@@ -20,12 +20,13 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 from app.db.database import Base
 from app.models.user import User
-
+from app.models.device import Device
 target_metadata = Base.metadata
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
 
 
 def run_migrations_offline() -> None:

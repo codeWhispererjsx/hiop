@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.auth.routes import router as auth_router
 from app.core.config import settings
+from app.devices.routes import router as device_router
 
 app = FastAPI(
     title="Hotel IT Operations Portal",
@@ -26,3 +27,8 @@ def health():
     return {
         "status": "healthy"
     }
+
+app.include_router(
+    device_router,
+    prefix=settings.api_prefix
+)
