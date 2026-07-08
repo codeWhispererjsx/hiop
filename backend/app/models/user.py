@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
-
+from sqlalchemy import Boolean
 from app.db.database import Base
 
 
@@ -48,3 +48,9 @@ class User(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    is_active: Mapped[bool] = mapped_column(
+    Boolean,
+    default=True
+    
+)
