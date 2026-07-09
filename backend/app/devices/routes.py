@@ -1,6 +1,5 @@
 from sqlalchemy.orm import Session
 from app.models.device import Device
-from app.schemas.device import DeviceCreate, DeviceResponse
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.device import (
     DeviceCreate,
@@ -8,7 +7,7 @@ from app.schemas.device import (
     DeviceUpdate,
 )
 from typing import List
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_roles
 from app.models.user import User
 from app.api.dependencies import get_db
 
@@ -22,7 +21,7 @@ router = APIRouter(
 def create_device(
     device: DeviceCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_roles(["admin"]))
 ):
     new_device = Device(**device.model_dump())
 
@@ -49,7 +48,7 @@ def update_device(
     device_id: str,
     device_data: DeviceUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_roles(["admin", "technician"]))
 ):
     device = db.query(Device).filter(
         Device.id == device_id
@@ -75,7 +74,7 @@ def update_device(
 def delete_device(
     device_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_roles(["admin"]))
 ):
     device = db.query(Device).filter(
         Device.id == device_id
