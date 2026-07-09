@@ -1,9 +1,12 @@
 from logging.config import fileConfig
-
+from app.models.ticket import Ticket
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from app.models.user import User
+from app.models.device import Device
+from app.models.ticket import Ticket
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
