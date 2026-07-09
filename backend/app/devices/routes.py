@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-from app.db.database import SessionLocal
 from app.models.device import Device
 from app.schemas.device import DeviceCreate, DeviceResponse
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,20 +10,12 @@ from app.schemas.device import (
 from typing import List
 from app.core.security import get_current_user
 from app.models.user import User
-
+from app.api.dependencies import get_db
 
 router = APIRouter(
     prefix="/devices",
     tags=["Devices"]
 )
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.post("/", response_model=DeviceResponse)

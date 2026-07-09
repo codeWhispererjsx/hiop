@@ -1,25 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app.db.database import SessionLocal
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse
 from app.core.security import hash_password
 from app.schemas.user import UserLogin, Token
 from app.core.security import authenticate_user, create_access_token
 from app.core.security import get_current_user
+from app.api.dependencies import get_db
 
 router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
 
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.post("/register", response_model=UserResponse)
