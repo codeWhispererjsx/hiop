@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
-
+from uuid import UUID
 
 class TicketCreate(BaseModel):
     title: str
@@ -17,7 +17,7 @@ class TicketUpdate(BaseModel):
 
 
 class TicketResponse(BaseModel):
-    id: str
+    id: UUID
     title: str
     description: str
     priority: str
