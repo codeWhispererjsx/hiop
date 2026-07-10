@@ -1,6 +1,5 @@
 import uuid
-
-from sqlalchemy import String, DateTime, ForeignKey, Integer
+from sqlalchemy import String, DateTime, ForeignKey, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -33,10 +32,10 @@ class NetworkScan(Base):
         nullable=False
     )
 
-    response_time: Mapped[int | None] = mapped_column(
-        Integer,
-        nullable=True
-    )
+    response_time: Mapped[float | None] = mapped_column(
+    Float,
+    nullable=True
+)
 
     scanned_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True),

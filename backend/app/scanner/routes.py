@@ -7,8 +7,8 @@ from app.core.security import require_roles
 from app.models.device import Device
 from app.models.network_scan import NetworkScan
 from app.models.user import User
-from app.schemas.network_scan import NetworkScanCreate, NetworkScanResponse
-
+from app.schemas.network_scan import NetworkScanCreate, NetworkScanResponse, NetworkRangeScan
+from app.network.utils import scan_range
 
 router = APIRouter(
     prefix="/network",
@@ -58,3 +58,12 @@ def scan_device(
     db.refresh(scan_result)
 
     return scan_result
+
+@router.post("/scan-range")
+def scan_network(
+    scan: NetworkRangeScan,
+    current_user: User = Depends(
+        require_roles(["admin", "technician"])
+    )
+):
+    return scan_range(scan.network)

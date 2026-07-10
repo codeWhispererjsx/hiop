@@ -12,8 +12,11 @@ class NetworkScanResponse(BaseModel):
     device_id: UUID
     ip_address: str
     status: str
-    response_time: int | None
+    response_time: float | None
 
     model_config = {
         "from_attributes": True
     }
+
+class NetworkRangeScan(BaseModel):
+    network: str
