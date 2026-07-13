@@ -1,28 +1,89 @@
 from sqlalchemy.orm import Session
-
 from app.models.device import Device
 from app.models.network_scan import NetworkScan
 from app.network.utils import ping_host
-
+from app.models.alert import Alert
+from app.models.ticket import Ticket
+from app.models.user import User
 
 def scan_single_device(
     db: Session,
     device: Device
 ):
+    previous_scan = (
+        db.query(NetworkScan)
+        .filter(NetworkScan.device_id == device.id)
+        .order_by(NetworkScan.scanned_at.desc())
+        .first()
+    )
+
     result = ping_host(device.ip_address)
 
-    scan = NetworkScan(
+    new_scan = NetworkScan(
         device_id=device.id,
         ip_address=device.ip_address,
         status=result["status"],
         response_time=result["response_time"]
     )
 
-    db.add(scan)
-    db.commit()
-    db.refresh(scan)
+    db.add(new_scan)
 
-    return scan
+    status_changed = (
+        previous_scan
+        and previous_scan.status != new_scan.status
+    )
+
+    if status_changed:
+        alert = Alert(
+            device_id=device.id,
+            previous_status=previous_scan.status,
+            current_status=new_scan.status,
+            message=(
+                f"{device.hostname} changed from "
+                f"{previous_scan.status} to {new_scan.status}"
+            )
+        )
+
+        db.add(alert)
+
+        if new_scan.status == "Offline":
+            existing_open_ticket = (
+                db.query(Ticket)
+                .filter(
+                    Ticket.title == f"{device.hostname} is offline",
+                    Ticket.status.in_(["Open", "In Progress"])
+                )
+                .first()
+            )
+
+            if not existing_open_ticket:
+                admin_user = (
+                    db.query(User)
+                    .filter(User.role == "admin")
+                    .first()
+                )
+
+                if admin_user:
+                    ticket = Ticket(
+                        title=f"{device.hostname} is offline",
+                        description=(
+                            f"HIOP detected that {device.hostname} "
+                            f"at {device.ip_address} changed from "
+                            f"{previous_scan.status} to Offline."
+                        ),
+                        priority="High",
+                        status="Open",
+                        reported_by=admin_user.id,
+                        assigned_to=None
+                    )
+
+                    db.add(ticket)
+
+    db.commit()
+    db.refresh(new_scan)
+
+    return new_scan
+
 
 def scan_all_devices(db: Session):
     devices = db.query(Device).all()
