@@ -30,10 +30,12 @@ def scan_single_device(
     db.add(new_scan)
 
     status_changed = (
-        previous_scan
+        previous_scan is not None
         and previous_scan.status != new_scan.status
     )
+
     live_event = None
+
     if status_changed:
         alert = Alert(
             device_id=device.id,
@@ -44,16 +46,17 @@ def scan_single_device(
                 f"{previous_scan.status} to {new_scan.status}"
             )
         )
-        live_event = {
-    "event": "device_status_changed",
-    "device_id": str(device.id),
-    "hostname": device.hostname,
-    "ip_address": device.ip_address,
-    "previous_status": previous_scan.status,
-    "current_status": new_scan.status
-    }
 
         db.add(alert)
+
+        live_event = {
+            "event": "device_status_changed",
+            "device_id": str(device.id),
+            "hostname": device.hostname,
+            "ip_address": device.ip_address,
+            "previous_status": previous_scan.status,
+            "current_status": new_scan.status
+        }
 
         if new_scan.status == "Offline":
             existing_open_ticket = (
@@ -88,13 +91,17 @@ def scan_single_device(
 
                     db.add(ticket)
 
-    db.commit()
-    db.refresh(new_scan)
+    try:
+        db.commit()
+        db.refresh(new_scan)
+    except Exception:
+        db.rollback()
+        raise
+
     if live_event:
-        manager.broadcast_from_thread(live_event)           
+        manager.broadcast_from_thread(live_event)
 
     return new_scan
-
 
 
 def scan_all_devices(db: Session):
