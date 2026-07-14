@@ -5,6 +5,7 @@ from app.network.utils import ping_host
 from app.models.alert import Alert
 from app.models.ticket import Ticket
 from app.models.user import User
+from app.websocket.connection_manager import manager
 
 def scan_single_device(
     db: Session,
@@ -32,7 +33,7 @@ def scan_single_device(
         previous_scan
         and previous_scan.status != new_scan.status
     )
-
+    live_event = None
     if status_changed:
         alert = Alert(
             device_id=device.id,
@@ -43,6 +44,14 @@ def scan_single_device(
                 f"{previous_scan.status} to {new_scan.status}"
             )
         )
+        live_event = {
+    "event": "device_status_changed",
+    "device_id": str(device.id),
+    "hostname": device.hostname,
+    "ip_address": device.ip_address,
+    "previous_status": previous_scan.status,
+    "current_status": new_scan.status
+    }
 
         db.add(alert)
 
@@ -81,8 +90,11 @@ def scan_single_device(
 
     db.commit()
     db.refresh(new_scan)
+    if live_event:
+        manager.broadcast_from_thread(live_event)           
 
     return new_scan
+
 
 
 def scan_all_devices(db: Session):

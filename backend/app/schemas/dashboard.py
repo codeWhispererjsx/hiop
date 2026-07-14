@@ -5,6 +5,7 @@ class DeviceStats(BaseModel):
     total: int
     online: int
     offline: int
+    unknown: int
 
 
 class TicketStats(BaseModel):

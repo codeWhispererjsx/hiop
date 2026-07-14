@@ -6,6 +6,13 @@ from app.core.security import get_current_user, require_roles
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.schemas.ticket import TicketCreate, TicketResponse, TicketUpdate
+from app.services.ticket_service import (
+    create_ticket as create_ticket_service,
+    update_ticket as update_ticket_service,
+    delete_ticket as delete_ticket_service,
+    assign_ticket as assign_ticket_service,
+    close_ticket as close_ticket_service,
+)
 
 router = APIRouter(
     prefix="/tickets",
@@ -14,26 +21,16 @@ router = APIRouter(
 
 
 @router.post("/", response_model=TicketResponse)
-
 def create_ticket(
-    ticket_data: TicketCreate,
+    ticket: TicketCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    new_ticket = Ticket(
-        title=ticket_data.title,
-        description=ticket_data.description,
-        priority=ticket_data.priority,
-        status="Open",
-        reported_by=current_user.id,
-        assigned_to=None
+    return create_ticket_service(
+        db=db,
+        ticket=ticket,
+        current_user=current_user
     )
-
-    db.add(new_ticket)
-    db.commit()
-    db.refresh(new_ticket)
-
-    return new_ticket
 
 @router.get("/", response_model=List[TicketResponse])
 def get_tickets(
@@ -83,25 +80,13 @@ def update_ticket(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    ticket = db.query(Ticket).filter(
-        Ticket.id == ticket_id
-    ).first()
+    return update_ticket_service(
+        db=db,
+        ticket_id=ticket_id,
+        ticket_data=ticket_data,
+        current_user=current_user
+    )
 
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found"
-        )
-
-    update_data = ticket_data.model_dump(exclude_unset=True)
-
-    for key, value in update_data.items():
-        setattr(ticket, key, value)
-
-    db.commit()
-    db.refresh(ticket)
-
-    return ticket
 
 @router.patch("/{ticket_id}/assign", response_model=TicketResponse)
 def assign_ticket(
@@ -112,39 +97,12 @@ def assign_ticket(
         require_roles(["admin", "technician"])
     )
 ):
-    ticket = db.query(Ticket).filter(
-        Ticket.id == ticket_id
-    ).first()
-
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found"
-        )
-
-    assignee = db.query(User).filter(
-        User.id == assigned_to
-    ).first()
-
-    if not assignee:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Assigned user not found"
-        )
-
-    if assignee.role not in ["admin", "technician"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tickets can only be assigned to an admin or technician"
-        )
-
-    ticket.assigned_to = assignee.id
-    ticket.status = "In Progress"
-
-    db.commit()
-    db.refresh(ticket)
-
-    return ticket
+    return assign_ticket_service(
+        db=db,
+        ticket_id=ticket_id,
+        assigned_to=assigned_to,
+        current_user=current_user
+    )
 
    
 @router.patch("/{ticket_id}/close", response_model=TicketResponse)
@@ -155,22 +113,12 @@ def close_ticket(
         require_roles(["admin", "technician"])
     )
 ):
-    ticket = db.query(Ticket).filter(
-        Ticket.id == ticket_id
-    ).first()
+    return close_ticket_service(
+        db=db,
+        ticket_id=ticket_id,
+        current_user=current_user
+    )
 
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found"
-        )
-
-    ticket.status = "Closed"
-
-    db.commit()
-    db.refresh(ticket)
-
-    return ticket
 
 @router.delete("/{ticket_id}")
 def delete_ticket(
@@ -180,19 +128,8 @@ def delete_ticket(
         require_roles(["admin"])
     )
 ):
-    ticket = db.query(Ticket).filter(
-        Ticket.id == ticket_id
-    ).first()
-
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ticket not found"
-        )
-
-    db.delete(ticket)
-    db.commit()
-
-    return {
-        "message": "Ticket deleted successfully"
-    }
+    return delete_ticket_service(
+        db=db,
+        ticket_id=ticket_id,
+        current_user=current_user
+    )

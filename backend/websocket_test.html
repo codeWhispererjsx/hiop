@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HIOP WebSocket Test</title>
+</head>
+<body>
+    <h1>HIOP WebSocket Test</h1>
+    <p id="status">Connecting...</p>
+    <pre id="messages"></pre>
+
+    <script>
+        const statusElement = document.getElementById("status");
+        const messagesElement = document.getElementById("messages");
+
+        const socket = new WebSocket(
+            "ws://127.0.0.1:8000/ws/dashboard"
+        );
+
+        socket.onopen = () => {
+            statusElement.textContent = "WebSocket connected";
+            console.log("WebSocket connected");
+        };
+
+        socket.onmessage = (event) => {
+            console.log("Message:", event.data);
+            messagesElement.textContent += event.data + "\n";
+        };
+
+        socket.onerror = (error) => {
+            statusElement.textContent = "WebSocket error";
+            console.error(error);
+        };
+
+        socket.onclose = () => {
+            statusElement.textContent = "WebSocket disconnected";
+            console.log("WebSocket disconnected");
+        };
+    </script>
+</body>
+</html>

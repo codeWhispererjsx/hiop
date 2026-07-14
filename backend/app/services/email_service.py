@@ -1,19 +1,19 @@
 import smtplib
 from email.message import EmailMessage
 
+from app.core.config import settings
+
 
 def send_email(
     subject: str,
     body: str,
-    recipient: str,
-    sender: str,
-    password: str
+    recipient: str | None = None
 ):
     message = EmailMessage()
 
     message["Subject"] = subject
-    message["From"] = sender
-    message["To"] = recipient
+    message["From"] = settings.email_address
+    message["To"] = recipient or settings.email_recipient
 
     message.set_content(body)
 
@@ -21,10 +21,9 @@ def send_email(
         "smtp.gmail.com",
         465
     ) as smtp:
-
         smtp.login(
-            sender,
-            password
+            settings.email_address,
+            settings.email_password
         )
 
         smtp.send_message(message)

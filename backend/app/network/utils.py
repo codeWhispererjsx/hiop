@@ -1,33 +1,51 @@
+import ipaddress
+
 from ping3 import ping
 
 
 def ping_host(ip: str):
-    response = ping(ip, timeout=1)
+    try:
+        response = ping(ip, timeout=1)
 
-    if response is None:
+        if response is None or response is False:
+            return {
+                "status": "Offline",
+                "response_time": None
+            }
+
+        return {
+            "status": "Online",
+            "response_time": round(response * 1000, 2)
+        }
+
+    except Exception:
         return {
             "status": "Offline",
             "response_time": None
         }
 
-    return {
-        "status": "Online",
-        "response_time": round(response * 1000, 2)
-    }
-
 
 def scan_range(network: str):
+    """
+    Scan all hosts in a CIDR network.
+
+    Example:
+        scan_range("192.168.1.0/24")
+    """
+
     results = []
 
-    for i in range(1, 11):   # We'll scan only .1 - .10 first
-        ip = f"{network}.{i}"
+    net = ipaddress.ip_network(network, strict=False)
+
+    for host in net.hosts():
+        ip = str(host)
 
         result = ping_host(ip)
 
         results.append({
             "ip_address": ip,
             "status": result["status"],
-            "response_time": result["response_time"]
+            "response_time": result["response_time"],
         })
 
     return results

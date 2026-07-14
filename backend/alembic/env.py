@@ -9,6 +9,7 @@ from app.models.device import Device
 from app.models.ticket import Ticket
 from app.models.network_scan import NetworkScan
 from app.models.alert import Alert
+from app.models.audit_log import AuditLog
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
