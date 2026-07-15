@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -8,6 +8,8 @@ import { PageTitle } from "./DashboardPage";
 
 export default function DeviceDetailsPage() {
   const { id = "" } = useParams();
+  const location = useLocation();
+  const successNotice = (location.state as { notice?: string } | null)?.notice;
   const { data: device, loading, error, reload } = useRequest(() => endpoints.device(id));
 
   const handleLiveEvent = (event: LiveEvent) => {
@@ -20,8 +22,10 @@ export default function DeviceDetailsPage() {
         eyebrow="Asset inventory"
         title={device?.hostname ?? "Device details"}
         copy="Complete device information from the HIOP inventory."
-        action={<Link className="secondary-action" to="/devices">Back to devices</Link>}
+        action={<div className="page-actions"><Link className="secondary-action" to="/devices">Back to devices</Link>{device && <Link className="primary-action" to={`/devices/${id}/edit`}>Edit device</Link>}</div>}
       />
+
+      {successNotice && <div className="inline-notice" role="status">{successNotice}</div>}
 
       {loading || error ? (
         <Feedback loading={loading} error={error} onRetry={reload} />
