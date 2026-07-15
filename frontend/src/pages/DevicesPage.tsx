@@ -12,7 +12,8 @@ const ROWS_PER_PAGE = 10;
 
 export default function DevicesPage() {
   const location = useLocation();
-  const successNotice = (location.state as { notice?: string } | null)?.notice;
+  const locationState = location.state as { notice?: string; toast?: boolean } | null;
+  const successNotice = locationState?.notice;
   const { data: devices, loading, error, reload } = useRequest(endpoints.devices);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All");
@@ -67,7 +68,7 @@ export default function DevicesPage() {
         action={<Link className="primary-action" to="/devices/new"><Icon name="devices" />Add device</Link>}
       />
 
-      {successNotice && <div className="inline-notice" role="status">{successNotice}</div>}
+      {successNotice && <div className={locationState?.toast ? "toast-notification" : "inline-notice"} role="status">{successNotice}</div>}
 
       {loading || error ? (
         <Feedback
