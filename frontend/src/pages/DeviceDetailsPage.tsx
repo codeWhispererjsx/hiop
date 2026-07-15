@@ -1,23 +1,36 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { ConfirmationModal } from "../components/ConfirmationModal";
+import { DeviceHistory, type HistorySection } from "../components/DeviceHistory";
 import { Feedback } from "../components/Feedback";
-import { DeviceHistory } from "../components/DeviceHistory";
-import Modal from "../components/Modal";
+import { StatusBadge } from "../components/StatusBadge";
+import { Toast } from "../components/Toast";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints } from "../lib/api";
-import type { LiveEvent } from "../lib/types";
+import { statusContext } from "../lib/deviceStatus";
+import type { Device, LiveEvent } from "../lib/types";
 import { PageTitle } from "./DashboardPage";
+
+type DetailsTab = "overview" | HistorySection;
+const tabs: Array<{ id: DetailsTab; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "scans", label: "Scan History" },
+  { id: "alerts", label: "Alerts" },
+  { id: "tickets", label: "Tickets" },
+  { id: "audit", label: "Audit Trail" },
+];
 
 export default function DeviceDetailsPage() {
   const { id = "" } = useParams();
   const location = useLocation();
-  const navigate = useNavigate();
   const successNotice = (location.state as { notice?: string } | null)?.notice;
   const { data: device, loading, error, reload } = useRequest(() => endpoints.device(id));
+  const [activeTab, setActiveTab] = useState<DetailsTab>("overview");
   const [confirmingRetirement, setConfirmingRetirement] = useState(false);
   const [retiring, setRetiring] = useState(false);
   const [retireError, setRetireError] = useState("");
+  const [retireNotice, setRetireNotice] = useState("");
 
   const handleLiveEvent = (event: LiveEvent) => {
     if (event.event === "device_status_changed" && event.device_id === id) void reload();
@@ -29,23 +42,34 @@ export default function DeviceDetailsPage() {
     setRetireError("");
     try {
       await endpoints.retireDevice(device.id);
-      navigate("/devices", { replace: true, state: { notice: `${device.hostname} was retired successfully.`, toast: true } });
-    } catch (error) {
-      setRetireError(error instanceof Error ? error.message : "Unable to retire this device.");
+      await reload();
+      setConfirmingRetirement(false);
+      setRetireNotice(`${device.hostname} was retired successfully.`);
+    } catch (requestError) {
+      setRetireError(requestError instanceof Error ? requestError.message : "Unable to retire this device.");
+    } finally {
       setRetiring(false);
     }
   };
+
+  const isRetired = device?.status.toLowerCase() === "retired";
 
   return (
     <DashboardLayout onLiveEvent={handleLiveEvent}>
       <PageTitle
         eyebrow="Asset inventory"
         title={device?.hostname ?? "Device details"}
-        copy="Complete device information from the HIOP inventory."
-        action={<div className="page-actions"><Link className="secondary-action" to="/devices">Back to devices</Link>{device && device.status !== "Retired" && <><Link className="primary-action" to={`/devices/${id}/edit`}>Edit device</Link><button className="danger-action" onClick={() => { setRetireError(""); setConfirmingRetirement(true); }}>Retire device</button></>}</div>}
+        copy="Complete device information and operational history from HIOP."
+        action={<div className="page-actions">
+          <Link className="secondary-action" to="/devices">Back to devices</Link>
+          {device && !isRetired && <>
+            <Link className="primary-action" to={`/devices/${id}/edit`}>Edit device</Link>
+            <button className="danger-action" onClick={() => { setRetireError(""); setConfirmingRetirement(true); }}>Retire device</button>
+          </>}
+        </div>}
       />
 
-      {successNotice && <div className="inline-notice" role="status">{successNotice}</div>}
+      {(retireNotice || successNotice) && <Toast message={retireNotice || successNotice || "Device updated successfully."} />}
 
       {loading || error ? (
         <Feedback loading={loading} error={error} onRetry={reload} />
@@ -53,47 +77,51 @@ export default function DeviceDetailsPage() {
         <Feedback emptyTitle="Device not found" empty="No device information is available." />
       ) : (
         <>
-        <section className="device-details" aria-label={`Details for ${device.hostname}`}>
-          <header>
-            <div>
-              <span>Current status</span>
-              <b className={`status-badge ${device.status.toLowerCase().replaceAll(" ", "-")}`}>{device.status}</b>
-            </div>
-          </header>
-          <dl>
-            <Detail label="Device ID" value={device.id} />
-            <Detail label="Asset Tag" value={device.asset_tag} />
-            <Detail label="Hostname" value={device.hostname} />
-            <Detail label="Device Type" value={device.device_type} />
-            <Detail label="Brand" value={device.brand} />
-            <Detail label="Model" value={device.model} />
-            <Detail label="Serial Number" value={device.serial_number} />
-            <Detail label="Department" value={device.department} />
-            <Detail label="Location" value={device.location} />
-            <Detail label="IP Address" value={device.ip_address} />
-            <Detail label="MAC Address" value={device.mac_address} />
-            <Detail label="Status" value={device.status} />
-          </dl>
-        </section>
-        <DeviceHistory device={device} />
+          {isRetired && <div className="retired-banner"><StatusBadge status="Retired" /><span>This asset is retired. Its details and operational history remain available.</span></div>}
+          <nav className="detail-tabs" aria-label="Device detail sections">
+            {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
+          </nav>
+
+          {activeTab === "overview" ? <DeviceOverview device={device} /> : <DeviceHistory device={device} section={activeTab} />}
         </>
       )}
 
-      {confirmingRetirement && device && <Modal title="Retire device" onClose={() => !retiring && setConfirmingRetirement(false)}>
-        <div className="retire-confirmation">
-          <p>Retire <strong>{device.hostname}</strong>? The device will remain in inventory history but will no longer be considered active.</p>
-          <p className="retire-warning">This action should only be used when the asset has been permanently removed from service.</p>
-          {retireError && <div className="form-error" role="alert">{retireError}</div>}
-          <footer>
-            <button className="secondary-action" disabled={retiring} onClick={() => setConfirmingRetirement(false)}>Cancel</button>
-            <button className="danger-action" disabled={retiring} onClick={() => void retire()}>{retiring ? "Retiring..." : "Confirm retirement"}</button>
-          </footer>
-        </div>
-      </Modal>}
+      {confirmingRetirement && device && <ConfirmationModal
+        title="Retire device"
+        confirmLabel="Confirm retirement"
+        busyLabel="Retiring..."
+        busy={retiring}
+        error={retireError}
+        onCancel={() => setConfirmingRetirement(false)}
+        onConfirm={() => void retire()}
+      >
+        <p>Retire <strong>{device.hostname}</strong>? The device record and all historical scans, alerts, tickets, and audit activity will remain available.</p>
+        <p className="confirmation-warning">This action should only be used when the asset has been permanently removed from service.</p>
+      </ConfirmationModal>}
     </DashboardLayout>
   );
 }
 
+function DeviceOverview({ device }: { device: Device }) {
+  return <section className="device-details" aria-label={`Details for ${device.hostname}`}>
+    <header><div><span>{statusContext(device.status)}</span><StatusBadge status={device.status} /></div></header>
+    <dl>
+      <Detail label="Device ID" value={device.id} />
+      <Detail label="Asset Tag" value={device.asset_tag} />
+      <Detail label="Hostname" value={device.hostname} />
+      <Detail label="Device Type" value={device.device_type} />
+      <Detail label="Brand" value={device.brand} />
+      <Detail label="Model" value={device.model} />
+      <Detail label="Serial Number" value={device.serial_number} />
+      <Detail label="Department" value={device.department} />
+      <Detail label="Location" value={device.location} />
+      <Detail label="IP Address" value={device.ip_address} />
+      <Detail label="MAC Address" value={device.mac_address} />
+      <Detail label="Backend Status" value={device.status} />
+    </dl>
+  </section>;
+}
+
 function Detail({ label, value }: { label: string; value: string }) {
-  return <div><dt>{label}</dt><dd>{value || "—"}</dd></div>;
+  return <div><dt>{label}</dt><dd>{value || "Not recorded"}</dd></div>;
 }

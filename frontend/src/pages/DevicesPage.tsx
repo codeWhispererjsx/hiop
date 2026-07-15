@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
+import { StatusBadge } from "../components/StatusBadge";
+import { Toast } from "../components/Toast";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints } from "../lib/api";
@@ -12,7 +14,7 @@ const ROWS_PER_PAGE = 10;
 
 export default function DevicesPage() {
   const location = useLocation();
-  const locationState = location.state as { notice?: string; toast?: boolean } | null;
+  const locationState = location.state as { notice?: string } | null;
   const successNotice = locationState?.notice;
   const { data: devices, loading, error, reload } = useRequest(endpoints.devices);
   const [search, setSearch] = useState("");
@@ -68,7 +70,7 @@ export default function DevicesPage() {
         action={<Link className="primary-action" to="/devices/new"><Icon name="devices" />Add device</Link>}
       />
 
-      {successNotice && <div className={locationState?.toast ? "toast-notification" : "inline-notice"} role="status">{successNotice}</div>}
+      {successNotice && <Toast message={successNotice} />}
 
       {loading || error ? (
         <Feedback
@@ -137,9 +139,7 @@ export default function DevicesPage() {
                   <small>{device.location}</small>
                 </span>
                 <span>
-                  <b className={`status-badge ${device.status.toLowerCase().replaceAll(" ", "-")}`}>
-                    {device.status}
-                  </b>
+                  <StatusBadge status={device.status} />
                 </span>
               </Link>
             ))}

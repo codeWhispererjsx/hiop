@@ -71,13 +71,14 @@ export function DeviceForm({ initialValues, cancelTo, submitLabel, submittingLab
             </label>
           ))}
           <label>
-            Status
+            Inventory Status
             <select value={form.status} onChange={(event) => update("status", event.target.value)} disabled={submitting}>
               <option value="Active">Active</option>
-              <option value="Online">Online</option>
-              <option value="Offline">Offline</option>
               <option value="Inactive">Inactive</option>
+              <option value="Online" disabled>Online (managed by monitoring)</option>
+              <option value="Offline" disabled>Offline (managed by monitoring)</option>
             </select>
+            <span className="field-help">Online and Offline are updated by network monitoring. Retirement uses the Retire action.</span>
           </label>
         </div>
 
