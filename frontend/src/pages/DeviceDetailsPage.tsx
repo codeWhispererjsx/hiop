@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
+import { DeviceHistory } from "../components/DeviceHistory";
 import Modal from "../components/Modal";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -51,6 +52,7 @@ export default function DeviceDetailsPage() {
       ) : !device ? (
         <Feedback emptyTitle="Device not found" empty="No device information is available." />
       ) : (
+        <>
         <section className="device-details" aria-label={`Details for ${device.hostname}`}>
           <header>
             <div>
@@ -73,6 +75,8 @@ export default function DeviceDetailsPage() {
             <Detail label="Status" value={device.status} />
           </dl>
         </section>
+        <DeviceHistory device={device} />
+        </>
       )}
 
       {confirmingRetirement && device && <Modal title="Retire device" onClose={() => !retiring && setConfirmingRetirement(false)}>
