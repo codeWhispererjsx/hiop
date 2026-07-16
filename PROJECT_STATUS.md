@@ -12,65 +12,64 @@ The Devices module is complete for the backend capabilities currently available:
 - Overview, Scan History, Alerts, Tickets, and Audit Trail views with independent loading, empty, error, and retry states.
 - JWT handling, protected routing, WebSocket status refreshes, responsive layouts, light/dark themes, and HIOP `#C29F04` branding remain active.
 
+## Phase 1 foundation
+
+Phase 1A and Phase 1B are implemented and migrated through Alembic revision `e4a19c7b2d50`:
+
+- `Device.inventory_status` now owns lifecycle values (`Active`, `Inactive`, `Retired`).
+- `Device.network_status` now owns monitoring values (`Online`, `Offline`, `Unknown`).
+- The legacy `Device.status` field remains temporarily for backward compatibility but is no longer changed by network scans.
+- Tickets have a nullable `device_id` foreign key with `ON DELETE SET NULL` semantics.
+- Automated offline tickets are linked directly to their device.
+- Legacy tickets are linked only when an existing hostname, asset tag, IP address, or serial number produces a match; unmatched records remain unlinked.
+- Exact authenticated device history endpoints now exist for scans, alerts, tickets, and audit logs.
+- Properties, buildings, floors, rooms, departments, and network zones are normalized into managed tables.
+- Devices have nullable `department_id`, `room_id`, and `network_zone_id` foreign keys with `ON DELETE SET NULL` compatibility semantics.
+- Existing nonblank department and location values were conservatively backfilled without inventing property, building, or floor assignments.
+- Authenticated hierarchy catalog APIs and admin-only create, update, and deactivate APIs are available under `/api/v1/hierarchy`.
+- The frontend includes a responsive Locations & Structure administration screen and hierarchy-backed Device form controls.
+- Legacy device `department` and `location` strings remain synchronized for current clients, search, filters, and reports.
+- Case-insensitive database uniqueness is enforced for hierarchy names, network-zone CIDRs are unique, and CIDR/VLAN inputs are validated.
+
 ### Status semantics
 
-The current backend stores inventory lifecycle values (`Active`, `Inactive`, `Retired`) and monitoring values (`Online`, `Offline`) in the same `Device.status` column. The UI labels Online/Offline as network state and Retired as inventory state, but a full separation requires distinct backend fields such as `inventory_status` and `network_status` in:
-
-- `backend/app/models/device.py`
-- `backend/app/schemas/device.py`
-- `backend/app/services/device_service.py`
-- `backend/app/services/network_service.py`
-- a new Alembic migration under `backend/alembic/versions/`
+Inventory and network states are now separate. A later compatibility migration can remove the legacy `status` column after all external clients have moved to `inventory_status` and `network_status`.
 
 ## Device history API coverage
 
 The frontend integrates every real history API currently present:
 
-- `GET /api/v1/network/history?limit=500`, filtered by `device_id`.
-- `GET /api/v1/alerts`, filtered by `device_id`.
-- `GET /api/v1/audit-logs`, filtered by `entity_type == "Device"` and `entity_id == device_id`. This endpoint correctly remains role-restricted to admins and technicians.
-- `GET /api/v1/tickets/`, matched against hostname, asset tag, IP address, or serial number because tickets currently have no device relationship.
+- `GET /api/v1/devices/{device_id}/scans`.
+- `GET /api/v1/devices/{device_id}/alerts`.
+- `GET /api/v1/devices/{device_id}/tickets` using the direct ticket foreign key.
+- `GET /api/v1/devices/{device_id}/audit-logs`. This endpoint remains role-restricted to admins and technicians.
 
-### Missing endpoints for exact device history
+### Remaining compatibility work
 
-These endpoints do not currently exist. The frontend does not fabricate their responses.
+- Remove the legacy `Device.status` compatibility field after downstream clients migrate.
+- Remove legacy device `department` and `location` text columns only after downstream clients use normalized relationships.
 
-1. `GET /api/v1/devices/{device_id}/scans`
+## Sprint 4 — Network Operations Center
 
-   Expected response:
+The Network Operations Center is implemented at `/network` using only persisted backend data:
 
-   ```json
-   [{"id":"uuid","device_id":"uuid","ip_address":"string","status":"string","response_time":12.5,"scanned_at":"ISO-8601 timestamp"}]
-   ```
+- Live summary cards for total, Online, Offline, Unknown, last scan time, average latest response time, and unacknowledged alerts.
+- A responsive device table combining inventory data with each device's latest recorded scan, including clear Retired handling.
+- Authenticated Scan All, Scan Single Device, and Refresh Status controls with duplicate-action prevention.
+- Honest running, completed, and failed scan states with an indeterminate progress indicator.
+- Recent persisted scan history and network alerts linked to their device details pages.
+- WebSocket-driven status refreshes with automatic reconnect behavior and a visible lost-connection warning.
+- Independent loading, empty, API-error, unauthorized, and backend-unavailable behavior through the shared API layer.
 
-   Add the route/query in `backend/app/devices/routes.py` (or `backend/app/scanner/routes.py`) and expose `scanned_at` in `backend/app/schemas/network_scan.py`.
+### Network APIs used
 
-2. `GET /api/v1/devices/{device_id}/alerts`
+- `GET /api/v1/devices/`
+- `GET /api/v1/network/history?limit=100`
+- `POST /api/v1/network/scan`
+- `POST /api/v1/network/scan-all`
+- `GET /api/v1/alerts`
+- `WS /ws/dashboard`
 
-   Expected response:
+### Remaining network backend gap
 
-   ```json
-   [{"id":"uuid","device_id":"uuid","previous_status":"string","current_status":"string","message":"string","created_at":"ISO-8601 timestamp","acknowledged":false}]
-   ```
-
-   Add the route/query in `backend/app/devices/routes.py` or a `device_id` query parameter in `backend/app/operations/routes.py`.
-
-3. `GET /api/v1/devices/{device_id}/tickets`
-
-   Expected response:
-
-   ```json
-   [{"id":"uuid","device_id":"uuid","title":"string","description":"string","priority":"Medium","status":"Open","reported_by":"user-id","assigned_to":null,"created_at":"ISO-8601 timestamp"}]
-   ```
-
-   This requires a nullable `device_id` foreign key in `backend/app/models/ticket.py`, matching fields in `backend/app/schemas/ticket.py`, assignment when automated tickets are created in `backend/app/services/network_service.py`, filtering in `backend/app/tickets/routes.py`, and an Alembic migration.
-
-4. `GET /api/v1/devices/{device_id}/audit-logs`
-
-   Expected response:
-
-   ```json
-   [{"id":"uuid","actor":"string","action":"string","entity_type":"Device","entity_id":"uuid","description":"string","created_at":"ISO-8601 timestamp"}]
-   ```
-
-   Add the route/query in `backend/app/devices/routes.py` or a device/entity filter in `backend/app/operations/routes.py`.
+`POST /api/v1/network/scan-all` is a synchronous request and does not expose job progress or emit per-device scan-completion events. The NOC therefore displays a truthful indeterminate running state followed by completed or failed. Determinate progress would require a job-based endpoint such as `POST /api/v1/network/scan-jobs`, returning `{ id, status, total_devices, completed_devices, failed_devices }`, plus job progress events over the existing WebSocket.

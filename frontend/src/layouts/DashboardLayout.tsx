@@ -8,9 +8,11 @@ import "../styles/dashboard.css";
 export default function DashboardLayout({
   children,
   onLiveEvent,
+  onLiveStateChange,
 }: {
   children: ReactNode;
   onLiveEvent?: (event: LiveEvent) => void;
+  onLiveStateChange?: (connected: boolean) => void;
 }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -30,7 +32,7 @@ export default function DashboardLayout({
       socket = new WebSocket(
         import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8000/ws/dashboard",
       );
-      socket.onopen = () => setLive(true);
+      socket.onopen = () => { setLive(true); onLiveStateChange?.(true); };
       socket.onmessage = (e) => {
         try {
           onLiveEvent?.(JSON.parse(e.data) as LiveEvent);
@@ -38,9 +40,10 @@ export default function DashboardLayout({
           /* malformed event */
         }
       };
-      socket.onerror = () => setLive(false);
+      socket.onerror = () => { setLive(false); onLiveStateChange?.(false); };
       socket.onclose = () => {
         setLive(false);
+        onLiveStateChange?.(false);
         if (!closed) retry = window.setTimeout(connect, 2500);
       };
     };
@@ -50,7 +53,7 @@ export default function DashboardLayout({
       if (retry) clearTimeout(retry);
       socket?.close();
     };
-  }, [onLiveEvent]);
+  }, [onLiveEvent, onLiveStateChange]);
   const logout = () => {
     localStorage.removeItem("hiop_token");
     navigate("/login");
