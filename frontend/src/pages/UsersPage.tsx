@@ -1,50 +1,21 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
 import { Feedback } from "../components/Feedback";
 import { endpoints } from "../lib/api";
 import { useRequest } from "../hooks/useRequest";
 
+const PAGE_SIZE = 10;
 export default function UsersPage() {
-  const users = useRequest(endpoints.users, []);
-  const me = useRequest(endpoints.me, []);
-  const [form, setForm] = useState({ username: "", email: "", password: "" });
-  const [query, setQuery] = useState("");
-  const [busy, setBusy] = useState("");
-  const [notice, setNotice] = useState("");
-  const rows = useMemo(() => (users.data ?? []).filter((user) => `${user.username} ${user.email} ${user.role}`.toLowerCase().includes(query.toLowerCase())), [users.data, query]);
-  const submit = async (event: FormEvent) => {
-    event.preventDefault(); setBusy("create"); setNotice("");
-    try { const user = await endpoints.register(form); setNotice(`Created ${user.username}.`); setForm({ username: "", email: "", password: "" }); await users.reload(); }
-    catch (error) { setNotice(error instanceof Error ? error.message : "Could not create user"); }
-    finally { setBusy(""); }
-  };
-  const update = async (id: string, body: { role?: string; is_active?: boolean }) => {
-    setBusy(id); setNotice("");
-    try { await endpoints.updateUser(id, body); setNotice("User updated."); await users.reload(); }
-    catch (error) { setNotice(error instanceof Error ? error.message : "Could not update user"); }
-    finally { setBusy(""); }
-  };
-
-  return <DashboardLayout>
-    <PageTitle eyebrow="Administration" title="Team & access" copy="Provision accounts, assign roles and manage active access."/>
-    {notice && <div className="inline-notice">{notice}</div>}
-    <section className="two-column">
-      <article className="panel">
-        <h2>User directory</h2>
-        <div className="search-field"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search users"/></div>
-        {users.loading || users.error || !rows.length ? <Feedback loading={users.loading} error={users.error} empty="No users match this search." onRetry={users.reload}/> : <div className="compact-list">{rows.map((user) => <div key={user.id}>
-          <span className={`pulse ${user.is_active ? "online" : "offline"}`}/><strong>{user.username}</strong><span>{user.email}</span>
-          <select aria-label={`Role for ${user.username}`} value={user.role} disabled={busy === user.id} onChange={(event) => void update(user.id, { role: event.target.value })}><option value="admin">Admin</option><option value="technician">Technician</option><option value="staff">Staff</option></select>
-          <button className="secondary-action" disabled={busy === user.id || user.id === me.data?.id} onClick={() => void update(user.id, { is_active: !user.is_active })}>{user.is_active ? "Deactivate" : "Activate"}</button>
-        </div>)}</div>}
-      </article>
-      <article className="panel"><h2>Create account</h2><form className="modal-form" onSubmit={submit}>
-        <label>Username<input required value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })}/></label>
-        <label>Email<input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })}/></label>
-        <label>Temporary password<input required minLength={8} type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })}/></label>
-        <button className="primary-action" disabled={busy === "create"}>{busy === "create" ? "Creating…" : "Create account"}</button>
-      </form></article>
-    </section>
-  </DashboardLayout>;
+  const users = useRequest(endpoints.users, []); const me = useRequest(endpoints.me, []); const roles = useRequest(endpoints.userRoles, []);
+  const [query,setQuery]=useState(""); const [role,setRole]=useState("all"); const [active,setActive]=useState("all"); const [page,setPage]=useState(1);
+  const rows=useMemo(()=>(users.data??[]).filter(u=>(`${u.username} ${u.email}`.toLowerCase().includes(query.toLowerCase()))&&(role==="all"||u.role===role)&&(active==="all"||String(u.is_active)===active)),[users.data,query,role,active]);
+  const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE)); const currentPage=Math.min(page,pages); const visible=rows.slice((currentPage-1)*PAGE_SIZE,currentPage*PAGE_SIZE); const all=users.data??[];
+  const stats=[['Total users',all.length],['Active',all.filter(u=>u.is_active).length],['Inactive',all.filter(u=>!u.is_active).length],['Administrators',all.filter(u=>u.role==='admin').length],['Technicians',all.filter(u=>u.role==='technician').length]];
+  return <DashboardLayout><div className="page-title-row"><PageTitle eyebrow="Administration" title="Users & roles" copy="Manage real accounts, access levels and sign-in availability."/>{me.data?.role==='admin'&&<Link className="primary-action" to="/users/new">Add user</Link>}</div>
+    <section className="metric-grid">{stats.map(([label,value])=><article className="metric-card" key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>
+    <section className="panel"><div className="users-toolbar"><input aria-label="Search users" value={query} onChange={e=>{setQuery(e.target.value);setPage(1)}} placeholder="Search username or email"/><select aria-label="Filter by role" value={role} onChange={e=>{setRole(e.target.value);setPage(1)}}><option value="all">All roles</option>{roles.data?.map(r=><option key={r} value={r}>{r[0].toUpperCase()+r.slice(1)}</option>)}</select><select aria-label="Filter by status" value={active} onChange={e=>{setActive(e.target.value);setPage(1)}}><option value="all">All statuses</option><option value="true">Active</option><option value="false">Inactive</option></select></div>
+    {users.loading||users.error||!visible.length?<Feedback loading={users.loading} error={users.error} empty={all.length?"No users match these filters.":"No user accounts are available."} onRetry={users.reload}/>:<div className="table-scroll"><table className="data-table"><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody>{visible.map(u=><tr key={u.id}><td><strong>{u.username}</strong></td><td>{u.email}</td><td><span className="role-badge">{u.role}</span></td><td><span className={`status-badge ${u.is_active?'online':'offline'}`}>{u.is_active?'Active':'Inactive'}</span></td><td>{u.created_at?new Date(u.created_at).toLocaleDateString():'Not tracked'}</td><td><Link className="table-link" to={`/users/${u.id}`}>View</Link></td></tr>)}</tbody></table></div>}
+    {rows.length>PAGE_SIZE&&<nav className="pagination" aria-label="User pages"><button disabled={currentPage===1} onClick={()=>setPage(currentPage-1)}>Previous</button>{Array.from({length:pages},(_,i)=>i+1).map(n=><button className={n===currentPage?'active':''} key={n} onClick={()=>setPage(n)}>{n}</button>)}<button disabled={currentPage===pages} onClick={()=>setPage(currentPage+1)}>Next</button></nav>}</section></DashboardLayout>;
 }

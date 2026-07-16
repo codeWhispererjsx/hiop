@@ -1,4 +1,5 @@
-export type User = { id: string; username: string; email: string; role: string; is_active: boolean };
+export type User = { id: string; username: string; email: string; role: string; is_active: boolean; created_at?: string | null; updated_at?: string | null };
+export type UserInput = { username: string; email: string; role?: string; is_active?: boolean; password?: string };
 export type Device = { id: string; asset_tag: string; hostname: string; device_type: string; brand: string; model: string; serial_number: string; department: string; location: string; ip_address: string; mac_address: string; status: string };
 export type DeviceInput = Omit<Device, "id">;
 export type Ticket = { id: string; device_id: string | null; title: string; description: string; priority: string; status: string; reported_by: string; assigned_to: string | null; created_at: string; updated_at: string };

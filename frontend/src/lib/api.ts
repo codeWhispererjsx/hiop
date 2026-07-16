@@ -13,7 +13,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (response.status === 401) { localStorage.removeItem("hiop_token"); window.dispatchEvent(new Event("hiop:unauthorized")); }
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
-    try { const body = await response.json(); message = body.detail ?? message; } catch { /* non-JSON response */ }
+    try {
+      const body = await response.json();
+      if (typeof body.detail === "string") message = body.detail;
+      else if (Array.isArray(body.detail)) message = body.detail.map((item: { msg?: string }) => item.msg ?? "Invalid value").join(" ");
+    } catch { /* non-JSON response */ }
     throw new ApiError(message, response.status);
   }
   if (response.status === 204) return undefined as T;
@@ -45,7 +49,15 @@ export const endpoints = {
   acknowledgeAlert: (id: string) => api<{id:string;acknowledged:boolean}>(`/alerts/${id}/acknowledge`, { method: "PATCH" }),
   auditLogs: () => api<import("./types").AuditLog[]>("/audit-logs"),
   users: () => api<import("./types").User[]>("/users"),
-  updateUser: (id: string, body: Partial<import("./types").User>) => api<import("./types").User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  user: (id: string) => api<import("./types").User>(`/users/${id}`),
+  userAudit: (id: string) => api<import("./types").AuditLog[]>(`/users/${id}/audit`),
+  userRoles: () => api<string[]>("/users/roles"),
+  eligibleAssignees: () => api<import("./types").User[]>("/users/eligible-assignees"),
+  createUser: (body: import("./types").UserInput) => api<import("./types").User>("/users", { method: "POST", body: JSON.stringify(body) }),
+  updateUser: (id: string, body: Pick<import("./types").UserInput, "username" | "email">) => api<import("./types").User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  changeUserRole: (id: string, role: string) => api<import("./types").User>(`/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role }) }),
+  changeUserStatus: (id: string, is_active: boolean) => api<import("./types").User>(`/users/${id}/status`, { method: "PATCH", body: JSON.stringify({ is_active }) }),
+  resetUserPassword: (id: string, password: string) => api<{message:string}>(`/users/${id}/reset-password`, { method: "POST", body: JSON.stringify({ password }) }),
   deactivateUser: (id: string) => api<void>(`/users/${id}`, { method: "DELETE" }),
   settings: () => api<import("./types").MonitoringSettings>("/settings"),
   updateSettings: (body: import("./types").MonitoringSettings) => api<import("./types").MonitoringSettings>("/settings", { method: "PUT", body: JSON.stringify(body) }),

@@ -163,3 +163,58 @@ A uniquely named runtime ticket was created against PostgreSQL, refreshed, edite
 ### Next recommended epic
 
 Epic 7 should add the missing service-desk collaboration and lifecycle backend contracts: eligible-assignee directory, structured ticket activity, comments, attachments, direct alert relationships, SLA policy/timers, explicit reopen, and ticket WebSocket events.
+
+## Epic 7 — Users and Role Management
+
+Epic 7 is complete for the account and authorization capabilities currently supported by HIOP:
+
+- Real PostgreSQL user metrics, responsive directory, combined username/email search, supported-role and active-state filters, and ten-row client pagination.
+- Reusable validated create/edit forms, user details, role changes, account activation/deactivation, and administrator-set temporary passwords.
+- Real current-user identity remains sourced from `GET /api/v1/auth/me`; no hardcoded administrator identity or password data is displayed.
+- Thin FastAPI routes backed by a transactional user service, case-insensitive uniqueness checks, secure existing password hashing, safe API errors, and audit entries for every management action.
+- Backend-enforced admin authorization, self-deactivation prevention, last-active-admin protection, soft account deactivation, and inactive-login rejection.
+- Ticket assignment now accepts only active administrators and technicians. Existing ticket references remain intact when an account is deactivated.
+- Loading, empty, filtered-empty, unauthorized, not-found, conflict, validation, backend-unavailable, confirmation, and success states are represented without dummy users.
+- JWT routing, WebSockets, light/dark themes, responsive application shell, and restrained `#C29F04` branding remain intact.
+
+### User APIs added or used
+
+- `GET /api/v1/users/roles`
+- `GET /api/v1/users/eligible-assignees`
+- `GET /api/v1/users`
+- `GET /api/v1/users/{user_id}`
+- `POST /api/v1/users`
+- `PATCH /api/v1/users/{user_id}`
+- `PATCH /api/v1/users/{user_id}/status`
+- `PATCH /api/v1/users/{user_id}/role`
+- `POST /api/v1/users/{user_id}/reset-password`
+- `DELETE /api/v1/users/{user_id}` (compatibility soft-deactivation; no physical deletion)
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/audit-logs`
+
+### Roles and authorization
+
+The existing backend supports `admin`, `technician`, and `staff`. Only administrators may list and manage the full user directory, create users, change roles, change account status, or set another user's temporary password. Administrators and technicians may load the active eligible-assignee directory. FastAPI remains the authorization source of truth even when the UI hides unavailable controls.
+
+Safety rules prevent self-deactivation and prevent deactivation or demotion of the last active administrator. User records are never physically deleted by the management API. Password hashes are excluded from response schemas and password/token values are excluded from audit descriptions.
+
+### Epic 7 verification
+
+A uniquely named technician was created in PostgreSQL, refreshed, edited, changed through supported roles, deactivated, reactivated, and given a new temporary password. Runtime HTTP checks confirmed inactive login returns 401, the old password returns 401 after reset, the new password authenticates while active, and inactive users disappear from eligible ticket assignees. Audit entries for create, update, role change, activation, deactivation, and password reset were verified. The safe verification account remains inactive for traceability.
+
+No database migration was required because username, email, hashed password, role, active state, and timestamps already existed in the user model.
+
+### Known identity gaps
+
+- Forgot-password email delivery and signed, expiring reset tokens
+- Email verification
+- Persisted last-login/login-history data
+- Session listing and revocation
+- Refresh-token rotation
+- Multi-factor authentication
+- Custom role and permission definitions beyond the supported fixed roles
+
+### Next recommended epic
+
+Epic 8 should implement reporting, analytics, and compliance exports across devices, scans, alerts, tickets, users, and audit activity using real aggregate APIs and role-aware access.

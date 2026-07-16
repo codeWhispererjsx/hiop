@@ -146,6 +146,9 @@ def assign_ticket(
             detail="Assigned user not found"
         )
 
+    if not assignee.is_active:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive users cannot be assigned tickets")
+
     if assignee.role not in ["admin", "technician"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

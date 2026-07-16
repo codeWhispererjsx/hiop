@@ -60,7 +60,7 @@ def decode_access_token(token: str):
 
 
 def authenticate_user(user, password: str):
-    if not user:
+    if not user or not user.is_active:
         return False
 
     if not verify_password(password, user.hashed_password):
@@ -93,10 +93,10 @@ def get_current_user(
 
     user = db.query(User).filter(User.email == email).first()
 
-    if user is None:
+    if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
+            detail="User account is unavailable"
         )
 
     return user
