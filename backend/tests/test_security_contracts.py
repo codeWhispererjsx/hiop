@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from jose import jwt
 from pydantic import ValidationError
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.rate_limit import FailedLoginLimiter
 from app.core.security import ALGORITHM, create_access_token, decode_access_token
 from app.schemas.device import DeviceCreate
@@ -16,6 +16,22 @@ from app.services.report_service import _csv_safe as report_csv_safe
 
 
 class SecurityContractTests(unittest.TestCase):
+    def test_production_configuration_rejects_development_safety_bypasses(self):
+        values = {
+            "app_name": "HIOP", "app_version": "1.0.0", "environment": "production",
+            "database_url": "postgresql+psycopg2://user:strong-password@db/hiop", "secret_key": "x" * 32,
+            "cors_origins": ["https://hiop.example.com"], "email_address": "", "email_password": "",
+            "email_recipient": "",
+        }
+        production = Settings(debug=False, **values)
+        self.assertEqual(production.environment, "production")
+        with self.assertRaises(ValidationError):
+            Settings(debug=True, **values)
+        with self.assertRaises(ValidationError):
+            Settings(debug=False, **(values | {"cors_origins": ["http://localhost:5173"]}))
+        with self.assertRaises(ValidationError):
+            Settings(debug=False, **(values | {"secret_key": "replace-with-a-secret-that-is-long-enough"}))
+
     def test_access_tokens_have_required_security_claims(self):
         token = create_access_token({"sub": "security@example.com", "role": "admin"})
         payload = decode_access_token(token)

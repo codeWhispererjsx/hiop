@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.testing.example
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+tests
+websocket_test.html

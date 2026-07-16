@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.models.user import User
@@ -12,6 +14,7 @@ router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
+security_logger = logging.getLogger("hiop.security")
 
 @router.post("/login", response_model=Token)
 def login(
@@ -29,12 +32,14 @@ def login(
 
     if not user:
         login_limiter.failure(client)
+        security_logger.warning("authentication_failed client=%s", client)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
 
     login_limiter.success(client)
+    security_logger.info("authentication_succeeded client=%s user_id=%s", client, user.id)
     access_token = create_access_token(
         data={
             "sub": user.email,

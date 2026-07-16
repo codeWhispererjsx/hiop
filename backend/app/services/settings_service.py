@@ -54,8 +54,8 @@ def read_bundle(db: Session) -> dict[str, Any]:
         "general": _group(values, "general"), "organization": _group(values, "organization"),
         "network": _group(values, "network"), "notifications": _group(values, "notifications"),
         "email": {"configured": configured, "host": "smtp.gmail.com" if settings.email_address else None, "port": 465 if settings.email_address else None, "security": "TLS" if settings.email_address else "Not configured", "credentials_editable": False},
-        "security": {"authentication": "JWT bearer token", "access_token_lifetime": "24 hours", "roles": ["admin", "technician"], "inactive_user_login_blocked": True, "failed_login_auditing": False, "refresh_tokens": False, "mfa": False, "session_revocation": False},
-        "application": {"product_name": "Hotel IT Operations Portal", "short_name": "HIOP", "frontend_version": "1.0.0", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": "Development" if settings.debug else "Production"},
+        "security": {"authentication": "JWT bearer token", "access_token_lifetime": f"{settings.access_token_expire_minutes} minutes", "roles": ["admin", "technician"], "inactive_user_login_blocked": True, "failed_login_auditing": False, "refresh_tokens": False, "mfa": False, "session_revocation": False},
+        "application": {"product_name": "Hotel IT Operations Portal", "short_name": "HIOP", "frontend_version": "1.0.0", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": settings.environment.title()},
     }
 
 
@@ -84,5 +84,6 @@ def health(db: Session) -> dict[str, Any]:
     from app.services.scheduler_service import scheduler
     last_scan = db.query(NetworkScan).order_by(NetworkScan.scanned_at.desc()).first() if database == "Connected" else None
     email = "Configured" if settings.email_address and settings.email_password else "Not configured"
-    status = "Healthy" if database == "Connected" and scheduler.running else "Degraded"
-    return {"status": status, "api": "Available", "database": database, "scheduler": "Running" if scheduler.running else "Stopped", "websocket": "Available", "email": email, "last_scan": last_scan.scanned_at.isoformat() if last_scan else None, "application_version": settings.app_version, "environment": "Development" if settings.debug else "Production", "server_time": datetime.now(timezone.utc).isoformat()}
+    status = "Healthy" if database == "Connected" and (scheduler.running or not settings.scheduler_enabled) else "Degraded"
+    scheduler_state = "Disabled" if not settings.scheduler_enabled else "Running" if scheduler.running else "Stopped"
+    return {"status": status, "api": "Available", "database": database, "scheduler": scheduler_state, "websocket": "Available", "email": email, "last_scan": last_scan.scanned_at.isoformat() if last_scan else None, "application_version": settings.app_version, "environment": settings.environment.title(), "server_time": datetime.now(timezone.utc).isoformat()}

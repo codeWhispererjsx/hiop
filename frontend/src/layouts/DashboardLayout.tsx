@@ -39,8 +39,11 @@ export default function DashboardLayout({
     const connect = () => {
       const token = getAuthToken();
       if (!token) return;
+      const defaultWebSocketUrl = import.meta.env.DEV
+        ? "ws://127.0.0.1:8001/ws/dashboard"
+        : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
       socket = new WebSocket(
-        import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8001/ws/dashboard",
+        import.meta.env.VITE_WS_URL ?? defaultWebSocketUrl,
         ["hiop", token],
       );
       socket.onopen = () => { setLive(true); liveStateRef.current?.(true); };

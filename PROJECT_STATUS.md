@@ -1,5 +1,21 @@
 # HIOP Project Status
 
+## Epic 14 — Production deployment and infrastructure
+
+HIOP now has a production deployment baseline without business-feature or visual changes.
+
+- Development, testing, and production environment contracts are separated. Production rejects debug mode, weak JWT secrets, and development CORS origins.
+- The frontend uses development endpoints only in development; production API and authenticated WebSocket traffic are same-origin through Nginx.
+- Production Docker support includes a multi-stage frontend image, unprivileged backend image, PostgreSQL 16 with persistent storage, one-shot Alembic migration service, health checks, restart policies, and scanner `NET_RAW` capability.
+- Nginx serves the React SPA, forwards API and WebSocket traffic, compresses responses, caches hashed assets, avoids caching the application shell, limits API request size, and supplies a restrictive CSP and security headers.
+- An HTTPS-ready host Nginx configuration and Let's Encrypt workflow are documented.
+- PostgreSQL uses connection pre-ping, bounded pool/overflow settings, and connection recycling. Index migrations remain at Alembic head.
+- Structured JSON logging separates application/access/security records from error output without logging secrets.
+- Public `GET /health` now reports safe real API, database, version, environment, timestamp, scheduler, WebSocket, scanner, and last-scan state and returns `503` when required components are degraded.
+- Backup and guarded restore scripts, migration/release strategy, monitoring guidance, recovery steps, daily checks, restart procedures, and troubleshooting are documented in `DEPLOYMENT.md` and `OPERATIONS.md`.
+
+Known production limitation: the APScheduler job remains embedded in the backend, so v1.0 intentionally runs one backend worker. Before horizontal API scaling, move scheduling to a dedicated process with a distributed lock. Remaining recommendations include centralized metrics/logging, external secrets management, image/advisory scanning in CI, encrypted off-host backups with restore drills, and production load/failover testing.
+
 ## Epic 13 — Enterprise security hardening
 
 The full security hardening pass is complete without business-feature or design changes.

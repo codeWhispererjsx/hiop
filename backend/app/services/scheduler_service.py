@@ -37,6 +37,10 @@ def scheduled_network_scan():
 
 
 def start_scheduler():
+    from app.core.config import settings
+    if not settings.scheduler_enabled:
+        logger.info("HIOP scheduler disabled by configuration")
+        return
     if scheduler.running:
         return
 
