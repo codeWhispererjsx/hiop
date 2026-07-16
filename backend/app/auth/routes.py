@@ -5,7 +5,7 @@ from app.schemas.user import UserCreate, UserResponse
 from app.core.security import hash_password
 from app.schemas.user import UserLogin, Token
 from app.core.security import authenticate_user, create_access_token
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_roles
 from app.api.dependencies import get_db
 
 router = APIRouter(
@@ -18,7 +18,8 @@ router = APIRouter(
 @router.post("/register", response_model=UserResponse)
 def register_user(
     user_data: UserCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin"]))
 ):
     existing_user = db.query(User).filter(
         (User.email == user_data.email) |
@@ -35,7 +36,7 @@ def register_user(
         username=user_data.username,
         email=user_data.email,
         hashed_password=hash_password(user_data.password),
-        role="admin"
+        role="staff"
     )
 
     db.add(new_user)
