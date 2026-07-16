@@ -11,8 +11,8 @@ const alertSeverity = (alert: Alert) => alert.current_status === "Offline" ? "Cr
 
 export function AlertDetailsPanel({alert, device, ticket, busy, onClose, onAcknowledge, onDevice, onTicket}: {alert: Alert; device?: Device; ticket?: Ticket; busy: boolean; onClose: () => void; onAcknowledge: () => void; onDevice: () => void; onTicket: () => void}) {
   const scans = useRequest(() => endpoints.deviceScans(alert.device_id), [alert.device_id]);
-  const audit = useRequest(endpoints.auditLogs, []);
-  const alertAudit = useMemo(() => (audit.data ?? []).filter(item => item.entity_type === "Alert" && item.entity_id === alert.id), [alert.id, audit.data]);
+  const audit = useRequest(() => endpoints.auditLogs({ entity_type: "Alert", page_size: 100 }), []);
+  const alertAudit = useMemo(() => (audit.data?.items ?? []).filter(item => item.entity_id === alert.id), [alert.id, audit.data]);
   const latestScan = scans.data?.[0];
   const timeline = useMemo(() => {
     const events: Array<{time: string; title: string; detail: string}> = [{time: alert.created_at, title: "Alert created", detail: `${alert.previous_status} changed to ${alert.current_status}`}];

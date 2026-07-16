@@ -24,6 +24,24 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function queryString(values: Record<string, string | number | undefined>) {
+  const params = new URLSearchParams();
+  Object.entries(values).forEach(([key, value]) => { if (value !== undefined && value !== "") params.set(key, String(value)); });
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+async function download(path: string) {
+  const token = localStorage.getItem("hiop_token");
+  let response: Response;
+  try { response = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); }
+  catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
+  if (response.status === 401) { localStorage.removeItem("hiop_token"); window.dispatchEvent(new Event("hiop:unauthorized")); }
+  if (!response.ok) throw new ApiError(`Export failed (${response.status})`, response.status);
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  return { blob: await response.blob(), filename: disposition.match(/filename="?([^";]+)"?/)?.[1] ?? "hiop-audit.csv" };
+}
+
 export const endpoints = {
   login: (email: string, password: string) => api<{access_token:string}>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   register: (body: {username:string;email:string;password:string}) => api<import("./types").User>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
@@ -47,7 +65,9 @@ export const endpoints = {
   deleteTicket: (id: string) => api<{message:string}>(`/tickets/${id}`, { method: "DELETE" }),
   alerts: () => api<import("./types").Alert[]>("/alerts"),
   acknowledgeAlert: (id: string) => api<{id:string;acknowledged:boolean}>(`/alerts/${id}/acknowledge`, { method: "PATCH" }),
-  auditLogs: () => api<import("./types").AuditLog[]>("/audit-logs"),
+  auditLogs: (filters: import("./types").AuditFilters = {}, signal?: AbortSignal) => api<import("./types").AuditLogPage>(`/audit-logs${queryString(filters)}`, { signal }),
+  auditLog: (id: string) => api<import("./types").AuditLog>(`/audit-logs/${id}`),
+  exportAuditLogs: (filters: import("./types").AuditFilters = {}) => download(`/audit-logs/export${queryString(filters)}`),
   users: () => api<import("./types").User[]>("/users"),
   user: (id: string) => api<import("./types").User>(`/users/${id}`),
   userAudit: (id: string) => api<import("./types").AuditLog[]>(`/users/${id}/audit`),

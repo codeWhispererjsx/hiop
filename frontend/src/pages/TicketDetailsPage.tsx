@@ -22,7 +22,7 @@ export default function TicketDetailsPage() {
   const users = useRequest(endpoints.users, []);
   const me = useRequest(endpoints.me, []);
   const devices = useRequest(endpoints.devices, []);
-  const audit = useRequest(endpoints.auditLogs, []);
+  const audit = useRequest(() => endpoints.auditLogs({ entity_type: "Ticket", page_size: 100 }), []);
   const [assigning, setAssigning] = useState(false);
   const [confirming, setConfirming] = useState<ConfirmAction>(null);
   const [busy, setBusy] = useState("");
@@ -31,7 +31,7 @@ export default function TicketDetailsPage() {
   const current = ticket.data;
   const userMap = useMemo(() => new Map((users.data ?? []).map(user => [user.id,user.username])), [users.data]);
   const device = devices.data?.find(item => item.id === current?.device_id);
-  const ticketAudit = useMemo(() => (audit.data ?? []).filter(item => item.entity_type === "Ticket" && item.entity_id === id).sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()), [audit.data,id]);
+  const ticketAudit = useMemo(() => (audit.data?.items ?? []).filter(item => item.entity_id === id).sort((a,b)=>new Date(a.created_at).getTime()-new Date(b.created_at).getTime()), [audit.data,id]);
   const canOperate = ["admin","technician"].includes(me.data?.role ?? "");
   const canDelete = me.data?.role === "admin";
   const refresh = async () => { await Promise.all([ticket.reload(), audit.reload()]); };

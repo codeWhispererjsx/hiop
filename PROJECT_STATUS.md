@@ -218,3 +218,55 @@ No database migration was required because username, email, hashed password, rol
 ### Next recommended epic
 
 Epic 8 should implement reporting, analytics, and compliance exports across devices, scans, alerts, tickets, users, and audit activity using real aggregate APIs and role-aware access.
+
+## Epic 8 — Enterprise Audit Center
+
+Epic 8 is complete for the immutable audit data currently persisted by HIOP:
+
+- Admin-only, read-only audit APIs with server-side search, combined filters, date range validation, sort order, 25/50/100-row pagination, details lookup, and full-filtered CSV export.
+- Real overview counts for total events, events today, user actions, device actions, ticket actions, and supported security-related user administration events.
+- Responsive Audit Center table on desktop and card presentation on narrow screens, with readable action/entity badges, long-description handling, loading/error/empty/filtered-empty states, refresh, and reset controls.
+- Debounced global search across actor, stored action, entity type, entity ID, and description. Actor, action, and entity options are derived from PostgreSQL values rather than invented lists.
+- Immutable detail modal retaining the raw stored action and providing safe navigation for retained Device and User records. Ticket events deliberately omit navigation because deleted tickets may no longer exist; Alert details currently use an in-page panel rather than a stable route.
+- Excel-compatible UTF-8 CSV export for the complete active filter set, including an export-generation timestamp and safe filename. Tokens, passwords, hashes, and request payloads are not exported.
+- Manual refresh is used because the existing WebSocket only carries device-status events; no audit events are fabricated.
+
+### Audit APIs added
+
+- `GET /api/v1/audit-logs`
+- `GET /api/v1/audit-logs/{audit_id}`
+- `GET /api/v1/audit-logs/export`
+
+The list and export endpoints support `actor`, `action`, `entity_type`, `entity_id`, `start_date`, `end_date`, `search`, and `sort_order`. The list additionally supports `page` and `page_size`. Results default to newest first. Invalid ranges and out-of-range pages return HTTP 400, missing details return 404, and non-admin access returns 403.
+
+### Audit authorization and immutability
+
+Audit Center access is restricted to administrators by FastAPI. The frontend remains protected by JWT routing, but backend enforcement is authoritative. No edit, delete, clear-history, or retention controls exist. No schema migration was required because the existing audit table already stores ID, actor, action, entity type, entity ID, description, and timestamp.
+
+### Current audit coverage
+
+- Devices: create, update, and soft retirement
+- Tickets: create, update, assign, close, and delete
+- Users: create, update, role change, activate, deactivate, and administrator password reset
+- Alerts: acknowledgement
+- Hierarchy: create, update, and deactivate
+- Monitoring settings: update
+
+These writes use the existing transaction so the mutation and audit record commit or roll back together. Read operations are not logged.
+
+### Missing audit support and limitations
+
+- Authentication login success/failure is not audited. A future authentication service should record safe outcome events without storing passwords, tokens, or full credential payloads.
+- Logout/token revocation cannot be audited because the project has no server-side session revocation endpoint.
+- Alert resolution and alert-to-ticket creation are unavailable because those lifecycle endpoints and relationships do not exist.
+- Manual scan start/completion is not intentionally audited; high-volume device status changes remain scanner/alert data rather than noisy governance records.
+- The audit model has no IP address, request path, HTTP method, structured outcome, metadata, or correlation ID fields.
+- No retention/archival policy, tamper-evident hash chain, external SIEM integration, or `audit_log_created` WebSocket event exists.
+
+### Epic 8 verification
+
+Both FastAPI and Vite were running. Real PostgreSQL verification confirmed 68 events at test time, 25-row pagination, newest-first ordering, details lookup, actor/entity/search filtering, full-filtered CSV content, and HTTP 403 for a real non-admin technician. The technician was re-deactivated after the authorization check. Browser verification confirmed combined User plus “deactivated” filtering, detail loading, safe related-user navigation, CSV success notification, light/dark themes, a 390px layout without horizontal overflow, and no console warnings or errors.
+
+### Next recommended epic
+
+Epic 9 should implement enterprise reporting and compliance dashboards, using server-side aggregates and scheduled, role-scoped exports across devices, scans, alerts, tickets, users, and audit events.

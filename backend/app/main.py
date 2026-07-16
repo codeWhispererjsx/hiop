@@ -14,6 +14,7 @@ from app.services.scheduler_service import (
 )
 from app.websocket.routes import router as websocket_router
 from app.users.routes import router as users_router
+from app.audit.routes import router as audit_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,3 +72,4 @@ app.include_router(
 
 app.include_router(websocket_router)
 app.include_router(users_router, prefix=settings.api_prefix)
+app.include_router(audit_router, prefix=settings.api_prefix)
