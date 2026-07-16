@@ -37,7 +37,7 @@ export default function DashboardLayout({
     let retry: number | undefined;
     const connect = () => {
       socket = new WebSocket(
-        import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8000/ws/dashboard",
+        import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8001/ws/dashboard",
       );
       socket.onopen = () => { setLive(true); liveStateRef.current?.(true); };
       socket.onmessage = (e) => {
