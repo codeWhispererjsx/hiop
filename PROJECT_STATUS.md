@@ -270,3 +270,39 @@ Both FastAPI and Vite were running. Real PostgreSQL verification confirmed 68 ev
 ### Next recommended epic
 
 Epic 9 should implement enterprise reporting and compliance dashboards, using server-side aggregates and scheduled, role-scoped exports across devices, scans, alerts, tickets, users, and audit events.
+
+## Epic 9 — Enterprise Reports & Export Center
+
+Epic 9 is complete for the operational data and historical records currently persisted by HIOP:
+
+- An administrator-only Reports dashboard provides real, date-scoped cards for Device Inventory, Network Status, Alerts, Tickets, Users, and Audit reports.
+- Each active report is loaded on demand from PostgreSQL and supports debounced search, applicable combined filters, sortable columns, and server-side 25/50/100-row pagination.
+- Reporting periods include Today, Last 7 Days, Last 30 Days, Last 90 Days, and a validated custom range. The selected period applies to dashboard totals, report rows, metrics, charts, and exports.
+- Real charts cover device network status, devices by department/type, network-health history, alerts by severity/department/day, ticket status/priority/assignment/day, user roles, and audit entity activity. The charts are reusable accessible React/CSS/SVG components; no chart dependency was already installed, and adding Recharts was blocked by the local package registry's self-signed certificate without weakening TLS validation.
+- Full filtered Excel-compatible UTF-8 CSV export is available for every report. Filenames include the report name, date, and time; exports include generation metadata and never include JWTs, passwords, hashes, or request payloads.
+- Browser printing uses report-specific print styles. Real record links connect devices, tickets, and users to their details; alert, audit, and network records link to their established module pages. Network, ticket, and critical-alert summary values provide filter-aware navigation.
+- Loading, empty, filtered-empty, invalid-date, unauthorized, backend-unavailable, and export failure states are handled without blank pages.
+
+### Reports APIs added
+
+- `GET /api/v1/reports/summary`
+- `GET /api/v1/reports/{report_name}`
+- `GET /api/v1/reports/{report_name}/export`
+
+Supported report names are `devices`, `network`, `alerts`, `tickets`, `users`, and `audit`. The list and export routes accept `start_date`, `end_date`, `search`, `status`, `department`, `category`, `sort_by`, and `sort_order`; list responses additionally accept `page` and `page_size`. All endpoints require the admin role. No migration was required.
+
+### Reports limitations
+
+- Alert resolution is not represented because the backend stores only acknowledgement state. Critical severity is transparently derived from an alert whose real current network status is `Offline`; no unsupported severity records are invented.
+- Network trends use the existing `network_scans` history. Devices without a scan in the active period correctly show unavailable scan/response values.
+- CSV is the supported Excel-compatible format. Native XLSX and PDF generation were not added because the project has no reliable existing dependency; browser print remains available.
+- “Last generated” is the real timestamp of the current report request. Scheduled jobs, persisted report runs, emailed reports, and report templates do not yet exist.
+- The existing WebSocket carries operational status changes, not report events. Reports refresh on navigation/filter changes and do not add polling or duplicate socket connections.
+
+### Epic 9 verification
+
+FastAPI and Vite were running during verification. Real PostgreSQL responses loaded all six report types, including 7 devices, 807 scan records, 12 alerts, 10 tickets, 4 users, and 70 audit events at final API verification time (the live scanner continues to add scan rows). Every CSV endpoint returned HTTP 200 with `text/csv`, unauthenticated access returned HTTP 401, and all six report views rendered through the browser without blank/error states. Search/filter behavior, network history charts, cross-module links, and light/dark theme switching were exercised. Frontend lint and the production build pass. Backend import, compilation, startup, health, and OpenAPI route registration pass; automated Python tests could not run because `pytest` is not installed in the project virtual environment.
+
+### Next recommended epic
+
+Epic 10 should focus on secure notification delivery and integrations: configurable alert channels, scheduled report delivery, delivery history, retry policies, and role-scoped subscription preferences.

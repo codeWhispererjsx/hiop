@@ -5,7 +5,6 @@ from app.devices.routes import router as device_router
 from app.tickets.routes import router as ticket_router
 from app.scanner.routes import router as scanner_router
 from app.dashboard.routes import router as dashboard_router
-
 from contextlib import asynccontextmanager
 
 from app.services.scheduler_service import (
@@ -15,6 +14,7 @@ from app.services.scheduler_service import (
 from app.websocket.routes import router as websocket_router
 from app.users.routes import router as users_router
 from app.audit.routes import router as audit_router
+from app.reports.routes import router as reports_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,3 +73,4 @@ app.include_router(
 app.include_router(websocket_router)
 app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(audit_router, prefix=settings.api_prefix)
+app.include_router(reports_router, prefix=settings.api_prefix)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
 import { StatusBadge } from "../components/StatusBadge";
@@ -14,11 +14,12 @@ const ROWS_PER_PAGE = 10;
 
 export default function DevicesPage() {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const locationState = location.state as { notice?: string } | null;
   const successNotice = locationState?.notice;
   const { data: devices, loading, error, reload } = useRequest(endpoints.devices);
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("All");
+  const [status, setStatus] = useState(() => searchParams.get("status") || "All");
   const [department, setDepartment] = useState("All");
   const [page, setPage] = useState(1);
   const visibleDevices = useMemo(() => {

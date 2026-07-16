@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
 import { Feedback } from "../components/Feedback";
@@ -23,6 +23,7 @@ const todayValue = () => new Date().toLocaleDateString("en-CA");
 
 export default function AlertsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const alerts = useRequest(endpoints.alerts, []);
   const devices = useRequest(endpoints.devices, []);
   const tickets = useRequest(endpoints.tickets, []);
@@ -32,7 +33,7 @@ export default function AlertsPage() {
   const [socketState, setSocketState] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
   const [toast, setToast] = useState<ToastState | null>(null);
   const [search, setSearch] = useState("");
-  const [severity, setSeverity] = useState("All");
+  const [severity, setSeverity] = useState(() => searchParams.get("severity") || "All");
   const [status, setStatus] = useState("All");
   const [department, setDepartment] = useState("All");
   const [deviceId, setDeviceId] = useState("All");
