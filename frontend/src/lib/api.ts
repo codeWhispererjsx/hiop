@@ -44,7 +44,6 @@ async function download(path: string) {
 
 export const endpoints = {
   login: (email: string, password: string) => api<{access_token:string}>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
-  register: (body: {username:string;email:string;password:string}) => api<import("./types").User>("/auth/register", { method: "POST", body: JSON.stringify(body) }),
   me: () => api<import("./types").User>("/auth/me"),
   dashboard: () => api<import("./types").DashboardData>("/dashboard/"),
   devices: () => api<import("./types").Device[]>("/devices/"),

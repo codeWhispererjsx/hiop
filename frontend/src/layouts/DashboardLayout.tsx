@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+/* eslint-disable react-hooks/refs */
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
@@ -19,6 +20,10 @@ export default function DashboardLayout({
   const [live, setLive] = useState(false);
   const [user, setUser] = useState<User>();
   const [branding, setBranding] = useState<PublicSettings>();
+  const liveEventRef = useRef(onLiveEvent);
+  const liveStateRef = useRef(onLiveStateChange);
+  liveEventRef.current = onLiveEvent;
+  liveStateRef.current = onLiveStateChange;
   useEffect(() => {
     void endpoints
       .me()
@@ -34,18 +39,18 @@ export default function DashboardLayout({
       socket = new WebSocket(
         import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8000/ws/dashboard",
       );
-      socket.onopen = () => { setLive(true); onLiveStateChange?.(true); };
+      socket.onopen = () => { setLive(true); liveStateRef.current?.(true); };
       socket.onmessage = (e) => {
         try {
-          onLiveEvent?.(JSON.parse(e.data) as LiveEvent);
+          liveEventRef.current?.(JSON.parse(e.data) as LiveEvent);
         } catch {
           /* malformed event */
         }
       };
-      socket.onerror = () => { setLive(false); onLiveStateChange?.(false); };
+      socket.onerror = () => { setLive(false); liveStateRef.current?.(false); };
       socket.onclose = () => {
         setLive(false);
-        onLiveStateChange?.(false);
+        liveStateRef.current?.(false);
         if (!closed) retry = window.setTimeout(connect, 2500);
       };
     };
@@ -55,7 +60,7 @@ export default function DashboardLayout({
       if (retry) clearTimeout(retry);
       socket?.close();
     };
-  }, [onLiveEvent, onLiveStateChange]);
+  }, []);
   const logout = () => {
     localStorage.removeItem("hiop_token");
     navigate("/login");

@@ -1,3 +1,5 @@
+import logging
+
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.db.database import SessionLocal
@@ -5,6 +7,7 @@ from app.services.network_service import scan_all_devices
 
 
 scheduler = BackgroundScheduler()
+logger = logging.getLogger(__name__)
 
 
 def configure_scheduler(enabled: bool, interval_minutes: int) -> None:
@@ -23,16 +26,11 @@ def scheduled_network_scan():
     try:
         result = scan_all_devices(db)
 
-        print(
-            "Automatic network scan completed:",
-            f"total={result['total_devices']},",
-            f"online={result['online']},",
-            f"offline={result['offline']}"
-        )
+        logger.info("Automatic network scan completed total=%s online=%s offline=%s", result["total_devices"], result["online"], result["offline"])
 
-    except Exception as exc:
+    except Exception:
         db.rollback()
-        print(f"Automatic network scan failed: {exc}")
+        logger.exception("Automatic network scan failed")
 
     finally:
         db.close()
@@ -50,10 +48,10 @@ def start_scheduler():
         configure_scheduler(values.get("network.automatic_scanning", "true") == "true", max(5, int(values.get("network.scan_interval_minutes", "5"))))
     finally:
         db.close()
-    print("HIOP scheduler started.")
+    logger.info("HIOP scheduler started")
 
 
 def stop_scheduler():
     if scheduler.running:
         scheduler.shutdown(wait=False)
-        print("HIOP scheduler stopped.")
+        logger.info("HIOP scheduler stopped")

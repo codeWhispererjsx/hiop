@@ -1,0 +1,17 @@
+# HIOP Bug Tracker
+
+## Sprint 11.1 stabilization register
+
+| ID | Module | Severity | Description | Root cause | Resolution | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| QA-001 | Shared frontend data | High | Details views could retain data from a previously visited route when a request dependency such as an entity ID changed. | `useRequest` accepted dependencies but did not include them in its effect lifecycle. | Added a stable dependency key so dependency changes trigger a fresh request while preserving abort cleanup. | Fixed |
+| QA-002 | WebSocket / application shell | High | Normal React renders could tear down and recreate the dashboard WebSocket connection. | The connection effect depended on callback identities supplied by individual pages. | Store live callbacks in refs and keep one connection lifecycle per mounted application shell. | Fixed |
+| QA-003 | Users and Audit APIs | Medium | Legacy user and audit handlers overlapped the authoritative feature routers and created inconsistent behavior depending on route registration order. | Older compatibility endpoints remained in `operations/routes.py` after dedicated modules were introduced. | Removed the duplicate handlers; dedicated Users and Audit routers are now the single owners. | Fixed |
+| QA-004 | Authentication | Medium | An obsolete staff registration endpoint bypassed the completed administrator user-management workflow. | The early `/auth/register` route remained after admin-only user creation was implemented. | Removed the obsolete endpoint and its unused imports. User creation remains admin-controlled under `/api/v1/users`. | Fixed |
+| QA-005 | Scheduler | Low | Scheduler startup and scan failures wrote directly to standard output. | Temporary `print` statements were left in production service code. | Replaced them with structured module logging and exception logging. | Fixed |
+| QA-006 | Frontend API contract | Low | The shared endpoint catalog still exposed the removed registration endpoint. | Dead client API metadata remained after the workflow changed. | Removed the unused endpoint entry. | Fixed |
+| QA-007 | Local runtime verification | Medium | Browser requests to the backend can be intercepted by an orphaned exact `127.0.0.1:8000` Windows listener even while the current backend is healthy on `0.0.0.0:8000`. | The operating system reports a listening socket for a PID that no longer exists in the process table, so it cannot be terminated normally. | Verified the active backend independently and documented the environment repair: restart Windows (or otherwise clear the orphaned socket) before the next full mutation test. No application hostname workaround was committed. | Environment blocked |
+| QA-008 | Test tooling | Low | Running unscoped `unittest discover` can traverse the local virtual environment and appear to hang. | Discovery was started above the project test directory. | Standardized the verification command on `python -m unittest discover -s tests -v`. | Fixed/documented |
+| QA-009 | Frontend build performance | Low | Vite reports that the CSS transform is the slowest build phase. | The application has a large shared stylesheet and Vite reports performance diagnostics for it. | Production output remains valid; stylesheet modularization is deferred because it is technical debt rather than a correctness defect. | Open technical debt |
+
+Audit records in this file describe verified defects only. Feature requests and missing future capabilities remain in `PROJECT_STATUS.md`.

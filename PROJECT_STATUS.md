@@ -1,5 +1,35 @@
 # HIOP Project Status
 
+## Sprint 11.1 — System stabilization and quality assurance
+
+The first whole-application stabilization pass is complete. It reviewed the Dashboard, Devices, Network Operations Center, Alerts, Tickets, Users, Audit, Reports, Settings, Locations & Structure, shared authentication/API handling, routing, WebSocket lifecycle, and backend router ownership without adding new product functionality.
+
+### Defects corrected
+
+- Shared requests now reload when route/request dependencies change, eliminating stale details data between entity routes.
+- The application shell maintains a single WebSocket connection across ordinary renders while still invoking the latest page callbacks.
+- Dedicated Users and Audit routers are the sole owners of those APIs; obsolete duplicate handlers were removed from the operations router.
+- The obsolete public/staff registration route and its dead frontend endpoint metadata were removed. Administrator user management remains the supported account-creation workflow.
+- Scheduler diagnostics now use structured logging rather than direct standard-output prints.
+- Dead imports and compatibility code associated with the removed routes were removed.
+
+The complete defect register, severity, root cause, resolution, and status are recorded in `BUG_TRACKER.md`.
+
+### Verification scope
+
+- Frontend TypeScript production build and ESLint.
+- Backend compilation/import and targeted `unittest` discovery from `backend/tests`.
+- Authenticated API checks across Dashboard, Devices, Network, Alerts, Tickets, Users, Audit, Reports, Settings, and hierarchy endpoints.
+- Invalid-token rejection and removal of the obsolete registration route.
+- Browser route coverage for application modules and representative create, detail, and edit pages, including logout/login behavior, performed while the local services were reachable.
+
+### Remaining issues and production recommendations
+
+- Clear the orphaned local Windows listener on `127.0.0.1:8000` (normally by restarting the development machine) before repeating the complete browser mutation workflow. The active FastAPI process itself was independently healthy; no misleading application workaround was committed.
+- Modularize the large shared frontend stylesheet only as a future maintainability task; it does not prevent a successful production build.
+- Before production, add automated browser regression tests for authentication and the highest-risk create/edit/retire/close/deactivate workflows, run them against an isolated test database, and add them to CI.
+- Continue removing compatibility fields only through planned migrations; do not combine schema cleanup with stabilization releases.
+
 ## Devices module
 
 The Devices module is complete for the backend capabilities currently available:
