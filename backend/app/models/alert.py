@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, String, DateTime, ForeignKey
+from sqlalchemy import Boolean, String, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -10,6 +10,7 @@ from app.db.database import Base
 
 class Alert(Base):
     __tablename__ = "alerts"
+    __table_args__ = (Index("ix_alerts_acknowledged_created_at", "acknowledged", "created_at"),)
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

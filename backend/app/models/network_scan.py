@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import String, DateTime, ForeignKey, Float
+from sqlalchemy import String, DateTime, ForeignKey, Float, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -9,6 +9,10 @@ from app.db.database import Base
 
 class NetworkScan(Base):
     __tablename__ = "network_scans"
+    __table_args__ = (
+        Index("ix_network_scans_scanned_at", "scanned_at"),
+        Index("ix_network_scans_device_scanned_at", "device_id", "scanned_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

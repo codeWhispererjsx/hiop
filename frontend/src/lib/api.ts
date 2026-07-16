@@ -2,8 +2,23 @@ const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8001/api/v1";
 
 export class ApiError extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status; } }
 
+const inFlightGets = new Map<string, Promise<unknown>>();
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method ?? "GET").toUpperCase();
   const token = localStorage.getItem("hiop_token");
+  const requestKey = method === "GET" && !init.signal ? `${token ?? "anonymous"}:${path}` : "";
+  const existing = requestKey ? inFlightGets.get(requestKey) : undefined;
+  if (existing) return existing as Promise<T>;
+
+  const request = performRequest<T>(path, init, token);
+  if (!requestKey) return request;
+  inFlightGets.set(requestKey, request);
+  try { return await request; }
+  finally { inFlightGets.delete(requestKey); }
+}
+
+async function performRequest<T>(path: string, init: RequestInit, token: string | null): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);

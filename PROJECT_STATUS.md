@@ -1,5 +1,20 @@
 # HIOP Project Status
 
+## Epic 12 — Performance optimization
+
+The HIOP v1.0 performance pass is complete without feature or design changes.
+
+- All pages use route-level lazy loading and code splitting. The initial shared JavaScript bundle decreased from 379.87 kB to 244.79 kB (35.6%), or from 109.51 kB to 78.15 kB gzip (28.6%).
+- Concurrent identical authenticated GET requests are coalesced only while in flight, avoiding duplicate calls without retaining stale operational data.
+- Shared request state ignores late responses after navigation, replacement requests, or unmount.
+- Devices, Tickets, and Alerts defer expensive search filtering so typing remains responsive while preserving current filters and pagination.
+- Dashboard metric queries were consolidated from seven database round trips to three.
+- Audit summary metrics were consolidated from six queries to one, and the current-day predicate can use the audit timestamp index.
+- Alembic revision `a71c8d9e4f20` adds targeted indexes for device hostname/IP, ticket status, active-alert ordering, audit chronology, and global/per-device scan chronology. Existing unique indexes already cover asset tags and user email addresses.
+- The existing single WebSocket connection, cleanup, retry timer, authentication, and live-update behavior remain intact.
+
+Verification passed: frontend lint, frontend production build, 10 backend contract tests, backend health/startup, Alembic upgrade/current-head checks, and authenticated browser loading of every primary module. Detailed measurements, rationale, and remaining scalability opportunities are in `PERFORMANCE_REPORT.md`.
+
 ## Sprint 11.1 — System stabilization and quality assurance
 
 The first whole-application stabilization pass is complete. It reviewed the Dashboard, Devices, Network Operations Center, Alerts, Tickets, Users, Audit, Reports, Settings, Locations & Structure, shared authentication/API handling, routing, WebSocket lifecycle, and backend router ownership without adding new product functionality.

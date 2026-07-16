@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
@@ -33,6 +33,7 @@ export default function AlertsPage() {
   const [socketState, setSocketState] = useState<"connected" | "reconnecting" | "offline">("reconnecting");
   const [toast, setToast] = useState<ToastState | null>(null);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [severity, setSeverity] = useState(() => searchParams.get("severity") || "All");
   const [status, setStatus] = useState("All");
   const [department, setDepartment] = useState("All");
@@ -50,13 +51,13 @@ export default function AlertsPage() {
   const rows = useMemo(() => (alerts.data ?? []).filter(alert => {
     const device = deviceMap.get(alert.device_id);
     const text = `${alert.message} ${alert.previous_status} ${alert.current_status} ${device?.hostname ?? ""} ${device?.asset_tag ?? ""} ${device?.department ?? ""}`.toLowerCase();
-    return (!search.trim() || text.includes(search.trim().toLowerCase()))
+    return (!deferredSearch.trim() || text.includes(deferredSearch.trim().toLowerCase()))
       && (severity === "All" || alertSeverity(alert) === severity)
       && (status === "All" || alertState(alert) === status)
       && (department === "All" || device?.department === department)
       && (deviceId === "All" || alert.device_id === deviceId)
       && (!date || dayValue(alert.created_at) === date);
-  }), [alerts.data, date, department, deviceId, deviceMap, search, severity, status]);
+  }), [alerts.data, date, deferredSearch, department, deviceId, deviceMap, severity, status]);
 
   const notify = (message: string, tone: "success" | "error" = "success") => setToast({id: Date.now(), message, tone});
   const acknowledge = async (alert: Alert) => {

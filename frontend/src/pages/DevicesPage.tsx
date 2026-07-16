@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
@@ -19,11 +19,12 @@ export default function DevicesPage() {
   const successNotice = locationState?.notice;
   const { data: devices, loading, error, reload } = useRequest(endpoints.devices);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [status, setStatus] = useState(() => searchParams.get("status") || "All");
   const [department, setDepartment] = useState("All");
   const [page, setPage] = useState(1);
   const visibleDevices = useMemo(() => {
-    const query = search.trim().toLowerCase();
+    const query = deferredSearch.trim().toLowerCase();
     if (!query) return devices ?? [];
 
     return (devices ?? []).filter((device) =>
@@ -35,7 +36,7 @@ export default function DevicesPage() {
         device.device_type,
       ].some((field) => field.toLowerCase().includes(query)),
     );
-  }, [devices, search]);
+  }, [devices, deferredSearch]);
   const statuses = useMemo(
     () => uniqueValues((devices ?? []).flatMap((device) => [device.inventory_status, device.network_status]).filter((value) => value !== "Unknown")),
     [devices],

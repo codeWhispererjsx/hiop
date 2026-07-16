@@ -1,7 +1,61 @@
-import { useEffect, type ReactNode } from "react"; import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
-import LoginPage from "./pages/LoginPage"; import DashboardPage from "./pages/DashboardPage"; import DevicesPage from "./pages/DevicesPage"; import DeviceDetailsPage from "./pages/DeviceDetailsPage"; import AddDevicePage from "./pages/AddDevicePage"; import EditDevicePage from "./pages/EditDevicePage"; import NetworkPage from "./pages/NetworkPage"; import AlertsPage from "./pages/AlertsPage"; import TicketsPage from "./pages/TicketsPage"; import TicketDetailsPage from "./pages/TicketDetailsPage"; import TicketFormPage from "./pages/TicketFormPage"; import UsersPage from "./pages/UsersPage"; import AuditPage from "./pages/AuditPage"; import SettingsPage from "./pages/SettingsPage";
-import HierarchyPage from "./pages/HierarchyPage";
-import UserDetailsPage from "./pages/UserDetailsPage"; import UserFormPage from "./pages/UserFormPage";
-import ReportsPage from "./pages/ReportsPage";
-function Protected({children}:{children:ReactNode}){return localStorage.getItem("hiop_token")?children:<Navigate to="/login" replace/>}
-export default function App(){const navigate=useNavigate();useEffect(()=>{const unauthorized=()=>navigate("/login",{replace:true});window.addEventListener("hiop:unauthorized",unauthorized);return()=>window.removeEventListener("hiop:unauthorized",unauthorized)},[navigate]);const p=(x:ReactNode)=><Protected>{x}</Protected>;return <Routes><Route path="/login" element={<LoginPage/>}/><Route path="/dashboard" element={p(<DashboardPage/>)}/><Route path="/reports" element={p(<ReportsPage/>)}/><Route path="/devices" element={p(<DevicesPage/>)}/><Route path="/devices/new" element={p(<AddDevicePage/>)}/><Route path="/devices/:id/edit" element={p(<EditDevicePage/>)}/><Route path="/devices/:id" element={p(<DeviceDetailsPage/>)}/><Route path="/network" element={p(<NetworkPage/>)}/><Route path="/alerts" element={p(<AlertsPage/>)}/><Route path="/tickets" element={p(<TicketsPage/>)}/><Route path="/tickets/new" element={p(<TicketFormPage mode="create"/>)}/><Route path="/tickets/:id/edit" element={p(<TicketFormPage mode="edit"/>)}/><Route path="/tickets/:id" element={p(<TicketDetailsPage/>)}/><Route path="/hierarchy" element={p(<HierarchyPage/>)}/><Route path="/users" element={p(<UsersPage/>)}/><Route path="/users/new" element={p(<UserFormPage mode="create"/>)}/><Route path="/users/:id/edit" element={p(<UserFormPage mode="edit"/>)}/><Route path="/users/:id" element={p(<UserDetailsPage/>)}/><Route path="/audit" element={p(<AuditPage/>)}/><Route path="/settings" element={p(<SettingsPage/>)}/><Route path="/" element={<Navigate to="/dashboard" replace/>}/><Route path="*" element={<Navigate to="/dashboard" replace/>}/></Routes>}
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Feedback } from "./components/Feedback";
+
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const DevicesPage = lazy(() => import("./pages/DevicesPage"));
+const DeviceDetailsPage = lazy(() => import("./pages/DeviceDetailsPage"));
+const AddDevicePage = lazy(() => import("./pages/AddDevicePage"));
+const EditDevicePage = lazy(() => import("./pages/EditDevicePage"));
+const NetworkPage = lazy(() => import("./pages/NetworkPage"));
+const AlertsPage = lazy(() => import("./pages/AlertsPage"));
+const TicketsPage = lazy(() => import("./pages/TicketsPage"));
+const TicketDetailsPage = lazy(() => import("./pages/TicketDetailsPage"));
+const TicketFormPage = lazy(() => import("./pages/TicketFormPage"));
+const HierarchyPage = lazy(() => import("./pages/HierarchyPage"));
+const UsersPage = lazy(() => import("./pages/UsersPage"));
+const UserDetailsPage = lazy(() => import("./pages/UserDetailsPage"));
+const UserFormPage = lazy(() => import("./pages/UserFormPage"));
+const AuditPage = lazy(() => import("./pages/AuditPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+
+function Protected({ children }: { children: ReactNode }) {
+  return localStorage.getItem("hiop_token") ? children : <Navigate to="/login" replace />;
+}
+
+export default function App() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const unauthorized = () => navigate("/login", { replace: true });
+    window.addEventListener("hiop:unauthorized", unauthorized);
+    return () => window.removeEventListener("hiop:unauthorized", unauthorized);
+  }, [navigate]);
+
+  const protectedPage = (page: ReactNode) => <Protected>{page}</Protected>;
+  return <Suspense fallback={<Feedback loading />}><Routes>
+    <Route path="/login" element={<LoginPage />} />
+    <Route path="/dashboard" element={protectedPage(<DashboardPage />)} />
+    <Route path="/reports" element={protectedPage(<ReportsPage />)} />
+    <Route path="/devices" element={protectedPage(<DevicesPage />)} />
+    <Route path="/devices/new" element={protectedPage(<AddDevicePage />)} />
+    <Route path="/devices/:id/edit" element={protectedPage(<EditDevicePage />)} />
+    <Route path="/devices/:id" element={protectedPage(<DeviceDetailsPage />)} />
+    <Route path="/network" element={protectedPage(<NetworkPage />)} />
+    <Route path="/alerts" element={protectedPage(<AlertsPage />)} />
+    <Route path="/tickets" element={protectedPage(<TicketsPage />)} />
+    <Route path="/tickets/new" element={protectedPage(<TicketFormPage mode="create" />)} />
+    <Route path="/tickets/:id/edit" element={protectedPage(<TicketFormPage mode="edit" />)} />
+    <Route path="/tickets/:id" element={protectedPage(<TicketDetailsPage />)} />
+    <Route path="/hierarchy" element={protectedPage(<HierarchyPage />)} />
+    <Route path="/users" element={protectedPage(<UsersPage />)} />
+    <Route path="/users/new" element={protectedPage(<UserFormPage mode="create" />)} />
+    <Route path="/users/:id/edit" element={protectedPage(<UserFormPage mode="edit" />)} />
+    <Route path="/users/:id" element={protectedPage(<UserDetailsPage />)} />
+    <Route path="/audit" element={protectedPage(<AuditPage />)} />
+    <Route path="/settings" element={protectedPage(<SettingsPage />)} />
+    <Route path="/" element={<Navigate to="/dashboard" replace />} />
+    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+  </Routes></Suspense>;
+}

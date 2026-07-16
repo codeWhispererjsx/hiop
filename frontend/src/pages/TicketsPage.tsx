@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
@@ -22,6 +22,7 @@ export default function TicketsPage() {
   const location = useLocation();
   const successNotice = (location.state as {notice?: string} | null)?.notice;
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const [status, setStatus] = useState(params.get("status") ?? "All");
   const [priority, setPriority] = useState("All");
   const [assignee, setAssignee] = useState("All");
@@ -35,12 +36,12 @@ export default function TicketsPage() {
   }, [tickets.data, userNames]);
   const filtered = useMemo(() => (tickets.data ?? []).filter(ticket => {
     const text = `${ticket.title} ${ticket.description}`.toLowerCase();
-    return (!query.trim() || text.includes(query.trim().toLowerCase()))
+    return (!deferredQuery.trim() || text.includes(deferredQuery.trim().toLowerCase()))
       && (status === "All" || ticket.status === status)
       && (priority === "All" || ticket.priority === priority)
       && (assignee === "All" || (assignee === "Unassigned" ? !ticket.assigned_to : ticket.assigned_to === assignee))
       && (!createdDate || dateValue(ticket.created_at) === createdDate);
-  }), [assignee, createdDate, priority, query, status, tickets.data]);
+  }), [assignee, createdDate, deferredQuery, priority, status, tickets.data]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);

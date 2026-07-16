@@ -1,4 +1,4 @@
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.models.device import Device
@@ -13,26 +13,24 @@ from app.schemas.dashboard import (
 
 
 def get_dashboard(db: Session):
-    operational_devices = db.query(Device).filter(Device.inventory_status != "Retired")
-    total_devices = operational_devices.count()
-    online_devices = operational_devices.filter(Device.network_status == "Online").count()
-    offline_devices = operational_devices.filter(Device.network_status == "Offline").count()
+    total_devices, online_devices, offline_devices = db.query(
+        func.count(Device.id),
+        func.sum(case((Device.network_status == "Online", 1), else_=0)),
+        func.sum(case((Device.network_status == "Offline", 1), else_=0)),
+    ).filter(Device.inventory_status != "Retired").one()
+    total_devices = total_devices or 0
+    online_devices = online_devices or 0
+    offline_devices = offline_devices or 0
 
     unknown_devices = total_devices - (
     online_devices + offline_devices
     )
 
-    open_tickets = db.query(Ticket).filter(
-        Ticket.status == "Open"
-    ).count()
-
-    in_progress_tickets = db.query(Ticket).filter(
-        Ticket.status == "In Progress"
-    ).count()
-
-    closed_tickets = db.query(Ticket).filter(
-        Ticket.status == "Closed"
-    ).count()
+    open_tickets, in_progress_tickets, closed_tickets = db.query(
+        func.sum(case((Ticket.status == "Open", 1), else_=0)),
+        func.sum(case((Ticket.status == "In Progress", 1), else_=0)),
+        func.sum(case((Ticket.status == "Closed", 1), else_=0)),
+    ).one()
 
     last_scan = db.query(
         func.max(NetworkScan.scanned_at)
@@ -46,9 +44,9 @@ def get_dashboard(db: Session):
         unknown=unknown_devices,
     ),
         tickets=TicketStats(
-            open=open_tickets,
-            in_progress=in_progress_tickets,
-            closed=closed_tickets,
+            open=open_tickets or 0,
+            in_progress=in_progress_tickets or 0,
+            closed=closed_tickets or 0,
         ),
         network=NetworkStats(
             last_scan=str(last_scan) if last_scan else None,

@@ -1,10 +1,10 @@
 import csv
 import io
 import math
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Query, Session
 
 from app.models.audit_log import AuditLog
@@ -66,15 +66,22 @@ def _filtered_query(
 
 
 def _summary(db: Session) -> dict[str, int]:
-    today = datetime.now(timezone.utc).date()
-    base = db.query(AuditLog)
+    today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
+    values = db.query(
+        func.count(AuditLog.id),
+        func.sum(case((AuditLog.created_at >= today_start, 1), else_=0)),
+        func.sum(case((func.lower(AuditLog.entity_type) == "user", 1), else_=0)),
+        func.sum(case((func.lower(AuditLog.entity_type) == "device", 1), else_=0)),
+        func.sum(case((func.lower(AuditLog.entity_type) == "ticket", 1), else_=0)),
+        func.sum(case((AuditLog.action.in_(SECURITY_ACTIONS), 1), else_=0)),
+    ).one()
     return {
-        "total": base.count(),
-        "today": base.filter(func.date(AuditLog.created_at) == today).count(),
-        "user_actions": base.filter(func.lower(AuditLog.entity_type) == "user").count(),
-        "device_actions": base.filter(func.lower(AuditLog.entity_type) == "device").count(),
-        "ticket_actions": base.filter(func.lower(AuditLog.entity_type) == "ticket").count(),
-        "security_events": base.filter(AuditLog.action.in_(SECURITY_ACTIONS)).count(),
+        "total": values[0] or 0,
+        "today": values[1] or 0,
+        "user_actions": values[2] or 0,
+        "device_actions": values[3] or 0,
+        "ticket_actions": values[4] or 0,
+        "security_events": values[5] or 0,
     }
 
 
