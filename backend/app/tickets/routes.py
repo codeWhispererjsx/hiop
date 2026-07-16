@@ -81,7 +81,7 @@ def update_ticket(
     ticket_id: str,
     ticket_data: TicketUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_roles(["admin", "technician"]))
 ):
     return update_ticket_service(
         db=db,

@@ -19,7 +19,7 @@ def list_alerts(db: Session = Depends(get_db), _: User = Depends(get_current_use
 
 
 @router.patch("/alerts/{alert_id}/acknowledge")
-def acknowledge_alert(alert_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def acknowledge_alert(alert_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(require_roles(["admin", "technician"]))):
     alert = db.query(Alert).filter(Alert.id == alert_id).first()
     if not alert:
         raise HTTPException(404, "Alert not found")

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 
 
@@ -21,4 +21,10 @@ class NetworkScanResponse(BaseModel):
     }
 
 class NetworkRangeScan(BaseModel):
-    network: str
+    network: str = Field(min_length=3, max_length=64)
+
+    @field_validator("network")
+    @classmethod
+    def valid_network(cls, value: str) -> str:
+        from ipaddress import ip_network
+        return str(ip_network(value.strip(), strict=False))

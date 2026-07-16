@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import ThemeToggle from "../components/ThemeToggle";
 import { endpoints } from "../lib/api";
+import { setAuthToken } from "../lib/auth";
 import "../App.css";
 
 export default function LoginPage() {
@@ -18,7 +19,8 @@ export default function LoginPage() {
     setBusy(true);
     try {
       const data = await endpoints.login(email, password);
-      localStorage.setItem("hiop_token", data.access_token);
+      setAuthToken(data.access_token);
+      setPassword("");
       navigate("/dashboard");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to sign in");

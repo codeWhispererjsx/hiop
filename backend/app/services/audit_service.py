@@ -34,6 +34,11 @@ def create_audit_log(
 SECURITY_ACTIONS = ("USER_PASSWORD_RESET", "USER_ACTIVATED", "USER_DEACTIVATED", "USER_ROLE_CHANGED", "LOGIN_SUCCESS", "LOGIN_FAILED")
 
 
+def _csv_safe(value):
+    text_value = str(value) if value is not None else ""
+    return f"'{text_value}" if text_value.startswith(("=", "+", "-", "@")) else text_value
+
+
 def _filtered_query(
     db: Session,
     actor: str | None,
@@ -118,6 +123,6 @@ def export_csv(db: Session, actor=None, action=None, entity_type=None, entity_id
     writer.writerow(["HIOP Audit Export", generated_at.isoformat()])
     writer.writerow(["ID", "Timestamp", "Actor", "Action", "Entity Type", "Entity ID", "Description"])
     for log in query.order_by(order, AuditLog.id.desc()).all():
-        writer.writerow([str(log.id), log.created_at.isoformat(), log.actor or "System", log.action, log.entity_type, log.entity_id, log.description])
+        writer.writerow([_csv_safe(value) for value in [str(log.id), log.created_at.isoformat(), log.actor or "System", log.action, log.entity_type, log.entity_id, log.description]])
     filename = f"hiop-audit-{generated_at.strftime('%Y%m%d-%H%M%S')}.csv"
     return "\ufeff" + output.getvalue(), filename

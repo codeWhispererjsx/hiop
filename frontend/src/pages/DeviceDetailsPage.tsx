@@ -26,6 +26,7 @@ export default function DeviceDetailsPage() {
   const successNotice = (location.state as { notice?: string } | null)?.notice;
   const { data: device, loading, error, reload } = useRequest(() => endpoints.device(id));
   const hierarchy = useRequest(endpoints.hierarchy, []);
+  const currentUser = useRequest(endpoints.me, []);
   const [activeTab, setActiveTab] = useState<DetailsTab>("overview");
   const [confirmingRetirement, setConfirmingRetirement] = useState(false);
   const [retiring, setRetiring] = useState(false);
@@ -62,9 +63,9 @@ export default function DeviceDetailsPage() {
         copy="Complete device information and operational history from HIOP."
         action={<div className="page-actions">
           <Link className="secondary-action" to="/devices">Back to devices</Link>
-          {device && !isRetired && <>
+          {device && !isRetired && ["admin", "technician"].includes(currentUser.data?.role ?? "") && <>
             <Link className="primary-action" to={`/devices/${id}/edit`}>Edit device</Link>
-            <button className="danger-action" onClick={() => { setRetireError(""); setConfirmingRetirement(true); }}>Retire device</button>
+            {currentUser.data?.role === "admin" && <button className="danger-action" onClick={() => { setRetireError(""); setConfirmingRetirement(true); }}>Retire device</button>}
           </>}
         </div>}
       />

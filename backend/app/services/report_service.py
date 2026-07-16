@@ -25,6 +25,11 @@ REPORTS = {
 }
 
 
+def _csv_safe(value):
+    text_value = str(value) if value is not None else ""
+    return f"'{text_value}" if text_value.startswith(("=", "+", "-", "@")) else text_value
+
+
 def _validate(report_name: str, start_date: datetime | None, end_date: datetime | None):
     if report_name not in REPORTS:
         raise HTTPException(404, "Report not found")
@@ -192,6 +197,6 @@ def export_csv(db: Session, report_name, start_date=None, end_date=None, search=
     rows = report["items"]
     if rows:
         columns = list(rows[0].keys()); writer.writerow([column.replace("_", " ").title() for column in columns])
-        for row in rows: writer.writerow([row.get(column) for column in columns])
+        for row in rows: writer.writerow([_csv_safe(row.get(column)) for column in columns])
     filename = f"hiop-{report_name}-report-{generated.strftime('%Y%m%d-%H%M%S')}.csv"
     return "\ufeff" + output.getvalue(), filename

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.schemas.user import UserResponse
@@ -6,6 +6,7 @@ from app.schemas.user import UserLogin, Token
 from app.core.security import authenticate_user, create_access_token
 from app.core.security import get_current_user
 from app.api.dependencies import get_db
+from app.core.rate_limit import login_limiter
 
 router = APIRouter(
     prefix="/auth",
@@ -15,8 +16,11 @@ router = APIRouter(
 @router.post("/login", response_model=Token)
 def login(
     user_data: UserLogin,
+    request: Request,
     db: Session = Depends(get_db)
 ):
+    client = request.client.host if request.client else "unknown"
+    login_limiter.check(client)
     user = db.query(User).filter(
         User.email == user_data.email
     ).first()
@@ -24,11 +28,13 @@ def login(
     user = authenticate_user(user, user_data.password)
 
     if not user:
+        login_limiter.failure(client)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password"
         )
 
+    login_limiter.success(client)
     access_token = create_access_token(
         data={
             "sub": user.email,

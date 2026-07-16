@@ -1,3 +1,5 @@
+import { clearAuthToken, getAuthToken } from "./auth";
+
 const API_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8001/api/v1";
 
 export class ApiError extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status; } }
@@ -6,7 +8,7 @@ const inFlightGets = new Map<string, Promise<unknown>>();
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
-  const token = localStorage.getItem("hiop_token");
+  const token = getAuthToken();
   const requestKey = method === "GET" && !init.signal ? `${token ?? "anonymous"}:${path}` : "";
   const existing = requestKey ? inFlightGets.get(requestKey) : undefined;
   if (existing) return existing as Promise<T>;
@@ -25,7 +27,7 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
   let response: Response;
   try { response = await fetch(`${API_URL}${path}`, { ...init, headers }); }
   catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
-  if (response.status === 401) { localStorage.removeItem("hiop_token"); window.dispatchEvent(new Event("hiop:unauthorized")); }
+  if (response.status === 401) { clearAuthToken(); window.dispatchEvent(new Event("hiop:unauthorized")); }
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
@@ -47,11 +49,11 @@ function queryString(values: Record<string, string | number | undefined>) {
 }
 
 async function download(path: string) {
-  const token = localStorage.getItem("hiop_token");
+  const token = getAuthToken();
   let response: Response;
   try { response = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} }); }
   catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
-  if (response.status === 401) { localStorage.removeItem("hiop_token"); window.dispatchEvent(new Event("hiop:unauthorized")); }
+  if (response.status === 401) { clearAuthToken(); window.dispatchEvent(new Event("hiop:unauthorized")); }
   if (!response.ok) throw new ApiError(`Export failed (${response.status})`, response.status);
   const disposition = response.headers.get("Content-Disposition") ?? "";
   return { blob: await response.blob(), filename: disposition.match(/filename="?([^";]+)"?/)?.[1] ?? "hiop-audit.csv" };

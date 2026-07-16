@@ -17,6 +17,13 @@ class UserCreate(BaseModel):
             raise ValueError("Username may contain letters, numbers, hyphens and underscores")
         return value
 
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, value: str):
+        if not any(char.islower() for char in value) or not any(char.isupper() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("Password must include uppercase, lowercase and numeric characters")
+        return value
+
 
 class UserUpdate(BaseModel):
     username: str | None = Field(default=None, min_length=3, max_length=50)
@@ -28,16 +35,23 @@ class UserStatusUpdate(BaseModel):
 
 
 class UserRoleUpdate(BaseModel):
-    role: str
+    role: str = Field(pattern="^(admin|technician|staff)$")
 
 
 class PasswordReset(BaseModel):
     password: str = Field(min_length=10, max_length=128)
 
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, value: str):
+        if not any(char.islower() for char in value) or not any(char.isupper() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("Password must include uppercase, lowercase and numeric characters")
+        return value
+
 
 class UserLogin(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=1, max_length=128)
 
 
 class UserResponse(BaseModel):

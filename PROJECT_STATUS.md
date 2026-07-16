@@ -1,5 +1,21 @@
 # HIOP Project Status
 
+## Epic 13 — Enterprise security hardening
+
+The full security hardening pass is complete without business-feature or design changes.
+
+- JWTs now use a configurable one-hour default lifetime, issuer validation, issued-at and unique token identifiers; production startup enforces a suitably long signing secret.
+- Failed login attempts are throttled with a safe generic response and `Retry-After`.
+- WebSocket monitoring now requires an active authenticated user and no longer permits anonymous subscriptions.
+- Browser tokens are session-scoped, migrated away from persistent local storage, checked for expiry before protected rendering, and cleared on logout or unauthorized responses.
+- Backend role enforcement was tightened for alert acknowledgement and ticket mutation; admin-only navigation and inventory controls are no longer presented to technicians.
+- Device, ticket, network, pagination, password, and role inputs have explicit normalization, formats, bounds, and enums.
+- CSV exports neutralize spreadsheet formulas. SQLAlchemy parameterization and React's escaped JSX were verified; no runtime raw-SQL or unsafe-HTML paths accept user input.
+- CORS is least-privilege for the current bearer-token architecture, and API responses include no-store and standard security headers.
+- Sixteen backend tests, frontend lint/build, FastAPI startup, real login/token behavior, CORS rejection, response headers, and authenticated/anonymous WebSocket handshakes were verified.
+
+Complete findings, severity, remediation, CSRF rationale, dependency results, and remaining production recommendations are documented in `SECURITY_REPORT.md`.
+
 ## Epic 12 — Performance optimization
 
 The HIOP v1.0 performance pass is complete without feature or design changes.

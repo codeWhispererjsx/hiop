@@ -18,6 +18,7 @@ export default function DevicesPage() {
   const locationState = location.state as { notice?: string } | null;
   const successNotice = locationState?.notice;
   const { data: devices, loading, error, reload } = useRequest(endpoints.devices);
+  const currentUser = useRequest(endpoints.me, []);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [status, setStatus] = useState(() => searchParams.get("status") || "All");
@@ -69,7 +70,7 @@ export default function DevicesPage() {
         eyebrow="Asset inventory"
         title="Devices"
         copy="View every hotel IT asset currently stored in HIOP."
-        action={<Link className="primary-action" to="/devices/new"><Icon name="devices" />Add device</Link>}
+        action={currentUser.data?.role === "admin" ? <Link className="primary-action" to="/devices/new"><Icon name="devices" />Add device</Link> : undefined}
       />
 
       {successNotice && <Toast message={successNotice} />}

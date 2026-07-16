@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
@@ -60,7 +60,7 @@ def scan_network(
     response_model=List[NetworkScanResponse]
 )
 def get_scan_history(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

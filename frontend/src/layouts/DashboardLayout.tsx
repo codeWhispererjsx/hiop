@@ -5,6 +5,7 @@ import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import { endpoints } from "../lib/api";
 import type { LiveEvent, PublicSettings, User } from "../lib/types";
+import { clearAuthToken, getAuthToken } from "../lib/auth";
 import "../styles/dashboard.css";
 export default function DashboardLayout({
   children,
@@ -36,8 +37,11 @@ export default function DashboardLayout({
     let socket: WebSocket | undefined;
     let retry: number | undefined;
     const connect = () => {
+      const token = getAuthToken();
+      if (!token) return;
       socket = new WebSocket(
         import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8001/ws/dashboard",
+        ["hiop", token],
       );
       socket.onopen = () => { setLive(true); liveStateRef.current?.(true); };
       socket.onmessage = (e) => {
@@ -62,12 +66,12 @@ export default function DashboardLayout({
     };
   }, []);
   const logout = () => {
-    localStorage.removeItem("hiop_token");
+    clearAuthToken();
     navigate("/login");
   };
   return (
     <div className="app-shell">
-      <Sidebar open={open} onClose={() => setOpen(false)} />
+      <Sidebar open={open} onClose={() => setOpen(false)} role={user?.role} />
       {open && (
         <button
           className="sidebar-scrim"

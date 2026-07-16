@@ -8,8 +8,8 @@ class ConnectionManager:
         self.active_connections: list[WebSocket] = []
         self.event_loop: asyncio.AbstractEventLoop | None = None
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
+    async def connect(self, websocket: WebSocket, subprotocol: str | None = None):
+        await websocket.accept(subprotocol=subprotocol)
 
         self.active_connections.append(websocket)
         self.event_loop = asyncio.get_running_loop()

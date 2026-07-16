@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, status
@@ -34,9 +35,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
 
-    expire = datetime.now(timezone.utc) + timedelta(hours=24)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=settings.access_token_expire_minutes)
 
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "iat": now, "iss": "hiop", "jti": str(uuid.uuid4())})
 
     encoded_jwt = jwt.encode(
         to_encode,
@@ -52,7 +54,8 @@ def decode_access_token(token: str):
         payload = jwt.decode(
             token,
             settings.secret_key,
-            algorithms=[ALGORITHM]
+            algorithms=[ALGORITHM],
+            issuer="hiop",
         )
         return payload
     except JWTError:
@@ -69,6 +72,13 @@ def authenticate_user(user, password: str):
     return user
 
 
+def user_from_token(db: Session, token: str) -> User | None:
+    payload = decode_access_token(token)
+    if payload is None or not isinstance(payload.get("sub"), str):
+        return None
+    return db.query(User).filter(User.email == payload["sub"], User.is_active.is_(True)).first()
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -81,22 +91,12 @@ def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db)
 ):
-    payload = decode_access_token(token)
-
-    if payload is None:
+    user = user_from_token(db, token)
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
-        )
-
-    email = payload.get("sub")
-
-    user = db.query(User).filter(User.email == email).first()
-
-    if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is unavailable"
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user

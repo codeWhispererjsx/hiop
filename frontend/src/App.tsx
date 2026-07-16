@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { Feedback } from "./components/Feedback";
+import { hasUsableToken } from "./lib/auth";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -22,7 +23,7 @@ const AuditPage = lazy(() => import("./pages/AuditPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 
 function Protected({ children }: { children: ReactNode }) {
-  return localStorage.getItem("hiop_token") ? children : <Navigate to="/login" replace />;
+  return hasUsableToken() ? children : <Navigate to="/login" replace />;
 }
 
 export default function App() {
