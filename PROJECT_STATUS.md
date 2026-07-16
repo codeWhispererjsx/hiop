@@ -73,3 +73,37 @@ The Network Operations Center is implemented at `/network` using only persisted 
 ### Remaining network backend gap
 
 `POST /api/v1/network/scan-all` is a synchronous request and does not expose job progress or emit per-device scan-completion events. The NOC therefore displays a truthful indeterminate running state followed by completed or failed. Determinate progress would require a job-based endpoint such as `POST /api/v1/network/scan-jobs`, returning `{ id, status, total_devices, completed_devices, failed_devices }`, plus job progress events over the existing WebSocket.
+
+## Sprint 5 — Enterprise Alerts Management
+
+The Alerts Management module is implemented at `/alerts` using persisted scanner, device, ticket, scan, audit, and WebSocket data:
+
+- Summary cards for total, active, acknowledged, critical, and today's alerts; resolved is explicitly shown as unavailable rather than fabricated.
+- A responsive alert queue with real device metadata, status transitions, messages, acknowledgement state, and operational severity derived from the real transition (`Offline` = Critical; recovery = Informational).
+- Combined search, severity, acknowledgement status, department, device, and local-date filters.
+- On-demand details showing the related device, latest scan, device-related ticket, alert audit activity, and a chronological timeline.
+- Real acknowledgement through the existing authenticated API with duplicate-action prevention and toast feedback.
+- WebSocket-driven alert refresh and new-alert notification without polling, plus Connected, Reconnecting, and Offline states.
+- Real device and ticket navigation, responsive table overflow, loading, empty, unauthorized, network-error, and backend-unavailable handling.
+
+### Alert APIs used
+
+- `GET /api/v1/alerts`
+- `PATCH /api/v1/alerts/{alert_id}/acknowledge`
+- `GET /api/v1/devices/`
+- `GET /api/v1/devices/{device_id}/scans`
+- `GET /api/v1/tickets/`
+- `GET /api/v1/audit-logs`
+- `WS /ws/dashboard`
+
+### Missing alert backend capabilities
+
+The existing alert table contains `device_id`, previous/current status, message, creation time, and acknowledgement boolean only. Complete lifecycle support requires:
+
+1. Persisted alert fields such as `alert_type`, `severity`, `state`, `acknowledged_at`, `acknowledged_by`, `resolved_at`, `resolved_by`, and nullable `ticket_id`.
+2. `GET /api/v1/alerts/{alert_id}` returning the alert plus exact device, ticket, scan, audit, and timeline relationships.
+3. `PATCH /api/v1/alerts/{alert_id}/resolve`, returning the updated alert and recording a resolution audit entry.
+4. A direct alert-to-ticket relationship instead of device-level correlation.
+5. A WebSocket `alert_created` event containing the persisted alert identifier and complete alert payload. The current `device_status_changed` event triggers one authenticated alert refresh; it does not require polling.
+
+These changes require an Alembic migration, updates to `backend/app/models/alert.py`, response schemas under `backend/app/schemas/`, lifecycle routes in `backend/app/operations/routes.py`, and richer event construction in `backend/app/services/network_service.py`.
