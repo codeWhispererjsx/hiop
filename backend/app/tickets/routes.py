@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 from app.api.dependencies import get_db
@@ -34,16 +35,6 @@ def create_ticket(
 
 @router.get("/", response_model=List[TicketResponse])
 def get_tickets(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    tickets = db.query(Ticket).all()
-
-    return tickets
-
-
-@router.get("/", response_model=List[TicketResponse])
-def get_tickets(
     status_filter: str | None = None,
     priority: str | None = None,
     search: str | None = None,
@@ -70,7 +61,19 @@ def get_tickets(
             )
         )
 
-    return query.all()
+    return query.order_by(Ticket.created_at.desc()).all()
+
+
+@router.get("/{ticket_id}", response_model=TicketResponse)
+def get_ticket(
+    ticket_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    return ticket
 
 
 @router.put("/{ticket_id}", response_model=TicketResponse)

@@ -1,7 +1,8 @@
 export type User = { id: string; username: string; email: string; role: string; is_active: boolean };
 export type Device = { id: string; asset_tag: string; hostname: string; device_type: string; brand: string; model: string; serial_number: string; department: string; location: string; ip_address: string; mac_address: string; status: string };
 export type DeviceInput = Omit<Device, "id">;
-export type Ticket = { id: string; title: string; description: string; priority: string; status: string; reported_by: string; assigned_to: string | null };
+export type Ticket = { id: string; device_id: string | null; title: string; description: string; priority: string; status: string; reported_by: string; assigned_to: string | null; created_at: string; updated_at: string };
+export type TicketInput = { title: string; description: string; priority: "Low" | "Medium" | "High"; device_id?: string | null };
 export type Scan = { id: string; device_id: string; ip_address: string; status: string; response_time: number | null };
 export type DashboardData = { devices: { total: number; online: number; offline: number; unknown: number }; tickets: { open: number; in_progress: number; closed: number }; network: { last_scan: string | null } };
 export type LiveEvent = { event: string; device_id?: string; hostname?: string; ip_address?: string; previous_status?: string; current_status?: string; message?: string };

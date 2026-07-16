@@ -107,3 +107,59 @@ The existing alert table contains `device_id`, previous/current status, message,
 5. A WebSocket `alert_created` event containing the persisted alert identifier and complete alert payload. The current `device_status_changed` event triggers one authenticated alert refresh; it does not require polling.
 
 These changes require an Alembic migration, updates to `backend/app/models/alert.py`, response schemas under `backend/app/schemas/`, lifecycle routes in `backend/app/operations/routes.py`, and richer event construction in `backend/app/services/network_service.py`.
+
+## Epic 6 — Enterprise Ticket Management
+
+The Tickets module is complete for the ticket capabilities currently exposed by FastAPI:
+
+- Real-data overview metrics for total, Open, In Progress, Closed, High-priority, and unassigned tickets.
+- Responsive ticket table with reporter, assignee, created/updated timestamps, optional device relationship, status/priority badges, and deep links.
+- Combined title/description search plus status, priority, real assignee, and created-date filters with ten-row client-side pagination.
+- Reusable validated create/edit form for title, description, supported Low/Medium/High priority, and the existing optional `device_id` relationship.
+- Deep-linked ticket details with real device context, reporter/assignee names, audit-backed chronological activity, loading/error/not-found states, and no fabricated alert relationship.
+- Real assignment to active admin/technician accounts, role-aware close/delete controls, confirmation dialogs, duplicate-action prevention, API errors, and success notifications.
+- Reopen through the existing supported `PUT /tickets/{ticket_id}` status update operation.
+- Dashboard ticket cards now navigate to real ticket details.
+- JWT handling, shared API errors, protected routing, WebSocket connectivity, light/dark themes, responsive behavior, and `#C29F04` branding remain intact.
+
+The backend now exposes `GET /api/v1/tickets/{ticket_id}` and includes the existing PostgreSQL `updated_at` field in `TicketResponse`.
+
+### Ticket APIs used
+
+- `GET /api/v1/tickets/`
+- `GET /api/v1/tickets/{ticket_id}`
+- `POST /api/v1/tickets/`
+- `PUT /api/v1/tickets/{ticket_id}`
+- `PATCH /api/v1/tickets/{ticket_id}/assign`
+- `PATCH /api/v1/tickets/{ticket_id}/close`
+- `DELETE /api/v1/tickets/{ticket_id}`
+- `GET /api/v1/users`
+- `GET /api/v1/auth/me`
+- `GET /api/v1/devices/`
+- `GET /api/v1/audit-logs`
+
+### Ticket authorization
+
+- Authenticated users may list, view, create, and update tickets.
+- Admins and technicians may assign and close tickets.
+- Admins may delete tickets and access the full users directory.
+- The UI hides role-restricted lifecycle actions, while FastAPI remains the source of truth.
+- The current users-list endpoint is admin-only, so a technician can call the assignment endpoint but cannot independently load the eligible-user directory. A role-scoped `GET /api/v1/users/eligible-assignees` endpoint should allow admins and technicians and return `[{ id, username, role, is_active }]`.
+
+### Missing ticket backend capabilities
+
+- Comments: add `GET/POST /api/v1/tickets/{ticket_id}/comments`, returning `[{ id, ticket_id, author_id, body, created_at, updated_at }]`.
+- Attachments: add authenticated upload/list/delete endpoints under `/api/v1/tickets/{ticket_id}/attachments`, returning metadata such as `{ id, filename, content_type, size, uploaded_by, created_at }`.
+- Direct alert relationship: add nullable `alert_id` or a ticket-alert association table and expose identifiers in both response schemas.
+- SLA timers: persist response/resolution targets, breach state, and service timestamps instead of calculating unsupported deadlines in the frontend.
+- Full status history: current audit entries record actions but not structured before/after values. Add `GET /api/v1/tickets/{ticket_id}/activity`, returning ordered typed events with actor, prior state, new state, and timestamp.
+- Explicit reopen lifecycle: reopening works through the supported update operation but is logged as `UPDATE_TICKET`. A dedicated `PATCH /api/v1/tickets/{ticket_id}/reopen` should enforce roles and write `REOPEN_TICKET`.
+- Ticket-specific WebSocket events: the existing socket only emits device status changes. Recommended persisted events are `ticket_created`, `ticket_updated`, `ticket_assigned`, `ticket_closed`, `ticket_reopened`, and `ticket_deleted` with ticket ID and current state.
+
+### Epic 6 verification
+
+A uniquely named runtime ticket was created against PostgreSQL, refreshed, edited, linked to a real device, assigned to a real eligible administrator, closed, reopened, filtered, and deleted. Create/update/assign/close/delete audit entries were verified, counts returned to their original values after cleanup, and no verification ticket remains.
+
+### Next recommended epic
+
+Epic 7 should add the missing service-desk collaboration and lifecycle backend contracts: eligible-assignee directory, structured ticket activity, comments, attachments, direct alert relationships, SLA policy/timers, explicit reopen, and ticket WebSocket events.

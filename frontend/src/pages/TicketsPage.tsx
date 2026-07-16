@@ -1,45 +1,82 @@
-import { type FormEvent, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
 import { Icon } from "../components/Icon";
-import Modal from "../components/Modal";
 import { Feedback } from "../components/Feedback";
+import { StatCard } from "../components/StatCard";
+import { StatusBadge } from "../components/StatusBadge";
+import { Toast } from "../components/Toast";
 import { endpoints } from "../lib/api";
 import { useRequest } from "../hooks/useRequest";
-import type { Ticket, User } from "../lib/types";
+import type { Device, Ticket } from "../lib/types";
+
+const PAGE_SIZE = 10;
+const dateValue = (value: string) => new Date(value).toLocaleDateString("en-CA");
 
 export default function TicketsPage() {
   const tickets = useRequest(endpoints.tickets, []);
   const users = useRequest(endpoints.users, []);
+  const devices = useRequest(endpoints.devices, []);
+  const [params] = useSearchParams();
+  const location = useLocation();
+  const successNotice = (location.state as {notice?: string} | null)?.notice;
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("All");
-  const [editing, setEditing] = useState<Ticket | null | "new">(null);
-  const [assigning, setAssigning] = useState<Ticket | null>(null);
-  const [busy, setBusy] = useState("");
-  const [notice, setNotice] = useState("");
-  const userNames = useMemo(() => new Map((users.data ?? []).map((user) => [user.id, user.username])), [users.data]);
-  const rows = useMemo(() => (tickets.data ?? []).filter((ticket) => (status === "All" || ticket.status === status) && `${ticket.title} ${ticket.description} ${ticket.priority}`.toLowerCase().includes(query.toLowerCase())), [tickets.data, query, status]);
-  const act = async (label: string, action: () => Promise<unknown>) => { setBusy(label); setNotice(""); try { await action(); setNotice(`${label} completed.`); await tickets.reload(); } catch (error) { setNotice(error instanceof Error ? error.message : `${label} failed`); } finally { setBusy(""); } };
+  const [status, setStatus] = useState(params.get("status") ?? "All");
+  const [priority, setPriority] = useState("All");
+  const [assignee, setAssignee] = useState("All");
+  const [createdDate, setCreatedDate] = useState("");
+  const [page, setPage] = useState(1);
+  const userNames = useMemo(() => new Map((users.data ?? []).map(user => [user.id, user.username])), [users.data]);
+  const deviceMap = useMemo(() => new Map((devices.data ?? []).map(device => [device.id, device])), [devices.data]);
+  const assignees = useMemo(() => {
+    const ids = [...new Set((tickets.data ?? []).map(ticket => ticket.assigned_to).filter((id): id is string => Boolean(id)))];
+    return ids.map(id => ({id, label:userNames.get(id) ?? `User ${id.slice(0,8)}`}));
+  }, [tickets.data, userNames]);
+  const filtered = useMemo(() => (tickets.data ?? []).filter(ticket => {
+    const text = `${ticket.title} ${ticket.description}`.toLowerCase();
+    return (!query.trim() || text.includes(query.trim().toLowerCase()))
+      && (status === "All" || ticket.status === status)
+      && (priority === "All" || ticket.priority === priority)
+      && (assignee === "All" || (assignee === "Unassigned" ? !ticket.assigned_to : ticket.assigned_to === assignee))
+      && (!createdDate || dateValue(ticket.created_at) === createdDate);
+  }), [assignee, createdDate, priority, query, status, tickets.data]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const rows = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+  const all = tickets.data ?? [];
+  const clear = () => { setQuery(""); setStatus("All"); setPriority("All"); setAssignee("All"); setCreatedDate(""); setPage(1); };
+
   return <DashboardLayout>
-    <PageTitle eyebrow="IT service desk" title="Service tickets" copy="Create, assign, update and close operational issues." action={<button className="primary-action" onClick={() => setEditing("new")}><Icon name="tickets"/>New ticket</button>}/>
-    {notice && <div className="inline-notice">{notice}</div>}
-    <section className="toolbar-panel"><div className="search-field"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tickets"/></div><select value={status} onChange={(event) => setStatus(event.target.value)}><option>All</option><option>Open</option><option>In Progress</option><option>Closed</option></select><button className="secondary-action" onClick={() => void tickets.reload()}>Refresh</button></section>
-    {tickets.loading || tickets.error || !rows.length ? <Feedback loading={tickets.loading} error={tickets.error} empty="No tickets match the current filters." onRetry={tickets.reload}/> : <section className="ticket-grid">{rows.map((ticket) => <article className="ticket-card" key={ticket.id}><header><b className={`priority ${ticket.priority.toLowerCase()}`}>{ticket.priority}</b><b className={`status-badge ${ticket.status.toLowerCase().replace(" ", "-")}`}>{ticket.status}</b></header><h2>{ticket.title}</h2><p>{ticket.description}</p><dl><div><dt>Reporter</dt><dd>{userNames.get(ticket.reported_by) ?? ticket.reported_by.slice(0, 8)}</dd></div><div><dt>Assignee</dt><dd>{ticket.assigned_to ? userNames.get(ticket.assigned_to) ?? ticket.assigned_to.slice(0, 8) : "Unassigned"}</dd></div></dl><footer><button disabled={!!busy || ticket.status === "Closed"} onClick={() => setEditing(ticket)}>Edit</button><button disabled={!!busy || ticket.status === "Closed"} onClick={() => setAssigning(ticket)}>Assign</button><button disabled={!!busy || ticket.status === "Closed"} onClick={() => void act("Close ticket", () => endpoints.closeTicket(ticket.id))}>Close</button><button disabled={!!busy} onClick={() => confirm("Delete this ticket?") && void act("Delete ticket", () => endpoints.deleteTicket(ticket.id))}>Delete</button></footer></article>)}</section>}
-    {editing && <TicketModal ticket={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await tickets.reload(); }}/>}
-    {assigning && <AssignModal ticket={assigning} users={users.data ?? []} onClose={() => setAssigning(null)} onSaved={async () => { setAssigning(null); await tickets.reload(); }}/>}
+    <PageTitle eyebrow="IT service desk" title="Enterprise tickets" copy="Manage real operational issues from creation through assignment, resolution and audit." action={<Link className="primary-action" to="/tickets/new"><Icon name="tickets"/>Create ticket</Link>}/>
+    {successNotice && <Toast message={successNotice}/>}
+    {tickets.loading || tickets.error || devices.loading || devices.error ? <Feedback loading={tickets.loading || devices.loading} error={tickets.error || devices.error} onRetry={() => void Promise.all([tickets.reload(), devices.reload(), users.reload()])}/> : <>
+      <section className="tickets-summary">
+        <StatCard label="Total tickets" value={all.length} detail="All persisted service records" icon="tickets" trend="Recorded"/>
+        <StatCard label="Open tickets" value={all.filter(item => item.status === "Open").length} detail="Awaiting assignment or action" icon="warning" tone="warning" trend="Queue"/>
+        <StatCard label="In progress" value={all.filter(item => item.status === "In Progress").length} detail="Assigned and actively handled" icon="network" tone="success" trend="Active"/>
+        <StatCard label="Closed tickets" value={all.filter(item => item.status === "Closed").length} detail="Completed service records" icon="check" tone="success" trend="Complete"/>
+        <StatCard label="High priority" value={all.filter(item => item.priority === "High").length} detail="High-priority operational issues" icon="alerts" tone="danger" trend="Priority"/>
+        <StatCard label="Unassigned" value={all.filter(item => !item.assigned_to).length} detail="Tickets without an owner" icon="users" tone="warning" trend="Ownership"/>
+      </section>
+      <section className="toolbar-panel tickets-toolbar">
+        <label className="search-field"><Icon name="search" size={16}/><input aria-label="Search tickets" placeholder="Search title or description" value={query} onChange={event => {setQuery(event.target.value);setPage(1)}}/></label>
+        <select aria-label="Ticket status" value={status} onChange={event => {setStatus(event.target.value);setPage(1)}}><option>All</option><option>Open</option><option>In Progress</option><option>Closed</option></select>
+        <select aria-label="Ticket priority" value={priority} onChange={event => {setPriority(event.target.value);setPage(1)}}><option>All</option><option>Low</option><option>Medium</option><option>High</option></select>
+        <select aria-label="Ticket assignee" value={assignee} onChange={event => {setAssignee(event.target.value);setPage(1)}}><option>All</option><option>Unassigned</option>{assignees.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+        <input className="tickets-date" aria-label="Created date" type="date" value={createdDate} onChange={event => {setCreatedDate(event.target.value);setPage(1)}}/>
+        <button className="secondary-action" onClick={clear}>Clear</button><button className="secondary-action" onClick={() => void tickets.reload()}>Refresh</button>
+      </section>
+      <section className="panel tickets-table-panel"><header className="section-head"><div><h2>Ticket queue</h2><p>{filtered.length} of {all.length} tickets match the current view.</p></div></header>
+        {!filtered.length ? <Feedback emptyTitle="No tickets found" empty="No tickets match the selected search and filters."/> : <TicketTable tickets={rows} users={userNames} devices={deviceMap}/>}
+      </section>
+      {filtered.length > 0 && <nav className="pagination" aria-label="Ticket pages"><button className="secondary-action" disabled={currentPage === 1} onClick={() => setPage(value => value - 1)}>Previous</button><div className="page-numbers">{Array.from({length:pageCount},(_,index)=>index+1).map(number => <button key={number} className={currentPage === number ? "active" : ""} aria-current={currentPage === number ? "page" : undefined} onClick={() => setPage(number)}>{number}</button>)}</div><button className="secondary-action" disabled={currentPage === pageCount} onClick={() => setPage(value => value + 1)}>Next</button></nav>}
+      {users.error && <div className="api-gap compact"><Icon name="warning"/><div><strong>Assignee names unavailable</strong><p>{users.error} Ticket data remains available and assignee identifiers are preserved.</p></div></div>}
+    </>}
   </DashboardLayout>;
 }
 
-function TicketModal({ ticket, onClose, onSaved }: { ticket: Ticket | null; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [form, setForm] = useState({ title: ticket?.title ?? "", description: ticket?.description ?? "", priority: ticket?.priority ?? "Medium", status: ticket?.status ?? "Open" });
-  const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
-  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(""); try { if (ticket) await endpoints.updateTicket(ticket.id, form); else await endpoints.createTicket(form); await onSaved(); } catch (error) { setError(error instanceof Error ? error.message : "Unable to save ticket"); } finally { setBusy(false); } };
-  return <Modal title={ticket ? "Edit service ticket" : "Create service ticket"} onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Title<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })}/></label><label>Description<textarea required rows={5} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })}/></label><label>Priority<select value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}><option>Low</option><option>Medium</option><option>High</option></select></label>{ticket && <label>Status<select value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}><option>Open</option><option>In Progress</option><option>Closed</option></select></label>}{error && <p className="form-error">{error}</p>}<footer><button type="button" className="secondary-action" onClick={onClose}>Cancel</button><button className="primary-action" disabled={busy}>{busy ? "Saving…" : "Save ticket"}</button></footer></form></Modal>;
-}
-
-function AssignModal({ ticket, users, onClose, onSaved }: { ticket: Ticket; users: User[]; onClose: () => void; onSaved: () => Promise<void> }) {
-  const [id, setId] = useState(ticket.assigned_to ?? ""); const [error, setError] = useState(""); const [busy, setBusy] = useState(false);
-  const eligible = users.filter((user) => user.is_active && ["admin", "technician"].includes(user.role));
-  const submit = async (event: FormEvent) => { event.preventDefault(); setBusy(true); setError(""); try { await endpoints.assignTicket(ticket.id, id); await onSaved(); } catch (error) { setError(error instanceof Error ? error.message : "Assignment failed"); } finally { setBusy(false); } };
-  return <Modal title={`Assign ${ticket.title}`} onClose={onClose}><form className="modal-form" onSubmit={submit}><label>Technician<select required value={id} onChange={(event) => setId(event.target.value)}><option value="">Select an active team member</option>{eligible.map((user) => <option key={user.id} value={user.id}>{user.username} — {user.role}</option>)}</select></label>{!eligible.length && <p className="form-error">No active admin or technician accounts are available.</p>}{error && <p className="form-error">{error}</p>}<footer><button type="button" className="secondary-action" onClick={onClose}>Cancel</button><button className="primary-action" disabled={busy || !id}>{busy ? "Assigning…" : "Assign ticket"}</button></footer></form></Modal>;
+function TicketTable({tickets, users, devices}: {tickets: Ticket[]; users: Map<string,string>; devices: Map<string,Device>}) {
+  const userLabel = (id: string | null) => id ? users.get(id) ?? `User ${id.slice(0,8)}` : "Unassigned";
+  return <div className="tickets-table-wrap"><table className="tickets-table"><thead><tr><th>Ticket</th><th>Priority</th><th>Status</th><th>Reporter</th><th>Assignee</th><th>Created</th><th>Updated</th><th>Related device</th><th>Actions</th></tr></thead><tbody>{tickets.map(ticket => <tr key={ticket.id}><td><Link className="ticket-title-link" to={`/tickets/${ticket.id}`}><strong>{ticket.title}</strong><span>{ticket.description}</span></Link></td><td><span className={`priority ${ticket.priority.toLowerCase()}`}>{ticket.priority}</span></td><td><StatusBadge status={ticket.status}/></td><td>{userLabel(ticket.reported_by)}</td><td>{userLabel(ticket.assigned_to)}</td><td>{new Date(ticket.created_at).toLocaleString()}</td><td>{new Date(ticket.updated_at).toLocaleString()}</td><td>{ticket.device_id ? <Link className="table-link" to={`/devices/${ticket.device_id}`}>{devices.get(ticket.device_id)?.hostname ?? "Linked device"}</Link> : "None"}</td><td><div className="row-actions"><Link to={`/tickets/${ticket.id}`}>View</Link>{ticket.status !== "Closed" && <Link to={`/tickets/${ticket.id}/edit`}>Edit</Link>}</div></td></tr>)}</tbody></table></div>;
 }
