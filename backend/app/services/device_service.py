@@ -5,6 +5,7 @@ from app.models.device import Device
 from app.models.user import User
 from app.schemas.device import DeviceCreate, DeviceUpdate
 from app.services.audit_service import create_audit_log
+from app.services.hierarchy_service import resolve_device_hierarchy
 
 
 def create_device(
@@ -12,7 +13,10 @@ def create_device(
     device: DeviceCreate,
     current_user: User
 ):
-    new_device = Device(**device.model_dump())
+    values = resolve_device_hierarchy(db, device.model_dump(exclude={"status"}))
+    if device.status in {"Active", "Inactive"}:
+        values["inventory_status"] = device.status
+    new_device = Device(**values, status=values["inventory_status"], network_status="Unknown")
 
     db.add(new_device)
     db.flush()
@@ -53,9 +57,16 @@ def update_device(
         )
 
     update_data = device_data.model_dump(exclude_unset=True)
+    legacy_status = update_data.pop("status", None)
+    if legacy_status in {"Active", "Inactive"} and "inventory_status" not in update_data:
+        update_data["inventory_status"] = legacy_status
+    update_data = resolve_device_hierarchy(db, update_data)
 
     for key, value in update_data.items():
         setattr(device, key, value)
+
+    if "inventory_status" in update_data:
+        device.status = device.inventory_status
 
     create_audit_log(
         db=db,
@@ -91,6 +102,7 @@ def delete_device(
             detail="Device not found"
         )
 
+    device.inventory_status = "Retired"
     device.status = "Retired"
 
     create_audit_log(

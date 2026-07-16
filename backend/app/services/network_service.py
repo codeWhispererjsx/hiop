@@ -6,6 +6,7 @@ from app.models.alert import Alert
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.websocket.connection_manager import manager
+from app.services.settings_service import read_network
 
 def scan_single_device(
     db: Session,
@@ -18,7 +19,8 @@ def scan_single_device(
         .first()
     )
 
-    result = ping_host(device.ip_address)
+    runtime = read_network(db)
+    result = ping_host(device.ip_address, timeout=runtime["ping_timeout_seconds"])
 
     new_scan = NetworkScan(
         device_id=device.id,
@@ -28,6 +30,7 @@ def scan_single_device(
     )
 
     db.add(new_scan)
+    device.network_status = new_scan.status
 
     status_changed = (
         previous_scan is not None
@@ -36,7 +39,7 @@ def scan_single_device(
 
     live_event = None
 
-    if status_changed:
+    if status_changed and runtime["automatic_alerts"]:
         alert = Alert(
             device_id=device.id,
             previous_status=previous_scan.status,
@@ -58,7 +61,7 @@ def scan_single_device(
             "current_status": new_scan.status
         }
 
-        if new_scan.status == "Offline":
+        if new_scan.status == "Offline" and runtime["automatic_offline_tickets"]:
             existing_open_ticket = (
                 db.query(Ticket)
                 .filter(
@@ -86,7 +89,8 @@ def scan_single_device(
                         priority="High",
                         status="Open",
                         reported_by=admin_user.id,
-                        assigned_to=None
+                        assigned_to=None,
+                        device_id=device.id,
                     )
 
                     db.add(ticket)
@@ -105,7 +109,7 @@ def scan_single_device(
 
 
 def scan_all_devices(db: Session):
-    devices = db.query(Device).all()
+    devices = db.query(Device).filter(Device.inventory_status != "Retired").all()
     results = []
 
     for device in devices:

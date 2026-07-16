@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from ping3 import ping
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
@@ -10,7 +9,9 @@ from app.models.user import User
 from app.schemas.network_scan import NetworkScanCreate, NetworkScanResponse, NetworkRangeScan
 from app.network.utils import scan_range
 from typing import List
-from app.services.network_service import scan_all_devices
+from ipaddress import ip_network
+from app.services.network_service import scan_all_devices, scan_single_device
+from app.services.settings_service import read_network
 
 
 router = APIRouter(
@@ -37,38 +38,20 @@ def scan_device(
             detail="Device not found"
         )
 
-    response_seconds = ping(
-        device.ip_address,
-        timeout=2
-    )
-
-    if response_seconds is None:
-        device_status = "Offline"
-        response_time = None
-    else:
-        device_status = "Online"
-        response_time = round(response_seconds * 1000)
-
-    scan_result = NetworkScan(
-        device_id=device.id,
-        ip_address=device.ip_address,
-        status=device_status,
-        response_time=response_time
-    )
-
-    db.add(scan_result)
-    db.commit()
-    db.refresh(scan_result)
-
-    return scan_result
+    return scan_single_device(db, device)
 
 @router.post("/scan-range")
 def scan_network(
     scan: NetworkRangeScan,
+    db: Session = Depends(get_db),
     current_user: User = Depends(
         require_roles(["admin", "technician"])
     )
 ):
+    approved = ip_network(read_network(db)["approved_network"], strict=False)
+    requested = ip_network(scan.network, strict=False)
+    if not requested.subnet_of(approved):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Scan range must be inside the approved private network")
     return scan_range(scan.network)
 
 

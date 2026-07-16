@@ -306,3 +306,36 @@ FastAPI and Vite were running during verification. Real PostgreSQL responses loa
 ### Next recommended epic
 
 Epic 10 should focus on secure notification delivery and integrations: configurable alert channels, scheduled report delivery, delivery history, retry policies, and role-scoped subscription preferences.
+
+## Epic 10 — Enterprise Settings & Administration
+
+Epic 10 is complete for the safe runtime configuration currently supported by HIOP:
+
+- Administrator-only, database-backed General, Organization, Network/Scanner, and Notification policy settings use explicit Pydantic schemas and audited transactions.
+- Authenticated public branding supplies the saved property name to the application header without exposing administration data or secrets.
+- Existing normalized departments and rooms are displayed from PostgreSQL and managed through the established Locations & Structure module. At verification time the real departments were exactly `Front Office` and `IT`.
+- Scanner configuration enforces a private approved CIDR, rejects out-of-scope range scans, validates a minimum five-minute schedule, reloads the single APScheduler job safely, and applies saved ping timeout and automatic alert/ticket choices.
+- Email configuration remains environment-only. The UI exposes configuration status and safe transport metadata but never returns or edits SMTP passwords.
+- Appearance supports persistent Light, Dark, and System preferences without a startup theme flash. `#C29F04` remains the fixed brand accent.
+- System Health reports real API, PostgreSQL, scheduler, WebSocket, email configuration, last scan, version, environment, and server time without credentials or internal paths.
+- Backup & Maintenance honestly documents the PostgreSQL operating procedure; HIOP does not expose fake backup controls, destructive restores, arbitrary SQL, or shell execution.
+
+### Epic 10 endpoints
+
+- `GET /api/v1/settings`
+- `GET /api/v1/settings/public`
+- `PUT /api/v1/settings/general`
+- `PUT /api/v1/settings/organization`
+- `PUT /api/v1/settings/network`
+- `PUT /api/v1/settings/notifications`
+- `GET /api/v1/settings/system-health`
+
+No new migration was required: Epic 10 extends the existing `system_settings` key/value table using an explicit allow-listed schema. Deployment secrets remain in environment configuration.
+
+### Epic 10 verification
+
+Frontend lint and production build pass. FastAPI compilation, import, startup, OpenAPI registration, health checks, and real PostgreSQL persistence pass. A safe default-page-size change persisted after a fresh request and was restored. Health returned Healthy, Connected database, and Running scheduler. An external `8.8.8.0/24` scan attempt returned HTTP 422. Unauthenticated Settings access returned HTTP 401. Browser verification covered real General values, the two real departments, live health, successful save notification, and Light/Dark/System appearance controls.
+
+### Settings limitations and recommended stabilization
+
+Runtime SMTP credential changes, secure test email, logo uploads, automated backup/restore, multi-property profiles, server-side personal preferences, refresh tokens, MFA, session revocation, custom permissions, and login-failure auditing remain unavailable. The next stabilization phase should add automated tests to the project virtual environment, an external secrets manager, and a deployment-tested backup/restore runbook before production rollout.

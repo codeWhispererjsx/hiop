@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import String, DateTime
+from sqlalchemy import String, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -73,6 +73,24 @@ class Device(Base):
     status: Mapped[str] = mapped_column(
         String,
         default="Active"
+    )
+
+    inventory_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="Active", server_default="Active"
+    )
+
+    network_status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="Unknown", server_default="Unknown"
+    )
+
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), index=True
+    )
+    room_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="SET NULL"), index=True
+    )
+    network_zone_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("network_zones.id", ondelete="SET NULL"), index=True
     )
 
     created_at: Mapped[DateTime] = mapped_column(

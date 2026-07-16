@@ -37,17 +37,17 @@ export default function DevicesPage() {
     );
   }, [devices, search]);
   const statuses = useMemo(
-    () => [...new Set((devices ?? []).map((device) => device.status))].sort(),
+    () => uniqueValues((devices ?? []).flatMap((device) => [device.inventory_status, device.network_status]).filter((value) => value !== "Unknown")),
     [devices],
   );
   const departments = useMemo(
-    () => [...new Set((devices ?? []).map((device) => device.department))].sort(),
+    () => uniqueValues((devices ?? []).map((device) => device.department)),
     [devices],
   );
   const filteredDevices = useMemo(
     () => visibleDevices.filter((device) =>
-      (status === "All" || device.status === status)
-      && (department === "All" || device.department === department),
+      (status === "All" || device.inventory_status.trim() === status || device.network_status.trim() === status)
+      && (department === "All" || device.department.trim() === department),
     ),
     [visibleDevices, status, department],
   );
@@ -140,7 +140,7 @@ export default function DevicesPage() {
                   <small>{device.location}</small>
                 </span>
                 <span>
-                  <StatusBadge status={device.status} />
+                  <span className="device-statuses"><StatusBadge status={device.inventory_status} /><StatusBadge status={device.network_status} /></span>
                 </span>
               </Link>
             ))}
@@ -169,4 +169,13 @@ export default function DevicesPage() {
       )}
     </DashboardLayout>
   );
+}
+
+function uniqueValues(values: string[]) {
+  const unique = new Map<string, string>();
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (trimmed && !unique.has(trimmed.toLowerCase())) unique.set(trimmed.toLowerCase(), trimmed);
+  }
+  return [...unique.values()].sort((a, b) => a.localeCompare(b));
 }

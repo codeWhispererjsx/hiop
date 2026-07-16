@@ -1,6 +1,7 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { DeviceInput } from "../lib/types";
+import { endpoints } from "../lib/api";
+import type { DeviceInput, HierarchyCatalog } from "../lib/types";
 
 type Errors = Partial<Record<keyof DeviceInput, string>>;
 
@@ -11,8 +12,6 @@ const fields: Array<{ key: keyof DeviceInput; label: string; placeholder: string
   { key: "brand", label: "Brand", placeholder: "Dell" },
   { key: "model", label: "Model", placeholder: "OptiPlex 7010" },
   { key: "serial_number", label: "Serial Number", placeholder: "Enter serial number" },
-  { key: "department", label: "Department", placeholder: "Front Office" },
-  { key: "location", label: "Location", placeholder: "Reception" },
   { key: "ip_address", label: "IP Address", placeholder: "192.168.1.10" },
   { key: "mac_address", label: "MAC Address", placeholder: "00:1A:2B:3C:4D:5E" },
 ];
@@ -28,6 +27,12 @@ export function DeviceForm({ initialValues, cancelTo, submitLabel, submittingLab
   const [errors, setErrors] = useState<Errors>({});
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [catalog, setCatalog] = useState<HierarchyCatalog | null>(null);
+  const [catalogError, setCatalogError] = useState("");
+
+  useEffect(() => {
+    endpoints.hierarchy().then(setCatalog).catch((error) => setCatalogError(error instanceof Error ? error.message : "Unable to load locations and departments."));
+  }, []);
 
   const update = (key: keyof DeviceInput, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -60,7 +65,7 @@ export function DeviceForm({ initialValues, cancelTo, submitLabel, submittingLab
               {label}
               <input
                 className={errors[key] ? "field-invalid" : ""}
-                value={form[key]}
+                value={String(form[key] ?? "")}
                 onChange={(event) => update(key, event.target.value)}
                 placeholder={placeholder}
                 aria-invalid={Boolean(errors[key])}
@@ -70,13 +75,14 @@ export function DeviceForm({ initialValues, cancelTo, submitLabel, submittingLab
               {errors[key] && <span className="field-error" id={`${key}-error`}>{errors[key]}</span>}
             </label>
           ))}
+          <HierarchySelect label="Department" value={form.department_id} fallback={form.department} options={catalog?.departments ?? []} unavailable={catalogError} error={errors.department} onChange={(id, name) => { setForm((current) => ({ ...current, department_id: id, department: name })); setErrors((current)=>({...current,department:undefined})); }} disabled={submitting} />
+          <HierarchySelect label="Room / Location" value={form.room_id} fallback={form.location} options={catalog?.rooms ?? []} unavailable={catalogError} error={errors.location} onChange={(id, name) => { setForm((current) => ({ ...current, room_id: id, location: name })); setErrors((current)=>({...current,location:undefined})); }} disabled={submitting} />
+          <HierarchySelect label="Network Zone" value={form.network_zone_id} fallback="" options={catalog?.network_zones ?? []} unavailable={catalogError} optional onChange={(id) => setForm((current) => ({ ...current, network_zone_id: id }))} disabled={submitting} />
           <label>
             Inventory Status
-            <select value={form.status} onChange={(event) => update("status", event.target.value)} disabled={submitting}>
+            <select value={form.inventory_status} onChange={(event) => update("inventory_status", event.target.value)} disabled={submitting}>
               <option value="Active">Active</option>
               <option value="Inactive">Inactive</option>
-              <option value="Online" disabled>Online (managed by monitoring)</option>
-              <option value="Offline" disabled>Offline (managed by monitoring)</option>
             </select>
             <span className="field-help">Online and Offline are updated by network monitoring. Retirement uses the Retire action.</span>
           </label>
@@ -97,8 +103,9 @@ export function DeviceForm({ initialValues, cancelTo, submitLabel, submittingLab
 
 function validate(device: DeviceInput): Errors {
   const errors: Errors = {};
-  for (const key of Object.keys(device) as Array<keyof DeviceInput>) {
-    if (!device[key].trim()) errors[key] = "This field is required.";
+  const required: Array<keyof DeviceInput> = ["asset_tag", "hostname", "device_type", "brand", "model", "serial_number", "department", "location", "ip_address", "mac_address", "inventory_status"];
+  for (const key of required) {
+    if (!String(device[key] ?? "").trim()) errors[key] = "This field is required.";
   }
   if (device.hostname && !/^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/.test(device.hostname.trim())) {
     errors.hostname = "Use letters, numbers, dots, or hyphens only.";
@@ -119,6 +126,14 @@ function isValidIpv4(value: string) {
 
 function trimDevice(device: DeviceInput): DeviceInput {
   return Object.fromEntries(
-    Object.entries(device).map(([key, value]) => [key, value.trim()]),
+    Object.entries(device).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]),
   ) as DeviceInput;
+}
+
+function HierarchySelect({ label, value, fallback, options, unavailable, error, optional = false, disabled, onChange }: { label: string; value?: string | null; fallback: string; options: Array<{id:string;name:string;is_active:boolean}>; unavailable: string; error?: string; optional?: boolean; disabled: boolean; onChange: (id: string | null, name: string) => void }) {
+  const active = options.filter((option) => option.is_active || option.id === value);
+  return <label>{label}<select value={value ?? ""} disabled={disabled || Boolean(unavailable)} onChange={(event) => { const item = options.find((option) => option.id === event.target.value); onChange(item?.id ?? null, item?.name ?? ""); }}>
+    <option value="">{optional ? `No ${label.toLowerCase()}` : `Select ${label.toLowerCase()}`}</option>
+    {active.map((option) => <option key={option.id} value={option.id}>{option.name}{option.is_active ? "" : " (Inactive)"}</option>)}
+  </select>{!value && fallback && <span className="field-help">Current legacy value: {fallback}</span>}{(unavailable||error) && <span className="field-error">{unavailable||error}</span>}</label>;
 }

@@ -13,41 +13,10 @@ from app.schemas.dashboard import (
 
 
 def get_dashboard(db: Session):
-    total_devices = db.query(Device).count()
-
-    latest_scan_times = (
-        db.query(
-            NetworkScan.device_id.label("device_id"),
-            func.max(NetworkScan.scanned_at).label("latest_scanned_at"),
-        )
-        .group_by(NetworkScan.device_id)
-        .subquery()
-    )
-
-    latest_scans = (
-        db.query(NetworkScan)
-        .join(
-            latest_scan_times,
-            (NetworkScan.device_id == latest_scan_times.c.device_id)
-            & (
-                NetworkScan.scanned_at
-                == latest_scan_times.c.latest_scanned_at
-            ),
-        )
-        .all()
-    )
-
-    online_devices = sum(
-        1
-        for scan in latest_scans
-        if scan.status == "Online"
-    )
-
-    offline_devices = sum(
-        1
-        for scan in latest_scans
-        if scan.status == "Offline"
-    )
+    operational_devices = db.query(Device).filter(Device.inventory_status != "Retired")
+    total_devices = operational_devices.count()
+    online_devices = operational_devices.filter(Device.network_status == "Online").count()
+    offline_devices = operational_devices.filter(Device.network_status == "Offline").count()
 
     unknown_devices = total_devices - (
     online_devices + offline_devices

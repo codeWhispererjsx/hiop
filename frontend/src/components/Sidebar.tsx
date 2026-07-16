@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 
 const links: { label: string; to: string; icon: IconName }[] = [
-  { label: "Overview", to: "/dashboard", icon: "dashboard" }, { label: "Reports", to: "/reports", icon: "audit" }, { label: "Devices", to: "/devices", icon: "devices" }, { label: "Network monitor", to: "/network", icon: "network" }, { label: "Alerts", to: "/alerts", icon: "alerts" }, { label: "Service tickets", to: "/tickets", icon: "tickets" }, { label: "Team & access", to: "/users", icon: "users" }, { label: "Audit trail", to: "/audit", icon: "audit" }, { label: "Settings", to: "/settings", icon: "settings" },
+  { label: "Overview", to: "/dashboard", icon: "dashboard" }, { label: "Reports", to: "/reports", icon: "audit" }, { label: "Devices", to: "/devices", icon: "devices" }, { label: "Network monitor", to: "/network", icon: "network" }, { label: "Alerts", to: "/alerts", icon: "alerts" }, { label: "Service tickets", to: "/tickets", icon: "tickets" }, { label: "Locations & structure", to: "/hierarchy", icon: "hierarchy" }, { label: "Team & access", to: "/users", icon: "users" }, { label: "Audit trail", to: "/audit", icon: "audit" }, { label: "Settings", to: "/settings", icon: "settings" },
 ];
 
 export default function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {

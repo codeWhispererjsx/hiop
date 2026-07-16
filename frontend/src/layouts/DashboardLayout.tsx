@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import { endpoints } from "../lib/api";
-import type { LiveEvent, User } from "../lib/types";
+import type { LiveEvent, PublicSettings, User } from "../lib/types";
 import "../styles/dashboard.css";
 export default function DashboardLayout({
   children,
@@ -18,12 +18,14 @@ export default function DashboardLayout({
   const [open, setOpen] = useState(false);
   const [live, setLive] = useState(false);
   const [user, setUser] = useState<User>();
+  const [branding, setBranding] = useState<PublicSettings>();
   useEffect(() => {
     void endpoints
       .me()
       .then(setUser)
       .catch(() => undefined);
   }, []);
+  useEffect(() => { void endpoints.publicSettings().then(setBranding).catch(() => undefined); }, []);
   useEffect(() => {
     let closed = false;
     let socket: WebSocket | undefined;
@@ -74,6 +76,7 @@ export default function DashboardLayout({
           live={live}
           onLogout={logout}
           user={user}
+          propertyName={branding?.property_name}
         />
         <main className="page-content">{children}</main>
       </div>

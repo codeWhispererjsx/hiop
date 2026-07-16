@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy import Boolean, String, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -42,3 +42,5 @@ class Alert(Base):
         DateTime(timezone=True),
         server_default=func.now()
     )
+
+    acknowledged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")

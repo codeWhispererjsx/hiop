@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.models.ticket import Ticket
+from app.models.device import Device
 from app.models.user import User
 from app.schemas.ticket import TicketCreate
 from app.services.audit_service import create_audit_log
@@ -12,13 +13,17 @@ def create_ticket(
     ticket: TicketCreate,
     current_user: User
 ):
+    if ticket.device_id is not None and not db.query(Device).filter(Device.id == ticket.device_id).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+
     new_ticket = Ticket(
         title=ticket.title,
         description=ticket.description,
         priority=ticket.priority,
         status="Open",
         reported_by=current_user.id,
-        assigned_to=None
+        assigned_to=None,
+        device_id=ticket.device_id,
     )
 
     db.add(new_ticket)
@@ -59,6 +64,9 @@ def update_ticket(
         )
 
     update_data = ticket_data.model_dump(exclude_unset=True)
+
+    if update_data.get("device_id") is not None and not db.query(Device).filter(Device.id == update_data["device_id"]).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
 
     for key, value in update_data.items():
         setattr(ticket, key, value)

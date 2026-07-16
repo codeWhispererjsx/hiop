@@ -10,6 +10,8 @@ from app.models.ticket import Ticket
 from app.models.network_scan import NetworkScan
 from app.models.alert import Alert
 from app.models.audit_log import AuditLog
+from app.models.system_setting import SystemSetting
+from app.models.hierarchy import Property, Building, Floor, Room, Department, NetworkZone
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

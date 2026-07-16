@@ -8,7 +8,7 @@ import { PageTitle } from "./DashboardPage";
 const initialDevice: DeviceInput = {
   asset_tag: "", hostname: "", device_type: "", brand: "", model: "",
   serial_number: "", department: "", location: "", ip_address: "",
-  mac_address: "", status: "Active",
+  mac_address: "", inventory_status: "Active",
 };
 
 export default function AddDevicePage() {

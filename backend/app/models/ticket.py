@@ -59,3 +59,10 @@ class Ticket(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+
+    device_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("devices.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )

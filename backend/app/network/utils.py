@@ -3,9 +3,9 @@ import ipaddress
 from ping3 import ping
 
 
-def ping_host(ip: str):
+def ping_host(ip: str, timeout: int = 1):
     try:
-        response = ping(ip, timeout=1)
+        response = ping(ip, timeout=timeout)
 
         if response is None or response is False:
             return {

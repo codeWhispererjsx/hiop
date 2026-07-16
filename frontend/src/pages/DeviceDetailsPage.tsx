@@ -8,7 +8,6 @@ import { Toast } from "../components/Toast";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints } from "../lib/api";
-import { statusContext } from "../lib/deviceStatus";
 import type { Device, LiveEvent } from "../lib/types";
 import { PageTitle } from "./DashboardPage";
 
@@ -26,6 +25,7 @@ export default function DeviceDetailsPage() {
   const location = useLocation();
   const successNotice = (location.state as { notice?: string } | null)?.notice;
   const { data: device, loading, error, reload } = useRequest(() => endpoints.device(id));
+  const hierarchy = useRequest(endpoints.hierarchy, []);
   const [activeTab, setActiveTab] = useState<DetailsTab>("overview");
   const [confirmingRetirement, setConfirmingRetirement] = useState(false);
   const [retiring, setRetiring] = useState(false);
@@ -52,7 +52,7 @@ export default function DeviceDetailsPage() {
     }
   };
 
-  const isRetired = device?.status.toLowerCase() === "retired";
+  const isRetired = device?.inventory_status.toLowerCase() === "retired";
 
   return (
     <DashboardLayout onLiveEvent={handleLiveEvent}>
@@ -82,7 +82,7 @@ export default function DeviceDetailsPage() {
             {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
           </nav>
 
-          {activeTab === "overview" ? <DeviceOverview device={device} /> : <DeviceHistory device={device} section={activeTab} />}
+          {activeTab === "overview" ? <DeviceOverview device={device} networkZone={hierarchy.data?.network_zones.find((zone) => zone.id === device.network_zone_id)?.name ?? ""} /> : <DeviceHistory device={device} section={activeTab} />}
         </>
       )}
 
@@ -102,9 +102,9 @@ export default function DeviceDetailsPage() {
   );
 }
 
-function DeviceOverview({ device }: { device: Device }) {
+function DeviceOverview({ device, networkZone }: { device: Device; networkZone: string }) {
   return <section className="device-details" aria-label={`Details for ${device.hostname}`}>
-    <header><div><span>{statusContext(device.status)}</span><StatusBadge status={device.status} /></div></header>
+    <header><div className="overview-statuses"><span>Inventory</span><StatusBadge status={device.inventory_status} /><span>Network</span><StatusBadge status={device.network_status} /></div></header>
     <dl>
       <Detail label="Device ID" value={device.id} />
       <Detail label="Asset Tag" value={device.asset_tag} />
@@ -115,9 +115,11 @@ function DeviceOverview({ device }: { device: Device }) {
       <Detail label="Serial Number" value={device.serial_number} />
       <Detail label="Department" value={device.department} />
       <Detail label="Location" value={device.location} />
+      <Detail label="Network Zone" value={networkZone} />
       <Detail label="IP Address" value={device.ip_address} />
       <Detail label="MAC Address" value={device.mac_address} />
-      <Detail label="Backend Status" value={device.status} />
+      <Detail label="Inventory Status" value={device.inventory_status} />
+      <Detail label="Network Status" value={device.network_status} />
     </dl>
   </section>;
 }

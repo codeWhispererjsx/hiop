@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from pydantic import BaseModel
+from datetime import datetime
 
 
 class NetworkScanCreate(BaseModel):
@@ -13,6 +14,7 @@ class NetworkScanResponse(BaseModel):
     ip_address: str
     status: str
     response_time: float | None
+    scanned_at: datetime
 
     model_config = {
         "from_attributes": True
