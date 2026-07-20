@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import MagicMock
 
 from sqlalchemy import CheckConstraint
 
@@ -73,10 +74,16 @@ class DiscoveryModelTests(unittest.TestCase):
         )
         self.assertEqual(set(DiscoveryRun.__mapper__.relationships.keys()), {"triggering_user"})
 
-    def test_service_is_an_unimplemented_contract(self):
-        service = DiscoveryService(db=object())
-        with self.assertRaises(NotImplementedError):
-            service.start_run("192.0.2.0/24", "manual")
+    def test_service_starts_a_validated_run(self):
+        db = MagicMock()
+        service = DiscoveryService(db=db, config={
+            "authorized_cidr_ranges": "10.0.0.0/24",
+            "ignore_ranges": "",
+            "max_hosts_per_run": 256,
+        })
+        run = service.start_run("10.0.0.0/24", "manual")
+        self.assertEqual(run.status, RunStatus.RUNNING)
+        db.add.assert_called_once_with(run)
 
 
 if __name__ == "__main__":

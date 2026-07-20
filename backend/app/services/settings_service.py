@@ -72,6 +72,18 @@ def read_network(db: Session) -> dict[str, Any]:
     return _group(_all(db), "network")
 
 
+def read_discovery(db: Session) -> dict[str, Any]:
+    values = _group(_all(db), "discovery")
+    for key in ("enabled", "automatic_vendor_lookup", "automatic_hostname_lookup"):
+        values[key] = _bool(values[key])
+    for key in (
+        "interval_minutes", "ping_timeout_seconds", "concurrency_limit",
+        "max_hosts_per_run", "admin_notification_threshold",
+    ):
+        values[key] = int(values[key])
+    return values
+
+
 def save_group(db: Session, prefix: str, payload: GeneralSettings | OrganizationSettings | NetworkSettings | NotificationSettings) -> None:
     for key, value in payload.model_dump().items():
         setting_key = f"{prefix}.{key}"

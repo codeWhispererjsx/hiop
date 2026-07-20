@@ -18,6 +18,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.database import Base
+from app.models.device import Device
+from app.models.hierarchy import NetworkZone
+from app.models.user import User
 
 
 class DiscoveryStatus(str, enum.Enum):
@@ -105,9 +108,9 @@ class DiscoveredDevice(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    approved_device = relationship("Device", foreign_keys=[approved_device_id])
-    reviewer = relationship("User", foreign_keys=[reviewed_by])
-    network_zone = relationship("NetworkZone", foreign_keys=[network_zone_id])
+    approved_device = relationship(Device, foreign_keys=[approved_device_id])
+    reviewer = relationship(User, foreign_keys=[reviewed_by])
+    network_zone = relationship(NetworkZone, foreign_keys=[network_zone_id])
 
 
 Index(
@@ -178,4 +181,4 @@ class DiscoveryRun(Base):
     triggered_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     error_summary: Mapped[str | None] = mapped_column(Text)
 
-    triggering_user = relationship("User", foreign_keys=[triggered_by])
+    triggering_user = relationship(User, foreign_keys=[triggered_by])
