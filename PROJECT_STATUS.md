@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 2C intelligent matching and location suggestions
+
+The backend now generates bounded, explainable candidates across official inventory, Discovery, and same-session staging rows. Configurable weighted scoring, identifier conflict penalties, conservative fuzzy comparison, retained evidence, safe merge previews, hierarchy/network/hostname location suggestions, reviewed staging links, audit events, and WebSocket progress/resolution events are implemented through migration `91b7d3e5a204`.
+
+No official inventory record is created, overwritten, merged, or deleted. The frontend Import Wizard, bulk inventory creation, Active Directory, SNMP, and background matching remain deferred.
+
 ## HIOP v2 — Epic 2B secure Excel/CSV parsing engine
 
 The backend import engine now accepts bounded `.csv` and `.xlsx` device-inventory files, validates content and storage safety, detects worksheets/headers/aliases, supports authoritative manual mapping, normalizes and validates canonical fields, retains row-level raw/normalized/error/warning metadata, marks within-file duplicates, updates audited session progress, exposes secured preview/review/error APIs, and exports CSV-safe validation findings.

@@ -28,6 +28,8 @@ class ImportSessionResponse(BaseModel):
     skipped_rows: int
     error_summary: str | None
     selected_worksheet: str | None
+    matching_state: str
+    match_summary: dict[str, Any]
     created_at: datetime
     updated_at: datetime
 
@@ -77,6 +79,11 @@ class ImportedDeviceResponse(BaseModel):
     warnings: list[dict[str, Any]]
     validation_status: ImportValidationStatus
     imported_at: datetime
+    resolution_action: str | None
+    linked_device_id: UUID | None
+    linked_discovery_id: UUID | None
+    resolved_by: str | None
+    resolved_at: datetime | None
 
 
 class ImportedDevicePage(BaseModel):
@@ -85,3 +92,60 @@ class ImportedDevicePage(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class MatchCandidateResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    import_session_id: UUID
+    imported_device_id: UUID
+    candidate_type: str
+    candidate_device_id: UUID | None
+    candidate_discovery_id: UUID | None
+    candidate_imported_device_id: UUID | None
+    match_score: int
+    match_level: str
+    match_status: str
+    evidence: list[dict[str, Any]]
+    conflicting_fields: list[dict[str, Any]]
+    matching_fields: list[str]
+    recommended_action: str
+    reviewed_by: str | None
+    reviewed_at: datetime | None
+
+
+class MatchCandidatePage(BaseModel):
+    items: list[MatchCandidateResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class CandidateResolutionRequest(BaseModel):
+    candidate_id: UUID
+
+
+class LocationReviewRequest(BaseModel):
+    action: str = Field(pattern="^(accept|reject|override)$")
+    department_id: UUID | None = None
+    building_id: UUID | None = None
+    floor_id: UUID | None = None
+    room_id: UUID | None = None
+    network_zone_id: UUID | None = None
+
+
+class LocationSuggestionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    imported_device_id: UUID
+    department_id: UUID | None
+    building_id: UUID | None
+    floor_id: UUID | None
+    room_id: UUID | None
+    network_zone_id: UUID | None
+    confidence_score: int
+    evidence: list[dict[str, Any]]
+    conflicts: list[dict[str, Any]]
+    status: str
+    reviewed_by: str | None
+    reviewed_at: datetime | None

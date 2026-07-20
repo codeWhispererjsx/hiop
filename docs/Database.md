@@ -8,9 +8,9 @@ Duplicate protection follows matching priority through PostgreSQL partial unique
 
 ## HIOP v2 inventory import persistence
 
-Alembic head `7f4e2c1a9d30` adds `import_sessions` and `imported_devices`. A UUID session owns staged rows through `ON DELETE CASCADE`; uploader history uses the existing string user key with `ON DELETE SET NULL`. PostgreSQL JSONB preserves bounded source fields without creating inventory relationships.
+Alembic head `91b7d3e5a204` adds explainable cross-system matching to `import_sessions` and `imported_devices`. A UUID session owns staged rows, candidates, and location suggestions through `ON DELETE CASCADE`; reviewer and hierarchy links preserve auditability without creating inventory.
 
-Checks constrain session and validation states, non-negative counters, and processed rows within the declared total. Lookup indexes cover session, asset tag, hostname, IP, MAC, status, and chronology. Case-insensitive partial unique indexes prevent repeated non-null asset tags and MAC addresses inside one session.
+Checks constrain session, validation, matching, score, and review states. Candidate rows require exactly one typed inventory, Discovery, or staging target; unique source/target indexes prevent repeated suggestions. Duplicate imported identifiers remain staged for review, while a unique session/source-row boundary preserves idempotency.
 
 See `DISCOVERY.md` for the complete architectural contract.
 

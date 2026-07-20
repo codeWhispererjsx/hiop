@@ -39,18 +39,19 @@ class ImportModelTests(unittest.TestCase):
             "id", "filename", "original_filename", "import_type", "file_format", "uploaded_by", "uploaded_at",
             "processing_started_at", "processing_completed_at", "status", "total_rows", "processed_rows",
             "successful_rows", "failed_rows", "duplicate_rows", "matched_rows", "skipped_rows", "error_summary",
-            "mapping_metadata", "selected_worksheet", "created_at", "updated_at",
+            "mapping_metadata", "selected_worksheet", "matching_state", "match_summary", "created_at", "updated_at",
         })
         self.assertEqual(set(ImportedDevice.__table__.columns.keys()), {
             "id", "import_session_id", "asset_tag", "hostname", "ip_address", "mac_address", "department_name",
             "building_name", "floor_name", "room_name", "network_zone", "vendor", "brand", "model",
             "serial_number", "inventory_status", "notes", "raw_data", "normalized_data", "errors", "warnings",
-            "source_row_number", "validation_status", "imported_at", "created_at", "updated_at",
+            "source_row_number", "resolution_action", "linked_device_id", "linked_discovery_id", "resolved_by",
+            "resolved_at", "validation_status", "imported_at", "created_at", "updated_at",
         })
 
     def test_relationships_constraints_and_indexes_exist(self):
-        self.assertEqual(set(ImportSession.__mapper__.relationships.keys()), {"uploader", "imported_devices"})
-        self.assertEqual(set(ImportedDevice.__mapper__.relationships.keys()), {"import_session"})
+        self.assertEqual(set(ImportSession.__mapper__.relationships.keys()), {"uploader", "imported_devices", "match_candidates"})
+        self.assertEqual(set(ImportedDevice.__mapper__.relationships.keys()), {"import_session", "match_candidates", "location_suggestion", "linked_device", "linked_discovery", "resolver"})
         constraints = {item.name for item in ImportSession.__table__.constraints if isinstance(item, CheckConstraint)}
         self.assertIn("ck_import_sessions_processed_within_total", constraints)
         indexes = {item.name: item for item in ImportedDevice.__table__.indexes}

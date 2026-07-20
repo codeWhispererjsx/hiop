@@ -65,3 +65,7 @@ Administrators manage safe runtime settings, organization text, hierarchy, scann
 - Scan rejected: the device/range may be outside the approved CIDR or your role may not permit scanning.
 
 Never place passwords, tokens, private keys, or database credentials in device, ticket, alert, or audit text.
+
+## Inventory matching review
+
+Authorized technicians can review staged import candidates, confidence levels, matching evidence, conflicts, and location suggestions. Administrators perform matching and resolution actions. A suggested link or create-new decision remains staging metadata in Epic 2C and does not add, overwrite, merge, or delete an official inventory device.

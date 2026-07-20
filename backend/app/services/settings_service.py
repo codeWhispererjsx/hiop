@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from typing import Any
 
@@ -31,6 +32,14 @@ DEFAULTS = {
     "import.duplicate_matching_enabled": "true", "import.import_batch_size": "500",
     "import.maximum_rows": "10000", "import.maximum_worksheets": "20", "import.preview_rows": "10",
     "import.maximum_columns": "100", "import.maximum_cell_length": "4000",
+    "import.exact_match_threshold": "95", "import.strong_match_threshold": "80",
+    "import.probable_match_threshold": "60", "import.weak_match_threshold": "35",
+    "import.maximum_candidates_per_row": "5", "import.fuzzy_matching_enabled": "true",
+    "import.hostname_similarity_threshold": "88", "import.fuzzy_similarity_threshold": "90",
+    "import.auto_suggestion_enabled": "true", "import.subnet_mapping_enabled": "true",
+    "import.hostname_rule_mapping_enabled": "true", "import.conflict_penalty": "35",
+    "import.candidate_recomputation_batch_size": "250", "import.subnet_mapping_rules": "[]",
+    "import.hostname_mapping_rules": "[]", "import.hierarchy_aliases": "{}",
 }
 
 
@@ -91,7 +100,7 @@ def read_discovery(db: Session) -> dict[str, Any]:
 
 def read_import_settings(db: Session) -> dict[str, Any]:
     values = _group(_all(db), "import")
-    return {
+    result = {
         "maximum_import_file_size": int(values["maximum_import_file_size"]),
         "supported_formats": [item.strip() for item in values["supported_formats"].split(",") if item.strip()],
         "duplicate_matching_enabled": _bool(values["duplicate_matching_enabled"]),
@@ -102,6 +111,14 @@ def read_import_settings(db: Session) -> dict[str, Any]:
         "maximum_columns": int(values["maximum_columns"]),
         "maximum_cell_length": int(values["maximum_cell_length"]),
     }
+    for key in ("exact_match_threshold", "strong_match_threshold", "probable_match_threshold", "weak_match_threshold", "maximum_candidates_per_row", "hostname_similarity_threshold", "fuzzy_similarity_threshold", "conflict_penalty", "candidate_recomputation_batch_size"):
+        result[key] = int(values[key])
+    for key in ("fuzzy_matching_enabled", "auto_suggestion_enabled", "subnet_mapping_enabled", "hostname_rule_mapping_enabled"):
+        result[key] = _bool(values[key])
+    for key in ("subnet_mapping_rules", "hostname_mapping_rules", "hierarchy_aliases"):
+        try: result[key] = json.loads(values[key])
+        except (TypeError, ValueError): result[key] = [] if key != "hierarchy_aliases" else {}
+    return result
 
 
 def save_group(db: Session, prefix: str, payload: GeneralSettings | OrganizationSettings | NetworkSettings | NotificationSettings | DiscoverySettings) -> None:

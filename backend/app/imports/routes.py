@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db
 from app.core.security import require_roles
 from app.models.user import User
-from app.schemas.inventory_import import ImportedDevicePage, ImportMappingRequest, ImportSessionResponse, ImportUploadResponse
+from app.schemas.inventory_import import CandidateResolutionRequest, ImportedDevicePage, ImportedDeviceResponse, ImportMappingRequest, ImportSessionResponse, ImportUploadResponse, LocationReviewRequest, LocationSuggestionResponse, MatchCandidatePage, MatchCandidateResponse
+from app.services.import_matching_service import ImportMatchingService, MatchingConflictError, MatchingNotFoundError, MatchingValidationError
 from app.services.import_service import ImportConflictError, ImportNotFoundError, ImportService, ImportValidationError
 
 
@@ -17,9 +18,9 @@ reader = require_roles(["admin", "technician"])
 
 
 def _error(exc: Exception) -> HTTPException:
-    if isinstance(exc, ImportNotFoundError): return HTTPException(404, str(exc))
-    if isinstance(exc, ImportConflictError): return HTTPException(409, str(exc))
-    if isinstance(exc, ImportValidationError): return HTTPException(422, str(exc))
+    if isinstance(exc, (ImportNotFoundError, MatchingNotFoundError)): return HTTPException(404, str(exc))
+    if isinstance(exc, (ImportConflictError, MatchingConflictError)): return HTTPException(409, str(exc))
+    if isinstance(exc, (ImportValidationError, MatchingValidationError)): return HTTPException(422, str(exc))
     if isinstance(exc, ValueError): return HTTPException(400, str(exc))
     return HTTPException(500, "Import operation failed")
 
@@ -85,4 +86,58 @@ def export_import_errors(session_id: UUID, db: Session = Depends(get_db), _: Use
 @router.post("/{session_id}/cancel", response_model=ImportSessionResponse)
 def cancel_import(session_id: UUID, db: Session = Depends(get_db), actor: User = Depends(admin)):
     try: return ImportService(db).cancel(session_id, actor)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/match")
+def run_import_matching(session_id: UUID, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportMatchingService(db).run(session_id, actor)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.get("/{session_id}/matches", response_model=MatchCandidatePage)
+def list_import_matches(session_id: UUID, match_level: str | None = Query(None, pattern="^(exact|strong|probable|weak|none)$"), match_status: str | None = Query(None, pattern="^(pending|accepted|rejected|resolved|ignored)$"), recommended_action: str | None = Query(None, pattern="^(link|merge|create_new|review|skip)$"), minimum_score: int = Query(0, ge=0, le=100), has_conflicts: bool | None = None, page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), db: Session = Depends(get_db), _: User = Depends(reader)):
+    try: return ImportMatchingService(db).matches(session_id, level=match_level, status=match_status, action=recommended_action, minimum_score=minimum_score, has_conflicts=has_conflicts, page=page, page_size=page_size)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.get("/{session_id}/rows/{row_id}/matches", response_model=list[MatchCandidateResponse])
+def row_import_matches(session_id: UUID, row_id: UUID, db: Session = Depends(get_db), _: User = Depends(reader)):
+    try: return ImportMatchingService(db).row_matches(session_id, row_id)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.get("/{session_id}/rows/{row_id}/merge-plan")
+def import_merge_plan(session_id: UUID, row_id: UUID, candidate_id: UUID | None = None, db: Session = Depends(get_db), actor: User = Depends(reader)):
+    try: return ImportMatchingService(db).merge_plan(session_id, row_id, candidate_id, actor)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/rows/{row_id}/accept-match", response_model=MatchCandidateResponse)
+def accept_import_match(session_id: UUID, row_id: UUID, payload: CandidateResolutionRequest, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportMatchingService(db).resolve_candidate(session_id, row_id, payload.candidate_id, actor, accept=True)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/rows/{row_id}/reject-match", response_model=MatchCandidateResponse)
+def reject_import_match(session_id: UUID, row_id: UUID, payload: CandidateResolutionRequest, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportMatchingService(db).resolve_candidate(session_id, row_id, payload.candidate_id, actor, accept=False)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/rows/{row_id}/mark-create-new", response_model=ImportedDeviceResponse)
+def mark_import_create_new(session_id: UUID, row_id: UUID, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportMatchingService(db).mark_create_new(session_id, row_id, actor)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/rows/{row_id}/location-suggestion", response_model=LocationSuggestionResponse)
+def review_location_suggestion(session_id: UUID, row_id: UUID, payload: LocationReviewRequest, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportMatchingService(db).review_location(session_id, row_id, actor, payload.action, payload.model_dump(exclude={"action"}))
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/matches/recompute")
+def recompute_import_matches(session_id: UUID, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportMatchingService(db).run(session_id, actor, recompute=True)
     except Exception as exc: raise _error(exc) from exc

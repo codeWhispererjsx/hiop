@@ -111,3 +111,39 @@ Admins own mutations. Admins and technicians may read session, mapping, staged r
 Row codes include `required`, `control_character`, `too_long`, `invalid_asset_tag`, `invalid_hostname`, `invalid_ipv4`, `invalid_mac`, `invalid_inventory_status`, `formula_ignored`, `column_count`, and `duplicate_in_file`. Request errors distinguish unsupported/mismatched/empty/oversized files, malformed CSV, corrupt or unsafe workbooks, missing/ambiguous mappings, missing worksheets, active processing, and unknown sessions.
 
 Epic 2B does not implement Discovery matching, inventory matching, hierarchy inference, inventory create/merge, approval, frontend wizard, background workers, or automatic import scheduling.
+
+## Epic 2C matching architecture
+
+Validated `valid`, `warning`, and `duplicate` staging rows are compared with official `Device` records, `DiscoveredDevice` observations, and other rows in the same import session. Indexed exact identifier and bounded hostname-prefix queries produce a small candidate pool; conservative fuzzy comparison runs only inside that pool. At most five ranked candidates are retained per row by default. Recomputing replaces pending results while preserving reviewed evidence and resolved rows.
+
+`ImportMatchCandidate` records exactly one typed target, a 0–100 score, level, review state, recommended action, matching fields, weighted evidence, and identifier conflicts. `ImportLocationSuggestion` independently stores hierarchy/zone foreign keys, confidence, evidence, conflicts, and review state. The staging row retains any reviewed link or create-new decision; official inventory remains unchanged.
+
+### Scoring and conflicts
+
+Default exact weights are MAC 96, asset tag 95, serial 92, hostname 40, IP 35, network zone 12, department/room 10, model 7, and vendor/brand 5. Scores are capped at 100. Conflicting non-empty MAC, asset tag, or serial values subtract the configurable conflict penalty (35 by default). Similar text contributes only a small bounded amount and fuzzy-only evidence can never recommend a link or merge.
+
+Configurable levels are exact 95–100, strong 80–94, probable 60–79, weak 35–59, and none below 35. IP alone is therefore weak and advisory. Conflicts force manual review regardless of the remaining score. Evidence records field, comparison kind, weight or similarity, and penalty so administrators can explain every result.
+
+### Review and merge safety
+
+Accepting a candidate links the staging row to the selected inventory or Discovery record, records reviewer/time, ignores contradictory pending candidates, writes audit history, and emits a safe WebSocket event. Rejecting retains the candidate. Mark-create-new records an advisory decision for a later phase and creates no Device.
+
+Merge plans are read-only previews. They identify fields that could enrich empty inventory values, fields preserved from inventory, explicit conflicts requiring administrator decisions, related Discovery identity, and audit impact. No merge endpoint, destructive overwrite, deletion, or inventory creation exists in Epic 2C.
+
+### Location and organization suggestions
+
+Suggestions use exact case-insensitive hierarchy names first, then configured aliases, conservative unambiguous fuzzy names, accepted candidate hierarchy/zone identifiers, longest-prefix private subnet rules, and ordered safe hostname glob rules. Multiple close hierarchy results remain ambiguous. Subnet and hostname rules contain only IDs and declarative CIDR/glob text; arbitrary code or regular-expression execution is not supported. Overrides must reference existing active hierarchy records.
+
+### Matching API
+
+- `POST /api/v1/imports/{session_id}/match`
+- `GET /api/v1/imports/{session_id}/matches`
+- `GET /api/v1/imports/{session_id}/rows/{row_id}/matches`
+- `GET /api/v1/imports/{session_id}/rows/{row_id}/merge-plan`
+- `POST /api/v1/imports/{session_id}/rows/{row_id}/accept-match`
+- `POST /api/v1/imports/{session_id}/rows/{row_id}/reject-match`
+- `POST /api/v1/imports/{session_id}/rows/{row_id}/mark-create-new`
+- `POST /api/v1/imports/{session_id}/rows/{row_id}/location-suggestion`
+- `POST /api/v1/imports/{session_id}/matches/recompute`
+
+Administrators run and resolve matching. Administrators and technicians may read candidates, evidence, summaries, location suggestions, and merge plans. Matching is synchronous and process-local in this phase; production-scale background orchestration and the Import Wizard remain future work.

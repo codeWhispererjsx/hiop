@@ -27,6 +27,8 @@ Except for `POST /auth/login`, all application routes require `Authorization: Be
 
 Inventory import endpoints stage validated device candidates only. They never create or update official inventory. Upload accepts multipart `.csv` and `.xlsx`, returns a bounded mapping preview, and never exposes the temporary server filename or path. Mutation routes are administrator-only.
 
+Epic 2C adds administrator matching/recompute, candidate accept/reject, create-new recommendation, and location-review routes under `/imports/{session_id}`. Admins and technicians can list ranked candidates and inspect evidence or a non-destructive merge plan. These routes retain staging history and never create, overwrite, merge, or delete an official inventory device.
+
 Supported report names are `devices`, `network`, `alerts`, `tickets`, `users`, `audit`, and `discovery`. CSV export honors filters and neutralizes spreadsheet-formula prefixes.
 
 Discovery settings are returned in the administrator settings bundle and updated with `PUT /settings/discovery`. The API accepts only validated private IPv4 CIDRs and bounded execution values. Discovery mutation routes are administrator-only; authenticated users may read Discovery data.
