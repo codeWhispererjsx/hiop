@@ -1,10 +1,26 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 1E Discovery integration
+
+Discovery is complete at version `2.0.0-dev` and integrated with the existing scheduler, audited runtime settings, Reports Center, email notification policy, authenticated WebSockets, and inventory approval workflow. The scheduler owns one `automatic_discovery` job, replaces it on configuration changes, coalesces missed intervals, and prevents overlapping runs. Authorized/ignored private CIDRs, host limits, timeouts, and concurrency remain enforced for manual and scheduled runs.
+
+The module remains deliberately conservative: no TCP/UDP port scan, service enumeration, credential probing, public range, automatic inventory creation, or certainty claim is supported. Production deployment still requires one scheduler-owning backend process until scheduling is externalized or protected by a distributed lock.
+
 ## HIOP v2 — Epic 1A Discovery foundation
 
 The backend architectural foundation for Discovery is complete without changing v1 behavior. It adds constrained `DiscoveredDevice` and `DiscoveryRun` models, tiered duplicate-prevention indexes, relationships to inventory/users/network zones, migration `c87d380fc50a`, persistence-only repositories, an unimplemented service contract, disabled backend configuration defaults, model/migration tests, and architecture documentation.
 
 Scanning, scheduler integration, API endpoints, frontend pages, review/approval behavior, and inventory creation remain explicitly deferred.
+
+## Epic 15 — Version 1.0.0 release candidate
+
+The final engineering and documentation pass is complete at the application level. Frontend and backend version metadata now agree on `1.0.0`; the repository has release, user, administrator, developer, production-checklist, changelog, architecture, API, database, deployment, operations, security, performance, project-status, and bug-register documentation.
+
+Real PostgreSQL acceptance exercised administrator and technician authentication/authorization, device create/view/update/scan/soft-retire, an Online-to-Offline transition, alert generation and acknowledgement, automatic ticket creation/assignment/closure, a second ticket lifecycle, retained device history, audit records/export, reports, dashboard, hierarchy, settings health, and inactive-user rejection. The final evidence record is documented in `RELEASE_CANDIDATE.md`.
+
+RC defects fixed: inaccurate frontend version metadata, fabricated sidebar health/sync copy, missing approved-CIDR enforcement for single-device scans, obsolete core technical documentation, and tracked development leftovers. `BUG_TRACKER.md` contains severity, root cause, resolution, and status.
+
+Production acceptance remains conditional on the deployment checklist: real production secrets, HTTPS/DNS, an encrypted backup plus successful restore drill, target-host container image build and advisory scan, monitoring/log retention, and the single-worker scheduler constraint. The existing `v1.0.0` Git tag points to older commit `1a37fbb`; it must not be force-moved without an explicit release-owner decision.
 
 ## Epic 14 — Production deployment and infrastructure
 

@@ -7,10 +7,10 @@ from app.api.dependencies import get_db
 from app.core.security import get_current_user, require_roles
 from app.models.alert import Alert
 from app.models.user import User
-from app.schemas.settings import GeneralSettings, NetworkSettings, NotificationSettings, OrganizationSettings, PublicSettings, SettingsBundle, SystemHealth
+from app.schemas.settings import DiscoverySettings, GeneralSettings, NetworkSettings, NotificationSettings, OrganizationSettings, PublicSettings, SettingsBundle, SystemHealth
 from app.services.audit_service import create_audit_log
 from app.services import settings_service
-from app.services.scheduler_service import configure_scheduler
+from app.services.scheduler_service import configure_discovery_scheduler, configure_scheduler
 
 router = APIRouter(tags=["Operations"])
 @router.get("/alerts")
@@ -69,6 +69,13 @@ def update_network(payload: NetworkSettings, db: Session = Depends(get_db), user
 @router.put("/settings/notifications", response_model=SettingsBundle)
 def update_notifications(payload: NotificationSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
     return save_settings_group(db, user, "notifications", payload)
+
+
+@router.put("/settings/discovery", response_model=SettingsBundle)
+def update_discovery(payload: DiscoverySettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
+    result = save_settings_group(db, user, "discovery", payload)
+    configure_discovery_scheduler(payload.enabled, payload.interval_minutes)
+    return result
 
 
 @router.get("/settings/system-health", response_model=SystemHealth)

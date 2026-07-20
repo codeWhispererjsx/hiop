@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.network_scan import NetworkScan
 from app.models.system_setting import SystemSetting
-from app.schemas.settings import GeneralSettings, NetworkSettings, NotificationSettings, OrganizationSettings
+from app.schemas.settings import DiscoverySettings, GeneralSettings, NetworkSettings, NotificationSettings, OrganizationSettings
 
 
 DEFAULTS = {
@@ -42,7 +42,7 @@ def _bool(value: str) -> bool:
 
 def _group(values: dict[str, str], prefix: str) -> dict[str, Any]:
     result = {key.removeprefix(prefix + "."): value for key, value in values.items() if key.startswith(prefix + ".")}
-    for key in ("automatic_scanning", "exclude_retired_devices", "automatic_alerts", "automatic_offline_tickets", "email_notifications", "device_offline", "device_restored", "ticket_assignment", "critical_alerts"):
+    for key in ("automatic_scanning", "exclude_retired_devices", "automatic_alerts", "automatic_offline_tickets", "email_notifications", "device_offline", "device_restored", "ticket_assignment", "critical_alerts", "enabled", "automatic_vendor_lookup", "automatic_hostname_lookup"):
         if key in result: result[key] = _bool(result[key])
     for key in ("default_page_size", "scan_interval_minutes", "ping_timeout_seconds", "max_concurrent_workers", "offline_threshold"):
         if key in result: result[key] = int(result[key])
@@ -57,9 +57,10 @@ def read_bundle(db: Session) -> dict[str, Any]:
     return {
         "general": _group(values, "general"), "organization": _group(values, "organization"),
         "network": _group(values, "network"), "notifications": _group(values, "notifications"),
+        "discovery": read_discovery(db),
         "email": {"configured": configured, "host": "smtp.gmail.com" if settings.email_address else None, "port": 465 if settings.email_address else None, "security": "TLS" if settings.email_address else "Not configured", "credentials_editable": False},
         "security": {"authentication": "JWT bearer token", "access_token_lifetime": f"{settings.access_token_expire_minutes} minutes", "roles": ["admin", "technician"], "inactive_user_login_blocked": True, "failed_login_auditing": False, "refresh_tokens": False, "mfa": False, "session_revocation": False},
-        "application": {"product_name": "Hotel IT Operations Portal", "short_name": "HIOP", "frontend_version": "1.0.0", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": settings.environment.title()},
+        "application": {"product_name": "Hotel IT Operations Portal", "short_name": "HIOP", "frontend_version": "2.0.0-dev", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": settings.environment.title()},
     }
 
 
@@ -84,7 +85,7 @@ def read_discovery(db: Session) -> dict[str, Any]:
     return values
 
 
-def save_group(db: Session, prefix: str, payload: GeneralSettings | OrganizationSettings | NetworkSettings | NotificationSettings) -> None:
+def save_group(db: Session, prefix: str, payload: GeneralSettings | OrganizationSettings | NetworkSettings | NotificationSettings | DiscoverySettings) -> None:
     for key, value in payload.model_dump().items():
         setting_key = f"{prefix}.{key}"
         stored = "" if value is None else str(value).lower() if isinstance(value, bool) else str(value)

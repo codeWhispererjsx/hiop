@@ -1,40 +1,62 @@
-# HIOP API contract
+# HIOP 1.0.0 API
 
-Base URL: `http://127.0.0.1:8000/api/v1`
+Development base URL: `http://127.0.0.1:8001/api/v1`. Production clients use same-origin `/api/v1`. FastAPI exposes the authoritative OpenAPI document at `/openapi.json` and interactive documentation at `/docs` when enabled.
 
-All endpoints except login require `Authorization: Bearer <JWT>`. The interactive OpenAPI contract is available at `/docs` while FastAPI is running.
+Except for `POST /auth/login`, all application routes require `Authorization: Bearer <JWT>`. `/health` is intentionally public and secret-safe. The dashboard WebSocket is `/ws/dashboard` and requires the JWT as the second WebSocket subprotocol after `hiop`.
 
-## Settings and administration
+## Endpoint catalog
 
-Settings mutations and system health are administrator-only. `GET /api/v1/settings/public` is available to authenticated users for non-sensitive branding.
+| Area | Endpoints |
+| --- | --- |
+| Authentication | `POST /auth/login`, `GET /auth/me` |
+| Dashboard | `GET /dashboard/` |
+| Devices | `GET/POST /devices/`, `GET/PUT/DELETE /devices/{id}` |
+| Device history | `GET /devices/{id}/scans`, `/alerts`, `/tickets`, `/audit-logs` |
+| Network | `POST /network/scan`, `POST /network/scan-all`, `POST /network/scan-range`, `GET /network/history` |
+| Alerts | `GET /alerts`, `PATCH /alerts/{id}/acknowledge` |
+| Tickets | `GET/POST /tickets/`, `GET/PUT/DELETE /tickets/{id}`, `PATCH /tickets/{id}/assign`, `PATCH /tickets/{id}/close` |
+| Users | `GET /users/roles`, `GET /users/eligible-assignees`, admin CRUD/status/role/reset-password routes under `/users` |
+| User audit | `GET /users/{id}/audit` |
+| Audit | `GET /audit-logs`, `GET /audit-logs/{id}`, `GET /audit-logs/export` |
+| Reports | `GET /reports/summary`, `GET /reports/{name}`, `GET /reports/{name}/export` |
+| Hierarchy | `GET /hierarchy`, admin create/update/deactivate under `/hierarchy/{kind}` |
+| Settings | `GET /settings/public`; admin `GET /settings`, grouped `PUT` routes, and `GET /settings/system-health` |
+| Live updates | `WS /ws/dashboard` |
+| Discovery | `GET /discovery`, `/discovery/{id}`, `/discovery/stats`, `/discovery/export`; admin run, approve, ignore, reject, and bulk routes |
 
-| Method | Endpoint | Purpose |
-| --- | --- | --- |
-| GET | `/settings` | Read the explicit non-secret settings bundle |
-| GET | `/settings/public` | Read application and property branding |
-| PUT | `/settings/general` | Update global display and formatting defaults |
-| PUT | `/settings/organization` | Update organization profile |
-| PUT | `/settings/network` | Update validated scanner and scheduler settings |
-| PUT | `/settings/notifications` | Update notification policy without SMTP secrets |
-| GET | `/settings/system-health` | Read live secret-safe component health |
+Supported report names are `devices`, `network`, `alerts`, `tickets`, `users`, `audit`, and `discovery`. CSV export honors filters and neutralizes spreadsheet-formula prefixes.
 
-The Settings API never accepts arbitrary keys and never returns secret keys, database credentials, email passwords, tokens, hashes, private keys, or connection strings.
+Discovery settings are returned in the administrator settings bundle and updated with `PUT /settings/discovery`. The API accepts only validated private IPv4 CIDRs and bounded execution values. Discovery mutation routes are administrator-only; authenticated users may read Discovery data.
 
-## Implemented endpoints
+## Authorization summary
 
-- Authentication: `POST /auth/login`, `GET /auth/me`, admin-only `POST /auth/register`
-- Dashboard: `GET /dashboard/`
-- Devices: `GET/POST /devices/`, `GET/PUT/DELETE /devices/{id}` (delete retires the asset)
-- Monitoring: `POST /network/scan`, `POST /network/scan-all`, `POST /network/scan-range`, `GET /network/history`
-- Tickets: `GET/POST /tickets/`, `PUT/DELETE /tickets/{id}`, `PATCH /tickets/{id}/assign`, `PATCH /tickets/{id}/close`
-- Alerts: `GET /alerts`, `PATCH /alerts/{id}/acknowledge`
-- Users: admin-only `GET /users`, `PATCH/DELETE /users/{id}`
-- Audit: admin/technician `GET /audit-logs`
-- Settings: `GET /settings`, admin-only `PUT /settings`
-- Live events: WebSocket `/ws/dashboard`
+- Admin: global configuration, reports, full audit, user and hierarchy management, device mutations/retirement, ticket deletion, and all supported operational actions.
+- Technician: supported monitoring, alert acknowledgement, ticket assignment/closure, eligible assignees, and authenticated operational reads.
+- Staff: authenticated reads and ticket reporting where the backend permits them.
 
-## Data and migration requirements
+Frontend visibility is convenience only; FastAPI role dependencies are authoritative.
 
-Migration `f4c8e0a4b321` adds persistent alert acknowledgement and the `system_settings` table. Run `alembic upgrade head` before starting the updated API.
+## Response behavior
 
-See [`frontend/MISSING_API.md`](../frontend/MISSING_API.md) for backend contracts required by future workflows. The frontend does not fabricate data for those features.
+- `400`: malformed business request.
+- `401`: missing, invalid, expired, or inactive-user authentication.
+- `403`: authenticated but insufficient role.
+- `404`: requested record does not exist.
+- `409`: uniqueness or lifecycle conflict where explicitly handled.
+- `422`: schema, enum, UUID, query-bound, approved-network, IP, or MAC validation failure.
+- `429`: login throttle exceeded, including `Retry-After`.
+
+Errors use FastAPI's `detail` field. The frontend safely handles string and validation-array details and falls back for non-JSON failures.
+
+## Important semantics
+
+- `DELETE /devices/{id}` soft-retires; it does not erase the device or history.
+- `DELETE /users/{id}` is a compatibility alias for account deactivation.
+- `DELETE /tickets/{id}` physically deletes and is administrator-only.
+- `Device.inventory_status` and `Device.network_status` are independent.
+- Scanner targets must fall inside the configured approved private CIDR.
+- Alert resolution, direct alert-ticket linking, ticket comments/attachments, and ticket-specific WebSocket events are not 1.0.0 API capabilities.
+
+## Secret handling
+
+Settings responses never return the JWT secret, database credentials, SMTP password, password hashes, tokens, private keys, or raw connection strings. Tokens belong only in the authorization header or authenticated WebSocket subprotocol and must not be logged.

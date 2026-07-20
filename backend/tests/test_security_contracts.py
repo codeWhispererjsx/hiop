@@ -1,5 +1,8 @@
 import unittest
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 from fastapi import HTTPException
 from jose import jwt
@@ -9,10 +12,12 @@ from app.core.config import Settings, settings
 from app.core.rate_limit import FailedLoginLimiter
 from app.core.security import ALGORITHM, create_access_token, decode_access_token
 from app.schemas.device import DeviceCreate
+from app.schemas.network_scan import NetworkScanCreate
 from app.schemas.ticket import TicketCreate, TicketUpdate
 from app.schemas.user import PasswordReset, UserCreate
 from app.services.audit_service import _csv_safe as audit_csv_safe
 from app.services.report_service import _csv_safe as report_csv_safe
+from app.scanner.routes import scan_device
 
 
 class SecurityContractTests(unittest.TestCase):
@@ -96,6 +101,16 @@ class SecurityContractTests(unittest.TestCase):
         for sanitizer in (audit_csv_safe, report_csv_safe):
             self.assertEqual(sanitizer("=HYPERLINK('bad')"), "'=HYPERLINK('bad')")
             self.assertEqual(sanitizer("ordinary"), "ordinary")
+
+    def test_single_device_scans_stay_inside_approved_network(self):
+        device_id = uuid4()
+        device = SimpleNamespace(id=device_id, ip_address="192.0.2.25")
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = device
+        with patch("app.scanner.routes.read_network", return_value={"approved_network": "10.50.20.0/24"}):
+            with self.assertRaises(HTTPException) as error:
+                scan_device(NetworkScanCreate(device_id=device_id), db=db, current_user=SimpleNamespace())
+        self.assertEqual(error.exception.status_code, 422)
 
 
 

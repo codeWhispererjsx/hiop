@@ -118,6 +118,12 @@ class DiscoveryService:
             logger.exception("Discovery WebSocket notification failed")
         self._email_notification(subject, body)
 
+    def _publish(self, event: dict[str, Any]) -> None:
+        try:
+            self.publisher(event)
+        except Exception:
+            logger.exception("Discovery WebSocket notification failed")
+
     def _settings(self) -> dict[str, Any]:
         return self.config.copy() if self.config is not None else read_discovery(self.db)
 
@@ -337,17 +343,20 @@ class DiscoveryService:
                 )
             self.db.commit()
             self.db.refresh(run)
-            self._notify(
-                {
+            event = {
                     "event": "discovery_run_completed",
                     "run_id": str(run.id),
                     "status": run.status.value,
                     "new_devices": run.new_devices,
                     "matched_devices": run.matched_devices,
-                },
-                "HIOP discovery run completed",
-                f"Discovery run {run.id} completed with status {run.status.value}.",
-            )
+                }
+            self._publish(event)
+            threshold = max(0, int(settings.get("admin_notification_threshold", 0)))
+            if run.new_devices >= threshold:
+                self._email_notification(
+                    "HIOP discovery run completed",
+                    f"Discovery run {run.id} completed with {run.new_devices} new device(s).",
+                )
             return run
         except Exception as exc:
             self.db.rollback()

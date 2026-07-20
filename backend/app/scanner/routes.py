@@ -9,7 +9,7 @@ from app.models.user import User
 from app.schemas.network_scan import NetworkScanCreate, NetworkScanResponse, NetworkRangeScan
 from app.network.utils import scan_range
 from typing import List
-from ipaddress import ip_network
+from ipaddress import ip_address, ip_network
 from app.services.network_service import scan_all_devices, scan_single_device
 from app.services.settings_service import read_network
 
@@ -36,6 +36,13 @@ def scan_device(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Device not found"
+        )
+
+    approved = ip_network(read_network(db)["approved_network"], strict=False)
+    if ip_address(device.ip_address) not in approved:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Device IP address is outside the approved private network",
         )
 
     return scan_single_device(db, device)

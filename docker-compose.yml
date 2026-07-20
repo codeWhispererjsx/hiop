@@ -24,7 +24,7 @@ services:
     restart: "no"
     environment: &backend_environment
       APP_NAME: Hotel IT Operations Portal
-      APP_VERSION: ${APP_VERSION:-1.0.0}
+      APP_VERSION: ${APP_VERSION:-2.0.0-dev}
       ENVIRONMENT: production
       DEBUG: "false"
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL with URL-encoded database credentials}

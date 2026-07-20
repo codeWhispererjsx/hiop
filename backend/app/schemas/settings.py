@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 class GeneralSettings(BaseModel):
@@ -10,7 +10,7 @@ class GeneralSettings(BaseModel):
     date_format: Literal["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
     time_format: Literal["12-hour", "24-hour"]
     default_page_size: Literal[10, 25, 50, 100]
-    default_landing_page: Literal["/dashboard", "/devices", "/network", "/alerts", "/tickets", "/reports"]
+    default_landing_page: Literal["/dashboard", "/devices", "/network", "/discovery", "/alerts", "/tickets", "/reports"]
     support_email: EmailStr | None = None
 
 
@@ -59,11 +59,42 @@ class NotificationSettings(BaseModel):
     recipient_email: EmailStr | None = None
 
 
+class DiscoverySettings(BaseModel):
+    enabled: bool = False
+    authorized_cidr_ranges: str = Field(min_length=3, max_length=1000)
+    ignore_ranges: str = Field(default="", max_length=1000)
+    interval_minutes: int = Field(ge=15, le=10080)
+    ping_timeout_seconds: int = Field(ge=1, le=10)
+    concurrency_limit: int = Field(ge=1, le=32)
+    max_hosts_per_run: int = Field(ge=1, le=4096)
+    automatic_vendor_lookup: bool = True
+    automatic_hostname_lookup: bool = True
+    admin_notification_threshold: int = Field(ge=0, le=4096)
+
+    @field_validator("authorized_cidr_ranges", "ignore_ranges")
+    @classmethod
+    def validate_private_ranges(cls, value: str, info) -> str:
+        from app.discovery.network import parse_networks
+        networks = parse_networks(value, allow_empty=info.field_name == "ignore_ranges")
+        return ",".join(str(network) for network in networks)
+
+    @model_validator(mode="after")
+    def validate_scheduled_host_limits(self):
+        if self.enabled:
+            from app.discovery.network import parse_networks
+            for network in parse_networks(self.authorized_cidr_ranges):
+                usable = network.num_addresses if network.prefixlen >= 31 else network.num_addresses - 2
+                if usable > self.max_hosts_per_run:
+                    raise ValueError("Each scheduled authorized range must fit within max_hosts_per_run")
+        return self
+
+
 class SettingsBundle(BaseModel):
     general: GeneralSettings
     organization: OrganizationSettings
     network: NetworkSettings
     notifications: NotificationSettings
+    discovery: DiscoverySettings
     email: dict
     security: dict
     application: dict

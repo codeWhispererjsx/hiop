@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models.alert import Alert
 from app.models.audit_log import AuditLog
 from app.models.device import Device
+from app.models.discovered_device import DiscoveredDevice
 from app.models.network_scan import NetworkScan
 from app.models.ticket import Ticket
 from app.models.user import User
@@ -22,6 +23,7 @@ REPORTS = {
     "tickets": ("Tickets Report", Ticket, Ticket.created_at),
     "users": ("Users Report", User, User.created_at),
     "audit": ("Audit Report", AuditLog, AuditLog.created_at),
+    "discovery": ("Discovery Report", DiscoveredDevice, DiscoveredDevice.first_seen_at),
 }
 
 
@@ -139,6 +141,14 @@ def _audit_rows(db, start_date, end_date, search):
     return [{"id": str(row.id), "actor": row.actor, "action": row.action, "entity_type": row.entity_type, "entity_id": row.entity_id, "description": row.description, "created_at": _value(row.created_at)} for row in query.order_by(AuditLog.created_at.desc()).all()]
 
 
+def _discovery_rows(db, start_date, end_date, search):
+    query = _date(db.query(DiscoveredDevice), DiscoveredDevice.first_seen_at, start_date, end_date)
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(DiscoveredDevice.hostname.ilike(term), DiscoveredDevice.ip_address.ilike(term), DiscoveredDevice.mac_address.ilike(term), DiscoveredDevice.vendor.ilike(term)))
+    return [{"id": str(row.id), "hostname": row.hostname, "ip_address": row.ip_address, "mac_address": row.mac_address, "vendor": row.vendor, "device_type_guess": row.device_type_guess, "confidence_score": row.confidence_score, "status": row.status.value, "review_status": row.review_status.value, "times_seen": row.times_seen, "first_seen_at": _value(row.first_seen_at), "last_seen_at": _value(row.last_seen_at)} for row in query.order_by(DiscoveredDevice.last_seen_at.desc()).all()]
+
+
 def _sort(rows, sort_by, sort_order):
     if not rows:
         return rows
@@ -148,14 +158,14 @@ def _sort(rows, sort_by, sort_order):
 
 def get_report(db: Session, report_name: str, start_date=None, end_date=None, search=None, status=None, department=None, category=None, page=1, page_size=25, sort_by=None, sort_order="asc"):
     _validate(report_name, start_date, end_date)
-    loaders = {"devices": _device_rows, "network": _network_rows, "alerts": _alert_rows, "tickets": _ticket_rows, "users": _user_rows, "audit": _audit_rows}
+    loaders = {"devices": _device_rows, "network": _network_rows, "alerts": _alert_rows, "tickets": _ticket_rows, "users": _user_rows, "audit": _audit_rows, "discovery": _discovery_rows}
     rows = loaders[report_name](db, start_date, end_date, search)
     if status:
         rows = [row for row in rows if str(row.get("network_status", row.get("inventory_status", row.get("status", row.get("current_status", "Active" if row.get("is_active") else "Inactive"))))).lower() == status.lower()]
     if department:
         rows = [row for row in rows if str(row.get("department", "Unassigned")).lower() == department.lower()]
     if category:
-        rows = [row for row in rows if str(row.get("device_type", row.get("severity", row.get("priority", row.get("role", row.get("entity_type", "")))))).lower() == category.lower()]
+        rows = [row for row in rows if str(row.get("device_type", row.get("device_type_guess", row.get("severity", row.get("priority", row.get("role", row.get("entity_type", ""))))))).lower() == category.lower()]
     metrics: dict[str, Any] = {"total": len(rows)}
     charts: dict[str, list[dict[str, Any]]] = {}
     if report_name == "devices":
@@ -180,9 +190,12 @@ def get_report(db: Session, report_name: str, start_date=None, end_date=None, se
     elif report_name == "users":
         charts["role"] = _distribution([row["role"] for row in rows])
         metrics.update({"active": sum(row["is_active"] for row in rows), "inactive": sum(not row["is_active"] for row in rows), "admins": sum(row["role"] == "admin" for row in rows), "technicians": sum(row["role"] == "technician" for row in rows)})
-    else:
+    elif report_name == "audit":
         charts["entity"] = _distribution([row["entity_type"] for row in rows])
         metrics.update({"today": sum(row["created_at"][:10] == datetime.now(timezone.utc).date().isoformat() for row in rows), "user_activity": sum(row["entity_type"].lower() == "user" for row in rows), "device_activity": sum(row["entity_type"].lower() == "device" for row in rows), "ticket_activity": sum(row["entity_type"].lower() == "ticket" for row in rows)})
+    else:
+        charts = {"status": _distribution([row["status"] for row in rows]), "review": _distribution([row["review_status"] for row in rows]), "type": _distribution([row["device_type_guess"] for row in rows])}
+        metrics.update({"pending": sum(row["review_status"] == "pending" for row in rows), "approved": sum(row["review_status"] == "approved" for row in rows), "ignored": sum(row["review_status"] == "ignored" for row in rows), "rejected": sum(row["review_status"] == "rejected" for row in rows)})
     rows = _sort(rows, sort_by, sort_order)
     items, total, pages = _page(rows, page, page_size)
     return {"report": report_name, "generated_at": datetime.now(timezone.utc), "items": items, "total": total, "page": page, "page_size": page_size, "pages": pages, "metrics": metrics, "charts": charts}

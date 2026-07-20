@@ -108,6 +108,7 @@ export const endpoints = {
   updateOrganizationSettings: (body: import("./types").OrganizationSettings) => api<import("./types").SettingsBundle>("/settings/organization", { method: "PUT", body: JSON.stringify(body) }),
   updateNetworkSettings: (body: import("./types").NetworkSettings) => api<import("./types").SettingsBundle>("/settings/network", { method: "PUT", body: JSON.stringify(body) }),
   updateNotificationSettings: (body: import("./types").NotificationSettings) => api<import("./types").SettingsBundle>("/settings/notifications", { method: "PUT", body: JSON.stringify(body) }),
+  updateDiscoverySettings: (body: import("./types").DiscoverySettings) => api<import("./types").SettingsBundle>("/settings/discovery", { method: "PUT", body: JSON.stringify(body) }),
   systemHealth: () => api<import("./types").SystemHealth>("/settings/system-health"),
   hierarchy: () => api<import("./types").HierarchyCatalog>("/hierarchy"),
   createHierarchy: (kind: import("./types").HierarchyKind, body: Partial<import("./types").HierarchyItem>) => api<import("./types").HierarchyItem>(`/hierarchy/${kind}`, { method: "POST", body: JSON.stringify(body) }),

@@ -12,7 +12,7 @@ import { PageTitle } from "./DashboardPage";
 
 type Range = "today" | "7" | "30" | "90" | "custom";
 const REPORT_META: Record<ReportKey, { icon: IconName; description: string }> = {
-  devices: { icon: "devices", description: "Asset ownership, placement, inventory state, and latest network observations." }, network: { icon: "network", description: "Real scan history, response times, availability, and network-health trends." }, alerts: { icon: "alerts", description: "Operational alerts, acknowledgement, severity, and department patterns." }, tickets: { icon: "tickets", description: "Service workload, priorities, assignments, statuses, and creation trends." }, users: { icon: "users", description: "Account availability, supported roles, and access distribution." }, audit: { icon: "audit", description: "Immutable governance activity across completed HIOP modules." },
+  devices: { icon: "devices", description: "Asset ownership, placement, inventory state, and latest network observations." }, network: { icon: "network", description: "Real scan history, response times, availability, and network-health trends." }, alerts: { icon: "alerts", description: "Operational alerts, acknowledgement, severity, and department patterns." }, tickets: { icon: "tickets", description: "Service workload, priorities, assignments, statuses, and creation trends." }, users: { icon: "users", description: "Account availability, supported roles, and access distribution." }, audit: { icon: "audit", description: "Immutable governance activity across completed HIOP modules." }, discovery: { icon: "discovery", description: "Observed devices, confidence hints, review state, and retained discovery history." },
 };
 const COLUMNS: Record<ReportKey, Array<{ key: string; label: string }>> = {
   devices: ["asset_tag","hostname","device_type","brand","model","department","location","ip_address","mac_address","inventory_status","network_status","last_scan","response_time"].map((key) => ({ key, label: key.replaceAll("_", " ") })),
@@ -21,6 +21,7 @@ const COLUMNS: Record<ReportKey, Array<{ key: string; label: string }>> = {
   tickets: ["title","priority","status","reporter","assignee","created_at","updated_at"].map((key) => ({ key, label: key.replaceAll("_", " ") })),
   users: ["username","email","role","is_active","created_at","updated_at"].map((key) => ({ key, label: key.replaceAll("_", " ") })),
   audit: ["created_at","actor","action","entity_type","entity_id","description"].map((key) => ({ key, label: key.replaceAll("_", " ") })),
+  discovery: ["hostname","ip_address","mac_address","vendor","device_type_guess","confidence_score","status","review_status","times_seen","first_seen_at","last_seen_at"].map((key) => ({ key, label: key.replaceAll("_", " ") })),
 };
 
 function rangeDates(range: Range, customStart: string, customEnd: string) {
