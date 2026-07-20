@@ -6,6 +6,10 @@ Discovery is disabled by default. In Settings → Discovery, enter only organiza
 
 Never authorize public, guest, third-party, or otherwise unapproved networks. Discovery performs ICMP, passive local neighbor-cache inspection, and reverse DNS only. Run one scheduler-owning backend worker until a distributed scheduler lock is implemented.
 
+## Inventory import administration
+
+Epic 2B provides backend APIs for `.csv` and `.xlsx` upload, mapping, validation, preview rows, error review/export, and cancellation. Uploads are limited by backend settings and stage data only; they cannot create or merge inventory. Resolve ambiguous/missing column mappings before validation. Treat formula warnings, invalid identifiers, and within-file duplicates as review findings. Temporary source files are removed after processing, failure, or cancellation, while staged rows and audit history remain.
+
 ## Responsibilities
 
 Administrators own deployment secrets, database migrations, account lifecycle, approved scan scope, settings, backups, audit review, and release validation. Frontend controls are not a security boundary; verify backend responses and audit records for privileged changes.

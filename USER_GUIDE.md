@@ -4,6 +4,10 @@
 
 Discovery lists devices observed on administrator-authorized private networks. Hostname, vendor, operating-system and device-type values are hints, and Confidence shows how much supporting evidence was available; it is never a certainty score. Search, filter, sort, paginate, and open a row for retained observation details. Administrators can run Discovery and approve, ignore, or reject pending observations. Approval is the only action that creates an official inventory device; Ignore and Reject never delete discovery history.
 
+## Inventory import staging
+
+Administrators can use the backend inventory-import workflow to upload UTF-8 CSV or `.xlsx`, review detected columns, correct mappings, validate rows, and export safe validation errors. Technicians may review staged results. Imported rows are candidates only and do not appear in official Devices until a future reviewed workflow is implemented.
+
 ## Sign in and navigation
 
 Open the HIOP address supplied by IT and sign in with your organization account. Your session lasts for the configured access-token period and is limited to the current browser tab session. If HIOP returns to Login, sign in again. Sign out before leaving a shared workstation.

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.inventory_import import ImportedDevice, ImportSession
@@ -58,3 +58,19 @@ class ImportedDeviceRepository:
     def count_for_session(self, session_id: UUID) -> int:
         statement = select(func.count(ImportedDevice.id)).where(ImportedDevice.import_session_id == session_id)
         return self.db.scalar(statement) or 0
+
+    def page_for_session(self, session_id: UUID, *, status: str | None = None, search: str | None = None, source_row_number: int | None = None, offset: int = 0, limit: int = 25):
+        filters = [ImportedDevice.import_session_id == session_id]
+        if status:
+            filters.append(ImportedDevice.validation_status == status)
+        if source_row_number is not None:
+            filters.append(ImportedDevice.source_row_number == source_row_number)
+        if search:
+            term = f"%{search.strip()}%"
+            filters.append(or_(ImportedDevice.asset_tag.ilike(term), ImportedDevice.hostname.ilike(term), ImportedDevice.ip_address.ilike(term), ImportedDevice.mac_address.ilike(term), ImportedDevice.serial_number.ilike(term)))
+        total = self.db.scalar(select(func.count(ImportedDevice.id)).where(*filters)) or 0
+        statement = select(ImportedDevice).where(*filters).order_by(ImportedDevice.source_row_number).offset(offset).limit(limit)
+        return self.db.scalars(statement).all(), total
+
+    def delete_for_session(self, session_id: UUID) -> None:
+        self.db.execute(delete(ImportedDevice).where(ImportedDevice.import_session_id == session_id))

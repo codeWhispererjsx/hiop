@@ -77,6 +77,8 @@ class ImportSession(Base):
     matched_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     skipped_rows: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     error_summary: Mapped[str | None] = mapped_column(Text)
+    mapping_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    selected_worksheet: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
@@ -97,6 +99,9 @@ class ImportedDevice(Base):
         Index("ix_imported_devices_ip_address", "ip_address"),
         Index("ix_imported_devices_mac_address", "mac_address"),
         Index("ix_imported_devices_validation_status", "validation_status"),
+        Index("ix_imported_devices_session_asset_tag", "import_session_id", "asset_tag"),
+        Index("ix_imported_devices_session_mac", "import_session_id", "mac_address"),
+        Index("uq_imported_devices_session_source_row", "import_session_id", "source_row_number", unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -117,7 +122,12 @@ class ImportedDevice(Base):
     model: Mapped[str | None] = mapped_column(String(128))
     serial_number: Mapped[str | None] = mapped_column(String(128))
     inventory_status: Mapped[str | None] = mapped_column(String(32))
+    notes: Mapped[str | None] = mapped_column(Text)
     raw_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    normalized_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    errors: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    warnings: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
+    source_row_number: Mapped[int] = mapped_column(Integer, nullable=False)
     validation_status: Mapped[ImportValidationStatus] = mapped_column(
         _enum(ImportValidationStatus, "import_validation_status"),
         nullable=False,
@@ -129,19 +139,3 @@ class ImportedDevice(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
     import_session: Mapped[ImportSession] = relationship(back_populates="imported_devices")
-
-
-Index(
-    "uq_imported_devices_session_asset_tag",
-    ImportedDevice.import_session_id,
-    func.lower(ImportedDevice.asset_tag),
-    unique=True,
-    postgresql_where=ImportedDevice.asset_tag.is_not(None),
-)
-Index(
-    "uq_imported_devices_session_mac",
-    ImportedDevice.import_session_id,
-    func.lower(ImportedDevice.mac_address),
-    unique=True,
-    postgresql_where=ImportedDevice.mac_address.is_not(None),
-)

@@ -39,12 +39,13 @@ class ImportModelTests(unittest.TestCase):
             "id", "filename", "original_filename", "import_type", "file_format", "uploaded_by", "uploaded_at",
             "processing_started_at", "processing_completed_at", "status", "total_rows", "processed_rows",
             "successful_rows", "failed_rows", "duplicate_rows", "matched_rows", "skipped_rows", "error_summary",
-            "created_at", "updated_at",
+            "mapping_metadata", "selected_worksheet", "created_at", "updated_at",
         })
         self.assertEqual(set(ImportedDevice.__table__.columns.keys()), {
             "id", "import_session_id", "asset_tag", "hostname", "ip_address", "mac_address", "department_name",
             "building_name", "floor_name", "room_name", "network_zone", "vendor", "brand", "model",
-            "serial_number", "inventory_status", "raw_data", "validation_status", "imported_at", "created_at", "updated_at",
+            "serial_number", "inventory_status", "notes", "raw_data", "normalized_data", "errors", "warnings",
+            "source_row_number", "validation_status", "imported_at", "created_at", "updated_at",
         })
 
     def test_relationships_constraints_and_indexes_exist(self):
@@ -55,22 +56,16 @@ class ImportModelTests(unittest.TestCase):
         indexes = {item.name: item for item in ImportedDevice.__table__.indexes}
         required = {"ix_imported_devices_asset_tag", "ix_imported_devices_hostname", "ix_imported_devices_ip_address", "ix_imported_devices_mac_address", "ix_imported_devices_import_session_id"}
         self.assertTrue(required.issubset(indexes))
-        self.assertTrue(indexes["uq_imported_devices_session_asset_tag"].unique)
-        self.assertTrue(indexes["uq_imported_devices_session_mac"].unique)
+        self.assertTrue(indexes["uq_imported_devices_session_source_row"].unique)
 
     def test_repositories_are_persistence_only(self):
         db = MagicMock()
         self.assertIsInstance(ImportSessionRepository(db), ImportSessionRepository)
         self.assertIsInstance(ImportedDeviceRepository(db), ImportedDeviceRepository)
 
-    def test_service_methods_are_explicitly_deferred(self):
-        service = ImportService(MagicMock())
-        with self.assertRaises(NotImplementedError):
-            service.validate_import_file(ImportSession().id)
-
-    def test_validator_interfaces_are_abstract(self):
+    def test_validator_interfaces_are_available(self):
         validators = (IPAddressValidator, MACAddressValidator, AssetTagValidator, HostnameValidator, DepartmentValidator, BuildingValidator, FloorValidator, RoomValidator)
-        self.assertTrue(all(validator.__abstractmethods__ == {"validate"} for validator in validators))
+        self.assertTrue(all(callable(getattr(validator, "validate")) for validator in validators))
 
     def test_import_settings_are_typed(self):
         db = MagicMock()

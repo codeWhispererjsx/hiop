@@ -23,6 +23,9 @@ Except for `POST /auth/login`, all application routes require `Authorization: Be
 | Settings | `GET /settings/public`; admin `GET /settings`, grouped `PUT` routes, and `GET /settings/system-health` |
 | Live updates | `WS /ws/dashboard` |
 | Discovery | `GET /discovery`, `/discovery/{id}`, `/discovery/stats`, `/discovery/export`; admin run, approve, ignore, reject, and bulk routes |
+| Inventory imports | Admin upload/mapping/validate/cancel under `/imports`; admin/technician session, columns, staged rows, errors, and safe error export |
+
+Inventory import endpoints stage validated device candidates only. They never create or update official inventory. Upload accepts multipart `.csv` and `.xlsx`, returns a bounded mapping preview, and never exposes the temporary server filename or path. Mutation routes are administrator-only.
 
 Supported report names are `devices`, `network`, `alerts`, `tickets`, `users`, `audit`, and `discovery`. CSV export honors filters and neutralizes spreadsheet-formula prefixes.
 

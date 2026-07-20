@@ -29,6 +29,8 @@ DEFAULTS = {
     "discovery.admin_notification_threshold": "5",
     "import.maximum_import_file_size": "10485760", "import.supported_formats": "csv,xlsx",
     "import.duplicate_matching_enabled": "true", "import.import_batch_size": "500",
+    "import.maximum_rows": "10000", "import.maximum_worksheets": "20", "import.preview_rows": "10",
+    "import.maximum_columns": "100", "import.maximum_cell_length": "4000",
 }
 
 
@@ -94,6 +96,11 @@ def read_import_settings(db: Session) -> dict[str, Any]:
         "supported_formats": [item.strip() for item in values["supported_formats"].split(",") if item.strip()],
         "duplicate_matching_enabled": _bool(values["duplicate_matching_enabled"]),
         "import_batch_size": int(values["import_batch_size"]),
+        "maximum_rows": int(values["maximum_rows"]),
+        "maximum_worksheets": int(values["maximum_worksheets"]),
+        "preview_rows": int(values["preview_rows"]),
+        "maximum_columns": int(values["maximum_columns"]),
+        "maximum_cell_length": int(values["maximum_cell_length"]),
     }
 
 

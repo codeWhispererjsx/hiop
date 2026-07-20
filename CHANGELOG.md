@@ -8,6 +8,7 @@ All notable HIOP changes are recorded here. The project follows semantic version
 - Added secure Discovery APIs, administrator review and bulk workflows, transactional inventory approval, audit entries, email policy integration, authenticated WebSocket events, and CSV-safe export.
 - Added the responsive Discovery dashboard, detail and review dialogs, real API data, Discovery settings, scheduled runs, and Discovery reporting.
 - Scheduled Discovery uses one replaceable APScheduler job with overlap prevention. Discovery remains disabled by default and performs no port scanning or public-internet scanning.
+- Added secure UTF-8 CSV and `.xlsx` inventory parsing, generated temporary storage, column alias detection/manual mapping, normalized row validation, within-file duplicate evidence, staged progress, audited import APIs, and CSV-safe validation-error export. Importing still creates no official inventory.
 
 ## 1.0.0 — 2026-07-16
 

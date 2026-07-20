@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 2B secure Excel/CSV parsing engine
+
+The backend import engine now accepts bounded `.csv` and `.xlsx` device-inventory files, validates content and storage safety, detects worksheets/headers/aliases, supports authoritative manual mapping, normalizes and validates canonical fields, retains row-level raw/normalized/error/warning metadata, marks within-file duplicates, updates audited session progress, exposes secured preview/review/error APIs, and exports CSV-safe validation findings.
+
+Migration `2c6a8e4f901b` extends staging metadata and replaces identifier uniqueness with a source-row idempotency boundary so duplicates can be retained. No official Device or Discovery row is created, matched, merged, or modified. No frontend or automatic import is included.
+
 ## HIOP v2 — Epic 2A intelligent inventory import foundation
 
 The backend-only import foundation is complete. It adds `ImportSession` and `ImportedDevice`, constrained lifecycle/validation enums, session ownership and uploader relationships, PostgreSQL JSONB source preservation, session-scoped duplicate boundaries, lookup indexes, migration `7f4e2c1a9d30`, persistence-only repositories, explicit unimplemented service methods, abstract field-validator contracts, backend settings defaults, architecture documentation, and regression tests.
