@@ -73,6 +73,8 @@ def list_discovery(
     search: str | None = Query(default=None, max_length=200),
     status: str | None = Query(default=None, pattern="^(online|offline|unknown)$"),
     review_status: str | None = Query(default=None, pattern="^(pending|approved|ignored|rejected)$"),
+    sort_by: str = Query(default="last_seen_at", pattern="^(hostname|ip_address|mac_address|vendor|confidence_score|status|review_status|times_seen|first_seen_at|last_seen_at)$"),
+    sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -83,6 +85,8 @@ def list_discovery(
             search=search,
             status=status,
             review_status=review_status,
+            sort_by=sort_by,
+            sort_order=sort_order,
             page=page,
             page_size=page_size,
         )

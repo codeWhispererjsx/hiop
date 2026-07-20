@@ -1,9 +1,10 @@
-type IconName = "dashboard" | "devices" | "network" | "alerts" | "tickets" | "users" | "audit" | "settings" | "hierarchy" | "bell" | "search" | "mail" | "lock" | "arrow" | "server" | "wifi" | "check" | "warning" | "clock" | "menu" | "close" | "logout" | "sun" | "moon";
+type IconName = "dashboard" | "devices" | "network" | "discovery" | "alerts" | "tickets" | "users" | "audit" | "settings" | "hierarchy" | "bell" | "search" | "mail" | "lock" | "arrow" | "server" | "wifi" | "check" | "warning" | "clock" | "menu" | "close" | "logout" | "sun" | "moon";
 
 const paths: Record<IconName, React.ReactNode> = {
   dashboard: <><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></>,
   devices: <><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></>,
   network: <><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M12 8v4m0 0-7 4m7-4 7 4"/></>,
+  discovery: <><circle cx="12" cy="12" r="2"/><path d="M12 3a9 9 0 0 1 9 9M12 7a5 5 0 0 1 5 5M3 12a9 9 0 0 1 9-9M7 12a5 5 0 0 1 5-5"/><path d="M12 12 18 18"/><circle cx="19" cy="19" r="2"/></>,
   alerts: <><path d="M10.3 4.1 2.5 18a2 2 0 0 0 1.8 3h15.4a2 2 0 0 0 1.8-3L13.7 4.1a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/></>,
   tickets: <><path d="M3 7a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-3a2 2 0 0 0 0-4Z"/><path d="M13 5v14"/></>,
   users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87m-2-12a4 4 0 0 1 0 7.75"/></>,

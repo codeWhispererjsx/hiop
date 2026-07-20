@@ -69,7 +69,11 @@ class DiscoveryStatsResponse(BaseModel):
     offline: int
     unknown: int
     pending_review: int
+    approved: int
+    ignored: int
+    rejected: int
     matched_inventory: int
+    new_today: int
     total_runs: int
     last_run: DiscoveryRunResponse | None
 

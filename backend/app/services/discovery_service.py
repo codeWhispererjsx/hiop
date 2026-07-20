@@ -431,6 +431,8 @@ class DiscoveryService:
         search: str | None = None,
         status: str | None = None,
         review_status: str | None = None,
+        sort_by: str = "last_seen_at",
+        sort_order: str = "desc",
         page: int = 1,
         page_size: int = 25,
     ) -> dict[str, Any]:
@@ -438,6 +440,8 @@ class DiscoveryService:
             search=search,
             status=status,
             review_status=review_status,
+            sort_by=sort_by,
+            sort_order=sort_order,
             offset=(page - 1) * page_size,
             limit=page_size,
         )

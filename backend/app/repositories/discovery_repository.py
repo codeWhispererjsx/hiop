@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import datetime, time, timezone
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -31,6 +32,8 @@ class DiscoveryRepository:
         search: str | None = None,
         status: str | None = None,
         review_status: str | None = None,
+        sort_by: str = "last_seen_at",
+        sort_order: str = "desc",
         offset: int = 0,
         limit: int = 25,
     ) -> tuple[Sequence[DiscoveredDevice], int]:
@@ -49,10 +52,24 @@ class DiscoveryRepository:
         if review_status:
             filters.append(DiscoveredDevice.review_status == review_status)
         total = self.db.scalar(select(func.count(DiscoveredDevice.id)).where(*filters)) or 0
+        sort_columns = {
+            "hostname": DiscoveredDevice.hostname,
+            "ip_address": DiscoveredDevice.ip_address,
+            "mac_address": DiscoveredDevice.mac_address,
+            "vendor": DiscoveredDevice.vendor,
+            "confidence_score": DiscoveredDevice.confidence_score,
+            "status": DiscoveredDevice.status,
+            "review_status": DiscoveredDevice.review_status,
+            "times_seen": DiscoveredDevice.times_seen,
+            "first_seen_at": DiscoveredDevice.first_seen_at,
+            "last_seen_at": DiscoveredDevice.last_seen_at,
+        }
+        sort_column = sort_columns.get(sort_by, DiscoveredDevice.last_seen_at)
+        order = sort_column.asc().nulls_last() if sort_order == "asc" else sort_column.desc().nulls_last()
         statement = (
             select(DiscoveredDevice)
             .where(*filters)
-            .order_by(DiscoveredDevice.last_seen_at.desc(), DiscoveredDevice.id)
+            .order_by(order, DiscoveredDevice.id)
             .offset(offset)
             .limit(limit)
         )
@@ -95,6 +112,7 @@ class DiscoveryRepository:
         return self.db.scalar(select(Device).where(Device.ip_address == ip_address).limit(1))
 
     def statistics(self) -> dict[str, int]:
+        today = datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
         row = self.db.execute(
             select(
                 func.count(DiscoveredDevice.id),
@@ -102,7 +120,11 @@ class DiscoveryRepository:
                 func.count(DiscoveredDevice.id).filter(DiscoveredDevice.status == "offline"),
                 func.count(DiscoveredDevice.id).filter(DiscoveredDevice.status == "unknown"),
                 func.count(DiscoveredDevice.id).filter(DiscoveredDevice.review_status == "pending"),
+                func.count(DiscoveredDevice.id).filter(DiscoveredDevice.review_status == "approved"),
+                func.count(DiscoveredDevice.id).filter(DiscoveredDevice.review_status == "ignored"),
+                func.count(DiscoveredDevice.id).filter(DiscoveredDevice.review_status == "rejected"),
                 func.count(DiscoveredDevice.id).filter(DiscoveredDevice.approved_device_id.is_not(None)),
+                func.count(DiscoveredDevice.id).filter(DiscoveredDevice.first_seen_at >= today),
             )
         ).one()
         return {
@@ -111,7 +133,11 @@ class DiscoveryRepository:
             "offline": row[2],
             "unknown": row[3],
             "pending_review": row[4],
-            "matched_inventory": row[5],
+            "approved": row[5],
+            "ignored": row[6],
+            "rejected": row[7],
+            "matched_inventory": row[8],
+            "new_today": row[9],
         }
 
     def delete(self, device: DiscoveredDevice) -> None:
