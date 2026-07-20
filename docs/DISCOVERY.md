@@ -39,6 +39,14 @@ Repository query methods support the service's matching order but contain no mat
 
 Run rows provide discovery history and aggregate counters. Consolidated device rows retain first seen, last seen, and times seen. Statistics report device states, pending review, inventory matches, run totals, and the latest run.
 
+## API and approval workflow
+
+Epic 1C exposes authenticated list, detail, and statistics APIs. Running Discovery, approving, ignoring, rejecting, CSV export, and all bulk actions require an administrator. No frontend is included.
+
+Approval validates a complete inventory record, rejects an existing inventory link or unique asset/serial/MAC conflict, creates the official device, links the discovery, records reviewer and timestamp, and writes audit records in one transaction. Ignore and reject retain the discovery and observation history; rejection may append a reason to notes. Bulk actions are atomic.
+
+Successful mutations emit authenticated WebSocket events and use the configured email-notification channel on a best-effort basis after commit. Reporting prefixes spreadsheet-formula characters before CSV output.
+
 ## Configuration
 
 Discovery defaults are stored under the `discovery.*` namespace and discovery is disabled by default. These keys are backend configuration only and are not exposed through a Discovery UI.

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.discovered_device import DiscoveredDevice, DiscoveryRun
@@ -24,6 +24,39 @@ class DiscoveryRepository:
     def list(self, *, offset: int = 0, limit: int = 100) -> Sequence[DiscoveredDevice]:
         statement = select(DiscoveredDevice).order_by(DiscoveredDevice.last_seen_at.desc()).offset(offset).limit(limit)
         return self.db.scalars(statement).all()
+
+    def page(
+        self,
+        *,
+        search: str | None = None,
+        status: str | None = None,
+        review_status: str | None = None,
+        offset: int = 0,
+        limit: int = 25,
+    ) -> tuple[Sequence[DiscoveredDevice], int]:
+        filters = []
+        if search and search.strip():
+            term = f"%{search.strip()}%"
+            filters.append(or_(
+                DiscoveredDevice.ip_address.ilike(term),
+                DiscoveredDevice.mac_address.ilike(term),
+                DiscoveredDevice.hostname.ilike(term),
+                DiscoveredDevice.vendor.ilike(term),
+                DiscoveredDevice.device_type_guess.ilike(term),
+            ))
+        if status:
+            filters.append(DiscoveredDevice.status == status)
+        if review_status:
+            filters.append(DiscoveredDevice.review_status == review_status)
+        total = self.db.scalar(select(func.count(DiscoveredDevice.id)).where(*filters)) or 0
+        statement = (
+            select(DiscoveredDevice)
+            .where(*filters)
+            .order_by(DiscoveredDevice.last_seen_at.desc(), DiscoveredDevice.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return self.db.scalars(statement).all(), total
 
     def find_by_mac(self, mac_address: str) -> DiscoveredDevice | None:
         statement = select(DiscoveredDevice).where(func.lower(DiscoveredDevice.mac_address) == mac_address.lower())
