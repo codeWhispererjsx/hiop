@@ -1,5 +1,13 @@
 # System Architecture
 
+## HIOP v2 Discovery foundation
+
+Discovery is backend-only in Epic 1A. SQLAlchemy models and Alembic reserve persistence and tiered identity constraints; persistence-only repositories isolate database access; and an unimplemented service contract reserves later orchestration boundaries.
+
+This phase registers no route, scheduler job, scanner, approval flow, inventory mutation, or frontend page. The detailed model, identity order, configuration namespace, and extension points are documented in `DISCOVERY.md`.
+
+---
+
 ## Hotel IT Operations Portal (HIOP)
 
 Version: 1.0

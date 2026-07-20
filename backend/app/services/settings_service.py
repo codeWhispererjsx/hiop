@@ -23,6 +23,10 @@ DEFAULTS = {
     "notifications.email_notifications": "false", "notifications.device_offline": "true", "notifications.device_restored": "true",
     "notifications.ticket_assignment": "true", "notifications.critical_alerts": "true",
     "notifications.sender_display_name": "HIOP Operations", "notifications.recipient_email": "",
+    "discovery.enabled": "false", "discovery.authorized_cidr_ranges": "10.50.20.0/24", "discovery.ignore_ranges": "",
+    "discovery.interval_minutes": "60", "discovery.ping_timeout_seconds": "2", "discovery.concurrency_limit": "10",
+    "discovery.max_hosts_per_run": "256", "discovery.automatic_vendor_lookup": "true", "discovery.automatic_hostname_lookup": "true",
+    "discovery.admin_notification_threshold": "5",
 }
 
 

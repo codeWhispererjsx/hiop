@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 1A Discovery foundation
+
+The backend architectural foundation for Discovery is complete without changing v1 behavior. It adds constrained `DiscoveredDevice` and `DiscoveryRun` models, tiered duplicate-prevention indexes, relationships to inventory/users/network zones, migration `c87d380fc50a`, persistence-only repositories, an unimplemented service contract, disabled backend configuration defaults, model/migration tests, and architecture documentation.
+
+Scanning, scheduler integration, API endpoints, frontend pages, review/approval behavior, and inventory creation remain explicitly deferred.
+
 ## Epic 14 — Production deployment and infrastructure
 
 HIOP now has a production deployment baseline without business-feature or visual changes.

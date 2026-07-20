@@ -1,5 +1,15 @@
 # Database Design
 
+## HIOP v2 Discovery persistence
+
+Alembic head `c87d380fc50a` adds `discovered_devices` and `discovery_runs`. Discovery rows use UUID primary keys, constrained status/review/run enums, nonnegative counters and timings, bounded confidence, and nullable foreign keys to devices, users, and network zones.
+
+Duplicate protection follows matching priority through PostgreSQL partial unique indexes: case-insensitive MAC, approved device, IP plus case-insensitive hostname, then IP-only. Repositories do not own matching rules or transactions.
+
+See `DISCOVERY.md` for the complete architectural contract.
+
+---
+
 ## Hotel IT Operations Portal (HIOP)
 
 Version: 1.0
