@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 2A intelligent inventory import foundation
+
+The backend-only import foundation is complete. It adds `ImportSession` and `ImportedDevice`, constrained lifecycle/validation enums, session ownership and uploader relationships, PostgreSQL JSONB source preservation, session-scoped duplicate boundaries, lookup indexes, migration `7f4e2c1a9d30`, persistence-only repositories, explicit unimplemented service methods, abstract field-validator contracts, backend settings defaults, architecture documentation, and regression tests.
+
+No upload/import API, Excel or CSV parser, matching engine, approval UI, inventory creation/merge, scheduler, or frontend was introduced. Epic 2B requires explicit approval before implementation.
+
 ## HIOP v2 — Epic 1E Discovery integration
 
 Discovery is complete at version `2.0.0-dev` and integrated with the existing scheduler, audited runtime settings, Reports Center, email notification policy, authenticated WebSockets, and inventory approval workflow. The scheduler owns one `automatic_discovery` job, replaces it on configuration changes, coalesces missed intervals, and prevents overlapping runs. Authorized/ignored private CIDRs, host limits, timeouts, and concurrency remain enforced for manual and scheduled runs.

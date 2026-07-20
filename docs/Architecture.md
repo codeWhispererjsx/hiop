@@ -1,4 +1,10 @@
-# System Architecture
+# HIOP 2.0.0-dev architecture
+
+## Intelligent inventory import foundation
+
+Epic 2A adds a backend-only staging bounded context beside official inventory and Discovery. `ImportSession` owns staged `ImportedDevice` rows; repositories provide persistence only; an unimplemented `ImportService` reserves orchestration; and abstract field validators reserve future normalization contracts.
+
+No API, parser, matcher, approval flow, inventory merge, scheduler, or frontend is registered. See `IMPORT_ARCHITECTURE.md`.
 
 ## HIOP v2 Discovery foundation
 

@@ -1,10 +1,16 @@
-# Database Design
+# HIOP 2.0.0-dev database
 
 ## HIOP v2 Discovery persistence
 
-Alembic head `c87d380fc50a` adds `discovered_devices` and `discovery_runs`. Discovery rows use UUID primary keys, constrained status/review/run enums, nonnegative counters and timings, bounded confidence, and nullable foreign keys to devices, users, and network zones.
+Alembic revision `c87d380fc50a` adds `discovered_devices` and `discovery_runs`. Discovery rows use UUID primary keys, constrained status/review/run enums, nonnegative counters and timings, bounded confidence, and nullable foreign keys to devices, users, and network zones.
 
 Duplicate protection follows matching priority through PostgreSQL partial unique indexes: case-insensitive MAC, approved device, IP plus case-insensitive hostname, then IP-only. Repositories do not own matching rules or transactions.
+
+## HIOP v2 inventory import persistence
+
+Alembic head `7f4e2c1a9d30` adds `import_sessions` and `imported_devices`. A UUID session owns staged rows through `ON DELETE CASCADE`; uploader history uses the existing string user key with `ON DELETE SET NULL`. PostgreSQL JSONB preserves bounded source fields without creating inventory relationships.
+
+Checks constrain session and validation states, non-negative counters, and processed rows within the declared total. Lookup indexes cover session, asset tag, hostname, IP, MAC, status, and chronology. Case-insensitive partial unique indexes prevent repeated non-null asset tags and MAC addresses inside one session.
 
 See `DISCOVERY.md` for the complete architectural contract.
 

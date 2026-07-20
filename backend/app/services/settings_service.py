@@ -27,6 +27,8 @@ DEFAULTS = {
     "discovery.interval_minutes": "60", "discovery.ping_timeout_seconds": "2", "discovery.concurrency_limit": "10",
     "discovery.max_hosts_per_run": "256", "discovery.automatic_vendor_lookup": "true", "discovery.automatic_hostname_lookup": "true",
     "discovery.admin_notification_threshold": "5",
+    "import.maximum_import_file_size": "10485760", "import.supported_formats": "csv,xlsx",
+    "import.duplicate_matching_enabled": "true", "import.import_batch_size": "500",
 }
 
 
@@ -83,6 +85,16 @@ def read_discovery(db: Session) -> dict[str, Any]:
     ):
         values[key] = int(values[key])
     return values
+
+
+def read_import_settings(db: Session) -> dict[str, Any]:
+    values = _group(_all(db), "import")
+    return {
+        "maximum_import_file_size": int(values["maximum_import_file_size"]),
+        "supported_formats": [item.strip() for item in values["supported_formats"].split(",") if item.strip()],
+        "duplicate_matching_enabled": _bool(values["duplicate_matching_enabled"]),
+        "import_batch_size": int(values["import_batch_size"]),
+    }
 
 
 def save_group(db: Session, prefix: str, payload: GeneralSettings | OrganizationSettings | NetworkSettings | NotificationSettings | DiscoverySettings) -> None:
