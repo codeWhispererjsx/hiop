@@ -1,71 +1,379 @@
-# HIOP 2.0.0-dev user guide
+# HIOP User Guide
 
-## Discovery
+## Hotel IT Operations Portal — Version 1.0.0
 
-Discovery lists devices observed on administrator-authorized private networks. Hostname, vendor, operating-system and device-type values are hints, and Confidence shows how much supporting evidence was available; it is never a certainty score. Search, filter, sort, paginate, and open a row for retained observation details. Administrators can run Discovery and approve, ignore, or reject pending observations. Approval is the only action that creates an official inventory device; Ignore and Reject never delete discovery history.
+---
 
-## Inventory import staging
+## Table of Contents
 
-Administrators can use the backend inventory-import workflow to upload UTF-8 CSV or `.xlsx`, review detected columns, correct mappings, validate rows, and export safe validation errors. Technicians may review staged results. Imported rows are candidates only and do not appear in official Devices until a future reviewed workflow is implemented.
+1. [Introduction](#introduction)
+2. [Getting Started](#getting-started)
+3. [Dashboard](#dashboard)
+4. [Device Management](#device-management)
+5. [Network Operations Center](#network-operations-center)
+6. [Alerts](#alerts)
+7. [Tickets](#tickets)
+8. [Reports](#reports)
+9. [Settings](#settings)
+10. [Common Workflows](#common-workflows)
+11. [Troubleshooting](#troubleshooting)
 
-## Sign in and navigation
+---
 
-Open the HIOP address supplied by IT and sign in with your organization account. Your session lasts for the configured access-token period and is limited to the current browser tab session. If HIOP returns to Login, sign in again. Sign out before leaving a shared workstation.
+## Introduction
 
-The sidebar provides Overview, Devices, Network monitor, Alerts, Service tickets, and role-dependent administration pages. On a small screen, use the menu button. The theme button switches light and dark mode and preserves your preference.
+HIOP (Hotel IT Operations Portal) is an internal operations application for managing hotel IT infrastructure. It provides real-time device monitoring, alerting, ticketing, and reporting capabilities.
+
+### Key Concepts
+
+- **Devices**: IT assets such as servers, switches, access points, and workstations
+- **Network Status**: Real-time connectivity state (Online, Offline, Unknown)
+- **Inventory Status**: Lifecycle state (Active, Inactive, Retired)
+- **Alerts**: Notifications triggered by device status changes
+- **Tickets**: Operational issues tracked through resolution
+
+### User Roles
+
+| Role | Capabilities |
+|------|-------------|
+| **Administrator** | Full access: manage devices, users, settings, hierarchy, imports, and all operations |
+| **Technician** | Operational access: view devices, run scans, manage tickets, view alerts and reports |
+| **Staff** | Read-only access: view dashboard, devices, alerts, and tickets |
+
+---
+
+## Getting Started
+
+### Logging In
+
+1. Open HIOP in your browser (URL provided by your IT department)
+2. Enter your **email address** and **password**
+3. Click **Sign in**
+
+> If you cannot log in, contact your system administrator.
+
+### First Look
+
+After logging in, you will see the **Dashboard** — the central monitoring view showing:
+
+- Device status summary (online/offline counts)
+- Recent activity feed
+- Network scan status
+- Quick-access charts
+
+---
 
 ## Dashboard
 
-Overview shows real inventory availability, ticket counts, recent network checks, and active tickets. Use Refresh data when you need a current database snapshot. “Live channel: Connected” means authenticated device-status events can update the interface without a page reload.
+The Dashboard provides an at-a-glance view of your IT environment.
 
-## Devices
+### Status Cards
 
-Devices lists PostgreSQL inventory. Search matches asset tag, hostname, IP, department, and device type. Status and department filters combine with search; changing them resets pagination. Select a row to view inventory fields and operational history.
+- **Total Devices**: All devices in inventory
+- **Online**: Devices currently responding to network checks
+- **Offline**: Devices not responding
+- **Unknown**: Devices with undetermined status
 
-Administrators can add and edit devices. Required network identifiers must be valid and unique where indicated. Inventory status describes ownership/lifecycle; Online/Offline/Unknown describes network reachability. Retire is a confirmed soft action: the device remains available with a Retired badge and its history is preserved.
+### Activity Feed
 
-## Network scanning
+Shows recent events including:
+- Device status changes
+- Alert creations
+- Ticket updates
+- Network scan results
 
-Network monitor shows current status, recent scan records, alerts, and response times. Authorized users can scan one device, all active devices, or an approved range. Controls are disabled while the request runs. Scanning is limited to the configured private network.
+### Network Status
 
-An Offline result means the address did not answer the configured ICMP check; it does not by itself prove a hardware failure. Confirm power, cabling, VLAN, firewall, and maintenance status before escalating.
+Displays the last network scan time and results summary.
+
+---
+
+## Device Management
+
+### Viewing Devices
+
+1. Click **Devices** in the sidebar
+2. Browse the device table showing:
+   - Hostname
+   - Asset tag
+   - Device type
+   - Department
+   - Network status
+   - Inventory status
+
+### Searching and Filtering
+
+- Use the **search field** to find devices by hostname, asset tag, IP, or MAC
+- Filter by **status**, **department**, or **device type**
+- Sort columns by clicking column headers
+
+### Viewing Device Details
+
+Click any device to open its detail page showing:
+- Full device information
+- Network scan history
+- Related alerts
+- Associated tickets
+- Audit log
+
+### Adding a Device (Administrators)
+
+1. Click **Devices** in the sidebar
+2. Click **Add device**
+3. Fill in required fields (Asset tag, Hostname)
+4. Complete optional fields (IP, MAC, Department, Location, etc.)
+5. Click **Save**
+
+### Editing a Device
+
+1. Open the device detail page
+2. Click **Edit**
+3. Update the desired fields
+4. Click **Save**
+
+### Retiring a Device
+
+1. Open the device detail page
+2. Click **Retire**
+3. Confirm the action
+4. The device status changes to Retired (scans, alerts, and history are preserved)
+
+---
+
+## Network Operations Center
+
+### Running a Network Scan
+
+1. Click **Network** in the sidebar
+2. Enter an IP address or select a device
+3. Click **Scan**
+4. View results showing response time and status
+
+### Scan All Devices
+
+Click **Scan all** to scan every active device in inventory. Results update in real time.
+
+### Scan History
+
+View past scan results including timestamps, response times, and status changes.
+
+---
 
 ## Alerts
 
-Alerts are generated from recorded network-state transitions. Combine severity, acknowledgement, department, device, date, and search controls. Open an alert to inspect its device, scan context, available ticket, audit entries, and timeline. Authorized users can acknowledge an alert. Version 1.0.0 does not have a separate persisted Resolve action.
+Alerts are created automatically when a device changes status (e.g., goes offline).
 
-## Service tickets
+### Viewing Alerts
 
-Tickets support real search, combined filters, pagination, details, create, edit, assignment, close, reopen-through-edit, and administrator deletion. Only choose assignees returned by HIOP. Link a device when the incident relates to a real inventory record. Closing should follow operational confirmation, not just alert acknowledgement.
+1. Click **Alerts** in the sidebar
+2. Browse the alert table showing:
+   - Timestamp
+   - Device name
+   - Previous and current status
+   - Alert message
+   - State (Active or Acknowledged)
+
+### Filtering Alerts
+
+Use the toolbar to filter by:
+- **Severity**: Critical (Offline) or Informational
+- **State**: Active or Acknowledged
+- **Department**
+- **Device**
+- **Date**
+
+### Acknowledging an Alert
+
+1. Click **Acknowledge** on an active alert
+2. The alert state changes to Acknowledged
+3. Acknowledged alerts are visually dimmed
+
+### Viewing Alert Details
+
+Click the alert message to open the detail panel showing:
+- Full device information
+- Status transition details
+- Timeline of events
+
+---
+
+## Tickets
+
+Tickets track operational issues from reporting through resolution.
+
+### Viewing Tickets
+
+1. Click **Tickets** in the sidebar
+2. Browse the ticket table showing:
+   - Title
+   - Priority
+   - Status
+   - Assigned technician
+   - Created date
+
+### Creating a Ticket
+
+1. Click **Tickets** in the sidebar
+2. Click **New ticket**
+3. Enter:
+   - **Title** (required)
+   - **Description** (required)
+   - **Priority** (Low, Medium, High)
+   - **Device** (optional — link to affected device)
+4. Click **Create**
+
+### Assigning a Ticket
+
+1. Open the ticket detail page
+2. Click **Assign**
+3. Select a technician from the list
+4. The ticket status updates to In Progress
+
+### Closing a Ticket
+
+1. Open the ticket detail page
+2. Click **Close**
+3. The ticket status changes to Closed
+
+### Deleting a Ticket (Administrators)
+
+1. Open the ticket detail page
+2. Click **Delete**
+3. Confirm the deletion
+
+---
 
 ## Reports
 
-Administrators can open Device Inventory, Network Status, Alerts, Tickets, Users, and Audit reports. Date ranges, search, filters, sorting, and pagination use real report data. CSV export honors the active filter set. Print uses the browser print dialog; review the preview before saving or printing.
+### Viewing Reports
 
-## Settings and administration
+1. Click **Reports** in the sidebar
+2. Select a report type:
+   - Devices
+   - Network
+   - Alerts
+   - Tickets
+   - Users
+   - Audit
+   - Discovery
 
-Administrators manage safe runtime settings, organization text, hierarchy, scanner behavior, notifications, appearance, and system health. Passwords, JWT secrets, database credentials, and SMTP secrets are never editable or displayed. A successful toast means the API persisted the change; restart-required or unsupported capabilities are labelled honestly.
+### Customizing Reports
 
-## Common workflow
+- Set a **date range** using the date picker
+- Use **filters** to narrow results
+- Sort by clicking column headers
 
-1. Confirm the device and latest scan in Devices or Network monitor.
-2. Review the related alert and acknowledge ownership.
-3. Open or create a related service ticket.
-4. Assign an eligible technician and record a clear description.
-5. Resolve the physical/network cause and scan again.
-6. Close the ticket when service is confirmed.
-7. Use Audit and Reports to verify the operational record.
+### Exporting Reports
+
+Click **Export CSV** to download the current report data.
+
+---
+
+## Settings (Administrators)
+
+### General Settings
+
+- Application name and branding
+- Timezone and date format
+- Default page size and landing page
+
+### Organization Settings
+
+- Organization name and property details
+- Contact information
+
+### Network Settings
+
+- Approved network CIDR for scanning
+- Scan interval and timeout
+- Automatic alerting and ticketing
+
+### Notification Settings
+
+- Email notification preferences
+- Recipient configuration
+
+### Discovery Settings
+
+- Discovery enable/disable
+- CIDR ranges and ignore ranges
+- Scan interval and concurrency
+
+---
+
+## Common Workflows
+
+### Workflow 1: Respond to an Offline Device
+
+1. **Dashboard** shows a device went offline
+2. Click **Alerts** to view the critical alert
+3. Click **Tickets** to see if a ticket was auto-created
+4. Assign the ticket to a technician
+5. Investigate and resolve the issue
+6. Close the ticket
+7. The alert is acknowledged
+
+### Workflow 2: Add and Scan New Equipment
+
+1. Click **Devices** → **Add device**
+2. Enter device details and save
+3. Click **Network** → enter the device IP
+4. Click **Scan** to verify connectivity
+5. View scan results in device history
+
+### Workflow 3: Generate a Monthly Report
+
+1. Click **Reports**
+2. Select **Devices** report
+3. Set the date range to the past month
+4. Click **Export CSV**
+5. Open the downloaded file in your spreadsheet application
+
+---
 
 ## Troubleshooting
 
-- “Cannot reach backend”: report the time and URL to IT; do not repeatedly submit forms.
-- Returned to login: the token is absent, invalid, expired, or the account is inactive.
-- Reconnecting: live updates are temporarily unavailable; saved API data still loads if the backend is healthy.
-- No records: clear active filters. If the empty state remains, the database has no matching rows.
-- Scan rejected: the device/range may be outside the approved CIDR or your role may not permit scanning.
+### Cannot Log In
 
-Never place passwords, tokens, private keys, or database credentials in device, ticket, alert, or audit text.
+- Verify your email and password are correct
+- Contact your administrator to reset your password
+- Check that your account is active
 
-## Inventory matching review
+### Page Shows "Loading" Indefinitely
 
-Authorized technicians can review staged import candidates, confidence levels, matching evidence, conflicts, and location suggestions. Administrators perform matching and resolution actions. A suggested link or create-new decision remains staging metadata in Epic 2C and does not add, overwrite, merge, or delete an official inventory device.
+- Check your network connection
+- The backend server may be restarting — wait a moment and refresh
+- Contact your administrator if the issue persists
+
+### Scan Returns No Response
+
+- Verify the device IP address is correct
+- Ensure the device is powered on and connected to the network
+- Check that the IP is within the approved network range
+
+### Report Shows No Data
+
+- Expand the date range
+- Check that filters are not excluding all results
+- Verify data exists for the selected report type
+
+---
+
+## Support
+
+For additional assistance, contact your system administrator or refer to the Administrator Guide.
+
+## Inventory imports (2.0.0-dev)
+
+Open **Inventory Import** from the sidebar to review recent sessions or resume unfinished work. Administrators can start a CSV or XLSX import; technicians can inspect sessions allowed by their role.
+
+The wizard stages data before any inventory change:
+
+1. Upload the file and, for Excel workbooks, explicitly choose the worksheet.
+2. Review suggested column mappings. Asset tag and hostname are required, duplicate targets are blocked, and unknown columns may be ignored.
+3. Run validation and inspect original values, normalized values, errors, warnings, and duplicate references. Staged rows are read-only; correct the source file and restart when necessary.
+4. Run matching, compare candidates and evidence, and accept, reject, defer, or prepare a create-new decision. Conflicting identifiers are always shown.
+5. Review location suggestions and either accept, reject, or override them with existing hierarchy records.
+6. Resolve or defer conflicts, then review the summary and readiness checklist.
+
+Leaving the wizard is safe. Use **Continue** on the imports page to reload backend-persisted progress. “Ready for Final Import” is a review state only; final device creation and merging are pending Epic 2E.

@@ -74,7 +74,7 @@ export default function DashboardLayout({
   };
   return (
     <div className="app-shell">
-      <Sidebar open={open} onClose={() => setOpen(false)} role={user?.role} />
+      <Sidebar open={open} onClose={() => setOpen(false)} role={user?.role} live={live} />
       {open && (
         <button
           className="sidebar-scrim"

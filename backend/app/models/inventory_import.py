@@ -133,6 +133,10 @@ class ImportSession(Base):
     )
     match_candidates: Mapped[list["ImportMatchCandidate"]] = relationship(back_populates="import_session", cascade="all, delete-orphan", passive_deletes=True)
 
+    @property
+    def validation_summary(self) -> dict[str, int]:
+        return getattr(self, "_validation_summary", {})
+
 
 class ImportedDevice(Base):
     __tablename__ = "imported_devices"

@@ -104,3 +104,6 @@ class ImportMatchingRepository:
 
     def suggestion_for_row(self, row_id: UUID) -> ImportLocationSuggestion | None:
         return self.db.scalar(select(ImportLocationSuggestion).where(ImportLocationSuggestion.imported_device_id == row_id))
+
+    def suggestions_for_session(self, session_id: UUID) -> Sequence[ImportLocationSuggestion]:
+        return self.db.scalars(select(ImportLocationSuggestion).join(ImportedDevice, ImportedDevice.id == ImportLocationSuggestion.imported_device_id).where(ImportedDevice.import_session_id == session_id).order_by(ImportedDevice.source_row_number)).all()

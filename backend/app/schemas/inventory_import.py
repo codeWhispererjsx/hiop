@@ -30,6 +30,7 @@ class ImportSessionResponse(BaseModel):
     selected_worksheet: str | None
     matching_state: str
     match_summary: dict[str, Any]
+    validation_summary: dict[str, int] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -37,6 +38,14 @@ class ImportSessionResponse(BaseModel):
 class ImportUploadResponse(BaseModel):
     session: ImportSessionResponse
     preview: dict[str, Any]
+
+
+class ImportSessionPage(BaseModel):
+    items: list[ImportSessionResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
 
 
 class ImportMappingRequest(BaseModel):

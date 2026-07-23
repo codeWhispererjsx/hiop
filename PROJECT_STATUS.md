@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 2D Import Wizard frontend
+
+The authenticated `/imports` workspace and resumable nine-step Import Wizard are implemented at version `2.0.0-dev`. The UI reuses the existing routing, dashboard shell, API client, role model, hierarchy catalog, dialogs, status components, feedback states, design tokens, and responsive patterns. It covers secure CSV/XLSX upload, explicit worksheet selection, backend-validated mapping, staged-row validation, error export, candidate comparison, safe resolutions, merge-plan preview, location review and override, conflict review, summary, and final-readiness review.
+
+Session, validation, match, resolution, and location state remain backend-persisted. Administrators receive mutation controls; technicians retain the backend-authorized read experience. No official inventory record is created, overwritten, merged, or deleted. Final transactional inventory creation remains explicitly deferred to Epic 2E.
+
 ## HIOP v2 — Epic 2C intelligent matching and location suggestions
 
 The backend now generates bounded, explainable candidates across official inventory, Discovery, and same-session staging rows. Configurable weighted scoring, identifier conflict penalties, conservative fuzzy comparison, retained evidence, safe merge previews, hierarchy/network/hostname location suggestions, reviewed staging links, audit events, and WebSocket progress/resolution events are implemented through migration `91b7d3e5a204`.

@@ -1,57 +1,415 @@
-# HIOP 2.0.0-dev administrator guide
+# HIOP Administrator Guide
 
-## Discovery administration
+## Hotel IT Operations Portal — Version 1.0.0
 
-Discovery is disabled by default. In Settings → Discovery, enter only organization-owned private IPv4 CIDRs, narrow ignore ranges where required, keep the host and concurrency limits conservative, then enable scheduling. Saving replaces the one scheduled Discovery job; it does not create duplicate jobs. Use the Discovery dashboard for manual runs and review. Approval creates an inventory record transactionally; Ignore and Reject retain history. Review audit entries and Discovery reports after operational changes.
+---
 
-Never authorize public, guest, third-party, or otherwise unapproved networks. Discovery performs ICMP, passive local neighbor-cache inspection, and reverse DNS only. Run one scheduler-owning backend worker until a distributed scheduler lock is implemented.
+## Table of Contents
 
-## Inventory import administration
+1. [Deployment](#deployment)
+2. [Initial Setup](#initial-setup)
+3. [User Management](#user-management)
+4. [Permissions and Roles](#permissions-and-roles)
+5. [Network Scanner Configuration](#network-scanner-configuration)
+6. [Backups](#backups)
+7. [Monitoring](#monitoring)
+8. [Troubleshooting](#troubleshooting)
+9. [Maintenance](#maintenance)
+10. [Recovery](#recovery)
 
-Epic 2B provides backend APIs for `.csv` and `.xlsx` upload, mapping, validation, preview rows, error review/export, and cancellation. Uploads are limited by backend settings and stage data only; they cannot create or merge inventory. Resolve ambiguous/missing column mappings before validation. Treat formula warnings, invalid identifiers, and within-file duplicates as review findings. Temporary source files are removed after processing, failure, or cancellation, while staged rows and audit history remain.
+---
 
-After validation, administrators may run Epic 2C matching and review ranked Device, Discovery, and staged-row candidates. Always inspect evidence and conflicts; IP-only and fuzzy-only results are advisory. Accepting a candidate creates a staging link only. Merge plans never modify inventory, and mark-create-new defers creation to a later reviewed workflow. Location suggestions and overrides must reference existing hierarchy records; subnet and hostname rules are ordered backend settings and should be narrow, documented, and tested.
+## Deployment
 
-## Responsibilities
+### Prerequisites
 
-Administrators own deployment secrets, database migrations, account lifecycle, approved scan scope, settings, backups, audit review, and release validation. Frontend controls are not a security boundary; verify backend responses and audit records for privileged changes.
+- Docker Engine 24+ and Docker Compose v2+
+- PostgreSQL 16+
+- Python 3.12+
+- Node.js 22+
+- Nginx (production)
 
-## Deployment and upgrades
+### Production Deployment (Docker)
 
-Follow `DEPLOYMENT.md`. Populate production environment variables outside Git, enforce HTTPS, run a verified backup, execute the one-shot Alembic migration, start one backend worker, then start the frontend proxy. Validate `/health`, login, WebSocket connectivity, a read-only module sweep, and backup status before opening access.
+```bash
+# Clone the repository
+git clone https://github.com/codeWhispererjsx/hiop.git
+cd hiop
 
-Version 1.0.0 keeps APScheduler in the backend process, so do not scale backend replicas without first externalizing scheduling or adding a distributed lock.
+# Configure environment
+cp backend/.env.example backend/.env
+# Edit backend/.env with production values
 
-## Users and permissions
+# Start services
+docker compose up -d
+```
 
-Supported stored roles are `admin`, `technician`, and legacy `staff`; global administration remains admin-only. Create accounts with unique username/email and a strong temporary password. Use deactivation rather than deletion to preserve ticket and audit references. HIOP prevents self-deactivation and removal of the last active admin. Resetting a password never reveals the prior password or hash.
+### Manual Deployment
 
-## Scanner administration
+**Backend:**
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with production values
+alembic upgrade head
+uvicorn app.main:app --host 0.0.0.0 --port 8001
+```
 
-Set `approved_network` to the exact private CIDR authorized for the property. Single-device and range scans are rejected outside it. Use conservative timeouts, worker counts, intervals, and offline thresholds. Confirm the scheduler state after changing network settings and ensure only one scheduler job exists.
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm run build
+# Serve the dist/ directory via Nginx
+```
 
-`NET_RAW` is required for ICMP in the production backend container. Do not grant host networking or arbitrary command execution.
+### Environment Variables
 
-## Backups and recovery
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `APP_NAME` | Yes | Application display name |
+| `APP_VERSION` | Yes | Version string |
+| `ENVIRONMENT` | Yes | `development`, `testing`, or `production` |
+| `DEBUG` | Yes | `true` or `false` |
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `SECRET_KEY` | Yes | JWT signing key (32+ chars in production) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | Token lifetime (default: 60) |
+| `CORS_ORIGINS` | Yes | Allowed origins (JSON array) |
+| `LOG_LEVEL` | No | Logging level (default: INFO) |
+| `SCHEDULER_ENABLED` | No | Enable background scheduler (default: true) |
 
-Use the scripts and procedures in `OPERATIONS.md`. Keep encrypted backups off-host, record retention, test restores regularly, and verify restored migrations and authentication in isolation. A backup that has never passed a restore drill is not production-ready.
+---
+
+## Initial Setup
+
+### First-Time Login
+
+1. Deploy the application
+2. Navigate to the login page
+3. Use the initial admin credentials (created via seed script or database)
+4. Change the default password immediately
+
+### Configuration Checklist
+
+- [ ] Set `ENVIRONMENT=production`
+- [ ] Set `DEBUG=false`
+- [ ] Generate a strong `SECRET_KEY` (32+ random characters)
+- [ ] Configure `CORS_ORIGINS` with production HTTPS origins
+- [ ] Set up PostgreSQL with proper credentials
+- [ ] Configure email settings for notifications
+- [ ] Set the approved network CIDR for scanning
+- [ ] Enable HTTPS via Nginx or reverse proxy
+
+---
+
+## User Management
+
+### Creating Users
+
+1. Navigate to **Settings** → **Users**
+2. Click **Add user**
+3. Enter:
+   - Username
+   - Email address
+   - Role (Administrator, Technician, Staff)
+   - Initial password
+4. Click **Create**
+
+### Modifying Users
+
+- **Edit**: Update username or email
+- **Change role**: Promote or demote user role
+- **Reset password**: Generate a new password
+- **Deactivate**: Disable account without deleting
+
+### Role Descriptions
+
+| Role | Description |
+|------|-------------|
+| **Administrator** | Full system access including user management, settings, and all operations |
+| **Technician** | Operational access for device management, scanning, tickets, and alerts |
+| **Staff** | Read-only access to monitoring views |
+
+### Security Policies
+
+- Passwords are bcrypt-hashed
+- JWT tokens expire after the configured interval
+- Inactive users cannot authenticate
+- Last administrator cannot be demoted or deactivated
+- Self-deactivation is prevented
+
+---
+
+## Permissions and Roles
+
+### Module Access by Role
+
+| Module | Admin | Technician | Staff |
+|--------|-------|------------|-------|
+| Dashboard | ✓ | ✓ | ✓ |
+| Devices | Full | View/Scan | View |
+| Network | Full | Scan | View |
+| Alerts | Full | View/Acknowledge | View |
+| Tickets | Full | Full | View/Create |
+| Reports | Full | View/Export | View |
+| Users | Full | — | — |
+| Audit | Full | View | View |
+| Settings | Full | — | — |
+| Hierarchy | Full | — | — |
+| Discovery | Full | View | View |
+| Imports | Full | View | View |
+
+---
+
+## Network Scanner Configuration
+
+### Approved Network Range
+
+The scanner is restricted to a configured private CIDR range:
+
+1. Navigate to **Settings** → **Network**
+2. Set **Approved network** (e.g., `10.0.0.0/8`)
+3. Configure **Scan interval** (minutes)
+4. Set **Ping timeout** (seconds)
+5. Configure **Max concurrent workers**
+
+### Automatic Alerts and Tickets
+
+Enable automatic alerting and ticket creation when devices go offline:
+
+1. Navigate to **Settings** → **Network**
+2. Enable **Automatic alerts**
+3. Enable **Automatic offline tickets**
+4. Set **Offline threshold** (minutes before triggering)
+
+### Discovery Settings
+
+1. Navigate to **Settings** → **Discovery**
+2. Enable Discovery
+3. Set authorized CIDR ranges
+4. Configure ignore ranges
+5. Set scan interval and concurrency limits
+
+---
+
+## Backups
+
+### Database Backup
+
+The project includes backup and restore scripts:
+
+```bash
+# Backup
+./scripts/backup-postgres.sh
+
+# Restore
+./scripts/restore-postgres.sh
+```
+
+### Manual Backup
+
+```bash
+pg_dump -U hiop -h localhost hiop > hiop-backup-$(date +%Y%m%d).sql
+```
+
+### Backup Best Practices
+
+- Schedule daily database backups
+- Store backups off-site or in secure cloud storage
+- Test restore procedures regularly
+- Keep at least 7 days of backup history
+- Document backup locations and procedures
+
+---
 
 ## Monitoring
 
-Monitor public `/health`, Nginx access/error logs, backend application/error/security logs, PostgreSQL capacity, scheduler state, scan freshness, WebSocket reconnect rates, and backup completion. Audit records are application data, not a substitute for infrastructure/security logs.
+### Health Check Endpoint
 
-## Maintenance and troubleshooting
+```
+GET /api/v1/settings/system-health
+```
 
-- API unavailable: check container/process health, database connectivity, migration state, and backend error logs.
-- Login failures: verify active status, generic 401 behavior, throttle state, clock synchronization, and JWT environment configuration.
-- Stale monitoring: check scheduler state, approved CIDR, ICMP capability, scan timestamps, and device network policy.
-- WebSocket offline: verify `/ws/dashboard` proxy upgrade headers and token subprotocol handling.
-- Migration failure: stop rollout, retain logs, restore only through the documented recovery decision, and never edit Alembic history manually in production.
+Returns:
+- API status
+- Database connectivity
+- Scheduler status
+- WebSocket status
+- Email configuration
+- Last scan time
+- Application version
+- Environment
 
-## Security rules
+### Logging
 
-Never expose `.env`, JWT secrets, SMTP passwords, database URLs, hashes, backups, or exported reports. Rotate secrets through the deployment environment, not Settings. Review `SECURITY_REPORT.md` before production and after material dependency or infrastructure changes.
+- Logs are written to stdout/stderr (Docker)
+- Configure `LOG_LEVEL` for verbosity
+- Structured logging for machine parsing
 
-## Release and rollback
+### Key Metrics to Monitor
 
-Use `PRODUCTION_CHECKLIST.md`. Record the deployed commit and image digest. Roll back application images only with schema compatibility confirmed; otherwise restore the matching database backup in an isolated recovery workflow. Preserve logs and audit evidence throughout an incident.
+- Device online/offline ratio
+- Scan success rate
+- Alert frequency
+- Ticket resolution time
+- API response times
+- Database connection pool usage
+
+---
+
+## Troubleshooting
+
+### Application Won't Start
+
+**Check:**
+1. Database is running and accessible
+2. Environment variables are correctly set
+3. Database migrations are up to date
+4. Required ports are available
+
+**Solution:**
+```bash
+# Verify database connection
+psql -U hiop -h localhost -d hiop -c "SELECT 1"
+
+# Run migrations
+alembic upgrade head
+
+# Check logs
+docker compose logs backend
+```
+
+### Users Cannot Log In
+
+**Check:**
+1. User account is active
+2. Password is correct
+3. JWT secret key hasn't changed
+4. Token hasn't expired
+
+**Solution:**
+- Reset the user's password via admin panel
+- Verify `SECRET_KEY` consistency across restarts
+
+### Scanner Not Working
+
+**Check:**
+1. Approved network CIDR is configured
+2. Target devices are reachable
+3. ICMP is not blocked by firewall
+4. Scheduler is enabled
+
+**Solution:**
+- Verify network range in Settings
+- Test ping manually from the server
+- Check firewall rules
+
+### WebSocket Disconnections
+
+**Check:**
+1. Browser console for errors
+2. Backend logs for WebSocket errors
+3. Network connectivity
+4. Proxy configuration (if behind Nginx)
+
+**Solution:**
+- Verify WebSocket path configuration
+- Check Nginx WebSocket proxy settings
+- Ensure no load balancer timeout is too low
+
+---
+
+## Maintenance
+
+### Routine Tasks
+
+| Frequency | Task |
+|-----------|------|
+| Daily | Review alerts and tickets |
+| Weekly | Check system health endpoint |
+| Monthly | Review audit logs |
+| Monthly | Test backup restoration |
+| Quarterly | Update dependencies |
+| Annually | Review security policies |
+
+### Database Maintenance
+
+```bash
+# Vacuum analyze
+psql -U hiop -d hiop -c "VACUUM ANALYZE;"
+
+# Reindex
+psql -U hiop -d hiop -c "REINDEX DATABASE hiop;"
+```
+
+### Log Rotation
+
+In Docker, logs are managed by the Docker logging driver. For manual deployments, configure log rotation in your process manager.
+
+---
+
+## Recovery
+
+### Database Recovery
+
+```bash
+# Restore from backup
+./scripts/restore-postgres.sh <backup-file.sql>
+
+# Or manually
+psql -U hiop -h localhost -d hiop < hiop-backup-20260101.sql
+```
+
+### Application Recovery
+
+1. Stop the application
+2. Restore the database from backup
+3. Verify environment configuration
+4. Start the application
+5. Run health checks
+6. Verify user access
+
+### Disaster Recovery Plan
+
+1. **Assess**: Determine the scope of the failure
+2. **Isolate**: Prevent further damage
+3. **Restore**: Restore from latest verified backup
+4. **Verify**: Confirm data integrity and application functionality
+5. **Communicate**: Notify affected users
+6. **Document**: Record the incident and recovery steps
+
+---
+
+## Security Considerations
+
+- All API traffic should use HTTPS in production
+- JWT tokens are stored in sessionStorage (cleared on tab close)
+- CORS is restricted to known origins
+- Passwords are never returned in API responses
+- Secrets are environment-only, never in the database
+- Export files are sanitized to prevent formula injection
+- File uploads are validated for type, size, and content
+- The scanner is restricted to approved private networks only
+
+---
+
+## Support
+
+For additional assistance, refer to:
+- `DEVELOPER_GUIDE.md` — Development and contribution guide
+- `DEPLOYMENT.md` — Detailed deployment instructions
+- `OPERATIONS.md` — Operational runbook
+- GitHub Issues: https://github.com/codeWhispererjsx/hiop/issues
+
+## Inventory Import administration (2.0.0-dev)
+
+Administrators can start and resolve imports from `/imports`. HIOP accepts only backend-validated CSV and XLSX content, stores generated server filenames, limits previews, never evaluates formulas or macros, and does not insert uploaded rows directly into inventory.
+
+Review the mapping before validation, export validation findings when correction is needed, and use candidate evidence rather than score alone. Bulk acceptance is restricted to pending exact candidates without conflicts; every item is submitted independently so failures remain in the queue. Location overrides must reference active records already present in the HIOP hierarchy.
+
+Do not treat hidden controls as authorization. Upload, mapping, validation, matching, cancellation, and resolution endpoints enforce the administrator role on the server. Read endpoints permit the established administrator/technician reader roles.
+
+Epic 2D stops at readiness preparation. There is no supported final bulk-create, merge execution, automatic conflict dismissal, rollback, scheduled import, Active Directory, or SNMP workflow. Those remain pending Epic 2E.

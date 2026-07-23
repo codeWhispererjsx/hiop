@@ -120,8 +120,18 @@ class ImportService:
             if worksheet not in worksheets:
                 raise ImportValidationError("Selected worksheet does not exist")
             parsed = parse_file(self._path(session), session.file_format, self._settings(), worksheet)
-            return {**detect_mapping(parsed.headers), "worksheet_names": worksheets, "selected_worksheet": worksheet}
-        return session.mapping_metadata
+            return {**detect_mapping(parsed.headers), "worksheet_names": worksheets, "selected_worksheet": worksheet, "preview": self._preview(parsed, self._settings())}
+        result = dict(session.mapping_metadata)
+        if session.status == ImportSessionStatus.UPLOADED and self._path(session).exists():
+            parsed = parse_file(self._path(session), session.file_format, self._settings(), session.selected_worksheet)
+            result["preview"] = self._preview(parsed, self._settings())
+        return result
+
+    def list_sessions(self, *, search: str | None, status: str | None, page: int, page_size: int) -> dict:
+        items, total = self.sessions.page(search=search, status=status, offset=(page - 1) * page_size, limit=page_size)
+        counts = self.devices.validation_counts([item.id for item in items])
+        for item in items: item._validation_summary = counts.get(item.id, {})
+        return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": max(1, (total + page_size - 1) // page_size)}
 
     def save_mapping(self, session_id: UUID, mapping: dict[str, str | None], worksheet: str | None, actor: User) -> dict:
         session = self._session(session_id)

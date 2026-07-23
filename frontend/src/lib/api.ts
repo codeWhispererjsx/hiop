@@ -22,7 +22,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 async function performRequest<T>(path: string, init: RequestInit, token: string | null): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   let response: Response;
   try { response = await fetch(`${API_URL}${path}`, { ...init, headers }); }
@@ -125,4 +125,27 @@ export const endpoints = {
   bulkIgnoreDiscovery: (discovery_ids: string[]) => api<import("./types").BulkActionResponse>("/discovery/bulk-ignore", { method: "POST", body: JSON.stringify({ discovery_ids }) }),
   bulkRejectDiscovery: (discovery_ids: string[], reason?: string) => api<import("./types").BulkActionResponse>("/discovery/bulk-reject", { method: "POST", body: JSON.stringify({ discovery_ids, reason: reason || null }) }),
   exportDiscovery: () => download("/discovery/export"),
+  importSessions: (filters: import("./types").ImportSessionFilters = {}) => api<import("./types").ImportSessionPage>(`/imports${queryString(filters)}`),
+  importSession: (id: string) => api<import("./types").ImportSession>(`/imports/${id}`),
+  uploadImport: (file: File, signal?: AbortSignal) => { const body = new FormData(); body.append("file", file); return api<import("./types").ImportUploadResponse>("/imports/device-inventory/upload", { method: "POST", body, signal }); },
+  importColumns: (id: string, worksheet?: string) => api<import("./types").ImportColumnDetection>(`/imports/${id}/columns${queryString({ worksheet })}`),
+  saveImportMapping: (id: string, mapping: Record<string, string | null>, worksheet?: string | null) => api<import("./types").ImportColumnDetection>(`/imports/${id}/mapping`, { method: "POST", body: JSON.stringify({ mapping, worksheet: worksheet || null }) }),
+  validateImport: (id: string) => api<import("./types").ImportSession>(`/imports/${id}/validate`, { method: "POST" }),
+  importRows: (id: string, filters: import("./types").ImportRowFilters = {}) => api<import("./types").ImportedDevicePage>(`/imports/${id}/rows${queryString(filters)}`),
+  importRow: (sessionId: string, rowId: string) => api<import("./types").ImportedDevice>(`/imports/${sessionId}/rows/${rowId}`),
+  importErrors: (id: string) => api<import("./types").ImportErrorReport>(`/imports/${id}/errors`),
+  exportImportErrors: (id: string) => download(`/imports/${id}/errors/export`),
+  cancelImport: (id: string) => api<import("./types").ImportSession>(`/imports/${id}/cancel`, { method: "POST" }),
+  runImportMatching: (id: string) => api<import("./types").ImportSummary>(`/imports/${id}/match`, { method: "POST" }),
+  recomputeImportMatches: (id: string) => api<import("./types").ImportSummary>(`/imports/${id}/matches/recompute`, { method: "POST" }),
+  importMatches: (id: string, filters: import("./types").ImportMatchFilters = {}) => api<import("./types").ImportMatchPage>(`/imports/${id}/matches${queryString(filters)}`),
+  importRowMatches: (sessionId: string, rowId: string) => api<import("./types").ImportMatchCandidate[]>(`/imports/${sessionId}/rows/${rowId}/matches`),
+  importMergePlan: (sessionId: string, rowId: string, candidateId?: string) => api<import("./types").MergePlan>(`/imports/${sessionId}/rows/${rowId}/merge-plan${queryString({ candidate_id: candidateId })}`),
+  acceptImportMatch: (sessionId: string, rowId: string, candidateId: string) => api<import("./types").ImportMatchCandidate>(`/imports/${sessionId}/rows/${rowId}/accept-match`, { method: "POST", body: JSON.stringify({ candidate_id: candidateId }) }),
+  rejectImportMatch: (sessionId: string, rowId: string, candidateId: string) => api<import("./types").ImportMatchCandidate>(`/imports/${sessionId}/rows/${rowId}/reject-match`, { method: "POST", body: JSON.stringify({ candidate_id: candidateId }) }),
+  markImportCreateNew: (sessionId: string, rowId: string) => api<import("./types").ImportedDevice>(`/imports/${sessionId}/rows/${rowId}/mark-create-new`, { method: "POST" }),
+  markImportSkip: (sessionId: string, rowId: string) => api<import("./types").ImportedDevice>(`/imports/${sessionId}/rows/${rowId}/mark-skip`, { method: "POST" }),
+  importLocationSuggestion: (sessionId: string, rowId: string) => api<import("./types").ImportLocationSuggestion>(`/imports/${sessionId}/rows/${rowId}/location-suggestion`),
+  importLocationSuggestions: (sessionId: string) => api<import("./types").ImportLocationSuggestion[]>(`/imports/${sessionId}/locations`),
+  reviewImportLocation: (sessionId: string, rowId: string, body: import("./types").LocationReviewInput) => api<import("./types").ImportLocationSuggestion>(`/imports/${sessionId}/rows/${rowId}/location-suggestion`, { method: "POST", body: JSON.stringify(body) }),
 };

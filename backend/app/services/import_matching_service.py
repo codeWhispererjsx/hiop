@@ -45,6 +45,54 @@ class ImportMatchingService:
         if not session: raise MatchingNotFoundError("Import session not found")
         return session
 
+    def _refresh_review_summary(self, session_id: UUID) -> None:
+        session = self._session(session_id)
+        rows = list(self.repository.rows_to_match(session_id))
+        resolved = [row for row in rows if row.resolution_action]
+        unresolved_ids = {row.id for row in rows if not row.resolution_action}
+        candidates = self.db.scalars(
+            select(ImportMatchCandidate).where(
+                ImportMatchCandidate.import_session_id == session_id,
+            )
+        ).all()
+        suggestions = self.repository.suggestions_for_session(session_id)
+        summary = dict(session.match_summary or {})
+        summary.update(
+            {
+                "total_valid_rows": len(rows),
+                "resolved": len(resolved),
+                "conflicts": len(
+                    {
+                        candidate.imported_device_id
+                        for candidate in candidates
+                        if candidate.imported_device_id in unresolved_ids
+                        and candidate.conflicting_fields
+                    }
+                ),
+                "suggested_new_devices": sum(
+                    row.resolution_action == "create_new" for row in rows
+                ),
+                "accepted_locations": sum(
+                    item.status == LocationSuggestionStatus.ACCEPTED
+                    for item in suggestions
+                ),
+                "rejected_locations": sum(
+                    item.status == LocationSuggestionStatus.REJECTED
+                    for item in suggestions
+                ),
+                "overridden_locations": sum(
+                    item.status == LocationSuggestionStatus.OVERRIDDEN
+                    for item in suggestions
+                ),
+                "unresolved_locations": sum(
+                    item.status == LocationSuggestionStatus.PENDING
+                    for item in suggestions
+                ),
+            }
+        )
+        session.skipped_rows = sum(row.resolution_action == "skip" for row in rows)
+        session.match_summary = summary
+
     def _row(self, session_id: UUID, row_id: UUID) -> ImportedDevice:
         row = self.rows.get(row_id)
         if not row or row.import_session_id != session_id: raise MatchingNotFoundError("Imported row not found")
@@ -199,6 +247,16 @@ class ImportMatchingService:
         self._row(session_id, row_id)
         return self.repository.candidates_for_row(session_id, row_id)
 
+    def location_for_row(self, session_id: UUID, row_id: UUID):
+        self._row(session_id, row_id)
+        suggestion = self.repository.suggestion_for_row(row_id)
+        if not suggestion: raise MatchingNotFoundError("Location suggestion not found")
+        return suggestion
+
+    def locations_for_session(self, session_id: UUID):
+        self._session(session_id)
+        return self.repository.suggestions_for_session(session_id)
+
     def merge_plan(self, session_id: UUID, row_id: UUID, candidate_id: UUID | None = None, actor: User | None = None) -> dict[str, Any]:
         row = self._row(session_id, row_id)
         candidates = self.repository.candidates_for_row(session_id, row_id)
@@ -236,6 +294,7 @@ class ImportMatchingService:
             for other in self.repository.candidates_for_row(session_id, row_id):
                 if other.id != candidate.id and other.match_status == ImportMatchStatus.PENDING: other.match_status = ImportMatchStatus.IGNORED
         create_audit_log(self.db, actor.username, "IMPORT_CANDIDATE_ACCEPTED" if accept else "IMPORT_CANDIDATE_REJECTED", "ImportMatchCandidate", str(candidate.id), "Reviewed an import match candidate")
+        self._refresh_review_summary(session_id)
         self.db.commit(); self.db.refresh(candidate)
         self._event("import_match_resolved", session_id, row_id=str(row_id), accepted=accept)
         return candidate
@@ -245,8 +304,19 @@ class ImportMatchingService:
         if row.resolution_action: raise MatchingConflictError("Imported row already has a resolution")
         row.resolution_action, row.resolved_by, row.resolved_at = "create_new", actor.id, datetime.now(timezone.utc)
         create_audit_log(self.db, actor.username, "IMPORT_ROW_CREATE_NEW", "ImportedDevice", str(row.id), "Marked staged row for later inventory creation")
+        self._refresh_review_summary(session_id)
         self.db.commit(); self.db.refresh(row)
         self._event("import_match_resolved", session_id, row_id=str(row_id), action="create_new")
+        return row
+
+    def mark_skip(self, session_id: UUID, row_id: UUID, actor: User) -> ImportedDevice:
+        row = self._row(session_id, row_id)
+        if row.resolution_action: raise MatchingConflictError("Imported row already has a resolution")
+        row.resolution_action, row.resolved_by, row.resolved_at = "skip", actor.id, datetime.now(timezone.utc)
+        create_audit_log(self.db, actor.username, "IMPORT_ROW_SKIPPED", "ImportedDevice", str(row.id), "Deferred staged row for later review")
+        self._refresh_review_summary(session_id)
+        self.db.commit(); self.db.refresh(row)
+        self._event("import_match_resolved", session_id, row_id=str(row_id), action="skip")
         return row
 
     def review_location(self, session_id: UUID, row_id: UUID, actor: User, action: str, overrides: dict[str, UUID | None]) -> ImportLocationSuggestion:
@@ -264,6 +334,7 @@ class ImportMatchingService:
         suggestion.status = {"accept": LocationSuggestionStatus.ACCEPTED, "reject": LocationSuggestionStatus.REJECTED, "override": LocationSuggestionStatus.OVERRIDDEN}[action]
         suggestion.reviewed_by, suggestion.reviewed_at = actor.id, datetime.now(timezone.utc)
         create_audit_log(self.db, actor.username, f"IMPORT_LOCATION_{action.upper()}", "ImportLocationSuggestion", str(suggestion.id), f"Location suggestion {action}ed")
+        self._refresh_review_summary(session_id)
         self.db.commit(); self.db.refresh(suggestion)
         self._event("import_location_suggestion_updated", session_id, row_id=str(row_id), status=suggestion.status.value)
         return suggestion

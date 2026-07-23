@@ -146,4 +146,14 @@ Suggestions use exact case-insensitive hierarchy names first, then configured al
 - `POST /api/v1/imports/{session_id}/rows/{row_id}/location-suggestion`
 - `POST /api/v1/imports/{session_id}/matches/recompute`
 
-Administrators run and resolve matching. Administrators and technicians may read candidates, evidence, summaries, location suggestions, and merge plans. Matching is synchronous and process-local in this phase; production-scale background orchestration and the Import Wizard remain future work.
+Administrators run and resolve matching. Administrators and technicians may read candidates, evidence, summaries, location suggestions, and merge plans. Matching is synchronous and process-local in this phase; production-scale background orchestration remains future work.
+
+## Epic 2D frontend review architecture
+
+Epic 2D adds one import feature surface inside the existing React application rather than a second UI framework. `/imports` lists backend sessions and `/imports/:session_id/*` hosts a resumable nine-step wizard. The shared authenticated API client owns every request; pages do not issue ad hoc fetches. Existing dashboard layout, role lookup, feedback, modal, status badge, hierarchy catalog, design tokens, and responsive table conventions are reused.
+
+The backend remains the source of truth. A resumed route derives its safe stage from session lifecycle, selected worksheet, matching state, counters, persisted row resolutions, candidates, and location reviews. Direct routes are available for mapping, validation, matches, locations, conflicts, summary, and readiness. URL state selects a review view but never substitutes for persisted import state.
+
+Epic 2D adds the session list, staged-row detail, session-location list, row-location detail, and audited mark-skip support endpoints required by the review UI. Administrator-only endpoints remain protected by backend role dependencies; hiding mutation controls from technicians is only a usability measure.
+
+Merge plans are previews and the readiness screen is a handoff boundary. The frontend contains no final-import button and calls no official Device create, overwrite, merge, delete, or rollback operation. Epic 2E must introduce the transactional finalization contract before those actions can exist.

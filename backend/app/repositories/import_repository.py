@@ -27,6 +27,14 @@ class ImportSessionRepository:
     def count(self) -> int:
         return self.db.scalar(select(func.count(ImportSession.id))) or 0
 
+    def page(self, *, search: str | None = None, status: str | None = None, offset: int = 0, limit: int = 25):
+        filters = []
+        if search: filters.append(ImportSession.original_filename.ilike(f"%{search.strip()}%"))
+        if status: filters.append(ImportSession.status == status)
+        total = self.db.scalar(select(func.count(ImportSession.id)).where(*filters)) or 0
+        statement = select(ImportSession).where(*filters).order_by(ImportSession.uploaded_at.desc()).offset(offset).limit(limit)
+        return self.db.scalars(statement).all(), total
+
 
 class ImportedDeviceRepository:
     """Persistence operations for staged imported devices; no matching rules."""
@@ -58,6 +66,13 @@ class ImportedDeviceRepository:
     def count_for_session(self, session_id: UUID) -> int:
         statement = select(func.count(ImportedDevice.id)).where(ImportedDevice.import_session_id == session_id)
         return self.db.scalar(statement) or 0
+
+    def validation_counts(self, session_ids: Sequence[UUID]) -> dict[UUID, dict[str, int]]:
+        if not session_ids: return {}
+        rows = self.db.execute(select(ImportedDevice.import_session_id, ImportedDevice.validation_status, func.count(ImportedDevice.id)).where(ImportedDevice.import_session_id.in_(session_ids)).group_by(ImportedDevice.import_session_id, ImportedDevice.validation_status)).all()
+        result: dict[UUID, dict[str, int]] = {}
+        for session_id, status, count in rows: result.setdefault(session_id, {})[status.value] = count
+        return result
 
     def page_for_session(self, session_id: UUID, *, status: str | None = None, search: str | None = None, source_row_number: int | None = None, offset: int = 0, limit: int = 25):
         filters = [ImportedDevice.import_session_id == session_id]
