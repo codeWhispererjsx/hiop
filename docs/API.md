@@ -4,6 +4,21 @@
 
 Administrators start staging-only full, incremental, or dry-run synchronization with `POST /api/v1/active-directory/connections/{id}/sync`. Run detail, cancellation, safe errors, summary, and projections are under `/sync-runs/{id}`. Staged detail/history are under `/objects/{id}`. Technician reads redact email/raw attributes; raw LDAP filters are never accepted.
 
+## Active Directory matching and reconciliation
+
+- `POST /active-directory/connections/{id}/match`
+- `GET /active-directory/objects/{id}/matches`
+- `GET /active-directory/objects/{id}/reconciliation-plan`
+- `POST /active-directory/objects/{id}/accept-match`
+- `POST /active-directory/objects/{id}/reject-match`
+- `POST /active-directory/objects/{id}/mark-create`
+- `POST /active-directory/objects/{id}/ignore`
+- `POST /active-directory/objects/{id}/resolve`
+- `POST /active-directory/bulk-review`
+- `GET|POST /active-directory/connections/{id}/mappings/{kind}`
+
+Mutations require Admin. Resolution requires explicit confirmation and performs source/target freshness and link-consistency checks.
+
 ## Final import endpoints
 
 - `POST /imports/{session_id}/rows/{row_id}/disposition`

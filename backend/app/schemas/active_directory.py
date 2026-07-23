@@ -298,6 +298,9 @@ class ActiveDirectoryMatchCandidateRead(BaseModel):
     candidate_type: str
     candidate_user_id: str | None = None
     candidate_device_id: UUID | None = None
+    candidate_discovery_id: UUID | None = None
+    candidate_department_id: UUID | None = None
+    candidate_role_id: str | None = None
     match_score: float
     match_level: str
     match_status: str
@@ -309,6 +312,105 @@ class ActiveDirectoryMatchCandidateRead(BaseModel):
     reviewed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class ActiveDirectoryMatchRequest(BaseModel):
+    object_types: list[Literal["user", "computer", "group"]] | None = None
+    recompute: bool = False
+    dry_run: bool = False
+    limit: int = Field(default=1000, ge=1, le=100000)
+
+
+class ActiveDirectoryCandidateReview(BaseModel):
+    candidate_id: str
+
+
+class ActiveDirectoryResolveRequest(BaseModel):
+    action: Literal[
+        "link_existing_user", "create_new_user", "enrich_existing_user",
+        "review_disable", "link_existing_device", "create_new_device",
+        "enrich_existing_device", "link_discovery", "review_retire",
+        "suggest_role_mapping", "ignore", "conflict",
+    ]
+    candidate_id: str | None = None
+    approved_fields: list[str] = Field(default_factory=list, max_length=20)
+    device: dict[str, Any] | None = None
+    role: Literal["admin", "technician", "staff"] | None = None
+    active: bool | None = None
+    confirm: bool = False
+    confirm_privileged_role: bool = False
+
+
+class ActiveDirectoryBulkReviewRequest(BaseModel):
+    object_ids: list[str] = Field(min_length=1, max_length=100)
+    action: Literal["link_existing_user", "link_existing_device", "ignore"]
+    confirm: bool = False
+
+
+class ActiveDirectoryDepartmentMappingWrite(BaseModel):
+    source_value: str = Field(min_length=1, max_length=255)
+    department_id: UUID
+    priority: int = Field(default=100, ge=0, le=10000)
+    enabled: bool = True
+
+
+class ActiveDirectoryOUMappingWrite(BaseModel):
+    pattern: str = Field(min_length=1, max_length=255, pattern=r"^[A-Za-z0-9 _.,=*\-]+$")
+    department_id: UUID | None = None
+    building_id: UUID | None = None
+    floor_id: UUID | None = None
+    room_id: UUID | None = None
+    network_zone_id: UUID | None = None
+    device_category: str | None = Field(default=None, max_length=80)
+    user_category: str | None = Field(default=None, max_length=80)
+    priority: int = Field(default=100, ge=0, le=10000)
+    enabled: bool = True
+
+
+class ActiveDirectoryGroupRoleMappingWrite(BaseModel):
+    source_group: str = Field(min_length=1, max_length=255)
+    target_role: Literal["admin", "technician", "staff"]
+    priority: int = Field(default=100, ge=0, le=10000)
+    enabled: bool = True
+    requires_confirmation: bool = True
+
+
+class ActiveDirectoryMappingRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    connection_id: str
+    priority: int
+    enabled: bool
+    created_at: datetime
+    updated_at: datetime
+    source_value: str | None = None
+    source_group: str | None = None
+    pattern: str | None = None
+    department_id: UUID | None = None
+    building_id: UUID | None = None
+    floor_id: UUID | None = None
+    room_id: UUID | None = None
+    network_zone_id: UUID | None = None
+    device_category: str | None = None
+    user_category: str | None = None
+    target_role: str | None = None
+    requires_confirmation: bool | None = None
+
+
+class ActiveDirectoryReconciliationResultRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    directory_object_id: str
+    action: str
+    status: str
+    target_user_id: str | None = None
+    target_device_id: UUID | None = None
+    before_values: dict[str, Any]
+    after_values: dict[str, Any]
+    safe_error: str | None = None
+    retryable: bool
+    reviewed_by: str | None = None
+    reviewed_at: datetime
 
 
 class PaginatedADConnections(BaseModel):

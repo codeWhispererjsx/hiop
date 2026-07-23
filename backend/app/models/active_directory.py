@@ -89,13 +89,16 @@ class ADConflictPolicy(str, enum.Enum):
 class ADMatchCandidateType(str, enum.Enum):
     HIOP_USER = "hiop_user"
     HIOP_DEVICE = "hiop_device"
+    DISCOVERED_DEVICE = "discovered_device"
+    DEPARTMENT = "department"
+    ROLE = "role"
 
 
 class ADMatchLevel(str, enum.Enum):
     EXACT = "exact"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+    STRONG = "strong"
+    PROBABLE = "probable"
+    WEAK = "weak"
     NONE = "none"
 
 
@@ -103,7 +106,8 @@ class ADMatchStatus(str, enum.Enum):
     PENDING = "pending"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
-    AUTO_MATCHED = "auto_matched"
+    IGNORED = "ignored"
+    RESOLVED = "resolved"
 
 
 class ADRecommendedAction(str, enum.Enum):
@@ -112,6 +116,8 @@ class ADRecommendedAction(str, enum.Enum):
     ENRICH = "enrich"
     REVIEW = "review"
     IGNORE = "ignore"
+    DISABLE_REVIEW = "disable_review"
+    CONFLICT = "conflict"
 
 
 class ActiveDirectoryConnection(Base):
@@ -834,34 +840,32 @@ class ActiveDirectorySyncError(Base):
 class ActiveDirectoryMatchCandidate(Base):
     __tablename__ = "active_directory_match_candidates"
     __table_args__ = (
-        UniqueConstraint(
-            "directory_object_id",
-            "candidate_type",
-            "candidate_user_id",
-            "candidate_device_id",
-            name="uq_ad_candidate_target",
-        ),
         CheckConstraint(
-            "(candidate_type = 'hiop_user' AND candidate_user_id IS NOT NULL AND candidate_device_id IS NULL) "
-            "OR (candidate_type = 'hiop_device' AND candidate_device_id IS NOT NULL AND candidate_user_id IS NULL)",
+            "(candidate_type = 'hiop_user' AND candidate_user_id IS NOT NULL) "
+            "OR (candidate_type = 'hiop_device' AND candidate_device_id IS NOT NULL) "
+            "OR (candidate_type = 'discovered_device' AND candidate_discovery_id IS NOT NULL) "
+            "OR (candidate_type = 'department' AND candidate_department_id IS NOT NULL) "
+            "OR (candidate_type = 'role' AND candidate_role_id IS NOT NULL)",
             name="ck_ad_candidate_typed_target",
         ),
         CheckConstraint("match_score BETWEEN 0 AND 100", name="ck_ad_candidate_score"),
         CheckConstraint(
-            "match_level IN ('exact','high','medium','low','none')",
+            "match_level IN ('exact','strong','probable','weak','none')",
             name="ck_ad_candidate_level",
         ),
         CheckConstraint(
-            "match_status IN ('pending','accepted','rejected','auto_matched')",
+            "match_status IN ('pending','accepted','rejected','ignored','resolved')",
             name="ck_ad_candidate_status",
         ),
         CheckConstraint(
-            "recommended_action IN ('link','create','enrich','review','ignore')",
+            "recommended_action IN ('link','create','enrich','review','ignore','disable_review','conflict')",
             name="ck_ad_candidate_action",
         ),
         Index("ix_ad_candidates_directory_object_id", "directory_object_id"),
         Index("ix_ad_candidates_candidate_user_id", "candidate_user_id"),
         Index("ix_ad_candidates_candidate_device_id", "candidate_device_id"),
+        Index("ix_ad_candidates_candidate_discovery_id", "candidate_discovery_id"),
+        Index("ix_ad_candidates_candidate_department_id", "candidate_department_id"),
         Index("ix_ad_candidates_match_status", "match_status"),
     )
 
@@ -889,6 +893,15 @@ class ActiveDirectoryMatchCandidate(Base):
         ForeignKey("devices.id", ondelete="CASCADE"),
         nullable=True,
     )
+    candidate_discovery_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("discovered_devices.id", ondelete="CASCADE"), nullable=True
+    )
+    candidate_department_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("departments.id", ondelete="CASCADE"), nullable=True
+    )
+    candidate_role_id: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    source_version: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    target_version: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     match_score: Mapped[float] = mapped_column(
         Float,
         default=0.0,
@@ -951,4 +964,121 @@ class ActiveDirectoryMatchCandidate(Base):
     )
     candidate_user: Mapped[User | None] = relationship("User", foreign_keys=[candidate_user_id])
     candidate_device: Mapped[Device | None] = relationship("Device", foreign_keys=[candidate_device_id])
+    candidate_discovery = relationship("DiscoveredDevice", foreign_keys=[candidate_discovery_id])
+    candidate_department = relationship("Department", foreign_keys=[candidate_department_id])
     reviewer: Mapped[User | None] = relationship("User", foreign_keys=[reviewed_by])
+
+
+class ActiveDirectoryRecordLink(Base):
+    __tablename__ = "active_directory_record_links"
+    __table_args__ = (
+        CheckConstraint(
+            "(user_id IS NOT NULL AND device_id IS NULL) OR "
+            "(user_id IS NULL AND device_id IS NOT NULL)",
+            name="ck_ad_record_link_single_target",
+        ),
+        UniqueConstraint("directory_object_id", name="uq_ad_record_link_object"),
+        UniqueConstraint("connection_id", "user_id", name="uq_ad_record_link_user"),
+        UniqueConstraint("connection_id", "device_id", name="uq_ad_record_link_device"),
+        Index("ix_ad_record_links_connection_id", "connection_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    connection_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("active_directory_connections.id", ondelete="CASCADE"), nullable=False
+    )
+    directory_object_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("active_directory_objects.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
+    )
+    device_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=True
+    )
+    discovery_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("discovered_devices.id", ondelete="SET NULL"), nullable=True
+    )
+    linked_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    source_version: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ActiveDirectoryDepartmentMapping(Base):
+    __tablename__ = "active_directory_department_mappings"
+    __table_args__ = (
+        UniqueConstraint("connection_id", "source_value", name="uq_ad_department_mapping_source"),
+        Index("ix_ad_department_mappings_connection_id", "connection_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    connection_id: Mapped[str] = mapped_column(String(36), ForeignKey("active_directory_connections.id", ondelete="CASCADE"), nullable=False)
+    source_value: Mapped[str] = mapped_column(String(255), nullable=False)
+    department_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("departments.id", ondelete="CASCADE"), nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ActiveDirectoryOUMapping(Base):
+    __tablename__ = "active_directory_ou_mappings"
+    __table_args__ = (
+        UniqueConstraint("connection_id", "pattern", "priority", name="uq_ad_ou_mapping_rule"),
+        Index("ix_ad_ou_mappings_connection_id", "connection_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    connection_id: Mapped[str] = mapped_column(String(36), ForeignKey("active_directory_connections.id", ondelete="CASCADE"), nullable=False)
+    pattern: Mapped[str] = mapped_column(String(255), nullable=False)
+    department_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"))
+    building_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("buildings.id", ondelete="SET NULL"))
+    floor_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("floors.id", ondelete="SET NULL"))
+    room_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="SET NULL"))
+    network_zone_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("network_zones.id", ondelete="SET NULL"))
+    device_category: Mapped[str | None] = mapped_column(String(80))
+    user_category: Mapped[str | None] = mapped_column(String(80))
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ActiveDirectoryGroupRoleMapping(Base):
+    __tablename__ = "active_directory_group_role_mappings"
+    __table_args__ = (
+        UniqueConstraint("connection_id", "source_group", name="uq_ad_group_role_mapping_source"),
+        Index("ix_ad_group_role_mappings_connection_id", "connection_id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    connection_id: Mapped[str] = mapped_column(String(36), ForeignKey("active_directory_connections.id", ondelete="CASCADE"), nullable=False)
+    source_group: Mapped[str] = mapped_column(String(255), nullable=False)
+    target_role: Mapped[str] = mapped_column(String(30), nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    requires_confirmation: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class ActiveDirectoryReconciliationResult(Base):
+    __tablename__ = "active_directory_reconciliation_results"
+    __table_args__ = (
+        Index("ix_ad_reconciliation_results_object_id", "directory_object_id"),
+        Index("ix_ad_reconciliation_results_status", "status"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    directory_object_id: Mapped[str] = mapped_column(String(36), ForeignKey("active_directory_objects.id", ondelete="CASCADE"), nullable=False)
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    target_user_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    target_device_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"))
+    before_values: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=func.text("'{}'::jsonb"), nullable=False)
+    after_values: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=func.text("'{}'::jsonb"), nullable=False)
+    safe_error: Mapped[str | None] = mapped_column(String(500))
+    retryable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

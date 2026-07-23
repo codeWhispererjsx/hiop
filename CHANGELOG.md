@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 3D
+
+- Added explainable AD user/device/Discovery/department/role matching with conservative fuzzy evidence and conflict penalties.
+- Added reviewed links, fill-missing enrichment, complete Device onboarding, manual-setup User onboarding, mapping rules, stale checks, bulk safeguards, events, audit, and reports.
+- Added migration `b8d4f6a10235`, reconciliation APIs, and offline tests.
+- No password sync, silent Admin grant, automatic disable/retirement, scheduling, SSO, frontend AD module, or real-domain mutation was added.
+
 ## 2.0.0-dev — Epic 3C
 
 - Added manual full, incremental, and dry-run AD staging synchronization.

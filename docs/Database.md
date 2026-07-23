@@ -2,7 +2,9 @@
 
 Migration `a7c3e5f90124` adds AD checkpoints, run progress/results/cancellation, missing markers, field-level change history, and sanitized sync errors. Missing staged objects are retained.
 
-PostgreSQL is the only supported production database. SQLAlchemy models define the runtime mapping and Alembic is the sole schema-change mechanism. The current head is `a7c3e5f90124`.
+Migration `b8d4f6a10235` expands AD candidates for Discovery, Department, and role suggestions; adds source/target versions; and creates record-link, department-map, OU-map, group-role-map, and reconciliation-result tables. Link uniqueness is enforced in PostgreSQL.
+
+PostgreSQL is the only supported production database. SQLAlchemy models define the runtime mapping and Alembic is the sole schema-change mechanism. The current head is `b8d4f6a10235`.
 
 Epic 3A adds `active_directory_connections`, `active_directory_sync_configurations`, `active_directory_objects`, `active_directory_sync_runs`, and `active_directory_match_candidates` for directory integration staging and telemetry.
 

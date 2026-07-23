@@ -16,6 +16,7 @@ from app.models.network_scan import NetworkScan
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.models.inventory_import import ImportSession
+from app.models.active_directory import ActiveDirectoryReconciliationResult
 
 REPORTS = {
     "devices": ("Device Inventory Report", Device, Device.created_at),
@@ -26,6 +27,7 @@ REPORTS = {
     "audit": ("Audit Report", AuditLog, AuditLog.created_at),
     "discovery": ("Discovery Report", DiscoveredDevice, DiscoveredDevice.first_seen_at),
     "imports": ("Inventory Import Report", ImportSession, ImportSession.uploaded_at),
+    "ad-reconciliation": ("Active Directory Reconciliation Report", ActiveDirectoryReconciliationResult, ActiveDirectoryReconciliationResult.reviewed_at),
 }
 
 
@@ -162,6 +164,20 @@ def _import_rows(db, start_date, end_date, search):
     return rows
 
 
+def _ad_reconciliation_rows(db, start_date, end_date, search):
+    query = _date(db.query(ActiveDirectoryReconciliationResult),
+                  ActiveDirectoryReconciliationResult.reviewed_at, start_date, end_date)
+    if search:
+        query = query.filter(ActiveDirectoryReconciliationResult.action.ilike(f"%{search.strip()}%"))
+    return [{
+        "id": row.id, "directory_object_id": row.directory_object_id,
+        "action": row.action, "status": row.status,
+        "target_user_id": row.target_user_id,
+        "target_device_id": _value(row.target_device_id),
+        "reviewed_by": row.reviewed_by, "reviewed_at": _value(row.reviewed_at),
+    } for row in query.order_by(ActiveDirectoryReconciliationResult.reviewed_at.desc()).all()]
+
+
 def _sort(rows, sort_by, sort_order):
     if not rows:
         return rows
@@ -171,7 +187,7 @@ def _sort(rows, sort_by, sort_order):
 
 def get_report(db: Session, report_name: str, start_date=None, end_date=None, search=None, status=None, department=None, category=None, page=1, page_size=25, sort_by=None, sort_order="asc"):
     _validate(report_name, start_date, end_date)
-    loaders = {"devices": _device_rows, "network": _network_rows, "alerts": _alert_rows, "tickets": _ticket_rows, "users": _user_rows, "audit": _audit_rows, "discovery": _discovery_rows, "imports": _import_rows}
+    loaders = {"devices": _device_rows, "network": _network_rows, "alerts": _alert_rows, "tickets": _ticket_rows, "users": _user_rows, "audit": _audit_rows, "discovery": _discovery_rows, "imports": _import_rows, "ad-reconciliation": _ad_reconciliation_rows}
     rows = loaders[report_name](db, start_date, end_date, search)
     if status:
         rows = [row for row in rows if str(row.get("network_status", row.get("inventory_status", row.get("status", row.get("current_status", "Active" if row.get("is_active") else "Inactive"))))).lower() == status.lower()]
@@ -209,9 +225,16 @@ def get_report(db: Session, report_name: str, start_date=None, end_date=None, se
     elif report_name == "discovery":
         charts = {"status": _distribution([row["status"] for row in rows]), "review": _distribution([row["review_status"] for row in rows]), "type": _distribution([row["device_type_guess"] for row in rows])}
         metrics.update({"pending": sum(row["review_status"] == "pending" for row in rows), "approved": sum(row["review_status"] == "approved" for row in rows), "ignored": sum(row["review_status"] == "ignored" for row in rows), "rejected": sum(row["review_status"] == "rejected" for row in rows)})
-    else:
+    elif report_name == "imports":
         charts = {"status": _distribution([row["status"] for row in rows])}
         metrics.update({"created": sum(row["created_devices"] for row in rows), "linked": sum(row["linked_devices"] for row in rows), "enriched": sum(row["enriched_devices"] for row in rows), "failed": sum(row["failed_rows"] for row in rows), "rolled_back": sum(row["rollback_rows"] for row in rows)})
+    else:
+        charts = {"action": _distribution([row["action"] for row in rows]), "status": _distribution([row["status"] for row in rows])}
+        metrics.update({
+            "completed": sum(row["status"] == "completed" for row in rows),
+            "manual_setup": sum(row["status"] == "pending_manual_setup" for row in rows),
+            "review_required": sum(row["status"] == "review_required" for row in rows),
+        })
     rows = _sort(rows, sort_by, sort_order)
     items, total, pages = _page(rows, page, page_size)
     return {"report": report_name, "generated_at": datetime.now(timezone.utc), "items": items, "total": total, "page": page, "page_size": page_size, "pages": pages, "metrics": metrics, "charts": charts}

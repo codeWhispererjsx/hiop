@@ -1,5 +1,11 @@
 # HIOP User Guide
 
+## Directory review
+
+Directory records are staged before they affect HIOP. A match score is evidence, not approval. Review matching and conflicting fields, inspect the reconciliation plan, then choose link, fill-missing enrichment, create preparation, ignore, or conflict/defer. Disabled or missing directory accounts and computers do not automatically change HIOP status.
+
+New HIOP users remain pending manual local-password setup because Active Directory passwords are never copied. New devices require every normal inventory identifier and hierarchy value.
+
 ## Hotel IT Operations Portal — Version 1.0.0
 
 ---

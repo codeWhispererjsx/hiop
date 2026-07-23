@@ -201,6 +201,8 @@ Enable automatic alerting and ticket creation when devices go offline:
 
 Epic 3C adds API-based manual staging sync. Begin with `dry_run: true`, review projections, then perform an approved full or incremental sync. Full sync marks staging rows missing only after complete paging and the grace period; it never deletes or disables HIOP records. Checkpoints advance only on success. There is no AD frontend, schedule, reconciliation, or automatic HIOP record creation.
 
+Epic 3D adds administrator-reviewed matching and reconciliation APIs. Run matching after a successful staging sync, review explainable candidates and the plan, then explicitly link/enrich/onboard/ignore. Bulk links are limited to conflict-free exact candidates. Admin group mappings always require additional confirmation. User creation remains pending manual local-password setup; no AD credential is accepted.
+
 HIOP `2.0.0-dev` includes a backend foundation for Microsoft Active Directory integration:
 - Domain connections, search bases, and ports are managed via `/api/v1/active-directory/connections` (Admin only).
 - Bind credentials use authenticated Fernet encryption and are treated as write-only. Configure a dedicated `HIOP_AD_SECRET_KEY` before production use.

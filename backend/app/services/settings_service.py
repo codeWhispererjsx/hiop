@@ -44,6 +44,13 @@ DEFAULTS = {
     "import.allow_reviewed_field_overwrite": "false", "import.rollback_retention_days": "30",
     "import.final_import_retry_limit": "3", "import.execution_result_retention_days": "365",
     "import.import_notification_threshold": "1", "import.execution_lock_timeout_seconds": "900",
+    "ad_match.exact_threshold": "95", "ad_match.strong_threshold": "80",
+    "ad_match.probable_threshold": "60", "ad_match.weak_threshold": "35",
+    "ad_match.candidate_limit": "5", "ad_match.fuzzy_enabled": "true",
+    "ad_match.fill_missing_only": "true", "ad_match.role_mapping_enabled": "true",
+    "ad_match.department_mapping_enabled": "true", "ad_match.ou_mapping_enabled": "true",
+    "ad_match.admin_confirmation_required": "true", "ad_match.bulk_exact_limit": "100",
+    "ad_match.reconciliation_batch_size": "50", "ad_match.conflict_penalty": "35",
 }
 
 
@@ -125,6 +132,21 @@ def read_import_settings(db: Session) -> dict[str, Any]:
     for key in ("subnet_mapping_rules", "hostname_mapping_rules", "hierarchy_aliases"):
         try: result[key] = json.loads(values[key])
         except (TypeError, ValueError): result[key] = [] if key != "hierarchy_aliases" else {}
+    return result
+
+
+def read_ad_matching_settings(db: Session) -> dict[str, Any]:
+    values = _group(_all(db), "ad_match")
+    integers = (
+        "exact_threshold", "strong_threshold", "probable_threshold", "weak_threshold",
+        "candidate_limit", "bulk_exact_limit", "reconciliation_batch_size", "conflict_penalty",
+    )
+    booleans = (
+        "fuzzy_enabled", "fill_missing_only", "role_mapping_enabled",
+        "department_mapping_enabled", "ou_mapping_enabled", "admin_confirmation_required",
+    )
+    result = {key: int(values[key]) for key in integers}
+    result.update({key: _bool(values[key]) for key in booleans})
     return result
 
 

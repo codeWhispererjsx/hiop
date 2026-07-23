@@ -1,5 +1,39 @@
 # HIOP Active Directory Integration (v2 — Epic 3C)
 
+## Epic 3D matching and reconciliation
+
+Epic 3D matches staged directory users to HIOP users, computers to inventory and Discovery records, department values to existing departments, and explicitly configured directory groups to role suggestions. It never grants a role, creates a record, disables an account, retires a device, or changes identifiers without administrator review.
+
+### Explainable scoring
+
+Candidate scores are bounded from 0–100 and retain matching fields, conflict penalties, and individual signal weights. Default levels are exact (95–100), strong (80–94), probable (60–79), weak (35–59), and none. Exact email, UPN, username, DNS hostname, existing links, and Discovery MAC evidence rank highest. IP-only, similar hostname, and display-name-only evidence remain review-only. Candidate generation uses exact filtered queries before bounded fuzzy pools and keeps at most five candidates.
+
+### Conflicts and stale data
+
+Conflicting email, username, hostname, MAC, existing link, or candidate state is never silently accepted. Candidates snapshot the directory `whenChanged` and target `updated_at` values; resolution rejects stale decisions. Dedicated one-to-one record links prevent a directory object from linking to multiple HIOP records or one HIOP record from linking to multiple directory objects in one connection.
+
+### User reconciliation
+
+Existing users may be linked, or enriched only through explicitly approved fill-missing fields. Local role and active status are preserved. Disabled/missing directory users produce review dispositions only.
+
+HIOP currently requires a local password and has no invitation workflow. Consequently, `create_new_user` records a `pending_manual_setup` result with required username/email/role but does not create a User, accept an AD password, generate a default password, or enable domain authentication. Admin role suggestions require separate privileged-role confirmation.
+
+### Device and Discovery reconciliation
+
+Existing devices can be linked or fill-missing enriched while asset tag, MAC, serial, location, monitoring history, tickets, alerts, scans, and audit data remain intact. Device creation requires the complete normal `DeviceCreate` inventory payload and hierarchy validation; no asset tag, serial, MAC, IP, or location is invented. Discovery links are accepted only when the Discovery record is already consistently linked to inventory.
+
+Disabled/missing directory computers only create retirement-review dispositions.
+
+### Department, OU, and group mappings
+
+Department aliases point to existing departments. OU rules are ordered, use constrained non-executable patterns, and may reference existing department/building/floor/room/network-zone records. Group-role mappings are explicit suggestions; Admin mappings must require additional confirmation. No hierarchy or role record is created silently.
+
+### Review APIs and batching
+
+Matching, candidate review, reconciliation plans, resolution, mapping mutation, and bulk review are administrator-only. Technicians retain the existing limited read policy. Bulk linking accepts only conflict-free exact candidates and returns per-object failures. Reconciliation results persist action, target, before/after values, reviewer, status, and safe errors.
+
+The `ad-reconciliation` report summarizes onboarding/link/enrichment dispositions. WebSocket and audit events contain IDs, actions, scores/counts, and statuses—not full directory objects.
+
 ## Scope
 
 Epic 3C adds administrator-triggered synchronization into directory staging. It builds on the secure Epic 3B LDAP client and never creates or updates HIOP users or devices.

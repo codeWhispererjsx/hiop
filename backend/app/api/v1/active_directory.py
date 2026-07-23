@@ -12,7 +12,13 @@ from app.models.active_directory import (
     ActiveDirectoryObjectChange,
     ActiveDirectorySyncError,
     ActiveDirectorySyncRun,
+    ActiveDirectoryConnection,
+    ActiveDirectoryDepartmentMapping,
+    ActiveDirectoryOUMapping,
+    ActiveDirectoryGroupRoleMapping,
+    ActiveDirectoryReconciliationResult,
 )
+from app.models.hierarchy import Building, Department, Floor, NetworkZone, Room
 from app.repositories.active_directory_repository import (
     ActiveDirectoryConnectionRepository,
     ActiveDirectoryMatchCandidateRepository,
@@ -41,12 +47,24 @@ from app.schemas.active_directory import (
     ActiveDirectorySyncSummary,
     PaginatedADSyncErrors,
     PaginatedADObjectChanges,
+    ActiveDirectoryMatchRequest,
+    ActiveDirectoryCandidateReview,
+    ActiveDirectoryResolveRequest,
+    ActiveDirectoryBulkReviewRequest,
+    ActiveDirectoryDepartmentMappingWrite,
+    ActiveDirectoryOUMappingWrite,
+    ActiveDirectoryGroupRoleMappingWrite,
+    ActiveDirectoryMappingRead,
+    ActiveDirectoryReconciliationResultRead,
 )
 from app.services.active_directory_service import (
     ActiveDirectoryConnectionService,
     ActiveDirectorySyncConfigService,
 )
 from app.services.active_directory_sync_service import ActiveDirectorySynchronizationService
+from app.services.active_directory_matching_service import ActiveDirectoryMatchingService
+from app.services.active_directory_reconciliation_service import ActiveDirectoryReconciliationService
+from app.services.audit_service import create_audit_log
 
 router = APIRouter(prefix="/active-directory", tags=["Active Directory"])
 
@@ -460,6 +478,224 @@ def object_changes(
         ActiveDirectoryObjectChange.directory_object_id == id
     ).order_by(ActiveDirectoryObjectChange.detected_at.desc()).offset(offset).limit(limit)).all()
     return PaginatedADObjectChanges(items=items, total=total, offset=offset, limit=limit)
+
+
+@router.post("/connections/{id}/match")
+def run_directory_matching(
+    id: str,
+    payload: ActiveDirectoryMatchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryMatchingService(db).run(
+        id, current_user, object_types=payload.object_types,
+        recompute=payload.recompute, dry_run=payload.dry_run, limit=payload.limit,
+    )
+
+
+@router.get("/objects/{id}/matches", response_model=list[ActiveDirectoryMatchCandidateRead])
+def object_matches(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(read_only),
+):
+    return ActiveDirectoryMatchingService(db).candidates_for_object(id)
+
+
+@router.get("/objects/{id}/reconciliation-plan")
+def reconciliation_plan(
+    id: str,
+    candidate_id: str | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(read_only),
+):
+    return ActiveDirectoryReconciliationService(db).plan(id, candidate_id)
+
+
+@router.post("/objects/{id}/accept-match", response_model=ActiveDirectoryMatchCandidateRead)
+def accept_directory_match(
+    id: str,
+    payload: ActiveDirectoryCandidateReview,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryReconciliationService(db).review_candidate(
+        id, payload.candidate_id, current_user, accept=True
+    )
+
+
+@router.post("/objects/{id}/reject-match", response_model=ActiveDirectoryMatchCandidateRead)
+def reject_directory_match(
+    id: str,
+    payload: ActiveDirectoryCandidateReview,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryReconciliationService(db).review_candidate(
+        id, payload.candidate_id, current_user, accept=False
+    )
+
+
+@router.post("/objects/{id}/mark-create", response_model=ActiveDirectoryReconciliationResultRead)
+def mark_directory_create(
+    id: str,
+    payload: ActiveDirectoryResolveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    if payload.action not in {"create_new_user", "create_new_device"}:
+        raise HTTPException(422, "Mark-create requires a create disposition.")
+    return _resolve_directory_object(id, payload, db, current_user)
+
+
+@router.post("/objects/{id}/ignore", response_model=ActiveDirectoryReconciliationResultRead)
+def ignore_directory_object(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryReconciliationService(db).resolve(
+        id, current_user, action="ignore", candidate_id=None, approved_fields=[],
+        device_payload=None, role=None, active=None, confirm=True,
+    )
+
+
+def _resolve_directory_object(id, payload, db, current_user):
+    return ActiveDirectoryReconciliationService(db).resolve(
+        id, current_user, action=payload.action, candidate_id=payload.candidate_id,
+        approved_fields=payload.approved_fields, device_payload=payload.device,
+        role=payload.role, active=payload.active, confirm=payload.confirm,
+        confirm_privileged_role=payload.confirm_privileged_role,
+    )
+
+
+@router.post("/objects/{id}/resolve", response_model=ActiveDirectoryReconciliationResultRead)
+def resolve_directory_object(
+    id: str,
+    payload: ActiveDirectoryResolveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return _resolve_directory_object(id, payload, db, current_user)
+
+
+@router.post("/bulk-review")
+def bulk_directory_review(
+    payload: ActiveDirectoryBulkReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryReconciliationService(db).bulk(
+        payload.object_ids, current_user, action=payload.action, confirm=payload.confirm
+    )
+
+
+@router.get("/objects/{id}/reconciliation-results", response_model=list[ActiveDirectoryReconciliationResultRead])
+def reconciliation_results(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    if not db.get(ActiveDirectoryObject, id):
+        raise HTTPException(404, "Directory object was not found.")
+    return db.scalars(select(ActiveDirectoryReconciliationResult).where(
+        ActiveDirectoryReconciliationResult.directory_object_id == id
+    ).order_by(ActiveDirectoryReconciliationResult.reviewed_at.desc()).limit(100)).all()
+
+
+def _mapping_model(kind: str):
+    models = {
+        "departments": ActiveDirectoryDepartmentMapping,
+        "ous": ActiveDirectoryOUMapping,
+        "roles": ActiveDirectoryGroupRoleMapping,
+    }
+    if kind not in models:
+        raise HTTPException(404, "Mapping type was not found.")
+    return models[kind]
+
+
+@router.get("/connections/{id}/mappings/{kind}", response_model=list[ActiveDirectoryMappingRead])
+def list_ad_mappings(
+    id: str, kind: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(read_only),
+):
+    if not db.get(ActiveDirectoryConnection, id):
+        raise HTTPException(404, "Active Directory connection was not found.")
+    model = _mapping_model(kind)
+    return db.scalars(select(model).where(model.connection_id == id).order_by(
+        model.priority, model.created_at
+    )).all()
+
+
+@router.post("/connections/{id}/mappings/departments", response_model=ActiveDirectoryMappingRead)
+def create_department_mapping(
+    id: str, payload: ActiveDirectoryDepartmentMappingWrite,
+    db: Session = Depends(get_db), current_user: User = Depends(admin_only),
+):
+    if not db.get(ActiveDirectoryConnection, id) or not db.get(Department, payload.department_id):
+        raise HTTPException(404, "Connection or department was not found.")
+    row = ActiveDirectoryDepartmentMapping(
+        connection_id=id, created_by=current_user.id, updated_by=current_user.id, **payload.model_dump()
+    )
+    db.add(row)
+    create_audit_log(db, current_user.username, "AD_DEPARTMENT_MAPPING_CREATED",
+                     "ActiveDirectoryDepartmentMapping", row.id, "Created reviewed AD department mapping.")
+    db.commit(); db.refresh(row); return row
+
+
+@router.post("/connections/{id}/mappings/ous", response_model=ActiveDirectoryMappingRead)
+def create_ou_mapping(
+    id: str, payload: ActiveDirectoryOUMappingWrite,
+    db: Session = Depends(get_db), current_user: User = Depends(admin_only),
+):
+    if not db.get(ActiveDirectoryConnection, id):
+        raise HTTPException(404, "Active Directory connection was not found.")
+    checks = ((Department, payload.department_id), (Building, payload.building_id),
+              (Floor, payload.floor_id), (Room, payload.room_id), (NetworkZone, payload.network_zone_id))
+    if any(value and not db.get(model, value) for model, value in checks):
+        raise HTTPException(422, "One or more hierarchy mapping targets are invalid.")
+    row = ActiveDirectoryOUMapping(
+        connection_id=id, created_by=current_user.id, updated_by=current_user.id, **payload.model_dump()
+    )
+    db.add(row)
+    create_audit_log(db, current_user.username, "AD_OU_MAPPING_CREATED",
+                     "ActiveDirectoryOUMapping", row.id, "Created ordered non-executable AD OU mapping.")
+    db.commit(); db.refresh(row); return row
+
+
+@router.post("/connections/{id}/mappings/roles", response_model=ActiveDirectoryMappingRead)
+def create_role_mapping(
+    id: str, payload: ActiveDirectoryGroupRoleMappingWrite,
+    db: Session = Depends(get_db), current_user: User = Depends(admin_only),
+):
+    if not db.get(ActiveDirectoryConnection, id):
+        raise HTTPException(404, "Active Directory connection was not found.")
+    if payload.target_role == "admin" and not payload.requires_confirmation:
+        raise HTTPException(422, "Admin mappings must require explicit confirmation.")
+    row = ActiveDirectoryGroupRoleMapping(
+        connection_id=id, created_by=current_user.id, updated_by=current_user.id, **payload.model_dump()
+    )
+    db.add(row)
+    create_audit_log(db, current_user.username, "AD_GROUP_ROLE_MAPPING_CREATED",
+                     "ActiveDirectoryGroupRoleMapping", row.id, "Created reviewed AD group-role suggestion mapping.")
+    db.commit(); db.refresh(row); return row
+
+
+@router.delete("/connections/{id}/mappings/{kind}/{mapping_id}")
+def delete_ad_mapping(
+    id: str, kind: str, mapping_id: str,
+    db: Session = Depends(get_db), current_user: User = Depends(admin_only),
+):
+    model = _mapping_model(kind)
+    row = db.get(model, mapping_id)
+    if not row or row.connection_id != id:
+        raise HTTPException(404, "Mapping rule was not found for this connection.")
+    db.delete(row)
+    create_audit_log(db, current_user.username, "AD_MAPPING_REMOVED",
+                     model.__name__, mapping_id, "Removed an explicit Active Directory mapping rule.")
+    db.commit()
+    return {"message": "Mapping rule removed.", "id": mapping_id}
 
 
 @router.get("/matches", response_model=PaginatedADMatchCandidates)

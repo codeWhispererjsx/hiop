@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 3D Directory matching and reviewed onboarding
+
+Explainable AD-to-HIOP user/device/Discovery/department/role matching and administrator-reviewed reconciliation are implemented at `2.0.0-dev`. The backend includes conflict evidence, stale-data checks, one-to-one links, fill-missing enrichment, complete Device onboarding, manual-setup User onboarding results, explicit mapping rules, bulk exact-link safeguards, events, audit, and reporting.
+
+Scheduled sync, SSO, domain authentication, automatic privilege/status changes, AD frontend administration, and real-domain mutation remain out of scope.
+
 ## HIOP v2 — Epic 3C Directory synchronization and staging
 
 Manual administrator-only AD synchronization is implemented at `2.0.0-dev`. Full, overlap-based incremental, and non-mutating dry-run modes stage approved attributes with persistent progress, per-type outcomes, checkpoints, history, missing/restored markers, sanitized errors, cancellation, aggregate events/notifications, and privacy-aware APIs.
