@@ -16,7 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -100,6 +100,18 @@ class ADRecommendedAction(str, enum.Enum):
 
 class ActiveDirectoryConnection(Base):
     __tablename__ = "active_directory_connections"
+    __table_args__ = (
+        CheckConstraint("server_port BETWEEN 1 AND 65535", name="ck_ad_connection_port"),
+        CheckConstraint("connection_timeout_seconds BETWEEN 1 AND 300", name="ck_ad_connection_timeout"),
+        CheckConstraint("page_size BETWEEN 1 AND 5000", name="ck_ad_connection_page_size"),
+        CheckConstraint("NOT (use_ssl AND use_start_tls)", name="ck_ad_connection_single_tls_mode"),
+        CheckConstraint(
+            "authentication_method IN ('simple','ldaps','start_tls','anonymous','kerberos')",
+            name="ck_ad_connection_auth_method",
+        ),
+        Index("ix_ad_connections_domain_name", "domain_name"),
+        Index("ix_ad_connections_server_host", "server_host"),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36),
@@ -243,6 +255,16 @@ class ActiveDirectoryConnection(Base):
 
 class ActiveDirectorySyncConfiguration(Base):
     __tablename__ = "active_directory_sync_configurations"
+    __table_args__ = (
+        CheckConstraint(
+            "sync_interval_minutes BETWEEN 1 AND 14400",
+            name="ck_ad_sync_config_interval",
+        ),
+        CheckConstraint(
+            "conflict_policy IN ('review','preserve_hiop','prefer_directory','fill_missing_only')",
+            name="ck_ad_sync_config_conflict_policy",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(
         String(36),
@@ -347,6 +369,19 @@ class ActiveDirectoryObject(Base):
     __tablename__ = "active_directory_objects"
     __table_args__ = (
         UniqueConstraint("connection_id", "object_guid", name="uq_ad_object_connection_guid"),
+        CheckConstraint("object_type IN ('user','computer','group')", name="ck_ad_object_type"),
+        CheckConstraint(
+            "sync_status IN ('discovered','unchanged','changed','missing','error')",
+            name="ck_ad_object_sync_status",
+        ),
+        CheckConstraint(
+            "review_status IN ('pending','matched','approved','ignored','conflict')",
+            name="ck_ad_object_review_status",
+        ),
+        CheckConstraint(
+            "NOT (matched_user_id IS NOT NULL AND matched_device_id IS NOT NULL)",
+            name="ck_ad_object_single_match",
+        ),
         Index("ix_ad_objects_connection_id", "connection_id"),
         Index("ix_ad_objects_object_guid", "object_guid"),
         Index("ix_ad_objects_object_sid", "object_sid"),
@@ -482,8 +517,8 @@ class ActiveDirectoryObject(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    matched_device_id: Mapped[str | None] = mapped_column(
-        String,
+    matched_device_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("devices.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -515,6 +550,17 @@ class ActiveDirectoryObject(Base):
 class ActiveDirectorySyncRun(Base):
     __tablename__ = "active_directory_sync_runs"
     __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','running','completed','partial','failed','cancelled')",
+            name="ck_ad_sync_run_status",
+        ),
+        CheckConstraint(
+            "users_seen >= 0 AND computers_seen >= 0 AND groups_seen >= 0 "
+            "AND created_objects >= 0 AND updated_objects >= 0 AND unchanged_objects >= 0 "
+            "AND missing_objects >= 0 AND conflicts >= 0 AND errors_count >= 0",
+            name="ck_ad_sync_run_nonnegative_counts",
+        ),
+        CheckConstraint("duration_ms IS NULL OR duration_ms >= 0", name="ck_ad_sync_run_duration"),
         Index("ix_ad_sync_runs_connection_id", "connection_id"),
         Index("ix_ad_sync_runs_status", "status"),
         Index("ix_ad_sync_runs_started_at", "started_at"),
@@ -634,6 +680,31 @@ class ActiveDirectorySyncRun(Base):
 class ActiveDirectoryMatchCandidate(Base):
     __tablename__ = "active_directory_match_candidates"
     __table_args__ = (
+        UniqueConstraint(
+            "directory_object_id",
+            "candidate_type",
+            "candidate_user_id",
+            "candidate_device_id",
+            name="uq_ad_candidate_target",
+        ),
+        CheckConstraint(
+            "(candidate_type = 'hiop_user' AND candidate_user_id IS NOT NULL AND candidate_device_id IS NULL) "
+            "OR (candidate_type = 'hiop_device' AND candidate_device_id IS NOT NULL AND candidate_user_id IS NULL)",
+            name="ck_ad_candidate_typed_target",
+        ),
+        CheckConstraint("match_score BETWEEN 0 AND 100", name="ck_ad_candidate_score"),
+        CheckConstraint(
+            "match_level IN ('exact','high','medium','low','none')",
+            name="ck_ad_candidate_level",
+        ),
+        CheckConstraint(
+            "match_status IN ('pending','accepted','rejected','auto_matched')",
+            name="ck_ad_candidate_status",
+        ),
+        CheckConstraint(
+            "recommended_action IN ('link','create','enrich','review','ignore')",
+            name="ck_ad_candidate_action",
+        ),
         Index("ix_ad_candidates_directory_object_id", "directory_object_id"),
         Index("ix_ad_candidates_candidate_user_id", "candidate_user_id"),
         Index("ix_ad_candidates_candidate_device_id", "candidate_device_id"),
@@ -659,8 +730,8 @@ class ActiveDirectoryMatchCandidate(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=True,
     )
-    candidate_device_id: Mapped[str | None] = mapped_column(
-        String,
+    candidate_device_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("devices.id", ondelete="CASCADE"),
         nullable=True,
     )

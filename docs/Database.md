@@ -1,4 +1,4 @@
-# HIOP 2.0.0 database
+# HIOP 2.0.0-dev database
 
 PostgreSQL is the only supported production database. SQLAlchemy models define the runtime mapping and Alembic is the sole schema-change mechanism. The current head is `e8a9b0c1d2e3`.
 

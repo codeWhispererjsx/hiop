@@ -201,7 +201,7 @@ Enable automatic alerting and ticket creation when devices go offline:
 
 HIOP `2.0.0-dev` includes a backend foundation for Microsoft Active Directory integration:
 - Domain connections, search bases, and ports are managed via `/api/v1/active-directory/connections` (Admin only).
-- Bind credentials are encrypted at rest using AES-256 / Fernet abstractions and treated as write-only.
+- Bind credentials use authenticated Fernet encryption and are treated as write-only. Configure a dedicated `HIOP_AD_SECRET_KEY` before production use.
 - Staging models track directory users, computers, and groups (`active_directory_objects`).
 - Live directory querying and background synchronization belong to Epic 3B.
 

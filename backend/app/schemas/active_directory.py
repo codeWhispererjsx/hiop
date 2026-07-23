@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+import re
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.active_directory import (
     ADAuthenticationMethod,
@@ -15,6 +18,35 @@ from app.models.active_directory import (
     ADSyncRunStatus,
     ADSyncStatus,
 )
+
+
+DOMAIN_PATTERN = re.compile(r"^(?=.{1,255}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+HOST_PATTERN = re.compile(r"^(?=.{1,255}$)[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$")
+DN_COMPONENT_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9-]*=.+$")
+
+
+def _domain(value: str) -> str:
+    value = value.strip().lower()
+    if not DOMAIN_PATTERN.fullmatch(value):
+        raise ValueError("Domain name must be a valid DNS domain.")
+    return value
+
+
+def _host(value: str) -> str:
+    value = value.strip().lower()
+    if not HOST_PATTERN.fullmatch(value):
+        raise ValueError("Server host must be a valid hostname or IP address.")
+    return value
+
+
+def _dn(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    parts = [part.strip() for part in value.split(",")]
+    if not parts or any(not DN_COMPONENT_PATTERN.fullmatch(part) for part in parts):
+        raise ValueError("Distinguished name must contain comma-separated key=value components.")
+    return value
 
 
 class ActiveDirectoryConnectionCreate(BaseModel):
@@ -40,18 +72,27 @@ class ActiveDirectoryConnectionCreate(BaseModel):
     @field_validator("domain_name")
     @classmethod
     def validate_domain(cls, v: str) -> str:
-        v = v.strip()
-        if not v or " " in v:
-            raise ValueError("Domain name must be a valid non-empty string without spaces.")
-        return v
+        return _domain(v)
 
-    @field_validator("base_dn")
+    @field_validator("server_host")
     @classmethod
-    def validate_base_dn(cls, v: str) -> str:
-        v = v.strip()
-        if "=" not in v:
-            raise ValueError("Base DN must contain key=value pairs (e.g. DC=hotel,DC=internal).")
-        return v
+    def validate_host(cls, v: str) -> str:
+        return _host(v)
+
+    @field_validator("base_dn", "user_search_base", "computer_search_base", "group_search_base")
+    @classmethod
+    def validate_base_dn(cls, v: str | None) -> str | None:
+        return _dn(v)
+
+    @model_validator(mode="after")
+    def validate_transport(self):
+        if self.use_ssl and self.use_start_tls:
+            raise ValueError("LDAPS and StartTLS cannot both be enabled.")
+        if self.authentication_method == ADAuthenticationMethod.ANONYMOUS and (
+            self.bind_username or self.bind_secret
+        ):
+            raise ValueError("Anonymous authentication cannot include bind credentials.")
+        return self
 
 
 class ActiveDirectoryConnectionUpdate(BaseModel):
@@ -72,6 +113,27 @@ class ActiveDirectoryConnectionUpdate(BaseModel):
     enabled: bool | None = None
     verify_tls: bool | None = None
     ca_certificate_reference: str | None = Field(default=None, max_length=255)
+
+    @field_validator("domain_name")
+    @classmethod
+    def validate_domain(cls, v: str | None) -> str | None:
+        return _domain(v) if v is not None else None
+
+    @field_validator("server_host")
+    @classmethod
+    def validate_host(cls, v: str | None) -> str | None:
+        return _host(v) if v is not None else None
+
+    @field_validator("base_dn", "user_search_base", "computer_search_base", "group_search_base")
+    @classmethod
+    def validate_dn(cls, v: str | None) -> str | None:
+        return _dn(v)
+
+    @model_validator(mode="after")
+    def validate_transport(self):
+        if self.use_ssl is True and self.use_start_tls is True:
+            raise ValueError("LDAPS and StartTLS cannot both be enabled.")
+        return self
 
 
 class ActiveDirectorySecretUpdate(BaseModel):
@@ -180,7 +242,7 @@ class ActiveDirectoryObjectRead(BaseModel):
     sync_status: str
     review_status: str
     matched_user_id: str | None = None
-    matched_device_id: str | None = None
+    matched_device_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -218,7 +280,7 @@ class ActiveDirectoryMatchCandidateRead(BaseModel):
     directory_object_id: str
     candidate_type: str
     candidate_user_id: str | None = None
-    candidate_device_id: str | None = None
+    candidate_device_id: UUID | None = None
     match_score: float
     match_level: str
     match_status: str

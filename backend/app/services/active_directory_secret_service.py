@@ -15,11 +15,11 @@ class ActiveDirectorySecretError(Exception):
 class ActiveDirectorySecretService:
     @staticmethod
     def _get_fernet_key() -> bytes:
-        """Derive a 32-byte URL-safe base64 key from HIOP_AD_SECRET_KEY or settings.SECRET_KEY."""
-        raw_key = os.getenv("HIOP_AD_SECRET_KEY") or getattr(settings, "SECRET_KEY", None)
+        """Derive a Fernet key from the dedicated environment key or HIOP secret."""
+        raw_key = os.getenv("HIOP_AD_SECRET_KEY") or settings.secret_key
         if not raw_key:
             raise ActiveDirectorySecretError("Encryption key for Active Directory secrets is missing.")
-        
+
         # Derive deterministic 32-byte key via SHA-256
         digest = hashlib.sha256(raw_key.encode("utf-8")).digest()
         return base64.urlsafe_b64encode(digest)
@@ -37,7 +37,7 @@ class ActiveDirectorySecretService:
         except ActiveDirectorySecretError:
             raise
         except Exception as err:
-            raise ActiveDirectorySecretError(f"Failed to encrypt secret: {err}") from err
+            raise ActiveDirectorySecretError("Failed to encrypt Active Directory secret.") from err
 
     @classmethod
     def decrypt_secret(cls, ciphertext: str) -> str:
@@ -54,4 +54,4 @@ class ActiveDirectorySecretService:
         except ActiveDirectorySecretError:
             raise
         except Exception as err:
-            raise ActiveDirectorySecretError(f"Failed to decrypt secret: {err}") from err
+            raise ActiveDirectorySecretError("Failed to decrypt Active Directory secret.") from err

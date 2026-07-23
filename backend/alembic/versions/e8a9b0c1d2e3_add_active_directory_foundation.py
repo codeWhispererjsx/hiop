@@ -48,9 +48,16 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.ForeignKeyConstraint(["created_by"], ["users.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["updated_by"], ["users.id"], ondelete="SET NULL"),
+        sa.CheckConstraint("server_port BETWEEN 1 AND 65535", name="ck_ad_connection_port"),
+        sa.CheckConstraint("connection_timeout_seconds BETWEEN 1 AND 300", name="ck_ad_connection_timeout"),
+        sa.CheckConstraint("page_size BETWEEN 1 AND 5000", name="ck_ad_connection_page_size"),
+        sa.CheckConstraint("NOT (use_ssl AND use_start_tls)", name="ck_ad_connection_single_tls_mode"),
+        sa.CheckConstraint("authentication_method IN ('simple','ldaps','start_tls','anonymous','kerberos')", name="ck_ad_connection_auth_method"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("name"),
     )
+    op.create_index("ix_ad_connections_domain_name", "active_directory_connections", ["domain_name"])
+    op.create_index("ix_ad_connections_server_host", "active_directory_connections", ["server_host"])
 
     # 2. active_directory_sync_configurations
     op.create_table(
@@ -74,6 +81,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.ForeignKeyConstraint(["connection_id"], ["active_directory_connections.id"], ondelete="CASCADE"),
+        sa.CheckConstraint("sync_interval_minutes BETWEEN 1 AND 14400", name="ck_ad_sync_config_interval"),
+        sa.CheckConstraint("conflict_policy IN ('review','preserve_hiop','prefer_directory','fill_missing_only')", name="ck_ad_sync_config_conflict_policy"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("connection_id"),
     )
@@ -109,12 +118,16 @@ def upgrade() -> None:
         sa.Column("sync_status", sa.String(length=30), server_default="discovered", nullable=False),
         sa.Column("review_status", sa.String(length=30), server_default="pending", nullable=False),
         sa.Column("matched_user_id", sa.String(), nullable=True),
-        sa.Column("matched_device_id", sa.String(), nullable=True),
+        sa.Column("matched_device_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.ForeignKeyConstraint(["connection_id"], ["active_directory_connections.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["matched_device_id"], ["devices.id"], ondelete="SET NULL"),
         sa.ForeignKeyConstraint(["matched_user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.CheckConstraint("object_type IN ('user','computer','group')", name="ck_ad_object_type"),
+        sa.CheckConstraint("sync_status IN ('discovered','unchanged','changed','missing','error')", name="ck_ad_object_sync_status"),
+        sa.CheckConstraint("review_status IN ('pending','matched','approved','ignored','conflict')", name="ck_ad_object_review_status"),
+        sa.CheckConstraint("NOT (matched_user_id IS NOT NULL AND matched_device_id IS NOT NULL)", name="ck_ad_object_single_match"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("connection_id", "object_guid", name="uq_ad_object_connection_guid"),
     )
@@ -158,6 +171,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.ForeignKeyConstraint(["connection_id"], ["active_directory_connections.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["triggered_by"], ["users.id"], ondelete="SET NULL"),
+        sa.CheckConstraint("status IN ('pending','running','completed','partial','failed','cancelled')", name="ck_ad_sync_run_status"),
+        sa.CheckConstraint("users_seen >= 0 AND computers_seen >= 0 AND groups_seen >= 0 AND created_objects >= 0 AND updated_objects >= 0 AND unchanged_objects >= 0 AND missing_objects >= 0 AND conflicts >= 0 AND errors_count >= 0", name="ck_ad_sync_run_nonnegative_counts"),
+        sa.CheckConstraint("duration_ms IS NULL OR duration_ms >= 0", name="ck_ad_sync_run_duration"),
         sa.PrimaryKeyConstraint("id"),
     )
 
@@ -172,7 +188,7 @@ def upgrade() -> None:
         sa.Column("directory_object_id", sa.String(length=36), nullable=False),
         sa.Column("candidate_type", sa.String(length=30), nullable=False),
         sa.Column("candidate_user_id", sa.String(), nullable=True),
-        sa.Column("candidate_device_id", sa.String(), nullable=True),
+        sa.Column("candidate_device_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("match_score", sa.Float(), server_default="0.0", nullable=False),
         sa.Column("match_level", sa.String(length=30), server_default="none", nullable=False),
         sa.Column("match_status", sa.String(length=30), server_default="pending", nullable=False),
@@ -188,7 +204,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["candidate_user_id"], ["users.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["directory_object_id"], ["active_directory_objects.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["reviewed_by"], ["users.id"], ondelete="SET NULL"),
+        sa.CheckConstraint("(candidate_type = 'hiop_user' AND candidate_user_id IS NOT NULL AND candidate_device_id IS NULL) OR (candidate_type = 'hiop_device' AND candidate_device_id IS NOT NULL AND candidate_user_id IS NULL)", name="ck_ad_candidate_typed_target"),
+        sa.CheckConstraint("match_score BETWEEN 0 AND 100", name="ck_ad_candidate_score"),
+        sa.CheckConstraint("match_level IN ('exact','high','medium','low','none')", name="ck_ad_candidate_level"),
+        sa.CheckConstraint("match_status IN ('pending','accepted','rejected','auto_matched')", name="ck_ad_candidate_status"),
+        sa.CheckConstraint("recommended_action IN ('link','create','enrich','review','ignore')", name="ck_ad_candidate_action"),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("directory_object_id", "candidate_type", "candidate_user_id", "candidate_device_id", name="uq_ad_candidate_target"),
     )
 
     op.create_index("ix_ad_candidates_directory_object_id", "active_directory_match_candidates", ["directory_object_id"])

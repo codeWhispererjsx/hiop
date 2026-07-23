@@ -3,7 +3,8 @@
 ## 2.0.0-dev — Epic 3A
 
 - Added `ActiveDirectoryConnection`, `ActiveDirectorySyncConfiguration`, `ActiveDirectoryObject`, `ActiveDirectorySyncRun`, and `ActiveDirectoryMatchCandidate` models and Alembic migration `e8a9b0c1d2e3`.
-- Added AES-256 / Fernet bind secret encryption abstraction (`ActiveDirectorySecretService`) ensuring credentials are encrypted at rest and write-only.
+- Added authenticated Fernet bind-secret encryption (`ActiveDirectorySecretService`) with a dedicated environment key, safe fallback, write-only responses, and failure-safe errors.
+- Hardened the Epic 3A foundation with configuration limits, database checks, strict DN/host/transport validation, explicit Epic 3B service boundaries, and role-policy tests.
 - Added `LdapClientInterface` abstract client and `MockLdapClient` stub for offline architecture validation.
 - Added Pydantic schemas, repositories, service skeletons, and admin-only REST APIs under `/api/v1/active-directory/`.
 - Added audit logging for AD connection lifecycle and documentation in `docs/ACTIVE_DIRECTORY.md`.

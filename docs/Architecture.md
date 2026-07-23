@@ -1,8 +1,8 @@
-# HIOP 2.0.0 architecture
+# HIOP 2.0.0-dev architecture
 
 ## Epic 3A Active Directory integration foundation
 
-Epic 3A adds a secure backend-only Active Directory integration foundation. `ActiveDirectoryConnection` models connection profiles; `ActiveDirectorySyncConfiguration` manages per-domain sync options; `ActiveDirectoryObject` stages directory users, computers, and groups; `ActiveDirectorySyncRun` captures execution telemetry; and `ActiveDirectoryMatchCandidate` matches staged directory objects against HIOP users and devices. Bind secrets are encrypted at rest using AES-256 / Fernet abstractions, treated as write-only, and strictly excluded from API outputs. No live LDAP connections, scheduled background sync, automatic mutations, or frontend admin pages are registered. See `docs/ACTIVE_DIRECTORY.md`.
+Epic 3A adds a secure backend-only Active Directory integration foundation. `ActiveDirectoryConnection` models connection profiles; `ActiveDirectorySyncConfiguration` manages per-domain sync options; `ActiveDirectoryObject` stages directory users, computers, and groups; `ActiveDirectorySyncRun` captures execution telemetry; and `ActiveDirectoryMatchCandidate` matches staged directory objects against HIOP users and devices. Bind secrets use authenticated Fernet encryption, are treated as write-only, and are excluded from API outputs. No live LDAP connections, scheduled background sync, automatic mutations, or frontend admin pages are registered. See `docs/ACTIVE_DIRECTORY.md`.
 
 ## Epic 2E final import
 

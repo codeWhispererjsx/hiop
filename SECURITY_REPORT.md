@@ -2,7 +2,7 @@
 
 ## Epic 3A Active Directory integration controls
 
-Active Directory connection configuration and bind secret management are strictly restricted to the administrator role (`admin`). Bind secrets are write-only, encrypted at rest using AES-256 / Fernet abstractions, and never returned in API responses, serialized schemas, or audit log entries. All configuration routes apply strict schema validation for domain names, hosts, ports, timeouts, and search bases. Live network execution remains disabled.
+Active Directory connection configuration and bind secret management are restricted to administrators. Bind secrets are write-only, encrypted at rest with authenticated Fernet encryption, and never returned in API responses, serialized schemas, or audit log entries. Administrators and technicians have read-only access; staff are denied. Configuration validates domains, hosts, ports, timeouts, search bases, and mutually exclusive TLS modes. Live network execution remains disabled.
 
 ## Epic 2E import controls
 

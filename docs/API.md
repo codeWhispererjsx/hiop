@@ -37,7 +37,7 @@ Except for `POST /auth/login`, all application routes require `Authorization: Be
 | Live updates | `WS /ws/dashboard` |
 | Discovery | `GET /discovery`, `/discovery/{id}`, `/discovery/stats`, `/discovery/export`; admin run, approve, ignore, reject, and bulk routes |
 | Inventory imports | Admin upload/mapping/validate/cancel under `/imports`; admin/technician session, columns, staged rows, errors, and safe error export |
-| Active Directory | Admin CRUD, secret rotation, disable, test, and sync config under `/active-directory/connections`; read-only `/active-directory/sync-runs`, `/objects`, `/matches` |
+| Active Directory | Admin CRUD, secret rotation, mock-only test, and sync config under `/active-directory/connections`; admin/technician read-only `/sync-runs`, `/objects`, `/matches` |
 
 
 Inventory import endpoints stage validated device candidates only. They never create or update official inventory. Upload accepts multipart `.csv` and `.xlsx`, returns a bounded mapping preview, and never exposes the temporary server filename or path. Mutation routes are administrator-only.

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.security import get_current_user, get_db, require_roles
+from app.core.security import get_db, require_roles
 from app.models.user import User
 from app.repositories.active_directory_repository import (
     ActiveDirectoryConnectionRepository,
@@ -32,6 +32,7 @@ from app.services.active_directory_service import (
 router = APIRouter(prefix="/active-directory", tags=["Active Directory"])
 
 admin_only = require_roles(["admin"])
+read_only = require_roles(["admin", "technician"])
 
 
 def _to_connection_read(conn) -> ActiveDirectoryConnectionRead:
@@ -72,7 +73,7 @@ def list_connections(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(read_only),
 ):
     repo = ActiveDirectoryConnectionRepository(db)
     connections, total = repo.page(search=search, enabled_only=enabled_only, offset=offset, limit=limit)
@@ -99,7 +100,7 @@ def create_connection(
 def get_connection(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(read_only),
 ):
     service = ActiveDirectoryConnectionService(db)
     connection = service.repo.get(id)
@@ -159,7 +160,7 @@ def test_connection(
 def get_sync_config(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(read_only),
 ):
     service = ActiveDirectorySyncConfigService(db)
     config = service.get_sync_config(id)
@@ -185,7 +186,7 @@ def list_sync_runs(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(read_only),
 ):
     repo = ActiveDirectorySyncRunRepository(db)
     runs, total = repo.page(connection_id=connection_id, status=status, offset=offset, limit=limit)
@@ -207,7 +208,7 @@ def list_directory_objects(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(read_only),
 ):
     repo = ActiveDirectoryObjectRepository(db)
     objects, total = repo.page(
@@ -235,7 +236,7 @@ def list_match_candidates(
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(read_only),
 ):
     repo = ActiveDirectoryMatchCandidateRepository(db)
     candidates, total = repo.page(

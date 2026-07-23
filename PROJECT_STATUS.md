@@ -2,7 +2,9 @@
 
 ## HIOP v2 — Epic 3A Active Directory integration foundation
 
-The backend foundation for Microsoft Active Directory integration is complete at version `2.0.0-dev`. It adds `ActiveDirectoryConnection`, `ActiveDirectorySyncConfiguration`, `ActiveDirectoryObject`, `ActiveDirectorySyncRun`, and `ActiveDirectoryMatchCandidate` models, Alembic migration `e8a9b0c1d2e3`, persistence-only repositories, AES-256 / Fernet bind secret encryption abstractions, `LdapClientInterface` mock stubs, Pydantic transport validation schemas, admin-only REST configuration APIs under `/api/v1/active-directory/`, audit events, documentation in `docs/ACTIVE_DIRECTORY.md`, and 108 passing backend tests.
+The backend foundation for Microsoft Active Directory integration is complete at version `2.0.0-dev`. It adds `ActiveDirectoryConnection`, `ActiveDirectorySyncConfiguration`, `ActiveDirectoryObject`, `ActiveDirectorySyncRun`, and `ActiveDirectoryMatchCandidate` models, Alembic migration `e8a9b0c1d2e3`, persistence-only repositories, authenticated Fernet bind-secret encryption, `LdapClientInterface` mock stubs, Pydantic transport validation schemas, role-protected REST configuration APIs under `/api/v1/active-directory/`, audit events, database invariants, and documentation in `docs/ACTIVE_DIRECTORY.md`.
+
+Repair verification: 16 Active Directory foundation tests and all 115 backend regression tests pass. The PostgreSQL upgrade reaches `e8a9b0c1d2e3 (head)`, offline downgrade SQL generates successfully, and live startup reports a healthy database with nine AD routes. A destructive downgrade was intentionally not run against the active development database.
 
 No live LDAP domain connections, LDAP queries, background synchronization, automatic user/device creation, or frontend UI pages were introduced in Epic 3A.
 

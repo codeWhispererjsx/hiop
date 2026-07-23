@@ -59,8 +59,8 @@ class ActiveDirectoryConnectionService:
             except ActiveDirectorySecretError as err:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Failed to encrypt bind secret: {err}",
-                )
+                    detail="Active Directory bind secret could not be encrypted. Check server secret configuration.",
+                ) from err
 
         conn_data = payload.model_dump(exclude={"bind_secret"})
         connection = ActiveDirectoryConnection(
@@ -106,6 +106,13 @@ class ActiveDirectoryConnectionService:
             )
 
         data = payload.model_dump(exclude_unset=True)
+        final_use_ssl = data.get("use_ssl", connection.use_ssl)
+        final_use_start_tls = data.get("use_start_tls", connection.use_start_tls)
+        if final_use_ssl and final_use_start_tls:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="LDAPS and StartTLS cannot both be enabled.",
+            )
         if "name" in data and data["name"] != connection.name:
             existing = self.repo.get_by_name(data["name"])
             if existing:
@@ -150,8 +157,8 @@ class ActiveDirectoryConnectionService:
         except ActiveDirectorySecretError as err:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to encrypt bind secret: {err}",
-            )
+                detail="Active Directory bind secret could not be encrypted. Check server secret configuration.",
+            ) from err
 
         connection.encrypted_bind_secret = encrypted_secret
         connection.updated_by = current_user.id
@@ -251,11 +258,10 @@ class ActiveDirectorySyncConfigService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Active Directory connection '{connection_id}' not found.",
                 )
-            # Create default config if missing
-            config = ActiveDirectorySyncConfiguration(connection_id=connection_id, enabled=True)
-            self.repo.add(config)
-            self.db.commit()
-            self.db.refresh(config)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Active Directory sync configuration is missing and must be repaired by an administrator.",
+            )
         return config
 
     def update_sync_config(
@@ -309,6 +315,15 @@ class ActiveDirectorySyncService:
         self.db.refresh(run)
         return run
 
+    def stage_directory_object(self, *args, **kwargs) -> ActiveDirectoryObject:
+        raise NotImplementedError("Directory staging execution is reserved for Epic 3B.")
+
+    def finalize_sync_run(self, *args, **kwargs) -> ActiveDirectorySyncRun:
+        raise NotImplementedError("Directory synchronization is reserved for Epic 3B.")
+
+    def mark_missing_objects(self, *args, **kwargs) -> int:
+        raise NotImplementedError("Directory synchronization is reserved for Epic 3B.")
+
 
 class ActiveDirectoryMatchingService:
     """Service skeleton for directory object candidate matching (Epic 3A stub)."""
@@ -316,3 +331,12 @@ class ActiveDirectoryMatchingService:
     def __init__(self, db: Session) -> None:
         self.db = db
         self.repo = ActiveDirectoryMatchCandidateRepository(db)
+
+    def generate_user_candidates(self, *args, **kwargs) -> list[ActiveDirectoryMatchCandidate]:
+        raise NotImplementedError("Active Directory matching is reserved for Epic 3B.")
+
+    def generate_device_candidates(self, *args, **kwargs) -> list[ActiveDirectoryMatchCandidate]:
+        raise NotImplementedError("Active Directory matching is reserved for Epic 3B.")
+
+    def resolve_candidate(self, *args, **kwargs) -> ActiveDirectoryMatchCandidate:
+        raise NotImplementedError("Active Directory match resolution is reserved for Epic 3B.")
