@@ -11,11 +11,13 @@
 3. [User Management](#user-management)
 4. [Permissions and Roles](#permissions-and-roles)
 5. [Network Scanner Configuration](#network-scanner-configuration)
-6. [Backups](#backups)
-7. [Monitoring](#monitoring)
-8. [Troubleshooting](#troubleshooting)
-9. [Maintenance](#maintenance)
-10. [Recovery](#recovery)
+6. [Active Directory Integration Foundation](#active-directory-integration-foundation)
+7. [Backups](#backups)
+8. [Monitoring](#monitoring)
+9. [Troubleshooting](#troubleshooting)
+10. [Maintenance](#maintenance)
+11. [Recovery](#recovery)
+
 
 ---
 
@@ -195,7 +197,18 @@ Enable automatic alerting and ticket creation when devices go offline:
 
 ---
 
+## Active Directory Integration Foundation
+
+HIOP `2.0.0-dev` includes a backend foundation for Microsoft Active Directory integration:
+- Domain connections, search bases, and ports are managed via `/api/v1/active-directory/connections` (Admin only).
+- Bind credentials are encrypted at rest using AES-256 / Fernet abstractions and treated as write-only.
+- Staging models track directory users, computers, and groups (`active_directory_objects`).
+- Live directory querying and background synchronization belong to Epic 3B.
+
+---
+
 ## Backups
+
 
 ### Database Backup
 

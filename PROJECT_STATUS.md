@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 3A Active Directory integration foundation
+
+The backend foundation for Microsoft Active Directory integration is complete at version `2.0.0-dev`. It adds `ActiveDirectoryConnection`, `ActiveDirectorySyncConfiguration`, `ActiveDirectoryObject`, `ActiveDirectorySyncRun`, and `ActiveDirectoryMatchCandidate` models, Alembic migration `e8a9b0c1d2e3`, persistence-only repositories, AES-256 / Fernet bind secret encryption abstractions, `LdapClientInterface` mock stubs, Pydantic transport validation schemas, admin-only REST configuration APIs under `/api/v1/active-directory/`, audit events, documentation in `docs/ACTIVE_DIRECTORY.md`, and 108 passing backend tests.
+
+No live LDAP domain connections, LDAP queries, background synchronization, automatic user/device creation, or frontend UI pages were introduced in Epic 3A.
+
 ## HIOP v2 — Epic 2E transactional final import
 
 Reviewed sessions now support backend readiness, versioned plans, administrator-only batch finalization, per-row results, idempotent create/link/enrich/merge behavior, Discovery linking, safe retry, compensating rollback, audit/WebSocket progress, grouped notifications, Imports reporting, and final frontend results at `2.0.0-dev`.

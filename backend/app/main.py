@@ -144,3 +144,7 @@ app.include_router(operations_router, prefix=settings.api_prefix)
 app.include_router(hierarchy_router, prefix=settings.api_prefix)
 app.include_router(discovery_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)
+
+from app.api.v1.active_directory import router as active_directory_router
+app.include_router(active_directory_router, prefix=settings.api_prefix)
+

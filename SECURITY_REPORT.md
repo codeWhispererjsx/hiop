@@ -1,5 +1,9 @@
 # HIOP Enterprise Security Report
 
+## Epic 3A Active Directory integration controls
+
+Active Directory connection configuration and bind secret management are strictly restricted to the administrator role (`admin`). Bind secrets are write-only, encrypted at rest using AES-256 / Fernet abstractions, and never returned in API responses, serialized schemas, or audit log entries. All configuration routes apply strict schema validation for domain names, hosts, ports, timeouts, and search bases. Live network execution remains disabled.
+
 ## Epic 2E import controls
 
 Finalization, disposition changes, retry, and rollback require the administrator role. Database row locks, plan versions, unique per-row results, terminal-state checks, and idempotency keys prevent concurrent or duplicate execution. Identifier and hierarchy validation repeat immediately before mutation.

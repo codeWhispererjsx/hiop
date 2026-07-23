@@ -1,308 +1,62 @@
-# HIOP 2.0.0-dev database
+# HIOP 2.0.0 database
 
-## HIOP v2 Discovery persistence
+PostgreSQL is the only supported production database. SQLAlchemy models define the runtime mapping and Alembic is the sole schema-change mechanism. The current head is `e8a9b0c1d2e3`.
 
-Alembic revision `c87d380fc50a` adds `discovered_devices` and `discovery_runs`. Discovery rows use UUID primary keys, constrained status/review/run enums, nonnegative counters and timings, bounded confidence, and nullable foreign keys to devices, users, and network zones.
+Epic 3A adds `active_directory_connections`, `active_directory_sync_configurations`, `active_directory_objects`, `active_directory_sync_runs`, and `active_directory_match_candidates` for directory integration staging and telemetry.
 
-Duplicate protection follows matching priority through PostgreSQL partial unique indexes: case-insensitive MAC, approved device, IP plus case-insensitive hostname, then IP-only. Repositories do not own matching rules or transactions.
+## Core tables
 
-## HIOP v2 inventory import persistence
+| Table | Purpose and important fields |
+| --- | --- |
+| `users` | String UUID ID, unique username/email, bcrypt hash, role, active flag, timestamps |
+| `devices` | UUID ID, unique asset tag/serial/MAC, inventory and network states, network identifiers, hierarchy foreign keys, timestamps |
+| `network_scans` | Device FK, IP, Online/Offline result, response time, scan timestamp |
+| `alerts` | Device FK, prior/current network state, message, acknowledgement, timestamp |
+| `tickets` | Reporter/assignee user FKs, optional device FK, title, description, priority, state, timestamps |
+| `audit_logs` | Actor label, action, entity type/ID, safe description, immutable timestamp |
+| `system_settings` | Explicit non-secret runtime configuration key/value pairs |
+| `properties`, `buildings`, `floors`, `rooms`, `departments`, `network_zones` | Active/inactive hierarchy catalog and parent relationships |
+| `discovered_devices` | Consolidated passive Discovery observations, identity metadata, constrained status/review state, and optional inventory/reviewer/zone links |
+| `discovery_runs` | Future Discovery run lifecycle, trigger metadata, counters, duration, and error summary |
+| `import_sessions` | Inventory-import lifecycle, uploader, processing timestamps, counters, safe file metadata, column mapping, and worksheet selection |
+| `imported_devices` | Session-owned staged candidates, source row, raw/normalized JSON, structured errors/warnings, identifiers, and validation state |
+| `import_match_candidates` | Ranked typed targets across inventory, Discovery, and staging with scores, evidence, conflicts, recommendations, and review history |
+| `import_location_suggestions` | Auditable department, building, floor, room, and network-zone suggestions with confidence and review state |
+| `active_directory_connections` | Domain connection profiles, LDAP settings, encrypted bind secrets, test statuses |
+| `active_directory_sync_configurations` | Per-connection synchronization rules, auto-creation flags, conflict policies |
+| `active_directory_objects` | Staged directory objects (users, computers, groups) with GUIDs, attributes, and match links |
+| `active_directory_sync_runs` | Sync run telemetry, object counters, dry-run flags, duration, and error summaries |
+| `active_directory_match_candidates` | Match candidate records linking directory objects to HIOP users/devices with scores and evidence |
 
-Alembic head `91b7d3e5a204` adds explainable cross-system matching to `import_sessions` and `imported_devices`. A UUID session owns staged rows, candidates, and location suggestions through `ON DELETE CASCADE`; reviewer and hierarchy links preserve auditability without creating inventory.
 
-Checks constrain session, validation, matching, score, and review states. Candidate rows require exactly one typed inventory, Discovery, or staging target; unique source/target indexes prevent repeated suggestions. Duplicate imported identifiers remain staged for review, while a unique session/source-row boundary preserves idempotency.
+Device retirement and hierarchy/user deactivation are soft lifecycle changes. Ticket deletion is a real deletion and therefore remains administrator-only. Device-linked ticket references use `ON DELETE SET NULL`; hierarchy references also preserve device rows.
 
-See `DISCOVERY.md` for the complete architectural contract.
+## Integrity and indexes
 
----
+- Database uniqueness protects device asset tags, serial numbers, MAC addresses, usernames, emails, hierarchy names, and non-null network-zone CIDRs.
+- Foreign keys connect scans/alerts/tickets to devices and tickets to users.
+- Operational indexes cover hostname, device IP, ticket status, active-alert chronology, audit chronology, scan chronology, per-device scan chronology, and hierarchy relationships.
+- Discovery partial unique indexes prevent duplicates using MAC, approved inventory device, IP plus hostname, then IP-only identity tiers. Checks constrain state values, counters, confidence, and response/duration values.
+- Import checks constrain session and row states and keep counters non-negative and processed rows within the declared total. A unique session/source-row boundary supports idempotent staging while duplicate asset tags, MACs, serials, and network identities remain reviewable. Lookup indexes cover session, identifiers, hostname, IP, and validation state.
+- Matching candidates require exactly one typed target, bound scores, unique source/target pairs, and indexed session/rank/review lookups. Location suggestions are unique per staged row and reference existing hierarchy records without creating them.
+- Pydantic validates enums, IP/MAC syntax, pagination bounds, credentials, and request lengths before persistence.
 
-## Hotel IT Operations Portal (HIOP)
+## Migrations
 
-Version: 1.0
+Never use `Base.metadata.create_all()` as a production migration strategy. From `backend`:
 
----
+```powershell
+alembic current
+alembic heads
+alembic upgrade head
+```
 
-# Purpose
+Take and verify a PostgreSQL backup before an upgrade. Apply migrations as a one-shot release step before starting the application. Do not run concurrent migration containers.
 
-The HIOP database stores all operational information required to manage, monitor, and maintain the hotel's IT infrastructure.
+## Backup and recovery
 
-The database is designed to be:
+Use the guarded scripts in `ops/` or standard `pg_dump`/`pg_restore`; keep encrypted backups off-host and outside source control. Recovery must restore into an isolated database first, apply the expected application version, run health and acceptance checks, and only then switch traffic. Full commands and drills are in `OPERATIONS.md`.
 
-- Scalable
-- Normalized
-- Maintainable
-- Secure
-- Suitable for enterprise environments
+## Compatibility debt
 
----
-
-# Design Principles
-
-The database follows these principles:
-
-- Avoid duplicate data.
-- Use UUIDs for primary keys.
-- Maintain referential integrity using foreign keys.
-- Separate lookup tables from transactional tables.
-- Store historical records whenever possible.
-
----
-
-# Core Entities
-
-The database consists of the following core entities:
-
-1. Users
-2. Roles
-3. Departments
-4. Locations
-5. Device Types
-6. Devices
-7. Network Scans
-8. Ping History
-9. Alerts
-10. Maintenance Tickets
-11. Audit Logs
-
----
-
-# Roles
-
-Purpose
-
-Defines user permission levels.
-
-Fields
-
-- id (UUID)
-- name
-- description
-- created_at
-
-Example Roles
-
-- Administrator
-- IT Manager
-- Technician
-- Read Only
-
----
-
-# Users
-
-Purpose
-
-Stores users who can log into HIOP.
-
-Fields
-
-- id (UUID)
-- first_name
-- last_name
-- username
-- email
-- password_hash
-- role_id
-- is_active
-- created_at
-- updated_at
-
-Relationships
-
-- Many Users belong to one Role.
-
----
-
-# Device Types
-
-Purpose
-
-Defines categories of devices.
-
-Examples
-
-- Desktop
-- Laptop
-- Printer
-- Server
-- Access Point
-- Switch
-- Router
-- IP Phone
-- POS Terminal
-
----
-
-# Departments
-
-Examples
-
-- Reception
-- Housekeeping
-- Kitchen
-- Finance
-- IT
-- Security
-- Banquet
-
----
-
-# Locations
-
-Purpose
-
-Stores the physical location of devices.
-
-Fields
-
-- id
-- building
-- floor
-- room
-- rack
-- switch_name
-- switch_port
-
----
-
-# Devices
-
-Purpose
-
-Stores every managed asset.
-
-Fields
-
-- id
-- hostname
-- device_name
-- ip_address
-- mac_address
-- serial_number
-- manufacturer
-- model
-- operating_system
-- device_type_id
-- department_id
-- location_id
-- status
-- first_seen
-- last_seen
-- created_at
-
----
-
-# Network Scans
-
-Purpose
-
-Records every scan.
-
-Fields
-
-- id
-- started_at
-- completed_at
-- subnet
-- devices_found
-- duration
-- status
-
----
-
-# Ping History
-
-Purpose
-
-Stores historical ping results.
-
-Fields
-
-- id
-- device_id
-- latency
-- status
-- checked_at
-
----
-
-# Alerts
-
-Purpose
-
-Stores all generated alerts.
-
-Examples
-
-- Device Offline
-- High Latency
-- New Device
-- Duplicate IP
-
-Fields
-
-- id
-- device_id
-- severity
-- title
-- description
-- status
-- created_at
-
----
-
-# Maintenance Tickets
-
-Purpose
-
-Tracks maintenance work.
-
-Fields
-
-- id
-- device_id
-- assigned_to
-- issue
-- priority
-- status
-- opened_at
-- closed_at
-
----
-
-# Audit Logs
-
-Purpose
-
-Tracks all important user actions.
-
-Fields
-
-- id
-- user_id
-- action
-- entity
-- timestamp
-
-Roles
-  │
-  ▼
-Users
-  │
-  ▼
-Maintenance Tickets
-
-Device Types
-        │
-Departments
-        │
-Locations
-        │
-        ▼
-      Devices
-     /   |    \
-    ▼    ▼     ▼
- Alerts Ping History Maintenance
-        |
-        ▼
-   Network Scans
+`devices.status`, `devices.department`, and `devices.location` remain compatibility fields while clients migrate to separate lifecycle/network fields and normalized hierarchy IDs. Their future removal requires a planned migration and downstream compatibility review.
