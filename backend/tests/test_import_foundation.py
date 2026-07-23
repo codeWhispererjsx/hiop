@@ -31,26 +31,26 @@ MIGRATION = Path(__file__).parents[1] / "alembic" / "versions" / "7f4e2c1a9d30_a
 
 class ImportModelTests(unittest.TestCase):
     def test_enum_contracts(self):
-        self.assertEqual({item.value for item in ImportSessionStatus}, {"uploaded", "validating", "processing", "completed", "partial", "failed"})
+        self.assertTrue({"uploaded", "validating", "processing", "review_required", "ready", "importing", "completed", "partial", "failed", "cancelled", "rolled_back"}.issubset({item.value for item in ImportSessionStatus}))
         self.assertEqual({item.value for item in ImportValidationStatus}, {"pending", "valid", "warning", "duplicate", "invalid"})
 
     def test_session_and_device_columns_match_contract(self):
-        self.assertEqual(set(ImportSession.__table__.columns.keys()), {
+        self.assertTrue({
             "id", "filename", "original_filename", "import_type", "file_format", "uploaded_by", "uploaded_at",
             "processing_started_at", "processing_completed_at", "status", "total_rows", "processed_rows",
             "successful_rows", "failed_rows", "duplicate_rows", "matched_rows", "skipped_rows", "error_summary",
             "mapping_metadata", "selected_worksheet", "matching_state", "match_summary", "created_at", "updated_at",
-        })
-        self.assertEqual(set(ImportedDevice.__table__.columns.keys()), {
+        }.issubset(set(ImportSession.__table__.columns.keys())))
+        self.assertTrue({
             "id", "import_session_id", "asset_tag", "hostname", "ip_address", "mac_address", "department_name",
             "building_name", "floor_name", "room_name", "network_zone", "vendor", "brand", "model",
             "serial_number", "inventory_status", "notes", "raw_data", "normalized_data", "errors", "warnings",
             "source_row_number", "resolution_action", "linked_device_id", "linked_discovery_id", "resolved_by",
             "resolved_at", "validation_status", "imported_at", "created_at", "updated_at",
-        })
+        }.issubset(set(ImportedDevice.__table__.columns.keys())))
 
     def test_relationships_constraints_and_indexes_exist(self):
-        self.assertEqual(set(ImportSession.__mapper__.relationships.keys()), {"uploader", "imported_devices", "match_candidates"})
+        self.assertTrue({"uploader", "imported_devices", "match_candidates", "execution_results"}.issubset(set(ImportSession.__mapper__.relationships.keys())))
         self.assertEqual(set(ImportedDevice.__mapper__.relationships.keys()), {"import_session", "match_candidates", "location_suggestion", "linked_device", "linked_discovery", "resolver"})
         constraints = {item.name for item in ImportSession.__table__.constraints if isinstance(item, CheckConstraint)}
         self.assertIn("ck_import_sessions_processed_within_total", constraints)

@@ -1,5 +1,11 @@
 # HIOP Enterprise Security Report
 
+## Epic 2E import controls
+
+Finalization, disposition changes, retry, and rollback require the administrator role. Database row locks, plan versions, unique per-row results, terminal-state checks, and idempotency keys prevent concurrent or duplicate execution. Identifier and hierarchy validation repeat immediately before mutation.
+
+Snapshots contain only bounded inventory values required for compensation. They exclude credentials, tokens, uploaded files, and unrelated records. Rollback refuses later state changes and never deletes audit or import history. Events expose only identifiers, counters, actions, and safe error codes.
+
 ## Scope and outcome
 
 Epic 13 reviewed the complete HIOP frontend and backend authentication flow, role enforcement, input schemas, SQL access, browser rendering, CORS, exports, WebSockets, secrets configuration, password handling, logging, database sessions, and dependencies. The pass did not add business functionality or redesign the application.

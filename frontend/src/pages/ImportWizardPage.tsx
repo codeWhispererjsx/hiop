@@ -41,6 +41,8 @@ const routeStep = (pathname: string): Step | null => {
 };
 
 const resumeStep = (session: ImportSession): Step => {
+  if (session.finalization_started_at || ["ready","importing","rolled_back"].includes(session.status))
+    return "ready";
   if (session.status === "uploaded") {
     return session.file_format === "xlsx" && !session.selected_worksheet
       ? "worksheet"
@@ -273,7 +275,7 @@ export default function ImportWizardPage() {
         <SummaryStep session={currentSession} />
       )}
       {step === "ready" && currentSession && (
-        <ReadyStep session={currentSession} />
+        <ReadyStep session={currentSession} admin={admin} />
       )}
       {!isNew && !currentSession && (
         <Feedback

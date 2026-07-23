@@ -266,7 +266,7 @@ class ImportService:
             raise ImportConflictError("An active import cannot be cancelled")
         if session.status != ImportSessionStatus.UPLOADED:
             raise ImportConflictError("Only an unprocessed import can be cancelled")
-        session.status = ImportSessionStatus.FAILED
+        session.status = ImportSessionStatus.CANCELLED
         session.processing_completed_at = datetime.now(timezone.utc)
         session.error_summary = "Cancelled by administrator"
         create_audit_log(self.db, actor.username, "IMPORT_CANCELLED", "ImportSession", str(session.id), "Cancelled unprocessed inventory import")

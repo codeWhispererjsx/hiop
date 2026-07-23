@@ -86,6 +86,7 @@ class ResolutionSafetyTests(unittest.TestCase):
         candidate = ImportMatchCandidate(id=candidate_id, import_session_id=session_id, imported_device_id=row_id, candidate_type="inventory_device", candidate_device_id=uuid4(), match_score=96, match_level="exact", match_status="pending", recommended_action="link")
         service.rows = SimpleNamespace(get=lambda value: row if value == row_id else None)
         service.repository = SimpleNamespace(get_candidate=lambda value: candidate if value == candidate_id else None, candidates_for_row=lambda *_: [candidate])
+        service._ensure_review_open = lambda _session_id: None
         return service, session_id, row_id, candidate_id, row, candidate
 
     @patch("app.services.import_matching_service.create_audit_log")
@@ -123,6 +124,7 @@ class MatchingApiTests(unittest.TestCase):
         protected_suffixes = {"/match", "/accept-match", "/reject-match", "/mark-create-new", "/location-suggestion", "/matches/recompute"}
         checked = 0
         for route in router.routes:
+            if "POST" not in route.methods: continue
             if not any(route.path.endswith(suffix) for suffix in protected_suffixes): continue
             role_checkers = [dependency.call for dependency in route.dependant.dependencies if getattr(dependency.call, "__name__", "") == "role_checker"]
             self.assertEqual(len(role_checkers), 1)

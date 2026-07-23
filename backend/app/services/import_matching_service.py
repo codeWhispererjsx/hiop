@@ -46,6 +46,8 @@ class ImportMatchingService:
         return session
 
     def _refresh_review_summary(self, session_id: UUID) -> None:
+        if not hasattr(self.repository, "rows_to_match"):
+            return
         session = self._session(session_id)
         rows = list(self.repository.rows_to_match(session_id))
         resolved = [row for row in rows if row.resolution_action]
@@ -97,6 +99,15 @@ class ImportMatchingService:
         row = self.rows.get(row_id)
         if not row or row.import_session_id != session_id: raise MatchingNotFoundError("Imported row not found")
         return row
+
+    def _ensure_review_open(self, session_id: UUID) -> None:
+        session = self._session(session_id)
+        if session.plan_locked_at or session.status in {
+            ImportSessionStatus.IMPORTING,
+            ImportSessionStatus.COMPLETED,
+            ImportSessionStatus.ROLLED_BACK,
+        } and session.finalization_started_at:
+            raise MatchingConflictError("Final execution plan is locked")
 
     @staticmethod
     def _event(event: str, session_id: UUID, **safe: Any) -> None:
@@ -277,6 +288,7 @@ class ImportMatchingService:
         return plan
 
     def resolve_candidate(self, session_id: UUID, row_id: UUID, candidate_id: UUID, actor: User, *, accept: bool) -> ImportMatchCandidate:
+        self._ensure_review_open(session_id)
         row = self._row(session_id, row_id)
         candidate = self._candidate(session_id, row_id, candidate_id)
         if candidate.match_status != ImportMatchStatus.PENDING: raise MatchingConflictError("Candidate has already been reviewed")
@@ -300,6 +312,7 @@ class ImportMatchingService:
         return candidate
 
     def mark_create_new(self, session_id: UUID, row_id: UUID, actor: User) -> ImportedDevice:
+        self._ensure_review_open(session_id)
         row = self._row(session_id, row_id)
         if row.resolution_action: raise MatchingConflictError("Imported row already has a resolution")
         row.resolution_action, row.resolved_by, row.resolved_at = "create_new", actor.id, datetime.now(timezone.utc)
@@ -310,6 +323,7 @@ class ImportMatchingService:
         return row
 
     def mark_skip(self, session_id: UUID, row_id: UUID, actor: User) -> ImportedDevice:
+        self._ensure_review_open(session_id)
         row = self._row(session_id, row_id)
         if row.resolution_action: raise MatchingConflictError("Imported row already has a resolution")
         row.resolution_action, row.resolved_by, row.resolved_at = "skip", actor.id, datetime.now(timezone.utc)
@@ -320,6 +334,7 @@ class ImportMatchingService:
         return row
 
     def review_location(self, session_id: UUID, row_id: UUID, actor: User, action: str, overrides: dict[str, UUID | None]) -> ImportLocationSuggestion:
+        self._ensure_review_open(session_id)
         self._row(session_id, row_id)
         suggestion = self.repository.suggestion_for_row(row_id)
         if not suggestion: raise MatchingNotFoundError("Location suggestion not found")

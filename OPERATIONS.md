@@ -1,5 +1,11 @@
 # HIOP Operations Guide
 
+## Final inventory import operations
+
+Confirm server readiness and the displayed plan version before finalization. Do not manually restart a session in `importing`; refresh its persisted results. Investigate `partial` sessions by safe error code and retry only through the retry endpoint.
+
+Rollback requires a fresh preview. If any action is non-reversible, investigate later edits rather than changing the database manually. Successful compensation preserves import and audit history. Monitor `import_finalization_*` and `import_rollback_*` events, grouped notifications, database locks, and result retention.
+
 ## Daily checks
 
 - Confirm frontend `/healthz` and backend `/health` are healthy.

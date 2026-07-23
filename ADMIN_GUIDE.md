@@ -413,3 +413,9 @@ Review the mapping before validation, export validation findings when correction
 Do not treat hidden controls as authorization. Upload, mapping, validation, matching, cancellation, and resolution endpoints enforce the administrator role on the server. Read endpoints permit the established administrator/technician reader roles.
 
 Epic 2D stops at readiness preparation. There is no supported final bulk-create, merge execution, automatic conflict dismissal, rollback, scheduled import, Active Directory, or SNMP workflow. Those remain pending Epic 2E.
+
+### Epic 2E execution policy
+
+Generate and review the server plan immediately before finalization. Plans are versioned and lock on execution. Create rows must satisfy the normal Device schema and uniqueness constraints. Links never overwrite inventory. Enrichment and merge apply only recorded approved fields; existing values remain unless reviewed overwrites are enabled and explicitly listed.
+
+Retry only safely retryable failures. Identifier and stale-target conflicts require renewed review. Always request a rollback preview immediately before rollback. HIOP refuses compensation after later inventory changes, retires import-created devices rather than silently deleting them, and retains audit/import history.

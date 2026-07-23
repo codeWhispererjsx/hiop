@@ -40,6 +40,10 @@ DEFAULTS = {
     "import.hostname_rule_mapping_enabled": "true", "import.conflict_penalty": "35",
     "import.candidate_recomputation_batch_size": "250", "import.subnet_mapping_rules": "[]",
     "import.hostname_mapping_rules": "[]", "import.hierarchy_aliases": "{}",
+    "import.final_import_batch_size": "100", "import.maximum_concurrent_imports": "1",
+    "import.allow_reviewed_field_overwrite": "false", "import.rollback_retention_days": "30",
+    "import.final_import_retry_limit": "3", "import.execution_result_retention_days": "365",
+    "import.import_notification_threshold": "1", "import.execution_lock_timeout_seconds": "900",
 }
 
 
@@ -113,8 +117,11 @@ def read_import_settings(db: Session) -> dict[str, Any]:
     }
     for key in ("exact_match_threshold", "strong_match_threshold", "probable_match_threshold", "weak_match_threshold", "maximum_candidates_per_row", "hostname_similarity_threshold", "fuzzy_similarity_threshold", "conflict_penalty", "candidate_recomputation_batch_size"):
         result[key] = int(values[key])
+    for key in ("final_import_batch_size", "maximum_concurrent_imports", "rollback_retention_days", "final_import_retry_limit", "execution_result_retention_days", "import_notification_threshold", "execution_lock_timeout_seconds"):
+        result[key] = int(values[key])
     for key in ("fuzzy_matching_enabled", "auto_suggestion_enabled", "subnet_mapping_enabled", "hostname_rule_mapping_enabled"):
         result[key] = _bool(values[key])
+    result["allow_reviewed_field_overwrite"] = _bool(values["allow_reviewed_field_overwrite"])
     for key in ("subnet_mapping_rules", "hostname_mapping_rules", "hierarchy_aliases"):
         try: result[key] = json.loads(values[key])
         except (TypeError, ValueError): result[key] = [] if key != "hierarchy_aliases" else {}

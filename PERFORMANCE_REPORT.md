@@ -1,5 +1,9 @@
 # HIOP v1.0 Performance Report
 
+## Epic 2E import execution
+
+Final import avoids one transaction spanning a full file. The default 100-row batches use per-row savepoints, indexed result lookups, paginated responses, and controlled progress broadcasts. Uploads remain limited to 10,000 rows and snapshots omit raw file payloads. Larger configured batches reduce commits but increase lock duration.
+
 ## Executive summary
 
 Epic 12 optimized existing execution paths without adding features or changing the visual design. The largest measured improvement is route-level code splitting: the shared initial JavaScript bundle decreased from 379.87 kB (109.51 kB gzip) to 244.79 kB (78.15 kB gzip), approximately 35.6% smaller uncompressed and 28.6% smaller compressed. Individual feature pages now load on demand.

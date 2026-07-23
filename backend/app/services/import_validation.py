@@ -133,6 +133,7 @@ VALIDATORS: dict[str, ImportFieldValidator] = {
     "floor_name": FloorValidator(), "room_name": RoomValidator(),
     "network_zone": TextValidator(120), "vendor": TextValidator(128), "brand": TextValidator(128),
     "model": TextValidator(128), "serial_number": TextValidator(128),
+    "device_type": TextValidator(80),
     "inventory_status": InventoryStatusValidator(), "notes": TextValidator(2000),
 }
 

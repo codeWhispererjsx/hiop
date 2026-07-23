@@ -15,6 +15,7 @@ from app.models.discovered_device import DiscoveredDevice
 from app.models.network_scan import NetworkScan
 from app.models.ticket import Ticket
 from app.models.user import User
+from app.models.inventory_import import ImportSession
 
 REPORTS = {
     "devices": ("Device Inventory Report", Device, Device.created_at),
@@ -24,6 +25,7 @@ REPORTS = {
     "users": ("Users Report", User, User.created_at),
     "audit": ("Audit Report", AuditLog, AuditLog.created_at),
     "discovery": ("Discovery Report", DiscoveredDevice, DiscoveredDevice.first_seen_at),
+    "imports": ("Inventory Import Report", ImportSession, ImportSession.uploaded_at),
 }
 
 
@@ -149,6 +151,17 @@ def _discovery_rows(db, start_date, end_date, search):
     return [{"id": str(row.id), "hostname": row.hostname, "ip_address": row.ip_address, "mac_address": row.mac_address, "vendor": row.vendor, "device_type_guess": row.device_type_guess, "confidence_score": row.confidence_score, "status": row.status.value, "review_status": row.review_status.value, "times_seen": row.times_seen, "first_seen_at": _value(row.first_seen_at), "last_seen_at": _value(row.last_seen_at)} for row in query.order_by(DiscoveredDevice.last_seen_at.desc()).all()]
 
 
+def _import_rows(db, start_date, end_date, search):
+    query = _date(db.query(ImportSession), ImportSession.uploaded_at, start_date, end_date)
+    if search:
+        query = query.filter(ImportSession.original_filename.ilike(f"%{search.strip()}%"))
+    rows = []
+    for session in query.order_by(ImportSession.uploaded_at.desc()).all():
+        summary = session.execution_summary or {}
+        rows.append({"id": str(session.id), "filename": session.original_filename, "status": session.status.value, "total_rows": session.total_rows, "created_devices": summary.get("created_devices", 0), "linked_devices": summary.get("linked_devices", 0), "enriched_devices": summary.get("enriched_devices", 0), "merged_devices": summary.get("merged_devices", 0), "failed_rows": summary.get("failed_rows", session.failed_rows), "rollback_rows": summary.get("rollback_completed_rows", 0), "uploaded_at": _value(session.uploaded_at), "completed_at": _value(session.finalization_completed_at)})
+    return rows
+
+
 def _sort(rows, sort_by, sort_order):
     if not rows:
         return rows
@@ -158,7 +171,7 @@ def _sort(rows, sort_by, sort_order):
 
 def get_report(db: Session, report_name: str, start_date=None, end_date=None, search=None, status=None, department=None, category=None, page=1, page_size=25, sort_by=None, sort_order="asc"):
     _validate(report_name, start_date, end_date)
-    loaders = {"devices": _device_rows, "network": _network_rows, "alerts": _alert_rows, "tickets": _ticket_rows, "users": _user_rows, "audit": _audit_rows, "discovery": _discovery_rows}
+    loaders = {"devices": _device_rows, "network": _network_rows, "alerts": _alert_rows, "tickets": _ticket_rows, "users": _user_rows, "audit": _audit_rows, "discovery": _discovery_rows, "imports": _import_rows}
     rows = loaders[report_name](db, start_date, end_date, search)
     if status:
         rows = [row for row in rows if str(row.get("network_status", row.get("inventory_status", row.get("status", row.get("current_status", "Active" if row.get("is_active") else "Inactive"))))).lower() == status.lower()]
@@ -193,9 +206,12 @@ def get_report(db: Session, report_name: str, start_date=None, end_date=None, se
     elif report_name == "audit":
         charts["entity"] = _distribution([row["entity_type"] for row in rows])
         metrics.update({"today": sum(row["created_at"][:10] == datetime.now(timezone.utc).date().isoformat() for row in rows), "user_activity": sum(row["entity_type"].lower() == "user" for row in rows), "device_activity": sum(row["entity_type"].lower() == "device" for row in rows), "ticket_activity": sum(row["entity_type"].lower() == "ticket" for row in rows)})
-    else:
+    elif report_name == "discovery":
         charts = {"status": _distribution([row["status"] for row in rows]), "review": _distribution([row["review_status"] for row in rows]), "type": _distribution([row["device_type_guess"] for row in rows])}
         metrics.update({"pending": sum(row["review_status"] == "pending" for row in rows), "approved": sum(row["review_status"] == "approved" for row in rows), "ignored": sum(row["review_status"] == "ignored" for row in rows), "rejected": sum(row["review_status"] == "rejected" for row in rows)})
+    else:
+        charts = {"status": _distribution([row["status"] for row in rows])}
+        metrics.update({"created": sum(row["created_devices"] for row in rows), "linked": sum(row["linked_devices"] for row in rows), "enriched": sum(row["enriched_devices"] for row in rows), "failed": sum(row["failed_rows"] for row in rows), "rolled_back": sum(row["rollback_rows"] for row in rows)})
     rows = _sort(rows, sort_by, sort_order)
     items, total, pages = _page(rows, page, page_size)
     return {"report": report_name, "generated_at": datetime.now(timezone.utc), "items": items, "total": total, "page": page, "page_size": page_size, "pages": pages, "metrics": metrics, "charts": charts}

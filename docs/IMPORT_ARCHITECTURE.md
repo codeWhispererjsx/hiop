@@ -157,3 +157,17 @@ The backend remains the source of truth. A resumed route derives its safe stage 
 Epic 2D adds the session list, staged-row detail, session-location list, row-location detail, and audited mark-skip support endpoints required by the review UI. Administrator-only endpoints remain protected by backend role dependencies; hiding mutation controls from technicians is only a usability measure.
 
 Merge plans are previews and the readiness screen is a handoff boundary. The frontend contains no final-import button and calls no official Device create, overwrite, merge, delete, or rollback operation. Epic 2E must introduce the transactional finalization contract before those actions can exist.
+
+## Epic 2E finalization architecture
+
+Epic 2E converts only explicitly reviewed staging dispositions into inventory actions. The server owns readiness, plan generation, locking, execution, results, retry, and rollback decisions. Browser state never authorizes inventory mutation.
+
+Validation retains the earlier `completed` or `partial` compatibility states. Plan generation moves a session to `review_required` or `ready`; finalization atomically locks it as `importing`, then ends as `completed`, `partial`, or `failed`. A safely compensated session becomes `rolled_back`.
+
+Each row receives one disposition: `create_new`, `link_existing`, `enrich_existing`, `merge_reviewed`, `link_discovery`, `skip`, `invalid`, or unresolved. Unresolved rows block execution. The persisted plan increments `plan_version` and creates one unique execution-result row per staged row. Finalize requires that version and an idempotency key.
+
+Finalization uses configurable batches (default 100) and per-row database savepoints. Successful and failed outcomes commit per batch, so one row cannot corrupt another. Create actions re-run `DeviceCreate` validation. Link actions never overwrite. Enrichment and merge apply only recorded approved fields. Discovery linking refuses records linked elsewhere.
+
+Execution results retain bounded plans, before/after inventory snapshots, targets, timestamps, safe errors, and retry counts. Retry is limited and never repeats completed work. Rollback compares current values with recorded after-state; later changes block compensation. Safe create reversals retire devices, enrichment reversals restore values, and import-created Discovery links are detached. Audit and import history are never deleted.
+
+The upload limit remains 10 MiB and 10,000 rows. Defaults are 100 final rows per batch, three retries, 30 rollback-retention days, and 365 result-retention days. Background scheduled imports remain unsupported.

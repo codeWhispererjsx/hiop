@@ -38,7 +38,7 @@ export default function ImportsPage() {
   );
   const recent = data?.items ?? [];
   const active = recent.filter((item) =>
-    ["uploaded", "validating", "processing"].includes(item.status),
+    ["uploaded", "validating", "processing", "review_required", "ready", "importing"].includes(item.status),
   ).length;
   const completed = recent.filter((item) => item.status === "completed").length;
   const failed = recent.filter((item) => item.status === "failed").length;
@@ -206,9 +206,14 @@ export default function ImportsPage() {
                 "uploaded",
                 "validating",
                 "processing",
+                "review_required",
+                "ready",
+                "importing",
                 "completed",
                 "partial",
                 "failed",
+                "cancelled",
+                "rolled_back",
               ].map((value) => (
                 <option key={value}>{value}</option>
               ))}

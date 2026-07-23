@@ -2,6 +2,8 @@
 
 HIOP 2.0.0-dev is an internal operations portal for hotel IT teams. It combines device inventory, safe private-network discovery, network monitoring, alerting, service tickets, user administration, immutable audit records, reports, and runtime-safe settings in one authenticated application.
 
+Reviewed CSV/XLSX inventory sessions can now be finalized transactionally. Administrators receive server readiness checks, versioned plans, create/link/enrich/merge execution, Discovery linking, persistent results, safe retry, and compensating rollback. Unreviewed imports, Active Directory, SNMP, and scheduled imports remain unsupported.
+
 ## Release status
 
 Version `2.0.0-dev` contains the integrated Discovery module and is not a release. Discovery is disabled by default; administrators must configure authorized private CIDRs before enabling scheduled runs. The Version 1.0.0 release evidence remains in [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md).

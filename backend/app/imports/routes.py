@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db
 from app.core.security import require_roles
 from app.models.user import User
-from app.schemas.inventory_import import CandidateResolutionRequest, ImportedDevicePage, ImportedDeviceResponse, ImportMappingRequest, ImportSessionPage, ImportSessionResponse, ImportUploadResponse, LocationReviewRequest, LocationSuggestionResponse, MatchCandidatePage, MatchCandidateResponse
+from app.schemas.inventory_import import CandidateResolutionRequest, FinalDispositionRequest, FinalizeRequest, ImportedDevicePage, ImportedDeviceResponse, ImportMappingRequest, ImportSessionPage, ImportSessionResponse, ImportUploadResponse, LocationReviewRequest, LocationSuggestionResponse, MatchCandidatePage, MatchCandidateResponse, RollbackRequest
+from app.services.import_finalization_service import FinalizationConflictError, FinalizationNotFoundError, FinalizationValidationError, ImportFinalizationService
 from app.services.import_matching_service import ImportMatchingService, MatchingConflictError, MatchingNotFoundError, MatchingValidationError
 from app.services.import_service import ImportConflictError, ImportNotFoundError, ImportService, ImportValidationError
 
@@ -19,8 +20,9 @@ reader = require_roles(["admin", "technician"])
 
 def _error(exc: Exception) -> HTTPException:
     if isinstance(exc, (ImportNotFoundError, MatchingNotFoundError)): return HTTPException(404, str(exc))
-    if isinstance(exc, (ImportConflictError, MatchingConflictError)): return HTTPException(409, str(exc))
-    if isinstance(exc, (ImportValidationError, MatchingValidationError)): return HTTPException(422, str(exc))
+    if isinstance(exc, FinalizationNotFoundError): return HTTPException(404, str(exc))
+    if isinstance(exc, (ImportConflictError, MatchingConflictError, FinalizationConflictError)): return HTTPException(409, str(exc))
+    if isinstance(exc, (ImportValidationError, MatchingValidationError, FinalizationValidationError)): return HTTPException(422, str(exc))
     if isinstance(exc, ValueError): return HTTPException(400, str(exc))
     return HTTPException(500, "Import operation failed")
 
@@ -40,7 +42,7 @@ async def upload_device_inventory(file: UploadFile = File(...), db: Session = De
 
 
 @router.get("", response_model=ImportSessionPage)
-def list_import_sessions(search: str | None = Query(None, max_length=200), status: str | None = Query(None, pattern="^(uploaded|validating|processing|completed|partial|failed)$"), page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), db: Session = Depends(get_db), _: User = Depends(reader)):
+def list_import_sessions(search: str | None = Query(None, max_length=200), status: str | None = Query(None, pattern="^(uploaded|validating|processing|review_required|ready|importing|completed|partial|failed|cancelled|rolled_back)$"), page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100), db: Session = Depends(get_db), _: User = Depends(reader)):
     return ImportService(db).list_sessions(search=search, status=status, page=page, page_size=page_size)
 
 
@@ -169,4 +171,52 @@ def review_location_suggestion(session_id: UUID, row_id: UUID, payload: Location
 @router.post("/{session_id}/matches/recompute")
 def recompute_import_matches(session_id: UUID, db: Session = Depends(get_db), actor: User = Depends(admin)):
     try: return ImportMatchingService(db).run(session_id, actor, recompute=True)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/rows/{row_id}/disposition", response_model=ImportedDeviceResponse)
+def set_final_disposition(session_id: UUID, row_id: UUID, payload: FinalDispositionRequest, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportFinalizationService(db).set_disposition(session_id, row_id, payload.disposition, payload.approved_fields, payload.approved_overwrites, actor)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.get("/{session_id}/readiness")
+def final_import_readiness(session_id: UUID, db: Session = Depends(get_db), _: User = Depends(reader)):
+    try: return ImportFinalizationService(db).readiness(session_id)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.get("/{session_id}/execution-plan")
+def final_import_execution_plan(session_id: UUID, persist: bool = False, db: Session = Depends(get_db), actor: User = Depends(reader)):
+    try: return ImportFinalizationService(db).execution_plan(session_id, actor if persist and actor.role == "admin" else None)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/finalize")
+def finalize_import(session_id: UUID, payload: FinalizeRequest, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportFinalizationService(db).finalize(session_id, actor, plan_version=payload.plan_version, idempotency_key=payload.idempotency_key, confirmed=payload.confirm_inventory_mutation and payload.confirm_rollback_limits)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.get("/{session_id}/results")
+def final_import_results(session_id: UUID, page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100), db: Session = Depends(get_db), _: User = Depends(reader)):
+    try: return ImportFinalizationService(db).results(session_id, page=page, page_size=page_size)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.get("/{session_id}/rollback-preview")
+def import_rollback_preview(session_id: UUID, db: Session = Depends(get_db), _: User = Depends(reader)):
+    try: return ImportFinalizationService(db).rollback_preview(session_id)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/rollback")
+def rollback_import(session_id: UUID, payload: RollbackRequest, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportFinalizationService(db).rollback(session_id, actor)
+    except Exception as exc: raise _error(exc) from exc
+
+
+@router.post("/{session_id}/retry-failed")
+def retry_failed_import_rows(session_id: UUID, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    try: return ImportFinalizationService(db).retry_failed(session_id, actor)
     except Exception as exc: raise _error(exc) from exc

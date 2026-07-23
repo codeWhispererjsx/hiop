@@ -5,7 +5,7 @@ import unicodedata
 CANONICAL_FIELDS = (
     "asset_tag", "hostname", "ip_address", "mac_address", "department_name",
     "building_name", "floor_name", "room_name", "network_zone", "vendor",
-    "brand", "model", "serial_number", "inventory_status", "notes",
+    "brand", "model", "device_type", "serial_number", "inventory_status", "notes",
 )
 REQUIRED_FIELDS = {"asset_tag", "hostname"}
 
@@ -22,6 +22,7 @@ ALIASES = {
     "vendor": {"vendor", "manufacturer", "maker"},
     "brand": {"brand"},
     "model": {"model", "model number"},
+    "device_type": {"device type", "device_type", "asset type", "equipment type"},
     "serial_number": {"serial", "serial number", "service tag"},
     "inventory_status": {"inventory status", "status", "asset status"},
     "notes": {"notes", "comments", "description"},

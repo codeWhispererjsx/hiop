@@ -148,4 +148,12 @@ export const endpoints = {
   importLocationSuggestion: (sessionId: string, rowId: string) => api<import("./types").ImportLocationSuggestion>(`/imports/${sessionId}/rows/${rowId}/location-suggestion`),
   importLocationSuggestions: (sessionId: string) => api<import("./types").ImportLocationSuggestion[]>(`/imports/${sessionId}/locations`),
   reviewImportLocation: (sessionId: string, rowId: string, body: import("./types").LocationReviewInput) => api<import("./types").ImportLocationSuggestion>(`/imports/${sessionId}/rows/${rowId}/location-suggestion`, { method: "POST", body: JSON.stringify(body) }),
+  setImportDisposition: (sessionId: string, rowId: string, body: {disposition:import("./types").FinalDisposition;approved_fields?:string[];approved_overwrites?:string[]}) => api<import("./types").ImportedDevice>(`/imports/${sessionId}/rows/${rowId}/disposition`, { method: "POST", body: JSON.stringify(body) }),
+  importReadiness: (id: string) => api<import("./types").ImportReadiness>(`/imports/${id}/readiness`),
+  importExecutionPlan: (id: string, persist = false) => api<import("./types").ImportReadiness>(`/imports/${id}/execution-plan${queryString({persist:persist ? "true" : undefined})}`),
+  finalizeImport: (id: string, planVersion: number, idempotencyKey: string) => api<import("./types").ImportResults>(`/imports/${id}/finalize`, { method: "POST", body: JSON.stringify({plan_version:planVersion,idempotency_key:idempotencyKey,confirm_inventory_mutation:true,confirm_rollback_limits:true}) }),
+  importResults: (id: string, page = 1) => api<import("./types").ImportResults>(`/imports/${id}/results${queryString({page,page_size:50})}`),
+  importRollbackPreview: (id: string) => api<import("./types").RollbackPreview>(`/imports/${id}/rollback-preview`),
+  rollbackImport: (id: string) => api<import("./types").ImportResults>(`/imports/${id}/rollback`, { method: "POST", body: JSON.stringify({confirmation:"ROLLBACK"}) }),
+  retryFailedImport: (id: string) => api<import("./types").ImportResults>(`/imports/${id}/retry-failed`, { method: "POST" }),
 };

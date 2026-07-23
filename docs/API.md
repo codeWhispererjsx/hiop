@@ -1,5 +1,18 @@
 # HIOP 1.0.0 API
 
+## Final import endpoints
+
+- `POST /imports/{session_id}/rows/{row_id}/disposition`
+- `GET /imports/{session_id}/readiness`
+- `GET /imports/{session_id}/execution-plan?persist=true`
+- `POST /imports/{session_id}/finalize`
+- `GET /imports/{session_id}/results`
+- `GET /imports/{session_id}/rollback-preview`
+- `POST /imports/{session_id}/rollback`
+- `POST /imports/{session_id}/retry-failed`
+
+Finalize, disposition mutation, rollback, and retry are administrator-only. Read endpoints use the existing import reader policy.
+
 Development base URL: `http://127.0.0.1:8001/api/v1`. Production clients use same-origin `/api/v1`. FastAPI exposes the authoritative OpenAPI document at `/openapi.json` and interactive documentation at `/docs` when enabled.
 
 Except for `POST /auth/login`, all application routes require `Authorization: Bearer <JWT>`. `/health` is intentionally public and secret-safe. The dashboard WebSocket is `/ws/dashboard` and requires the JWT as the second WebSocket subprotocol after `hiop`.

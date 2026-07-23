@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 2E transactional final import
+
+Reviewed sessions now support backend readiness, versioned plans, administrator-only batch finalization, per-row results, idempotent create/link/enrich/merge behavior, Discovery linking, safe retry, compensating rollback, audit/WebSocket progress, grouped notifications, Imports reporting, and final frontend results at `2.0.0-dev`.
+
+No unreviewed automatic import, permanent history deletion, Active Directory, SNMP, or scheduled import was introduced.
+
 ## HIOP v2 — Epic 2D Import Wizard frontend
 
 The authenticated `/imports` workspace and resumable nine-step Import Wizard are implemented at version `2.0.0-dev`. The UI reuses the existing routing, dashboard shell, API client, role model, hierarchy catalog, dialogs, status components, feedback states, design tokens, and responsive patterns. It covers secure CSV/XLSX upload, explicit worksheet selection, backend-validated mapping, staged-row validation, error export, candidate comparison, safe resolutions, merge-plan preview, location review and override, conflict review, summary, and final-readiness review.

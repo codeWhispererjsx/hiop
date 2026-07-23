@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.imports.columns import CANONICAL_FIELDS
-from app.models.inventory_import import ImportSessionStatus, ImportValidationStatus
+from app.models.inventory_import import ImportExecutionStatus, ImportSessionStatus, ImportValidationStatus
 
 
 class ImportSessionResponse(BaseModel):
@@ -30,6 +30,15 @@ class ImportSessionResponse(BaseModel):
     selected_worksheet: str | None
     matching_state: str
     match_summary: dict[str, Any]
+    execution_summary: dict[str, Any]
+    plan_version: int
+    plan_locked_at: datetime | None
+    finalized_by: str | None
+    finalization_started_at: datetime | None
+    finalization_completed_at: datetime | None
+    rollback_by: str | None
+    rollback_at: datetime | None
+    retry_count: int
     validation_summary: dict[str, int] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
@@ -82,6 +91,7 @@ class ImportedDeviceResponse(BaseModel):
     serial_number: str | None
     inventory_status: str | None
     notes: str | None
+    device_type: str | None
     raw_data: dict[str, Any]
     normalized_data: dict[str, Any]
     errors: list[dict[str, Any]]
@@ -93,6 +103,8 @@ class ImportedDeviceResponse(BaseModel):
     linked_discovery_id: UUID | None
     resolved_by: str | None
     resolved_at: datetime | None
+    final_disposition: str | None
+    approved_changes: dict[str, Any]
 
 
 class ImportedDevicePage(BaseModel):
@@ -158,3 +170,48 @@ class LocationSuggestionResponse(BaseModel):
     status: str
     reviewed_by: str | None
     reviewed_at: datetime | None
+
+
+class FinalDispositionRequest(BaseModel):
+    disposition: str = Field(pattern="^(create_new|link_existing|enrich_existing|merge_reviewed|link_discovery|skip)$")
+    approved_fields: list[str] = Field(default_factory=list, max_length=25)
+    approved_overwrites: list[str] = Field(default_factory=list, max_length=10)
+
+
+class FinalizeRequest(BaseModel):
+    plan_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=12, max_length=100, pattern=r"^[A-Za-z0-9._:-]+$")
+    confirm_inventory_mutation: bool
+    confirm_rollback_limits: bool
+
+
+class RollbackRequest(BaseModel):
+    confirmation: str = Field(pattern="^ROLLBACK$")
+
+
+class ImportExecutionResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    import_session_id: UUID
+    imported_device_id: UUID
+    action: str
+    status: ImportExecutionStatus
+    target_device_id: UUID | None
+    target_discovery_id: UUID | None
+    plan: dict[str, Any]
+    before_snapshot: dict[str, Any]
+    after_snapshot: dict[str, Any]
+    error_code: str | None
+    safe_error_message: str | None
+    retry_count: int
+    started_at: datetime | None
+    completed_at: datetime | None
+    rolled_back_at: datetime | None
+
+
+class ImportExecutionResultPage(BaseModel):
+    items: list[ImportExecutionResultResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int

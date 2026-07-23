@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.0-dev — Epic 2E
+
+- Added server readiness checks and immutable, versioned execution plans.
+- Added batched finalization with per-row savepoints, persistent results, idempotency, safe retry, audit, and WebSocket progress.
+- Added reviewed create, link, enrichment, merge, and Discovery-link execution without silent overwrites.
+- Added later-change-aware rollback preview and compensating rollback.
+- Completed final wizard confirmation, progress, results, retry, device links, and rollback UI.
+- Added final-import settings, grouped notifications, Imports reporting, migration `d4f2a7c8e901`, and tests.
+
 ## 2.0.0-dev — Epic 2D
 
 - Added the authenticated Inventory Import landing page with real session KPIs, search, status filtering, pagination, progress, resume, cancellation, and validation-error export.

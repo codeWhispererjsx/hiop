@@ -377,3 +377,7 @@ The wizard stages data before any inventory change:
 6. Resolve or defer conflicts, then review the summary and readiness checklist.
 
 Leaving the wizard is safe. Use **Continue** on the imports page to reload backend-persisted progress. “Ready for Final Import” is a review state only; final device creation and merging are pending Epic 2E.
+
+### Finalizing and reviewing results
+
+The final step requests a fresh server readiness check and shows exact create, update, link, and skip counts. Administrators must lock the plan and acknowledge conflict review, merge review, inventory mutation, and rollback limitations before Finalize is enabled. Results survive refresh and link to affected devices. Partial sessions may retry safe failures. Rollback is available only when a fresh preview confirms every action still matches its recorded after-state.

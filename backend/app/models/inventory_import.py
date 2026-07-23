@@ -18,9 +18,14 @@ class ImportSessionStatus(str, enum.Enum):
     UPLOADED = "uploaded"
     VALIDATING = "validating"
     PROCESSING = "processing"
+    REVIEW_REQUIRED = "review_required"
+    READY = "ready"
+    IMPORTING = "importing"
     COMPLETED = "completed"
     PARTIAL = "partial"
     FAILED = "failed"
+    CANCELLED = "cancelled"
+    ROLLED_BACK = "rolled_back"
 
 
 class ImportValidationStatus(str, enum.Enum):
@@ -66,6 +71,16 @@ class LocationSuggestionStatus(str, enum.Enum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     OVERRIDDEN = "overridden"
+
+
+class ImportExecutionStatus(str, enum.Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    ROLLED_BACK = "rolled_back"
+    ROLLBACK_FAILED = "rollback_failed"
 
 
 def _enum(enum_type: type[enum.Enum], name: str) -> Enum:
@@ -122,6 +137,15 @@ class ImportSession(Base):
     selected_worksheet: Mapped[str | None] = mapped_column(String(255))
     matching_state: Mapped[str] = mapped_column(String(16), nullable=False, default="idle", server_default="idle")
     match_summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    execution_summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    plan_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    plan_locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finalized_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    finalization_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finalization_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rollback_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    rollback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
 
@@ -132,6 +156,7 @@ class ImportSession(Base):
         passive_deletes=True,
     )
     match_candidates: Mapped[list["ImportMatchCandidate"]] = relationship(back_populates="import_session", cascade="all, delete-orphan", passive_deletes=True)
+    execution_results: Mapped[list["ImportExecutionResult"]] = relationship(back_populates="import_session", cascade="all, delete-orphan", passive_deletes=True)
 
     @property
     def validation_summary(self) -> dict[str, int]:
@@ -171,6 +196,7 @@ class ImportedDevice(Base):
     serial_number: Mapped[str | None] = mapped_column(String(128))
     inventory_status: Mapped[str | None] = mapped_column(String(32))
     notes: Mapped[str | None] = mapped_column(Text)
+    device_type: Mapped[str | None] = mapped_column(String(80))
     raw_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     normalized_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     errors: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list, server_default="[]")
@@ -181,6 +207,8 @@ class ImportedDevice(Base):
     linked_discovery_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("discovered_devices.id", ondelete="SET NULL"))
     resolved_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    final_disposition: Mapped[str | None] = mapped_column(String(32))
+    approved_changes: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
     validation_status: Mapped[ImportValidationStatus] = mapped_column(
         _enum(ImportValidationStatus, "import_validation_status"),
         nullable=False,
@@ -201,6 +229,39 @@ class ImportedDevice(Base):
     linked_device = relationship(Device, foreign_keys=[linked_device_id])
     linked_discovery = relationship(DiscoveredDevice, foreign_keys=[linked_discovery_id])
     resolver = relationship(User, foreign_keys=[resolved_by])
+
+
+class ImportExecutionResult(Base):
+    __tablename__ = "import_execution_results"
+    __table_args__ = (
+        Index("uq_import_execution_results_row", "import_session_id", "imported_device_id", unique=True),
+        Index("ix_import_execution_results_status", "status"),
+        Index("ix_import_execution_results_target", "target_device_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    import_session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("import_sessions.id", ondelete="CASCADE"), nullable=False)
+    imported_device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("imported_devices.id", ondelete="CASCADE"), nullable=False)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[ImportExecutionStatus] = mapped_column(_enum(ImportExecutionStatus, "import_execution_status"), nullable=False, default=ImportExecutionStatus.PENDING, server_default="pending")
+    target_device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"))
+    target_discovery_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("discovered_devices.id", ondelete="SET NULL"))
+    plan: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    before_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    after_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict, server_default="{}")
+    error_code: Mapped[str | None] = mapped_column(String(80))
+    safe_error_message: Mapped[str | None] = mapped_column(String(500))
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rolled_back_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+    import_session = relationship(ImportSession, back_populates="execution_results")
+    imported_device = relationship(ImportedDevice)
+    target_device = relationship(Device)
+    target_discovery = relationship(DiscoveredDevice)
 
 
 class ImportMatchCandidate(Base):
