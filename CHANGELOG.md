@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 3B
+
+- Added pinned `ldap3` connectivity supporting verified LDAPS, StartTLS, and explicit development-only LDAP.
+- Added RootDSE discovery, DN existence/containment validation, fixed escaped filters, bounded AD paging, and user/computer/group converters.
+- Added structured rate-limited connection testing, connection health metadata, safe error classification, and administrator-only non-persistent preview APIs.
+- Added migration `f4b8c2d9a731`, mock-only LDAP tests, operational/security guidance, and no synchronization or inventory mutation.
+
 ## 2.0.0-dev — Epic 3A
 
 - Added `ActiveDirectoryConnection`, `ActiveDirectorySyncConfiguration`, `ActiveDirectoryObject`, `ActiveDirectorySyncRun`, and `ActiveDirectoryMatchCandidate` models and Alembic migration `e8a9b0c1d2e3`.

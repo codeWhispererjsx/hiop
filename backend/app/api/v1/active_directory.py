@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
+from app.core.rate_limit import ad_connection_test_limiter
 from app.models.user import User
 from app.repositories.active_directory_repository import (
     ActiveDirectoryConnectionRepository,
@@ -13,6 +14,9 @@ from app.schemas.active_directory import (
     ActiveDirectoryConnectionCreate,
     ActiveDirectoryConnectionRead,
     ActiveDirectoryConnectionUpdate,
+    ActiveDirectoryConnectionTestResponse,
+    ActiveDirectoryRootDseResponse,
+    DirectoryPreviewResponse,
     ActiveDirectoryMatchCandidateRead,
     ActiveDirectoryObjectRead,
     ActiveDirectorySecretUpdate,
@@ -59,6 +63,11 @@ def _to_connection_read(conn) -> ActiveDirectoryConnectionRead:
         last_tested_at=conn.last_tested_at,
         last_test_status=conn.last_test_status,
         last_test_message=conn.last_test_message,
+        last_successful_bind_at=conn.last_successful_bind_at,
+        last_failure_at=conn.last_failure_at,
+        failure_count=conn.failure_count,
+        certificate_expiry=conn.certificate_expiry,
+        server_reported_domain=conn.server_reported_domain,
         created_by=conn.created_by,
         updated_by=conn.updated_by,
         created_at=conn.created_at,
@@ -145,15 +154,68 @@ def disable_connection(
     return _to_connection_read(connection)
 
 
-@router.post("/connections/{id}/test")
+@router.post("/connections/{id}/test", response_model=ActiveDirectoryConnectionTestResponse)
 def test_connection(
     id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(admin_only),
 ):
+    ad_connection_test_limiter.check(f"{current_user.id}:{id}")
     service = ActiveDirectoryConnectionService(db)
     result = service.test_connection(id, current_user)
     return result
+
+
+@router.get("/connections/{id}/root-dse", response_model=ActiveDirectoryRootDseResponse)
+def root_dse(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryConnectionService(db).root_dse(id, current_user)
+
+
+@router.get("/connections/{id}/preview/users", response_model=DirectoryPreviewResponse)
+def preview_users(
+    id: str,
+    limit: int = Query(25, ge=1, le=100),
+    search: str | None = Query(None, min_length=1, max_length=64),
+    enabled: bool | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryConnectionService(db).preview(
+        id, "users", current_user, limit=limit, search_term=search, enabled=enabled
+    )
+
+
+@router.get("/connections/{id}/preview/computers", response_model=DirectoryPreviewResponse)
+def preview_computers(
+    id: str,
+    limit: int = Query(25, ge=1, le=100),
+    search: str | None = Query(None, min_length=1, max_length=64),
+    enabled: bool | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryConnectionService(db).preview(
+        id, "computers", current_user, limit=limit, search_term=search, enabled=enabled
+    )
+
+
+@router.get("/connections/{id}/preview/groups", response_model=DirectoryPreviewResponse)
+def preview_groups(
+    id: str,
+    limit: int = Query(25, ge=1, le=100),
+    search: str | None = Query(None, min_length=1, max_length=64),
+    include_members: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectoryConnectionService(db).preview(
+        id, "groups", current_user, limit=limit, search_term=search,
+        include_members=include_members,
+    )
 
 
 @router.get("/connections/{id}/sync-config", response_model=ActiveDirectorySyncConfigurationRead)

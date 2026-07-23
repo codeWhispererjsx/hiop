@@ -1,5 +1,13 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 3B secure LDAP connection and query engine
+
+Epic 3B adds isolated ldap3 connectivity for LDAPS, StartTLS, and explicitly enabled development-only LDAP; verified TLS and host policy; RootDSE discovery; search-base validation; fixed escaped filters; bounded paged user/computer/group previews; safe attribute conversion; structured connection health; rate limiting; audit events; and migration `f4b8c2d9a731`.
+
+No synchronization, staging persistence, HIOP user/device mutation, matching, scheduling, frontend page, or real hotel-domain test is included.
+
+Verification: 31 combined AD tests and all 130 backend regression tests pass; dependency consistency passes; PostgreSQL is at `f4b8c2d9a731 (head)`; offline downgrade SQL generates; and live startup reports a healthy database with 13 AD routes.
+
 ## HIOP v2 — Epic 3A Active Directory integration foundation
 
 The backend foundation for Microsoft Active Directory integration is complete at version `2.0.0-dev`. It adds `ActiveDirectoryConnection`, `ActiveDirectorySyncConfiguration`, `ActiveDirectoryObject`, `ActiveDirectorySyncRun`, and `ActiveDirectoryMatchCandidate` models, Alembic migration `e8a9b0c1d2e3`, persistence-only repositories, authenticated Fernet bind-secret encryption, `LdapClientInterface` mock stubs, Pydantic transport validation schemas, role-protected REST configuration APIs under `/api/v1/active-directory/`, audit events, database invariants, and documentation in `docs/ACTIVE_DIRECTORY.md`.

@@ -1,82 +1,147 @@
-# HIOP Active Directory Integration Foundation (v2 — Epic 3A)
+# HIOP Active Directory Integration (v2 — Epic 3B)
 
-## Purpose and scope
+## Scope
 
-Epic 3A establishes a backend-only architecture for future Microsoft Active Directory integration. It introduces connection profiles, encrypted write-only credentials, synchronization configuration, directory-object staging, run telemetry, match-candidate persistence, repositories, service boundaries, schemas, and configuration APIs.
+Epic 3B adds secure, bounded directory communication to the Epic 3A persistence foundation. Administrators can test a saved connection, inspect safe RootDSE metadata, and preview users, computers, and groups without persisting directory results.
 
-It does not make live LDAP connections, query a directory, synchronize users or computers, schedule synchronization, mutate inventory, or add frontend administration pages.
+This phase does not synchronize or stage objects, mutate HIOP users or devices, score matches, schedule work, or add frontend pages.
 
-## Planned data flow
+## LDAP modes
 
-1. An administrator creates a disabled-by-default connection profile and sync policy.
-2. A future Epic 3B worker retrieves and decrypts the bind secret only for a bounded connection attempt.
-3. Directory users, computers, and groups are staged as `ActiveDirectoryObject` records using the stable object GUID.
-4. A sync run records counts, duration, safe failures, and dry-run state.
-5. Matching produces reviewable user or device candidates.
-6. No HIOP user or device changes occur without a later reviewed workflow.
+- LDAPS uses TLS from connection start, normally on port 636.
+- StartTLS opens LDAP and upgrades the connection before binding, normally on port 389.
+- Plain LDAP is accepted only when the backend is in development and `AD_ALLOW_INSECURE_LDAP=true`.
 
-## Connection model
+LDAPS and StartTLS are mutually exclusive. Production rejects disabled certificate verification and plain LDAP. Anonymous bind is supported only when explicitly configured without bind credentials.
 
-`ActiveDirectoryConnection` supports multiple named domain profiles with server, port, TLS mode, base/search DNs, authentication method, timeout, paging, TLS verification, certificate reference, test state, and creator/updater attribution.
+## Host and SSRF policy
 
-LDAPS and StartTLS are mutually exclusive. Domain names, hosts, distinguished names, ports, timeouts, and page sizes are validated at the API boundary and constrained where practical in PostgreSQL.
+The configured host cannot contain a URL scheme, embedded credentials, whitespace, or malformed hostname content. By default, hostnames must align with the configured AD DNS domain and IP literals must be private, loopback, or link-local. Exceptional hosts require `AD_APPROVED_HOSTS`; arbitrary public hosts require the protected `AD_ALLOW_PUBLIC_HOSTS` policy.
 
-## Secret handling
+No API accepts a URL or raw network destination.
 
-Bind credentials are accepted only on create or secret-rotation requests. Responses expose only `has_bind_secret`; ciphertext and plaintext are never serialized or included in audit descriptions.
+## TLS and certificates
 
-Secrets use authenticated Fernet encryption. The key is derived from the dedicated `HIOP_AD_SECRET_KEY`; the existing HIOP `SECRET_KEY` is a compatibility fallback. Missing or incorrect keys fail closed with safe messages.
+TLS uses certificate and hostname verification through Python and ldap3. A custom public CA bundle may be referenced by path; HIOP never stores a CA private key or returns certificate content. The client uses a modern TLS client context and never silently disables validation.
 
-Changing the encryption key currently requires re-entering each connection secret. Before production rollout, use a versioned multi-key decryptor or an external secrets manager. Do not store credentials, private keys, directory exports, or CA private material in source control.
+Safe client errors distinguish TLS handshake failure from certificate validation failure. Detailed logs contain only the connection ID, operation, duration/status, and safe category.
 
-## Foundation configuration
+## Credentials and bind lifecycle
 
-Environment-driven settings define:
+The bind secret remains encrypted at rest with authenticated Fernet encryption. The service decrypts it immediately before bind, drops the local plaintext reference after the bind call, closes the LDAP connection in `finally`, and clears the ldap3 password reference where possible.
 
-- Integration enablement, default LDAP and LDAPS ports
+Credentials are not serialized, audited, broadcast, or included in exception messages. Changing the encryption key still requires re-entering saved secrets; a versioned keyring or external vault is recommended for production.
+
+## RootDSE discovery
+
+The client requests only:
+
+- `defaultNamingContext`
+- `rootDomainNamingContext`
+- `configurationNamingContext`
+- `schemaNamingContext`
+- `supportedLDAPVersion`
+- `supportedSASLMechanisms`
+- `dnsHostName`
+- `serverName`
+
+The response reports whether LDAP v3 is supported and whether expected AD naming contexts are present. APIs return only this safe subset.
+
+## Search-base validation
+
+Base and specialized user/computer/group DNs must:
+
+- Have valid DN syntax
+- Remain within the configured base DN
+- Exist according to a bounded base-scope LDAP search
+
+Empty specialized bases fall back to `base_dn`. A configured base that differs from RootDSE is reported as a warning; missing or escaping search bases fail the operation.
+
+## Filter safety
+
+Clients cannot submit raw LDAP filters or attribute names. HIOP uses fixed templates:
+
+- Users: person/user objects excluding computers
+- Computers: computer category/class
+- Groups: group category/class
+
+Search terms are limited to 64 characters, raw wildcards are rejected, and values are escaped with ldap3’s RFC-compatible filter escaping. Search attributes come from a small internal allowlist.
+
+## Query engines
+
+User previews return identifiers, account/display/email/department/title fields, selected group DNs, enabled state, timestamps, description, and organizational unit.
+
+Computer previews return identifiers, normalized DNS hostname, OS/version, description, managed-by DN, enabled state, timestamps, and organizational unit.
+
+Group previews return identifiers, name, description, converted group scope/security type, timestamps, and organizational unit. Membership is excluded by default. When explicitly requested, both the number of groups and members returned per group are bounded and truncation is visible.
+
+Password, credential, token, and unrelated personal attributes are never requested.
+
+## Attribute conversion
+
+Converters safely handle binary GUID and SID values, Windows FILETIME, generalized timestamps, user-account-control flags, group-type flags, multivalued fields, missing attributes, and malformed values. Conversion failures attach a bounded parse warning to that object rather than terminating the page.
+
+All emitted datetimes are UTC-aware.
+
+## Paging and limits
+
+The client uses the Active Directory paged-results control and opaque paging cookies. It enforces:
+
+- Configured and maximum page size
+- Maximum objects per preview
 - Connection and search timeouts
-- Default and maximum page size
-- Maximum objects per sync and sync concurrency
-- Minimum and maximum sync intervals
-- Required TLS verification
-- Development-only insecure LDAP allowance
+- Maximum full-membership groups and members
+- Maximum retry count
+- Repeated-cookie and page-loop detection
 
-`ACTIVE_DIRECTORY_ENABLED` defaults to false. Insecure LDAP is rejected outside development, and production requires TLS verification.
+Only transient reachability/timeouts are retried, with a small bounded backoff. Invalid credentials, access denial, certificate errors, invalid DNs, and configuration errors are not retried.
 
-## Staging model
+## Connection test
 
-`ActiveDirectoryObject` stages `user`, `computer`, and `group` objects. It preserves the directory GUID, SID, distinguished name, common identities, organizational metadata, safe selected raw attributes, first/last-seen timestamps, sync/review status, and optional HIOP match.
+`POST /api/v1/active-directory/connections/{id}/test` is administrator-only and rate-limited. It validates connection/TLS, bind, RootDSE, base/search DNs, and one-record permission checks for users, computers, and groups.
 
-The database prevents duplicate object GUIDs per connection and prevents a staged object from pointing to both a user and a device.
+The structured response contains stage status, safe messages, warnings, error category, timestamp, and total duration. It updates last-test, last-success/failure, failure-count, and server-domain health metadata and creates summarized audit records.
 
-## Sync run lifecycle
+## Preview APIs
 
-`ActiveDirectorySyncRun` reserves `pending`, `running`, `completed`, `partial`, `failed`, and `cancelled` states. Counters and duration are nonnegative. Epic 3A exposes run history only; run execution remains an explicit `NotImplementedError` boundary for Epic 3B.
+- `GET /api/v1/active-directory/connections/{id}/root-dse`
+- `GET /api/v1/active-directory/connections/{id}/preview/users`
+- `GET /api/v1/active-directory/connections/{id}/preview/computers`
+- `GET /api/v1/active-directory/connections/{id}/preview/groups`
 
-## Matching model
+They are administrator-only, bounded, non-persistent, and reject disabled connections. Query parameters provide only a limited search term, enabled state where relevant, result limit, and optional bounded group membership.
 
-`ActiveDirectoryMatchCandidate` reserves typed HIOP user/device candidates, a bounded score, match level/status, matching and conflicting fields, evidence, a recommended action, and reviewer metadata. A database check requires exactly the target type declared by the candidate.
+## Safe error categories
 
-No scoring or resolution logic is implemented in Epic 3A.
+`host_unreachable`, `timeout`, `tls_failed`, `certificate_invalid`, `bind_failed`, `access_denied`, `base_dn_not_found`, `search_base_invalid`, `query_failed`, `page_limit_exceeded`, `malformed_response`, `configuration_error`, and `unknown_error`.
 
-## Permissions and audit
+Raw exceptions and directory entries are not returned.
 
-- Administrators can create/update/disable connections, rotate secrets, run the mock-only test, and change sync configuration.
-- Administrators and technicians can read configuration metadata, staged objects, run history, and match candidates.
-- Staff users are denied AD routes.
-- Unauthenticated requests receive `401`; role violations receive `403`.
+## Development testing
 
-Implemented mutations create summarized audit events without credentials.
+Automated tests use injected mock clients and in-memory fake ldap3 connection/entry behavior. They never resolve or connect to a hotel domain. Test coverage includes modes, TLS policy, host policy, filter injection, conversions, paging, limits, safe errors, health updates, rate limiting, and authorization contracts.
 
-## Security risks and controls
+## Production requirements
 
-- LDAP injection: no public arbitrary LDAP-filter API exists.
-- SSRF/network access: the Epic 3A client is mock-only and opens no socket.
-- Credential leakage: secret schemas are write-only and errors do not include cryptographic internals.
-- Weak transport: mutually exclusive TLS modes are validated; production requires TLS verification.
-- Excessive ingestion: page, object, concurrency, timeout, and interval limits are configured before live sync exists.
-- Raw attributes: future ingestion must allowlist attributes and exclude password, token, and unrelated sensitive data.
+- Configure a dedicated `HIOP_AD_SECRET_KEY`.
+- Use LDAPS or StartTLS with certificate verification.
+- Configure an internal domain-aligned host or explicit approved-host list.
+- Provide only a public CA bundle when private PKI is used.
+- Grant the bind account the minimum read permissions.
+- Review logs and rate-limit behavior before enabling tests.
+- Keep `AD_ALLOW_INSECURE_LDAP=false` and `AD_ALLOW_PUBLIC_HOSTS=false`.
 
-## Epic 3B
+## Troubleshooting
 
-Epic 3B may add a real LDAP client with certificate validation, bounded allowlisted filters, connection testing, dry-run synchronization, staging, missing-object detection, and candidate generation. It must retain the review boundary and must not silently create or update HIOP records.
+- `host_unreachable`: verify DNS, route, firewall, host policy, and port.
+- `certificate_invalid`: verify hostname/SAN, trust chain, expiry, and CA reference.
+- `bind_failed`: rotate the saved secret and verify the bind identity.
+- `base_dn_not_found`: compare configured bases with safe RootDSE metadata.
+- `access_denied`: grant only the missing read permission.
+- `page_limit_exceeded`: narrow the preview or lower page/result limits.
+
+## Known limitations and Epic 3C
+
+Connection rate limits are process-local. Certificate expiry is reserved in health metadata but remains unset unless safely available from the TLS stack. Group member range retrieval is bounded after response parsing rather than using AD ranged attributes.
+
+Epic 3C may add administrator-triggered dry-run synchronization into staging and missing-object detection. It must not automatically create or update HIOP users or devices.

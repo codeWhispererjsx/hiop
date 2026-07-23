@@ -104,6 +104,7 @@ class ActiveDirectoryConnection(Base):
         CheckConstraint("server_port BETWEEN 1 AND 65535", name="ck_ad_connection_port"),
         CheckConstraint("connection_timeout_seconds BETWEEN 1 AND 300", name="ck_ad_connection_timeout"),
         CheckConstraint("page_size BETWEEN 1 AND 5000", name="ck_ad_connection_page_size"),
+        CheckConstraint("failure_count >= 0", name="ck_ad_connection_failure_count"),
         CheckConstraint("NOT (use_ssl AND use_start_tls)", name="ck_ad_connection_single_tls_mode"),
         CheckConstraint(
             "authentication_method IN ('simple','ldaps','start_tls','anonymous','kerberos')",
@@ -209,6 +210,27 @@ class ActiveDirectoryConnection(Base):
     )
     last_test_message: Mapped[str | None] = mapped_column(
         String(500),
+        nullable=True,
+    )
+    last_successful_bind_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_failure_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    failure_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+    certificate_expiry: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    server_reported_domain: Mapped[str | None] = mapped_column(
+        String(255),
         nullable=True,
     )
     created_by: Mapped[str | None] = mapped_column(

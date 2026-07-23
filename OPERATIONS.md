@@ -98,3 +98,9 @@ Track p50/p95/p99 API latency, error rate, PostgreSQL query latency and pool sat
 ## Escalation record
 
 For every production incident record timestamps, symptoms, affected modules, health output, safe log references, actions, recovery, and follow-up. Never place credentials, JWTs, database URLs, raw user exports, or private guest/hotel information in incident notes.
+
+## Active Directory connection operations
+
+Keep `AD_ALLOW_INSECURE_LDAP=false` and `AD_ALLOW_PUBLIC_HOSTS=false` outside isolated development. Configure `HIOP_AD_SECRET_KEY`, an internal domain-aligned controller or explicit `AD_APPROVED_HOSTS`, and a public CA bundle reference when private PKI is used.
+
+Connection tests are administrator-only and rate-limited. Diagnose failures by safe category: network/DNS for `host_unreachable`, trust chain and hostname for `certificate_invalid`, saved credentials for `bind_failed`, configured naming contexts for base-DN errors, and directory ACLs for `access_denied`. Never paste bind secrets, raw entries, packet captures, or private CA material into logs or tickets.

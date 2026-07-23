@@ -30,11 +30,18 @@ class Settings(BaseSettings):
     ad_default_page_size: int = Field(default=500, ge=1, le=5000)
     ad_maximum_page_size: int = Field(default=5000, ge=1, le=10000)
     ad_maximum_objects_per_sync: int = Field(default=100000, ge=1, le=1000000)
+    ad_maximum_objects_per_query: int = Field(default=500, ge=1, le=10000)
+    ad_maximum_groups_with_members: int = Field(default=10, ge=0, le=100)
+    ad_maximum_group_members: int = Field(default=100, ge=1, le=5000)
+    ad_maximum_attributes: int = Field(default=32, ge=1, le=100)
+    ad_connection_retry_count: int = Field(default=1, ge=0, le=2)
     ad_sync_concurrency: int = Field(default=1, ge=1, le=10)
     ad_minimum_sync_interval_minutes: int = Field(default=15, ge=1, le=1440)
     ad_maximum_sync_interval_minutes: int = Field(default=14400, ge=15, le=525600)
     ad_tls_verification_required: bool = True
     ad_allow_insecure_ldap: bool = False
+    ad_allow_public_hosts: bool = False
+    ad_approved_hosts: list[str] = []
 
     # Email Settings
     email_address: str

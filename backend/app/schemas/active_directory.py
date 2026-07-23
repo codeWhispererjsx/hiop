@@ -165,6 +165,11 @@ class ActiveDirectoryConnectionRead(BaseModel):
     last_tested_at: datetime | None = None
     last_test_status: str | None = None
     last_test_message: str | None = None
+    last_successful_bind_at: datetime | None = None
+    last_failure_at: datetime | None = None
+    failure_count: int = 0
+    certificate_expiry: datetime | None = None
+    server_reported_domain: str | None = None
     created_by: str | None = None
     updated_by: str | None = None
     created_at: datetime
@@ -320,3 +325,104 @@ class PaginatedADMatchCandidates(BaseModel):
     total: int
     offset: int
     limit: int
+
+
+class SafeLdapError(BaseModel):
+    category: str
+    message: str
+    retryable: bool = False
+
+
+class ConnectionTestStage(BaseModel):
+    name: str
+    status: str
+    message: str
+    duration_ms: int = 0
+
+
+class ActiveDirectoryConnectionTestResponse(BaseModel):
+    overall_status: str
+    connection_id: str
+    stages: list[ConnectionTestStage]
+    warnings: list[str] = []
+    error: SafeLdapError | None = None
+    tested_at: datetime
+    duration_ms: int
+
+
+class ActiveDirectoryRootDseResponse(BaseModel):
+    default_naming_context: str | None = None
+    root_domain_naming_context: str | None = None
+    configuration_naming_context: str | None = None
+    schema_naming_context: str | None = None
+    supported_ldap_versions: list[str] = []
+    supported_sasl_mechanisms: list[str] = []
+    dns_host_name: str | None = None
+    server_name: str | None = None
+    appears_active_directory: bool
+    ldap_v3_supported: bool
+    warnings: list[str] = []
+
+
+class DirectoryUserPreview(BaseModel):
+    object_guid: str | None = None
+    object_sid: str | None = None
+    sam_account_name: str | None = None
+    user_principal_name: str | None = None
+    display_name: str | None = None
+    email: str | None = None
+    department: str | None = None
+    job_title: str | None = None
+    distinguished_name: str | None = None
+    organizational_unit: str | None = None
+    group_memberships: list[str] = []
+    enabled: bool
+    last_logon_at: datetime | None = None
+    when_created: datetime | None = None
+    when_changed: datetime | None = None
+    description: str | None = None
+    parse_warnings: list[str] = []
+
+
+class DirectoryComputerPreview(BaseModel):
+    object_guid: str | None = None
+    object_sid: str | None = None
+    sam_account_name: str | None = None
+    dns_hostname: str | None = None
+    operating_system: str | None = None
+    operating_system_version: str | None = None
+    distinguished_name: str | None = None
+    organizational_unit: str | None = None
+    description: str | None = None
+    managed_by: str | None = None
+    enabled: bool
+    last_logon_at: datetime | None = None
+    when_created: datetime | None = None
+    when_changed: datetime | None = None
+    parse_warnings: list[str] = []
+
+
+class DirectoryGroupPreview(BaseModel):
+    object_guid: str | None = None
+    object_sid: str | None = None
+    sam_account_name: str | None = None
+    common_name: str | None = None
+    distinguished_name: str | None = None
+    organizational_unit: str | None = None
+    description: str | None = None
+    group_type: dict[str, Any]
+    members: list[str] = []
+    members_truncated: bool = False
+    member_count_returned: int = 0
+    when_created: datetime | None = None
+    when_changed: datetime | None = None
+    parse_warnings: list[str] = []
+
+
+class DirectoryPreviewResponse(BaseModel):
+    object_type: str
+    items: list[DirectoryUserPreview | DirectoryComputerPreview | DirectoryGroupPreview]
+    returned: int
+    truncated: bool
+    page_count: int
+    warnings: list[str] = []

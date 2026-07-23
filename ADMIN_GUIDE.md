@@ -202,6 +202,9 @@ Enable automatic alerting and ticket creation when devices go offline:
 HIOP `2.0.0-dev` includes a backend foundation for Microsoft Active Directory integration:
 - Domain connections, search bases, and ports are managed via `/api/v1/active-directory/connections` (Admin only).
 - Bind credentials use authenticated Fernet encryption and are treated as write-only. Configure a dedicated `HIOP_AD_SECRET_KEY` before production use.
+- Use LDAPS or StartTLS with certificate verification. Plain LDAP requires development mode plus the explicit insecure-LDAP setting.
+- Connection testing and directory previews are administrator-only, bounded, audited, and do not stage or mutate HIOP records.
+- Keep directory hosts domain-aligned or add them to the protected approved-host setting; do not allow arbitrary public LDAP servers.
 - Staging models track directory users, computers, and groups (`active_directory_objects`).
 - Live directory querying and background synchronization belong to Epic 3B.
 

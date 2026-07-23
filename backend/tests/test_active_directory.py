@@ -248,7 +248,7 @@ class ActiveDirectoryFoundationBoundaryTests(unittest.TestCase):
     def test_mock_client_never_performs_network_io(self):
         client = MockLdapClient("dc01.hotel.internal", 636, True)
         self.assertTrue(client.test_connection()["success"])
-        self.assertEqual(client.search_users("DC=hotel,DC=internal"), [])
+        self.assertEqual(client.search_users("DC=hotel,DC=internal").items, [])
         self.assertTrue(client.validate_base_dn("OU=Users,DC=hotel,DC=internal"))
         self.assertFalse(client.validate_base_dn("invalid"))
 

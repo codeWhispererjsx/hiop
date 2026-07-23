@@ -47,3 +47,32 @@ class FailedLoginLimiter:
 
 
 login_limiter = FailedLoginLimiter()
+
+
+class OperationRateLimiter:
+    """Small fixed-window limiter for sensitive administrative operations."""
+
+    def __init__(self, limit: int = 5, window_seconds: int = 60):
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self._attempts: dict[str, deque[float]] = defaultdict(deque)
+        self._lock = Lock()
+
+    def check(self, key: str) -> None:
+        now = monotonic()
+        with self._lock:
+            attempts = self._attempts[key]
+            cutoff = now - self.window_seconds
+            while attempts and attempts[0] <= cutoff:
+                attempts.popleft()
+            if len(attempts) >= self.limit:
+                retry_after = max(1, int(self.window_seconds - (now - attempts[0])))
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Too many directory connection tests. Try again later.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+            attempts.append(now)
+
+
+ad_connection_test_limiter = OperationRateLimiter()
