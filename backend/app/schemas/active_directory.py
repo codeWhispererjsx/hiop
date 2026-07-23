@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 import re
@@ -212,6 +212,7 @@ class ActiveDirectorySyncConfigurationRead(BaseModel):
     dry_run_default: bool
     conflict_policy: str
     enabled: bool
+    checkpoints: dict[str, str] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -244,6 +245,8 @@ class ActiveDirectoryObjectRead(BaseModel):
     raw_attributes: dict[str, Any]
     first_seen_at: datetime
     last_seen_at: datetime
+    missing_since: datetime | None = None
+    last_sync_run_id: str | None = None
     sync_status: str
     review_status: str
     matched_user_id: str | None = None
@@ -263,6 +266,14 @@ class ActiveDirectorySyncRunRead(BaseModel):
     trigger_type: str
     triggered_by: str | None = None
     dry_run: bool
+    sync_mode: str = "full"
+    object_types: list[str] = Field(default_factory=list)
+    checkpoint_before: dict[str, Any] = Field(default_factory=dict)
+    checkpoint_after: dict[str, Any] = Field(default_factory=dict)
+    per_type_status: dict[str, Any] = Field(default_factory=dict)
+    progress: dict[str, Any] = Field(default_factory=dict)
+    dry_run_results: dict[str, Any] = Field(default_factory=dict)
+    cancel_requested_at: datetime | None = None
     users_seen: int
     computers_seen: int
     groups_seen: int
@@ -270,6 +281,7 @@ class ActiveDirectorySyncRunRead(BaseModel):
     updated_objects: int
     unchanged_objects: int
     missing_objects: int
+    restored_objects: int = 0
     conflicts: int
     errors_count: int
     duration_ms: int | None = None
@@ -426,3 +438,75 @@ class DirectoryPreviewResponse(BaseModel):
     truncated: bool
     page_count: int
     warnings: list[str] = []
+
+
+class ActiveDirectorySyncRequest(BaseModel):
+    sync_mode: Literal["full", "incremental"] = "incremental"
+    dry_run: bool | None = None
+    object_types: list[Literal["user", "computer", "group"]] | None = None
+    limit: int | None = Field(default=None, ge=1, le=1_000_000)
+
+    @field_validator("object_types")
+    @classmethod
+    def unique_types(cls, value):
+        if value is not None and len(value) != len(set(value)):
+            raise ValueError("Object types must not contain duplicates.")
+        return value
+
+
+class ActiveDirectorySyncAccepted(BaseModel):
+    sync_run_id: str
+    status: str
+    accepted_configuration: dict[str, Any]
+    warnings: list[str] = Field(default_factory=list)
+
+
+class ActiveDirectorySyncErrorRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    sync_run_id: str
+    object_type: str | None = None
+    safe_object_reference: str | None = None
+    stage: str
+    error_code: str
+    safe_message: str
+    retryable: bool
+    created_at: datetime
+
+
+class ActiveDirectoryObjectChangeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    directory_object_id: str
+    sync_run_id: str
+    change_type: str
+    changed_fields: list[str]
+    before_values: dict[str, Any]
+    after_values: dict[str, Any]
+    detected_at: datetime
+
+
+class PaginatedADSyncErrors(BaseModel):
+    items: list[ActiveDirectorySyncErrorRead]
+    total: int
+    offset: int
+    limit: int
+
+
+class PaginatedADObjectChanges(BaseModel):
+    items: list[ActiveDirectoryObjectChangeRead]
+    total: int
+    offset: int
+    limit: int
+
+
+class ActiveDirectorySyncSummary(BaseModel):
+    sync_run_id: str
+    status: str
+    sync_mode: str
+    dry_run: bool
+    counts: dict[str, int]
+    per_object_type: dict[str, Any]
+    duration_ms: int | None = None
+    checkpoint_before: dict[str, Any]
+    checkpoint_after: dict[str, Any]

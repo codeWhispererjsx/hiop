@@ -135,6 +135,7 @@ def build_search_filter(
     search_term: str | None = None,
     search_attribute: str | None = None,
     enabled: bool | None = None,
+    changed_since: datetime | None = None,
 ) -> str:
     templates = {"user": USER_FILTER, "computer": COMPUTER_FILTER, "group": GROUP_FILTER}
     if object_type not in templates:
@@ -152,6 +153,9 @@ def build_search_filter(
     if enabled is not None and object_type in {"user", "computer"}:
         disabled = "(userAccountControl:1.2.840.113556.1.4.803:=2)"
         clauses.append(f"(!{disabled})" if enabled else disabled)
+    if changed_since is not None:
+        value = changed_since.astimezone(timezone.utc).strftime("%Y%m%d%H%M%S.0Z")
+        clauses.append(f"(whenChanged>={escape_filter_chars(value)})")
     return f"(&{''.join(clauses)})" if len(clauses) > 1 else clauses[0]
 
 
@@ -505,6 +509,7 @@ class SecureLdapClient(LdapClientInterface):
         limit: int | None = None,
         include_members: bool = False,
         member_limit: int = 100,
+        changed_since: datetime | None = None,
     ) -> LdapSearchResult:
         if not validate_dn_syntax(base_dn):
             raise LdapError("search_base_invalid", "Directory search base syntax is invalid.")
@@ -514,7 +519,9 @@ class SecureLdapClient(LdapClientInterface):
         query_attributes = list(attributes)
         if object_type == "group" and include_members:
             query_attributes.append("member")
-        filter_value = build_search_filter(object_type, search_term=search_term, enabled=enabled)
+        filter_value = build_search_filter(
+            object_type, search_term=search_term, enabled=enabled, changed_since=changed_since
+        )
         items: list[dict[str, Any]] = []
         cookie: bytes | str | None = None
         pages = 0

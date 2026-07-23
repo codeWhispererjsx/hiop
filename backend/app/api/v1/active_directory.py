@@ -1,9 +1,18 @@
-from fastapi import APIRouter, Depends, Query, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
 from app.core.rate_limit import ad_connection_test_limiter
 from app.models.user import User
+from app.models.active_directory import (
+    ActiveDirectoryObject,
+    ActiveDirectoryObjectChange,
+    ActiveDirectorySyncError,
+    ActiveDirectorySyncRun,
+)
 from app.repositories.active_directory_repository import (
     ActiveDirectoryConnectionRepository,
     ActiveDirectoryMatchCandidateRepository,
@@ -27,11 +36,17 @@ from app.schemas.active_directory import (
     PaginatedADMatchCandidates,
     PaginatedADObjects,
     PaginatedADSyncRuns,
+    ActiveDirectorySyncRequest,
+    ActiveDirectorySyncAccepted,
+    ActiveDirectorySyncSummary,
+    PaginatedADSyncErrors,
+    PaginatedADObjectChanges,
 )
 from app.services.active_directory_service import (
     ActiveDirectoryConnectionService,
     ActiveDirectorySyncConfigService,
 )
+from app.services.active_directory_sync_service import ActiveDirectorySynchronizationService
 
 router = APIRouter(prefix="/active-directory", tags=["Active Directory"])
 
@@ -245,13 +260,22 @@ def update_sync_config(
 def list_sync_runs(
     connection_id: str | None = Query(None),
     status: str | None = Query(None),
+    sync_mode: str | None = Query(None, pattern="^(full|incremental)$"),
+    dry_run: bool | None = Query(None),
+    trigger_type: str | None = Query(None),
+    started_from: datetime | None = Query(None),
+    started_to: datetime | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(read_only),
 ):
     repo = ActiveDirectorySyncRunRepository(db)
-    runs, total = repo.page(connection_id=connection_id, status=status, offset=offset, limit=limit)
+    runs, total = repo.page(
+        connection_id=connection_id, status=status, sync_mode=sync_mode, dry_run=dry_run,
+        trigger_type=trigger_type, started_from=started_from, started_to=started_to,
+        offset=offset, limit=limit,
+    )
     return PaginatedADSyncRuns(
         items=[ActiveDirectorySyncRunRead.model_validate(run) for run in runs],
         total=total,
@@ -260,12 +284,116 @@ def list_sync_runs(
     )
 
 
+@router.post("/connections/{id}/sync", response_model=ActiveDirectorySyncAccepted)
+def start_sync(
+    id: str,
+    payload: ActiveDirectorySyncRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    run = ActiveDirectorySynchronizationService(db).start(
+        id, current_user, sync_mode=payload.sync_mode, dry_run=payload.dry_run,
+        object_types=list(payload.object_types) if payload.object_types else None,
+        limit=payload.limit,
+    )
+    return ActiveDirectorySyncAccepted(
+        sync_run_id=run.id,
+        status=run.status,
+        accepted_configuration={
+            "sync_mode": run.sync_mode, "dry_run": run.dry_run,
+            "object_types": run.object_types, "limit": (run.progress or {}).get("limit"),
+        },
+        warnings=["Synchronization executes inline in this deployment; progress remains resumable from the run record."],
+    )
+
+
+@router.get("/sync-runs/{id}", response_model=ActiveDirectorySyncRunRead)
+def get_sync_run(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(read_only),
+):
+    run = db.get(ActiveDirectorySyncRun, id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Synchronization run was not found.")
+    return ActiveDirectorySyncRunRead.model_validate(run)
+
+
+@router.post("/sync-runs/{id}/cancel", response_model=ActiveDirectorySyncRunRead)
+def cancel_sync_run(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    return ActiveDirectorySynchronizationService(db).cancel(id, current_user)
+
+
+@router.get("/sync-runs/{id}/errors", response_model=PaginatedADSyncErrors)
+def sync_run_errors(
+    id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    if not db.get(ActiveDirectorySyncRun, id):
+        raise HTTPException(status_code=404, detail="Synchronization run was not found.")
+    total = db.scalar(select(func.count(ActiveDirectorySyncError.id)).where(
+        ActiveDirectorySyncError.sync_run_id == id
+    )) or 0
+    items = db.scalars(select(ActiveDirectorySyncError).where(
+        ActiveDirectorySyncError.sync_run_id == id
+    ).order_by(ActiveDirectorySyncError.created_at.desc()).offset(offset).limit(limit)).all()
+    return PaginatedADSyncErrors(items=items, total=total, offset=offset, limit=limit)
+
+
+@router.get("/sync-runs/{id}/summary", response_model=ActiveDirectorySyncSummary)
+def sync_run_summary(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(read_only),
+):
+    run = db.get(ActiveDirectorySyncRun, id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Synchronization run was not found.")
+    return ActiveDirectorySyncSummary(
+        sync_run_id=run.id, status=run.status, sync_mode=run.sync_mode, dry_run=run.dry_run,
+        counts={
+            "users": run.users_seen, "computers": run.computers_seen, "groups": run.groups_seen,
+            "created": run.created_objects, "updated": run.updated_objects,
+            "unchanged": run.unchanged_objects, "missing": run.missing_objects,
+            "restored": run.restored_objects, "errors": run.errors_count,
+            "conflicts": run.conflicts,
+        },
+        per_object_type=run.per_type_status, duration_ms=run.duration_ms,
+        checkpoint_before=run.checkpoint_before, checkpoint_after=run.checkpoint_after,
+    )
+
+
+@router.get("/sync-runs/{id}/dry-run-results")
+def dry_run_results(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    run = db.get(ActiveDirectorySyncRun, id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Synchronization run was not found.")
+    if not run.dry_run:
+        raise HTTPException(status_code=409, detail="This was not a dry-run synchronization.")
+    return {"sync_run_id": run.id, "simulation": True, "projected": run.dry_run_results}
+
+
 @router.get("/objects", response_model=PaginatedADObjects)
 def list_directory_objects(
     connection_id: str | None = Query(None),
     object_type: str | None = Query(None),
     sync_status: str | None = Query(None),
     review_status: str | None = Query(None),
+    enabled: bool | None = Query(None),
+    organizational_unit: str | None = Query(None, max_length=512),
+    department: str | None = Query(None, max_length=255),
+    missing: bool | None = Query(None),
     search: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
@@ -278,16 +406,60 @@ def list_directory_objects(
         object_type=object_type,
         sync_status=sync_status,
         review_status=review_status,
+        enabled=enabled,
+        organizational_unit=organizational_unit,
+        department=department,
+        missing=missing,
         search=search,
         offset=offset,
         limit=limit,
     )
     return PaginatedADObjects(
-        items=[ActiveDirectoryObjectRead.model_validate(obj) for obj in objects],
+        items=[
+            ActiveDirectoryObjectRead.model_validate(obj).model_copy(update={
+                "raw_attributes": {} if current_user.role != "admin" else obj.raw_attributes,
+                "email": None if current_user.role != "admin" else obj.email,
+            })
+            for obj in objects
+        ],
         total=total,
         offset=offset,
         limit=limit,
     )
+
+
+@router.get("/objects/{id}", response_model=ActiveDirectoryObjectRead)
+def get_directory_object(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(read_only),
+):
+    obj = db.get(ActiveDirectoryObject, id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Directory object was not found.")
+    result = ActiveDirectoryObjectRead.model_validate(obj)
+    if current_user.role != "admin":
+        result = result.model_copy(update={"raw_attributes": {}, "email": None})
+    return result
+
+
+@router.get("/objects/{id}/changes", response_model=PaginatedADObjectChanges)
+def object_changes(
+    id: str,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    if not db.get(ActiveDirectoryObject, id):
+        raise HTTPException(status_code=404, detail="Directory object was not found.")
+    total = db.scalar(select(func.count(ActiveDirectoryObjectChange.id)).where(
+        ActiveDirectoryObjectChange.directory_object_id == id
+    )) or 0
+    items = db.scalars(select(ActiveDirectoryObjectChange).where(
+        ActiveDirectoryObjectChange.directory_object_id == id
+    ).order_by(ActiveDirectoryObjectChange.detected_at.desc()).offset(offset).limit(limit)).all()
+    return PaginatedADObjectChanges(items=items, total=total, offset=offset, limit=limit)
 
 
 @router.get("/matches", response_model=PaginatedADMatchCandidates)

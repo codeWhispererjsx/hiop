@@ -63,6 +63,22 @@ class ADSyncRunStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
+class ADSyncMode(str, enum.Enum):
+    FULL = "full"
+    INCREMENTAL = "incremental"
+
+
+class ADObjectChangeType(str, enum.Enum):
+    CREATED = "created"
+    UPDATED = "updated"
+    MOVED = "moved"
+    RENAMED = "renamed"
+    ENABLED = "enabled"
+    DISABLED = "disabled"
+    MISSING = "missing"
+    RESTORED = "restored"
+
+
 class ADConflictPolicy(str, enum.Enum):
     REVIEW = "review"
     PRESERVE_HIOP = "preserve_hiop"
@@ -369,6 +385,9 @@ class ActiveDirectorySyncConfiguration(Base):
         default=True,
         nullable=False,
     )
+    checkpoints: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -416,6 +435,8 @@ class ActiveDirectoryObject(Base):
         Index("ix_ad_objects_review_status", "review_status"),
         Index("ix_ad_objects_matched_user_id", "matched_user_id"),
         Index("ix_ad_objects_matched_device_id", "matched_device_id"),
+        Index("ix_ad_objects_missing_since", "missing_since"),
+        Index("ix_ad_objects_last_sync_run_id", "last_sync_run_id"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -524,6 +545,13 @@ class ActiveDirectoryObject(Base):
         server_default=func.now(),
         nullable=False,
     )
+    missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_sync_run_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("active_directory_sync_runs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     sync_status: Mapped[str] = mapped_column(
         String(30),
         default="discovered",
@@ -567,6 +595,11 @@ class ActiveDirectoryObject(Base):
         back_populates="directory_object",
         cascade="all, delete-orphan",
     )
+    changes: Mapped[list["ActiveDirectoryObjectChange"]] = relationship(
+        "ActiveDirectoryObjectChange",
+        back_populates="directory_object",
+        cascade="all, delete-orphan",
+    )
 
 
 class ActiveDirectorySyncRun(Base):
@@ -579,10 +612,12 @@ class ActiveDirectorySyncRun(Base):
         CheckConstraint(
             "users_seen >= 0 AND computers_seen >= 0 AND groups_seen >= 0 "
             "AND created_objects >= 0 AND updated_objects >= 0 AND unchanged_objects >= 0 "
-            "AND missing_objects >= 0 AND conflicts >= 0 AND errors_count >= 0",
+            "AND missing_objects >= 0 AND restored_objects >= 0 "
+            "AND conflicts >= 0 AND errors_count >= 0",
             name="ck_ad_sync_run_nonnegative_counts",
         ),
         CheckConstraint("duration_ms IS NULL OR duration_ms >= 0", name="ck_ad_sync_run_duration"),
+        CheckConstraint("sync_mode IN ('full','incremental')", name="ck_ad_sync_run_mode"),
         Index("ix_ad_sync_runs_connection_id", "connection_id"),
         Index("ix_ad_sync_runs_status", "status"),
         Index("ix_ad_sync_runs_started_at", "started_at"),
@@ -627,6 +662,28 @@ class ActiveDirectorySyncRun(Base):
         default=True,
         nullable=False,
     )
+    sync_mode: Mapped[str] = mapped_column(String(20), default="full", nullable=False)
+    object_types: Mapped[list[str]] = mapped_column(
+        JSONB, server_default=func.text("'[]'::jsonb"), nullable=False
+    )
+    checkpoint_before: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+    )
+    checkpoint_after: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+    )
+    per_type_status: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+    )
+    progress: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+    )
+    dry_run_results: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+    )
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     users_seen: Mapped[int] = mapped_column(
         Integer,
         default=0,
@@ -662,6 +719,7 @@ class ActiveDirectorySyncRun(Base):
         default=0,
         nullable=False,
     )
+    restored_objects: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     conflicts: Mapped[int] = mapped_column(
         Integer,
         default=0,
@@ -697,6 +755,80 @@ class ActiveDirectorySyncRun(Base):
         back_populates="sync_runs",
     )
     trigger_user: Mapped[User | None] = relationship("User", foreign_keys=[triggered_by])
+    changes: Mapped[list["ActiveDirectoryObjectChange"]] = relationship(
+        "ActiveDirectoryObjectChange", back_populates="sync_run", cascade="all, delete-orphan"
+    )
+    errors: Mapped[list["ActiveDirectorySyncError"]] = relationship(
+        "ActiveDirectorySyncError", back_populates="sync_run", cascade="all, delete-orphan"
+    )
+
+
+class ActiveDirectoryObjectChange(Base):
+    __tablename__ = "active_directory_object_changes"
+    __table_args__ = (
+        CheckConstraint(
+            "change_type IN ('created','updated','moved','renamed','enabled','disabled','missing','restored')",
+            name="ck_ad_object_change_type",
+        ),
+        Index("ix_ad_object_changes_object_id", "directory_object_id"),
+        Index("ix_ad_object_changes_run_id", "sync_run_id"),
+        Index("ix_ad_object_changes_detected_at", "detected_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    directory_object_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("active_directory_objects.id", ondelete="CASCADE"), nullable=False
+    )
+    sync_run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("active_directory_sync_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    change_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    changed_fields: Mapped[list[str]] = mapped_column(
+        JSONB, server_default=func.text("'[]'::jsonb"), nullable=False
+    )
+    before_values: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+    )
+    after_values: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+    )
+    detected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    directory_object: Mapped[ActiveDirectoryObject] = relationship(
+        "ActiveDirectoryObject", back_populates="changes"
+    )
+    sync_run: Mapped[ActiveDirectorySyncRun] = relationship(
+        "ActiveDirectorySyncRun", back_populates="changes"
+    )
+
+
+class ActiveDirectorySyncError(Base):
+    __tablename__ = "active_directory_sync_errors"
+    __table_args__ = (
+        Index("ix_ad_sync_errors_run_id", "sync_run_id"),
+        Index("ix_ad_sync_errors_created_at", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    sync_run_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("active_directory_sync_runs.id", ondelete="CASCADE"), nullable=False
+    )
+    object_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    safe_object_reference: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    stage: Mapped[str] = mapped_column(String(50), nullable=False)
+    error_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    safe_message: Mapped[str] = mapped_column(String(500), nullable=False)
+    retryable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    sync_run: Mapped[ActiveDirectorySyncRun] = relationship(
+        "ActiveDirectorySyncRun", back_populates="errors"
+    )
 
 
 class ActiveDirectoryMatchCandidate(Base):

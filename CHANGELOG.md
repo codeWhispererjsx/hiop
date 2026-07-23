@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 3C
+
+- Added manual full, incremental, and dry-run AD staging synchronization.
+- Added checkpoints, batch progress, field-level history, missing/restored state, safe errors, cancellation, events, and notifications.
+- Added sync-run, staging-object, summary, dry-run, and history APIs with mocked tests.
+- No reconciliation, scheduling, AD frontend, HIOP record mutation, or real-domain testing was added.
+
 ## 2.0.0-dev — Epic 3B
 
 - Added pinned `ldap3` connectivity supporting verified LDAPS, StartTLS, and explicit development-only LDAP.

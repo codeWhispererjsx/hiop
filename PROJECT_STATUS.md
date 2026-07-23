@@ -1,5 +1,11 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 3C Directory synchronization and staging
+
+Manual administrator-only AD synchronization is implemented at `2.0.0-dev`. Full, overlap-based incremental, and non-mutating dry-run modes stage approved attributes with persistent progress, per-type outcomes, checkpoints, history, missing/restored markers, sanitized errors, cancellation, aggregate events/notifications, and privacy-aware APIs.
+
+No HIOP user/device creation, reconciliation, schedule, AD frontend, or real hotel-domain test is included.
+
 ## HIOP v2 — Epic 3B secure LDAP connection and query engine
 
 Epic 3B adds isolated ldap3 connectivity for LDAPS, StartTLS, and explicitly enabled development-only LDAP; verified TLS and host policy; RootDSE discovery; search-base validation; fixed escaped filters; bounded paged user/computer/group previews; safe attribute conversion; structured connection health; rate limiting; audit events; and migration `f4b8c2d9a731`.

@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
@@ -108,6 +109,10 @@ class ActiveDirectoryObjectRepository:
         object_type: str | None = None,
         sync_status: str | None = None,
         review_status: str | None = None,
+        enabled: bool | None = None,
+        organizational_unit: str | None = None,
+        department: str | None = None,
+        missing: bool | None = None,
         search: str | None = None,
         offset: int = 0,
         limit: int = 25,
@@ -121,6 +126,17 @@ class ActiveDirectoryObjectRepository:
             filters.append(ActiveDirectoryObject.sync_status == sync_status)
         if review_status:
             filters.append(ActiveDirectoryObject.review_status == review_status)
+        if enabled is not None:
+            filters.append(ActiveDirectoryObject.enabled == enabled)
+        if organizational_unit:
+            filters.append(ActiveDirectoryObject.organizational_unit == organizational_unit)
+        if department:
+            filters.append(ActiveDirectoryObject.department == department)
+        if missing is not None:
+            filters.append(
+                ActiveDirectoryObject.missing_since.is_not(None)
+                if missing else ActiveDirectoryObject.missing_since.is_(None)
+            )
         if search:
             pattern = f"%{search.strip()}%"
             filters.append(
@@ -162,6 +178,11 @@ class ActiveDirectorySyncRunRepository:
         *,
         connection_id: str | None = None,
         status: str | None = None,
+        sync_mode: str | None = None,
+        dry_run: bool | None = None,
+        trigger_type: str | None = None,
+        started_from: datetime | None = None,
+        started_to: datetime | None = None,
         offset: int = 0,
         limit: int = 25,
     ) -> tuple[Sequence[ActiveDirectorySyncRun], int]:
@@ -170,6 +191,16 @@ class ActiveDirectorySyncRunRepository:
             filters.append(ActiveDirectorySyncRun.connection_id == connection_id)
         if status:
             filters.append(ActiveDirectorySyncRun.status == status)
+        if sync_mode:
+            filters.append(ActiveDirectorySyncRun.sync_mode == sync_mode)
+        if dry_run is not None:
+            filters.append(ActiveDirectorySyncRun.dry_run == dry_run)
+        if trigger_type:
+            filters.append(ActiveDirectorySyncRun.trigger_type == trigger_type)
+        if started_from:
+            filters.append(ActiveDirectorySyncRun.started_at >= started_from)
+        if started_to:
+            filters.append(ActiveDirectorySyncRun.started_at <= started_to)
 
         total = self.db.scalar(select(func.count(ActiveDirectorySyncRun.id)).where(*filters)) or 0
         statement = (

@@ -1,10 +1,24 @@
-# HIOP Active Directory Integration (v2 — Epic 3B)
+# HIOP Active Directory Integration (v2 — Epic 3C)
 
 ## Scope
 
-Epic 3B adds secure, bounded directory communication to the Epic 3A persistence foundation. Administrators can test a saved connection, inspect safe RootDSE metadata, and preview users, computers, and groups without persisting directory results.
+Epic 3C adds administrator-triggered synchronization into directory staging. It builds on the secure Epic 3B LDAP client and never creates or updates HIOP users or devices.
 
-This phase does not synchronize or stage objects, mutate HIOP users or devices, score matches, schedule work, or add frontend pages.
+This phase does not reconcile staging with HIOP records, score matches, schedule work, or add frontend pages.
+
+## Synchronization, staging, and change detection
+
+`POST /api/v1/active-directory/connections/{id}/sync` creates a persistent run, enforces a per-connection active-run guard, binds through the encrypted-secret client, queries enabled object types, and stages approved attributes in configured batches. Run transitions are `pending -> running -> completed|partial|failed|cancelled`. Configuration changes, disable, and secret rotation are blocked during active synchronization.
+
+Full sync performs missing detection only after complete, non-truncated, non-dry queries. Incremental sync uses a fixed `whenChanged` filter from the last successful checkpoint plus a configurable overlap window; stable identity deduplicates overlap results. Checkpoints advance only after wholly successful non-dry runs. Timestamp-based incremental sync is conservative and is not claimed to be as lossless as AD DirSync controls.
+
+Dry runs query and compare while avoiding staging mutations, history, missing detection, and checkpoint changes. Projected counts remain attached to the run.
+
+Identity priority is GUID, SID, then a normalized-DN digest fallback. Canonical comparison normalizes case where appropriate, nulls, DNs, UTC timestamps, and multivalue ordering. Created, updated, moved, renamed, enabled, disabled, missing, and restored changes are stored as bounded field-level history without replacing review decisions or match links.
+
+Batch commits preserve progress and successful work. Sanitized per-object/query errors remain paginated on the run. Cancellation is cooperative at batch boundaries. Aggregate audit, WebSocket, and email notifications avoid broadcasting directory object contents.
+
+Staging endpoints add run detail/cancel/errors/summary/dry-run results plus object detail and change history. Administrators control sync and full detail; technician reads redact email and raw attributes.
 
 ## LDAP modes
 
@@ -140,8 +154,10 @@ Automated tests use injected mock clients and in-memory fake ldap3 connection/en
 - `access_denied`: grant only the missing read permission.
 - `page_limit_exceeded`: narrow the preview or lower page/result limits.
 
-## Known limitations and Epic 3C
+## Known limitations and Epic 3D
 
 Connection rate limits are process-local. Certificate expiry is reserved in health metadata but remains unset unless safely available from the TLS stack. Group member range retrieval is bounded after response parsing rather than using AD ranged attributes.
 
-Epic 3C may add administrator-triggered dry-run synchronization into staging and missing-object detection. It must not automatically create or update HIOP users or devices.
+Manual execution is inline because HIOP has no durable background-job executor. Cancellation takes effect at a batch boundary. Timestamp incremental sync uses overlap rather than AD DirSync control. No AD frontend exists.
+
+Epic 3D should add reviewed user/device reconciliation and match scoring. It must not silently create or update HIOP records.

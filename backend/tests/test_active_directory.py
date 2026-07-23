@@ -197,7 +197,7 @@ class ActiveDirectoryModelTests(unittest.TestCase):
 
 
 class ActiveDirectoryApiContractTests(unittest.TestCase):
-    def test_routes_exist_and_no_sync_mutation_route_exists(self):
+    def test_foundation_and_sync_routes_exist(self):
         paths = app.openapi()["paths"]
         expected = {
             "/api/v1/active-directory/connections",
@@ -209,9 +209,9 @@ class ActiveDirectoryApiContractTests(unittest.TestCase):
             "/api/v1/active-directory/sync-runs",
             "/api/v1/active-directory/objects",
             "/api/v1/active-directory/matches",
+            "/api/v1/active-directory/connections/{id}/sync",
         }
         self.assertTrue(expected.issubset(paths))
-        self.assertNotIn("/api/v1/active-directory/sync", paths)
 
     def test_mutations_are_admin_only_and_reads_exclude_staff(self):
         for route in app.routes:
@@ -252,13 +252,10 @@ class ActiveDirectoryFoundationBoundaryTests(unittest.TestCase):
         self.assertTrue(client.validate_base_dn("OU=Users,DC=hotel,DC=internal"))
         self.assertFalse(client.validate_base_dn("invalid"))
 
-    def test_epic_3b_service_methods_are_explicit_stubs(self):
+    def test_matching_methods_remain_explicit_stubs(self):
         sync = ActiveDirectorySyncService(MagicMock())
         matching = ActiveDirectoryMatchingService(MagicMock())
         for operation in (
-            sync.stage_directory_object,
-            sync.finalize_sync_run,
-            sync.mark_missing_objects,
             matching.generate_user_candidates,
             matching.generate_device_candidates,
             matching.resolve_candidate,

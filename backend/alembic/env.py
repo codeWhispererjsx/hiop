@@ -14,6 +14,15 @@ from app.models.system_setting import SystemSetting
 from app.models.hierarchy import Property, Building, Floor, Room, Department, NetworkZone
 from app.models.discovered_device import DiscoveredDevice, DiscoveryRun
 from app.models.inventory_import import ImportedDevice, ImportSession
+from app.models.active_directory import (
+    ActiveDirectoryConnection,
+    ActiveDirectoryMatchCandidate,
+    ActiveDirectoryObject,
+    ActiveDirectoryObjectChange,
+    ActiveDirectorySyncConfiguration,
+    ActiveDirectorySyncError,
+    ActiveDirectorySyncRun,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

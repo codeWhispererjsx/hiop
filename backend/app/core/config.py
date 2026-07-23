@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     ad_maximum_attributes: int = Field(default=32, ge=1, le=100)
     ad_connection_retry_count: int = Field(default=1, ge=0, le=2)
     ad_sync_concurrency: int = Field(default=1, ge=1, le=10)
+    ad_sync_default_mode: Literal["full", "incremental"] = "incremental"
+    ad_sync_incremental_overlap_minutes: int = Field(default=5, ge=1, le=1440)
+    ad_sync_maximum_duration_minutes: int = Field(default=120, ge=1, le=1440)
+    ad_sync_batch_size: int = Field(default=250, ge=10, le=5000)
+    ad_sync_retry_limit: int = Field(default=1, ge=0, le=3)
+    ad_sync_missing_grace_period_minutes: int = Field(default=0, ge=0, le=43200)
+    ad_sync_progress_broadcast_interval_seconds: int = Field(default=2, ge=1, le=60)
+    ad_sync_stale_run_timeout_minutes: int = Field(default=180, ge=5, le=1440)
     ad_minimum_sync_interval_minutes: int = Field(default=15, ge=1, le=1440)
     ad_maximum_sync_interval_minutes: int = Field(default=14400, ge=15, le=525600)
     ad_tls_verification_required: bool = True

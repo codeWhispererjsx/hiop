@@ -1,5 +1,9 @@
 # HIOP v1.0 Performance Report
 
+## Epic 3C Active Directory staging
+
+LDAP paging and hard object caps bound queries. Staging commits in configurable batches (default 250), uses indexed lookups, stores changed-field snapshots instead of directory exports, and broadcasts progress at batch boundaries. Dry-run representative scopes before increasing limits.
+
 ## Epic 2E import execution
 
 Final import avoids one transaction spanning a full file. The default 100-row batches use per-row savepoints, indexed result lookups, paginated responses, and controlled progress broadcasts. Uploads remain limited to 10,000 rows and snapshots omit raw file payloads. Larger configured batches reduce commits but increase lock duration.

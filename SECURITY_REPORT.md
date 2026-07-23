@@ -4,6 +4,10 @@
 
 Active Directory connection configuration and bind secret management are restricted to administrators. Bind secrets are write-only, encrypted at rest with authenticated Fernet encryption, and never returned in API responses, serialized schemas, or audit log entries. Administrators and technicians have read-only access; staff are denied. Configuration validates domains, hosts, ports, timeouts, search bases, and mutually exclusive TLS modes. Automated synchronization remains disabled.
 
+## Epic 3C staging controls
+
+Only administrators start/cancel sync and inspect errors, projections, raw approved attributes, and history. Technician reads redact email/raw attributes. Incremental filters are fixed and server-built. Missing objects remain staged, and sync cannot create or update HIOP users/devices.
+
 Epic 3B enables administrator-triggered LDAP communication through one isolated ldap3 client. Production requires verified LDAPS or StartTLS; plain LDAP and disabled verification are development-only. Domain-aligned/private host policy reduces SSRF exposure. Fixed filters, escaped bounded search terms, attribute allowlists, paged-result/object limits, short retries, safe error classification, and non-persistent previews constrain directory access. Automated tests inject mocks and never contact a real domain.
 
 ## Epic 2E import controls

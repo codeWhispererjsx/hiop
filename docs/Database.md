@@ -1,6 +1,8 @@
 # HIOP 2.0.0-dev database
 
-PostgreSQL is the only supported production database. SQLAlchemy models define the runtime mapping and Alembic is the sole schema-change mechanism. The current head is `e8a9b0c1d2e3`.
+Migration `a7c3e5f90124` adds AD checkpoints, run progress/results/cancellation, missing markers, field-level change history, and sanitized sync errors. Missing staged objects are retained.
+
+PostgreSQL is the only supported production database. SQLAlchemy models define the runtime mapping and Alembic is the sole schema-change mechanism. The current head is `a7c3e5f90124`.
 
 Epic 3A adds `active_directory_connections`, `active_directory_sync_configurations`, `active_directory_objects`, `active_directory_sync_runs`, and `active_directory_match_candidates` for directory integration staging and telemetry.
 

@@ -4,6 +4,7 @@ from time import monotonic
 from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.active_directory import (
@@ -45,11 +46,15 @@ logger = logging.getLogger(__name__)
 class ActiveDirectoryConnectionService:
     """Service managing Active Directory connection profiles and credentials."""
 
-    def __init__(self, db: Session, client_factory=SecureLdapClient) -> None:
+    def __init__(
+        self, db: Session, client_factory=SecureLdapClient,
+        maximum_objects: int | None = None,
+    ) -> None:
         self.db = db
         self.repo = ActiveDirectoryConnectionRepository(db)
         self.config_repo = ActiveDirectorySyncConfigurationRepository(db)
         self.client_factory = client_factory
+        self.maximum_objects = maximum_objects
 
     def _get_connection(self, connection_id: str) -> ActiveDirectoryConnection:
         connection = self.repo.get(connection_id)
@@ -59,6 +64,17 @@ class ActiveDirectoryConnectionService:
                 detail="Active Directory connection was not found.",
             )
         return connection
+
+    def _ensure_no_active_sync(self, connection_id: str) -> None:
+        active = self.db.scalar(select(ActiveDirectorySyncRun.id).where(
+            ActiveDirectorySyncRun.connection_id == connection_id,
+            ActiveDirectorySyncRun.status.in_(("pending", "running")),
+        ).limit(1))
+        if active:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Connection configuration cannot change during an active synchronization.",
+            )
 
     def _client_config(self, connection: ActiveDirectoryConnection) -> LdapClientConfig:
         return LdapClientConfig(
@@ -74,7 +90,7 @@ class ActiveDirectoryConnectionService:
             search_timeout=settings.ad_search_timeout_seconds,
             page_size=connection.page_size,
             maximum_page_size=settings.ad_maximum_page_size,
-            maximum_objects=settings.ad_maximum_objects_per_query,
+            maximum_objects=self.maximum_objects or settings.ad_maximum_objects_per_query,
             domain_name=connection.domain_name,
             environment=settings.environment,
             allow_insecure_ldap=settings.ad_allow_insecure_ldap,
@@ -218,6 +234,7 @@ class ActiveDirectoryConnectionService:
         payload: ActiveDirectoryConnectionUpdate,
         current_user: User,
     ) -> ActiveDirectoryConnection:
+        self._ensure_no_active_sync(connection_id)
         connection = self.repo.get(connection_id)
         if not connection:
             raise HTTPException(
@@ -279,6 +296,7 @@ class ActiveDirectoryConnectionService:
         new_secret: str,
         current_user: User,
     ) -> ActiveDirectoryConnection:
+        self._ensure_no_active_sync(connection_id)
         connection = self.repo.get(connection_id)
         if not connection:
             raise HTTPException(
@@ -315,6 +333,7 @@ class ActiveDirectoryConnectionService:
         connection_id: str,
         current_user: User,
     ) -> ActiveDirectoryConnection:
+        self._ensure_no_active_sync(connection_id)
         connection = self.repo.get(connection_id)
         if not connection:
             raise HTTPException(
