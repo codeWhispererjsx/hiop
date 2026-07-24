@@ -13,6 +13,7 @@ const links: { label: string; to: string; icon: IconName }[] = [
   { label: "Locations & structure", to: "/hierarchy", icon: "hierarchy" },
   { label: "Team & access", to: "/users", icon: "users" },
   { label: "Audit trail", to: "/audit", icon: "audit" },
+  { label: "Active Directory", to: "/active-directory", icon: "network" },
   { label: "Settings", to: "/settings", icon: "settings" },
 ];
 
@@ -32,7 +33,7 @@ export default function Sidebar({
       ? links
       : links.filter(
           (link) =>
-            !["/reports", "/users", "/audit", "/settings"].includes(link.to),
+            !["/reports", "/users", "/audit", "/active-directory", "/settings"].includes(link.to),
         );
   return (
     <aside className={`sidebar ${open ? "is-open" : ""}`}>

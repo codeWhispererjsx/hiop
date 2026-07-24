@@ -14,8 +14,28 @@ docker-compose.override.yml
 # Python cache
 __pycache__/
 *.pyc
+**/__pycache__/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
 
 # Deployment artifacts
 backups/
 *.dump
 *.sql
+
+# Docker
+.docker/

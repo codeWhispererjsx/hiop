@@ -1,7 +1,8 @@
 from datetime import datetime
+from fnmatch import fnmatchcase
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
@@ -17,7 +18,13 @@ from app.models.active_directory import (
     ActiveDirectoryOUMapping,
     ActiveDirectoryGroupRoleMapping,
     ActiveDirectoryReconciliationResult,
+    ActiveDirectoryRecordLink,
 )
+from app.models.alert import Alert
+from app.models.ticket import Ticket
+from app.models.network_scan import NetworkScan
+from app.models.device import Device
+from app.core.config import settings
 from app.models.hierarchy import Building, Department, Floor, NetworkZone, Room
 from app.repositories.active_directory_repository import (
     ActiveDirectoryConnectionRepository,
@@ -65,6 +72,7 @@ from app.services.active_directory_sync_service import ActiveDirectorySynchroniz
 from app.services.active_directory_matching_service import ActiveDirectoryMatchingService
 from app.services.active_directory_reconciliation_service import ActiveDirectoryReconciliationService
 from app.services.audit_service import create_audit_log
+from app.services.scheduler_service import scheduler, ad_sync_job_id
 
 router = APIRouter(prefix="/active-directory", tags=["Active Directory"])
 
@@ -106,6 +114,68 @@ def _to_connection_read(conn) -> ActiveDirectoryConnectionRead:
         created_at=conn.created_at,
         updated_at=conn.updated_at,
     )
+
+
+@router.get("/overview")
+def active_directory_overview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(read_only),
+):
+    connections = db.scalars(select(ActiveDirectoryConnection)).all()
+    objects_by_type = dict(db.execute(select(
+        ActiveDirectoryObject.object_type, func.count(ActiveDirectoryObject.id)
+    ).group_by(ActiveDirectoryObject.object_type)).all())
+    pending = db.scalar(select(func.count(ActiveDirectoryMatchCandidate.id)).where(
+        ActiveDirectoryMatchCandidate.match_status == "pending"
+    )) or 0
+    conflicts = db.scalar(select(func.count(ActiveDirectoryMatchCandidate.id)).where(
+        func.jsonb_array_length(ActiveDirectoryMatchCandidate.conflicting_fields) > 0
+    )) or 0
+    missing = db.scalar(select(func.count(ActiveDirectoryObject.id)).where(
+        ActiveDirectoryObject.sync_status == "missing"
+    )) or 0
+    last_run = db.scalar(select(ActiveDirectorySyncRun).where(
+        ActiveDirectorySyncRun.status == "completed"
+    ).order_by(ActiveDirectorySyncRun.completed_at.desc()).limit(1))
+    scheduled_jobs = sum(job.id.startswith("active_directory_sync_") for job in scheduler.get_jobs())
+    return {
+        "configured_connections": len(connections),
+        "healthy_connections": sum(item.last_test_status == "success" for item in connections),
+        "failed_connection_tests": sum(item.last_test_status == "failed" for item in connections),
+        "last_successful_sync": last_run.completed_at if last_run else None,
+        "staged": {
+            "users": objects_by_type.get("user", 0),
+            "computers": objects_by_type.get("computer", 0),
+            "groups": objects_by_type.get("group", 0),
+        },
+        "pending_matches": pending,
+        "conflicts": conflicts,
+        "missing_objects": missing,
+        "scheduled_syncs": scheduled_jobs,
+        "scheduler_running": scheduler.running,
+        "integration_enabled": settings.active_directory_enabled,
+    }
+
+
+@router.get("/settings")
+def active_directory_settings(
+    current_user: User = Depends(admin_only),
+):
+    return {
+        "integration_enabled": settings.active_directory_enabled,
+        "default_ldap_port": settings.ad_default_ldap_port,
+        "default_ldaps_port": settings.ad_default_ldaps_port,
+        "allow_insecure_ldap": settings.ad_allow_insecure_ldap,
+        "tls_verification_required": settings.ad_tls_verification_required,
+        "maximum_page_size": settings.ad_maximum_page_size,
+        "maximum_objects_per_sync": settings.ad_maximum_objects_per_sync,
+        "sync_batch_size": settings.ad_sync_batch_size,
+        "sync_overlap_minutes": settings.ad_sync_incremental_overlap_minutes,
+        "missing_grace_minutes": settings.ad_sync_missing_grace_period_minutes,
+        "candidate_limit": 5,
+        "raw_attributes_visible_to": ["admin"],
+        "scheduler_running": scheduler.running,
+    }
 
 
 @router.get("/connections", response_model=PaginatedADConnections)
@@ -696,6 +766,98 @@ def delete_ad_mapping(
                      model.__name__, mapping_id, "Removed an explicit Active Directory mapping rule.")
     db.commit()
     return {"message": "Mapping rule removed.", "id": mapping_id}
+
+
+@router.get("/review-queue")
+def ad_review_queue(
+    connection_id: str | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(admin_only),
+):
+    filters = [
+        or_(
+            ActiveDirectoryObject.sync_status == "missing",
+            ActiveDirectoryObject.enabled.is_(False),
+            ActiveDirectoryObject.review_status == "conflict",
+        )
+    ]
+    if connection_id:
+        filters.append(ActiveDirectoryObject.connection_id == connection_id)
+    total = db.scalar(select(func.count(ActiveDirectoryObject.id)).where(*filters)) or 0
+    objects = db.scalars(select(ActiveDirectoryObject).where(*filters).order_by(
+        ActiveDirectoryObject.last_seen_at.desc()
+    ).offset(offset).limit(limit)).all()
+    links = {
+        row.directory_object_id: row for row in db.scalars(select(ActiveDirectoryRecordLink).where(
+            ActiveDirectoryRecordLink.directory_object_id.in_([item.id for item in objects])
+        )).all()
+    } if objects else {}
+    items = []
+    for obj in objects:
+        link = links.get(obj.id)
+        open_tickets = open_alerts = 0
+        last_scan = None
+        if link and link.device_id:
+            open_tickets = db.scalar(select(func.count(Ticket.id)).where(
+                Ticket.device_id == link.device_id, Ticket.status != "Closed"
+            )) or 0
+            open_alerts = db.scalar(select(func.count(Alert.id)).where(
+                Alert.device_id == link.device_id, Alert.acknowledged.is_(False)
+            )) or 0
+            scan = db.scalar(select(NetworkScan.scanned_at).where(
+                NetworkScan.device_id == link.device_id
+            ).order_by(NetworkScan.scanned_at.desc()).limit(1))
+            last_scan = scan
+        user = db.get(User, link.user_id) if link and link.user_id else None
+        items.append({
+            "id": obj.id, "connection_id": obj.connection_id, "object_type": obj.object_type,
+            "identity": obj.sam_account_name or obj.dns_hostname or obj.common_name,
+            "sync_status": obj.sync_status, "enabled": obj.enabled,
+            "review_status": obj.review_status, "last_seen_at": obj.last_seen_at,
+            "user_id": link.user_id if link else None, "device_id": link.device_id if link else None,
+            "user_role": user.role if user else None, "user_active": user.is_active if user else None,
+            "open_tickets": open_tickets, "open_alerts": open_alerts, "last_scan": last_scan,
+            "recommendation": "review_disable" if obj.object_type == "user" else "review_retire" if obj.object_type == "computer" else "review",
+        })
+    return {"items": items, "total": total, "offset": offset, "limit": limit}
+
+
+@router.get("/connections/{id}/mappings/{kind}/{mapping_id}/preview")
+def preview_ad_mapping(
+    id: str, kind: str, mapping_id: str,
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db), current_user: User = Depends(admin_only),
+):
+    model = _mapping_model(kind)
+    row = db.get(model, mapping_id)
+    if not row or row.connection_id != id:
+        raise HTTPException(404, "Mapping rule was not found for this connection.")
+    objects = db.scalars(select(ActiveDirectoryObject).where(
+        ActiveDirectoryObject.connection_id == id
+    ).order_by(ActiveDirectoryObject.updated_at.desc()).limit(limit)).all()
+    matched = []
+    for obj in objects:
+        source = (
+            obj.department if kind == "departments" else
+            obj.organizational_unit if kind == "ous" else
+            obj.sam_account_name or obj.common_name
+        ) or ""
+        pattern = getattr(row, "source_value", None) or getattr(row, "source_group", None) or getattr(row, "pattern", "")
+        is_match = (
+            source.strip().casefold() == pattern.strip().casefold()
+            if kind != "ous"
+            else fnmatchcase(source.strip().casefold(), pattern.strip().casefold())
+        )
+        if is_match:
+            matched.append({
+                "object_id": obj.id, "object_type": obj.object_type,
+                "identity": obj.sam_account_name or obj.dns_hostname or obj.common_name,
+                "source": source, "review_status": obj.review_status,
+            })
+    return {"mapping_id": mapping_id, "matched": matched, "affected": len(matched),
+            "truncated": len(objects) == limit, "applied": False}
 
 
 @router.get("/matches", response_model=PaginatedADMatchCandidates)

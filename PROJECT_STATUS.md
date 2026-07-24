@@ -1,5 +1,13 @@
 # HIOP Project Status
 
+## HIOP v2 — Epic 3E Active Directory Frontend, Scheduler, Integration and Production Hardening
+
+Epic 3E is complete at `2.0.0-dev`. The AD integration features a full React frontend administration interface with deep React Router linking, secure credential transmission, WebSocket-driven live updates, and detailed object browsing with change history. The APScheduler background worker has been hardened with startup stale-run recovery, orphan job cleanup, and concurrent execution locks for connections. Integration into the Settings module and comprehensive offline test coverage for the scheduler lifecycle are included.
+
+Real Active Directory domain modifications, auto-creation of records outside of reconciliation review, and password synchronization remain out of scope for HIOP.
+
+Verification: Full backend regression, offline mock scheduler lifecycle testing, and React production builds succeed.
+
 ## HIOP v2 — Epic 3D Directory matching and reviewed onboarding
 
 Explainable AD-to-HIOP user/device/Discovery/department/role matching and administrator-reviewed reconciliation are implemented at `2.0.0-dev`. The backend includes conflict evidence, stale-data checks, one-to-one links, fill-missing enrichment, complete Device onboarding, manual-setup User onboarding results, explicit mapping rules, bulk exact-link safeguards, events, audit, and reporting.

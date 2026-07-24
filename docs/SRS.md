@@ -1,222 +1,39 @@
-# HIOP
-## Hotel IT Operations Portal
+# HIOP 1.0.0 software requirements specification
 
-Version: 1.0
+## Purpose and scope
 
-Author: Joseph Oko
+HIOP is the internal source of truth for hotel IT inventory, availability checks, operational alerts, service tickets, users, audit evidence, reports, hierarchy, and safe runtime configuration. It does not remotely configure, patch, reboot, or shut down managed devices.
 
-Status: Draft
+## Actors
 
-Last Updated: July 2026
+- Administrator: global configuration, inventory/hierarchy/user administration, reports, audit, ticket deletion, and all supported operations.
+- Technician: supported monitoring, alert acknowledgement, ticket assignment/closure, and operational reads.
+- Staff: authenticated reads and ticket reporting where permitted by the backend.
+- Scheduler: performs configured scans within approved scope and records resulting operational state.
 
----
+## Functional requirements
 
-# 1. Introduction
+1. Authenticate active accounts with expiring JWTs and enforce backend roles.
+2. Maintain real device inventory with separate lifecycle and network state.
+3. Scan individual inventory devices and configured ranges only inside an approved private CIDR.
+4. Persist scan results, status transitions, alerts, and configured automatic offline tickets.
+5. Provide ticket create/view/edit/assign/close/reopen-through-update/admin-delete workflows.
+6. Preserve device history across soft retirement.
+7. Manage users through safe activation, role, and password-reset actions without returning secrets.
+8. Provide immutable, paginated, filterable audit records and safe CSV export.
+9. Generate real device, network, alert, ticket, user, and audit reports with filter-aware CSV.
+10. Persist explicit non-secret settings and expose secret-safe health/branding data.
+11. Deliver authenticated live device-status updates without polling.
+12. Present loading, empty, error, unauthorized, not-found, and success states without dummy data.
 
-## 1.1 Purpose
+## Non-functional requirements
 
-The Hotel IT Operations Portal (HIOP) is a centralized platform designed to help the IT department manage, monitor, and maintain hotel technology infrastructure.
+- Security: bcrypt passwords, validated issuer-bound JWTs, throttled login, least-privilege CORS/RBAC, approved network scope, security headers, no secret logging/export.
+- Reliability: transaction rollback, dependency-scoped sessions, health checks, persistent PostgreSQL, migration and backup/restore procedures.
+- Performance: route splitting, in-flight GET coalescing, indexed operational queries, bounded database pool, and server pagination for large audit/report data.
+- Accessibility: labelled keyboard-operable controls, visible focus, responsive tables/layout, and functional light/dark themes.
+- Operability: structured logs, scheduler/WebSocket/database health, documented deployment, monitoring, backup, recovery, and rollback.
 
-The system provides real-time visibility into network-connected devices, asset inventory, network health, alerts, and maintenance activities.
+## Version 1.0.0 exclusions
 
----
-
-## 1.2 Problem Statement
-
-The current IT environment relies heavily on manual processes for:
-
-- Device tracking
-- Network monitoring
-- Asset inventory
-- Maintenance records
-- Infrastructure visibility
-
-These manual processes increase response time, reduce operational efficiency, and make troubleshooting difficult.
-
-HIOP aims to provide a single source of truth for all IT operations.
-
----
-
-## 1.3 Objectives
-
-The system shall:
-
-- Discover devices on the network
-- Maintain an inventory of IT assets
-- Monitor device availability
-- Generate alerts for outages
-- Record maintenance activities
-- Provide operational reports
-- Improve IT response time
-
----
-
-# 2. Scope
-
-## In Scope
-
-- Device Inventory
-- Network Discovery
-- Device Monitoring
-- Alerts
-- Reporting
-- User Management
-- Asset Tracking
-
-## Out of Scope (Version 1)
-
-- Automatic device configuration
-- Remote device shutdown
-- Network configuration changes
-- Firmware updates
-- Active Directory integration
-
----
-
-# 3. Users
-
-## IT Administrator
-
-Responsibilities:
-
-- Manage users
-- Configure settings
-- View reports
-- Monitor infrastructure
-
-## IT Technician
-
-Responsibilities:
-
-- Resolve alerts
-- Update device records
-- Manage maintenance tickets
-
-## IT Manager
-
-Responsibilities:
-
-- Review reports
-- Track operational metrics
-- Monitor infrastructure health
-
----
-
-# 4. Functional Requirements
-
-## FR-001 Device Discovery
-
-The system shall discover devices within configured network ranges.
-
----
-
-## FR-002 Device Inventory
-
-The system shall maintain an inventory of discovered devices.
-
----
-
-## FR-003 Device Monitoring
-
-The system shall periodically check device availability.
-
----
-
-## FR-004 Alert Management
-
-The system shall generate alerts when devices become unavailable.
-
----
-
-## FR-005 Dashboard
-
-The system shall display:
-
-- Total devices
-- Online devices
-- Offline devices
-- Active alerts
-- Recent activity
-
----
-
-## FR-006 Reporting
-
-The system shall generate operational reports.
-
----
-
-## FR-007 User Authentication
-
-The system shall require user authentication.
-
----
-
-## FR-008 Maintenance Tracking
-
-The system shall record maintenance activities linked to devices.
-
----
-
-# 5. Non-Functional Requirements
-
-## Performance
-
-- Dashboard loads within 3 seconds
-- Device scans complete within acceptable time limits
-
-## Reliability
-
-- System uptime target: 99%
-
-## Security
-
-- Authentication required
-- Role-based access control
-- Audit logging
-
-## Scalability
-
-- Support 1000+ devices
-
-## Maintainability
-
-- Modular architecture
-- Documented APIs
-- Version-controlled source code
-
----
-
-# 6. Assumptions
-
-- Devices are reachable through the hotel network.
-- IT staff have authorization to perform monitoring.
-- The organization maintains an internal network infrastructure.
-
----
-
-# 7. Future Enhancements
-
-- QR Asset Tracking
-- Mobile Application
-- SMS Notifications
-- Email Alerts
-- Active Directory Integration
-- Floor Map Visualization
-- Network Topology Mapping
-
----
-
-# 8. Success Criteria
-
-The project will be considered successful if:
-
-- Device discovery functions correctly.
-- Device monitoring operates continuously.
-- Alerts are generated accurately.
-- Inventory records remain accurate.
-- IT staff can use the platform effectively.
-
----
-
-End of Document
+Full alert resolution/ownership, comments, attachments, SLA timers, arbitrary network execution, remote device control, refresh tokens, MFA, email recovery, custom roles, automated backup/restore UI, multi-property permissions, and external SIEM/metrics are not implemented.

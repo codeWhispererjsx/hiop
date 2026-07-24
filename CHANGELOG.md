@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-dev — Epic 3E
+
+- Added the Active Directory frontend administration interface with deep linking, live WebSocket updates, and detailed object browsing with change history.
+- Hardened the APScheduler background worker with startup stale-run recovery, orphan job cleanup, and concurrent execution locks for connections.
+- Integrated Active Directory module into Settings.
+- Added comprehensive offline test coverage for the scheduler lifecycle.
+- Real domain modification, automatic object creation without reconciliation, and password sync remain explicitly excluded.
+
 ## 2.0.0-dev — Epic 3D
 
 - Added explainable AD user/device/Discovery/department/role matching with conservative fuzzy evidence and conflict penalties.

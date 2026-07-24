@@ -1,4 +1,13 @@
-# HIOP Active Directory Integration (v2 — Epic 3C)
+# HIOP Active Directory Integration (v2 — Epic 3E)
+
+## Epic 3E Administration and Scheduler
+
+Epic 3E finalizes the AD integration by delivering the frontend administration interface and hardening the background scheduler. The frontend features a comprehensive React workspace using WebSocket-driven live updates to monitor synchronization, explore staged directory objects, configure mapping rules, and securely manage connectivity and secrets.
+
+The APScheduler backend logic is hardened against concurrent connection modification, preventing overlapping synchronization routines, safely pruning orphaned configurations at startup, and recovering runs that were terminated abruptly (such as from a container restart) by gracefully transitioning them to a failed state.
+
+The Settings module natively incorporates a safe overview of the AD configuration, preserving credential security.
+
 
 ## Epic 3D matching and reconciliation
 

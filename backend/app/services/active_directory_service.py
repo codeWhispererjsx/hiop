@@ -226,6 +226,8 @@ class ActiveDirectoryConnectionService:
 
         self.db.commit()
         self.db.refresh(connection)
+        from app.services.scheduler_service import update_ad_sync_job
+        update_ad_sync_job(str(connection.id))
         return connection
 
     def update_connection(
@@ -288,6 +290,8 @@ class ActiveDirectoryConnectionService:
 
         self.db.commit()
         self.db.refresh(connection)
+        from app.services.scheduler_service import update_ad_sync_job
+        update_ad_sync_job(str(connection.id))
         return connection
 
     def rotate_secret(
@@ -326,6 +330,8 @@ class ActiveDirectoryConnectionService:
 
         self.db.commit()
         self.db.refresh(connection)
+        from app.services.scheduler_service import update_ad_sync_job
+        update_ad_sync_job(str(connection.id))
         return connection
 
     def disable_connection(
@@ -355,6 +361,8 @@ class ActiveDirectoryConnectionService:
 
         self.db.commit()
         self.db.refresh(connection)
+        from app.services.scheduler_service import remove_ad_sync_job
+        remove_ad_sync_job(str(connection.id))
         return connection
 
     def test_connection(
@@ -560,6 +568,8 @@ class ActiveDirectorySyncConfigService:
 
         self.db.commit()
         self.db.refresh(config)
+        from app.services.scheduler_service import update_ad_sync_job
+        update_ad_sync_job(str(connection_id))
         return config
 
 

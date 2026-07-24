@@ -1,241 +1,25 @@
-# User Interface Design
+# HIOP 1.0.0 interface contract
 
-## Hotel IT Operations Portal (HIOP)
+Status: implemented release candidate.
 
-Version: 1.0
+The React application uses a shared authenticated shell, responsive sidebar/header, real organization identity, session status, light/dark themes, and `#C29F04` as a restrained brand accent. Page routes are lazy-loaded and every data view provides loading, empty/filtered-empty, error, unauthorized/not-found where applicable, and success feedback.
 
-Author: Joseph Oko
+## Pages
 
-Status: Draft
+- Login: email/password authentication and safe backend/error feedback. Email recovery is not implemented.
+- Overview: real inventory availability, recent scans, active tickets, refresh, and ticket links.
+- Devices: search, status/department filters, pagination, details, reusable add/edit form, soft retirement, and operational history tabs.
+- Network monitor: live summary, device table, approved scan controls, scan state, history, alerts, and WebSocket connection state.
+- Alerts: real combined filters, details panel, acknowledgement, related device/ticket navigation, scan/audit context, and live refresh.
+- Service tickets: summary, combined filters, pagination, details, reusable create/edit form, assignment, close, supported reopen, and controlled deletion.
+- Locations & structure: real normalized hierarchy catalog and admin create/edit/deactivate actions.
+- Team & access: real user metrics/table/details/form, role/status/password actions, search, filters, and pagination.
+- Audit trail: server-side combined filters, pagination, details, related-record navigation, refresh, and CSV export.
+- Reports: six real report datasets, date/filter/sort/pagination controls, charts, cross-navigation, CSV export, and print.
+- Settings: validated persisted global settings, organization, hierarchy entry points, scanner, notifications, theme, security facts, health, operations guidance, and application metadata.
 
-Last Updated: 07 July 2026
+## Accessibility and responsive behavior
 
----
+Controls use native buttons, links, inputs, selects, labels, dialog semantics, ARIA labels where visual text is absent, visible focus treatment, keyboard-operable navigation, and horizontally scrollable tables. Desktop, tablet, and narrow layouts preserve usable navigation and actions. Theme tokens maintain contrast across cards, tables, forms, charts, modals, toasts, and feedback states.
 
-# Overview
-
-The HIOP user interface is designed to provide IT staff with a modern, responsive, and intuitive experience for monitoring and managing the hotel's IT infrastructure.
-
----
-
-# Design Principles
-
-- Clean and minimal interface
-- Fast navigation
-- Responsive design
-- Dark/Light mode support (Future)
-- Role-based navigation
-- Real-time dashboard updates
-
----
-
-# Application Pages
-
-## 1. Login
-
-Purpose
-
-Authenticate users before granting access.
-
-Components
-
-- Username
-- Password
-- Login Button
-- Forgot Password
-
----
-
-## 2. Dashboard
-
-Purpose
-
-Provides an overview of the hotel's IT infrastructure.
-
-Widgets
-
-- Online Devices
-- Offline Devices
-- Newly Discovered Devices
-- Active Alerts
-- Open Maintenance Tickets
-
-Charts
-
-- Devices by Department
-- Devices by Type
-- Alerts by Severity
-
-Recent Activity
-
-- Device Online
-- Device Offline
-- Maintenance Completed
-- New Device Found
-
----
-
-## 3. Device Inventory
-
-Purpose
-
-Displays every managed device.
-
-Components
-
-- Search Bar
-- Filter Panel
-- Device Table
-- Pagination
-
-Columns
-
-- Device Name
-- IP Address
-- MAC Address
-- Department
-- Device Type
-- Status
-- Last Seen
-
-Actions
-
-- View
-- Edit
-- Delete
-
----
-
-## 4. Device Details
-
-Displays complete information for a selected device.
-
-Sections
-
-- General Information
-- Network Information
-- Location
-- Ping History
-- Alerts
-- Maintenance History
-
----
-
-## 5. Network Scanner
-
-Components
-
-- Scan Button
-- Stop Scan
-- Scan Progress
-- Discovery Queue
-- Scan History
-
----
-
-## 6. Alerts
-
-Displays active alerts.
-
-Columns
-
-- Severity
-- Device
-- Description
-- Time
-- Status
-
-Actions
-
-- Acknowledge
-- Resolve
-
----
-
-## 7. Maintenance
-
-Displays maintenance tickets.
-
-Columns
-
-- Ticket ID
-- Device
-- Technician
-- Priority
-- Status
-- Date Opened
-
-Actions
-
-- Create
-- Edit
-- Close
-
----
-
-## 8. Reports
-
-Available Reports
-
-- Inventory
-- Offline Devices
-- Maintenance
-- Scan History
-
-Export
-
-- PDF
-- Excel
-- CSV
-
----
-
-## 9. User Management
-
-Administrator Only
-
-Functions
-
-- Create User
-- Edit User
-- Disable User
-- Assign Role
-
----
-
-## 10. Settings
-
-Configure
-
-- Departments
-- Device Types
-- Locations
-- Scan Interval
-- Notifications
-- Roles
-
----
-
-# Navigation
-
-Sidebar
-
-- Dashboard
-- Devices
-- Scanner
-- Alerts
-- Maintenance
-- Reports
-- Users
-- Settings
-
-Top Bar
-
-- Search
-- Notifications
-- Profile
-- Logout
-
----
-
-End of Document
+No Version 1.0.0 page exposes fake alerts, reports, health values, save controls, or unsupported actions.

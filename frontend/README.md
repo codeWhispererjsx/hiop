@@ -7,8 +7,8 @@ React, TypeScript and Vite client for the Hotel IT Operations Portal.
 Optional `.env.local` values:
 
 ```env
-VITE_API_URL=http://127.0.0.1:8000/api/v1
-VITE_WS_URL=ws://127.0.0.1:8000/ws/dashboard
+VITE_API_URL=http://127.0.0.1:8001/api/v1
+VITE_WS_URL=ws://127.0.0.1:8001/ws/dashboard
 ```
 
 ## Run
@@ -25,4 +25,4 @@ npm run lint
 npm run build
 ```
 
-The active screens use FastAPI for authentication, dashboard metrics, devices, network scans, alerts, tickets, users, audit logs and settings. Empty states mean the database has no corresponding records; they are not replaced by sample content. See [MISSING_API.md](MISSING_API.md) for deliberately deferred backend contracts.
+The active screens use FastAPI for authentication, dashboard metrics, devices, network scans, alerts, tickets, users, audit logs, reports, hierarchy management, and settings. Empty states mean the database has no corresponding records; they are never replaced by sample content. Release limitations are maintained in the root `PROJECT_STATUS.md` and `RELEASE_CANDIDATE.md` files.
