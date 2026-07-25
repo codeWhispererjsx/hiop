@@ -408,6 +408,7 @@ class SNMPCandidateRead(BaseModel):
     matched_device_id: UUID | None
     matched_discovery_id: UUID | None
     created_at: datetime
+    updated_at: datetime
 
 
 class SNMPPage(BaseModel):
@@ -491,3 +492,18 @@ class SNMPInterfaceChangeRead(BaseModel):
     before_values: dict[str, Any]
     after_values: dict[str, Any]
     detected_at: datetime
+
+
+class SNMPStateChangeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    target_id: UUID
+    interface_id: UUID | None
+    poll_run_id: UUID | None
+    state_type: str
+    severity_hint: str
+    previous_value: str | None
+    current_value: str | None
+    evidence: dict[str, Any]
+    detected_at: datetime
+    acknowledged_at: datetime | None

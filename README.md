@@ -74,3 +74,6 @@ Production and container commands are documented in [DEPLOYMENT.md](DEPLOYMENT.m
 Never commit `.env` files, credentials, tokens, database dumps, exports, backups, virtual environments, `node_modules`, or build output. Report security concerns through the organization’s internal IT security process; do not place secrets in tickets or audit descriptions.
 
 HIOP is internal-use software. No public license is granted unless the repository owner states otherwise.
+# HIOP v2 SNMP monitoring
+
+Version `2.0.0-dev` includes the Epic 4D SNMP Monitoring workspace at `/snmp`: secure credential/target administration, structured tests, approved manual collection, candidate review, target/interface monitoring, bounded metric charts, state history, retention preview, and reports. It does not schedule polls, generate alert rules, map topology, receive traps, or automatically onboard devices.

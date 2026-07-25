@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 4D
+
+- Added the responsive, theme-aware SNMP Monitoring workspace and role-aware navigation.
+- Added secure credential/secret flows, target setup/testing/collection, profile/OID views, candidate review plans, target/interface detail, metrics, state changes, retention, and reports.
+- Added a typed SNMP frontend client, aligned TypeScript models, WebSocket-controlled refetch, polling fallback, accessible charts, and zero-dependency frontend contract tests.
+- Added no scheduled polling, automatic alerts, topology, traps, arbitrary OID execution, or automatic onboarding.
+
 ## 2.0.0-dev — Epic 4C
 
 - Added administrator-reviewed SNMP candidate matching, complete Device onboarding, authoritative linking, and explicit safe enrichment.

@@ -8,6 +8,7 @@ const links: { label: string; to: string; icon: IconName }[] = [
   { label: "Inventory Import", to: "/imports", icon: "import" },
   { label: "Network monitor", to: "/network", icon: "network" },
   { label: "Discovery", to: "/discovery", icon: "discovery" },
+  { label: "SNMP Monitoring", to: "/snmp", icon: "network" },
   { label: "Alerts", to: "/alerts", icon: "alerts" },
   { label: "Service tickets", to: "/tickets", icon: "tickets" },
   { label: "Locations & structure", to: "/hierarchy", icon: "hierarchy" },

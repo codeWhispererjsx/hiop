@@ -120,6 +120,32 @@ Metric, interface-change, and state-history queries are indexed and paginated. C
 
 Operational APIs add candidate detail/match/plan/approve/link/enrich/review, bounded manual collection groups, target/interface metric reads, summaries, interface history, and retention preview/cleanup. Audit and WebSocket messages are operation summaries; no per-sample audit or metric broadcast occurs.
 
-## Current limitations
+## Limitations after Epic 4C
 
 There is no scheduled polling, alert generation, frontend/dashboard, topology mapping, trap/inform receiver, automatic unreviewed onboarding, persistent rollup table, TCP transport, or MIB-name resolution. Profile OIDs must already be approved configuration. Real hotel-network polling remains prohibited without explicit approval. Epic 4D should add the reviewed frontend and visualization layer, leaving scheduling and alert rules for their designated later phases.
+
+## Epic 4D frontend navigation and monitoring
+
+Authenticated administrators and technicians enter through **SNMP Monitoring** at `/snmp`. The responsive workspace provides overview, targets, credentials, profiles, approved OIDs, candidates, interfaces, poll runs, metric explorer, state changes, retention, and reports. Administrators see mutation controls; technicians receive the backend-authorized read-only experience.
+
+Credential forms dynamically separate community and SNMPv3 fields. Secrets use password controls, confirmation, `autocomplete="new-password"`, component-local state, and the write-only create/rotation APIs. Existing values are never rendered, placed in URLs, logged by the client, or saved to browser storage. SNMPv3 is presented as the production preference.
+
+Target setup filters enabled credentials by SNMP version and explains that saving performs validation but does not poll. Structured testing displays safe validation, authorization, decryption, transport, authentication, identity, and profile stages. Manual collection requires confirmation and accepts only availability, system, interface inventory/performance, device performance, or all-profile groups.
+
+Candidates display system identity, ranked inventory/Discovery evidence, conflicts, required onboarding fields, and explicit review actions. No frontend path automatically approves or creates inventory. Target pages combine health, response time, uptime, supported profile metrics, interfaces, runs, and state history. Interface pages preserve ifIndex identity and show missing/restored history plus quality-aware traffic samples.
+
+Metric charts query bounded APIs, limit rendered samples, display units/quality, provide screen-reader text alternatives, and render deliberate no-data states. Reset, wrapped, stale, invalid, and unsupported samples remain visible. Reboot events explain rate-baseline gaps. WebSocket summaries trigger controlled refetches and a 30-second dashboard poll is the fallback.
+
+Retention is administrator-only and preview-first. Manual cleanup requires browser confirmation and cannot remove audit or onboarding history. SNMP reports currently provide bounded on-screen operational summaries; dedicated CSV/PDF endpoints remain a known limitation.
+
+Troubleshooting:
+
+- If the live channel is disconnected, wait for controlled polling or use refresh; charts are not populated directly from every socket event.
+- A target outside configured authorized ranges is rejected by the backend even if the form appears valid.
+- A disabled credential/target must be corrected before testing or collection.
+- Empty device-specific panels mean the assigned approved profile has not produced those metric keys.
+- After a reboot or counter reset, rate metrics remain unavailable until a safe new baseline exists.
+
+## Current limitations after Epic 4D
+
+There is no scheduled SNMP polling, alert-rule generation, topology mapping, trap/inform receiver, unreviewed onboarding, persisted metric rollup table, or real-network acceptance test. SNMP report export and a full client-side onboarding mutation form remain limited to safe plans/typed APIs until their dedicated backend/report workflows are finalized. Real hotel-network polling remains prohibited without explicit approval.

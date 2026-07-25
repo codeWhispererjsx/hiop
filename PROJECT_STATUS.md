@@ -515,3 +515,7 @@ Complete: pinned PySNMP adapter, v1/v2c/v3 mapping, safe target tests, approved 
 ## Epic 4C — reviewed onboarding and operational SNMP data
 
 Complete at `2.0.0-dev`: explainable inventory/discovery matching, mandatory-field Device onboarding, authoritative linkage, explicit enrichment, complete-only interface missing detection, interface/state history, approved profile metrics, safe counter rates/utilization, bounded metric APIs, and manual retention controls. There is no scheduled polling, alert generation, dashboard/frontend, topology, trap receiver, or unreviewed automatic onboarding.
+
+## Epic 4D — SNMP monitoring frontend
+
+Complete at `2.0.0-dev`: lazy-loaded responsive SNMP workspace, role-aware credential/target administration, secret rotation, structured testing, approved collection, candidate evidence, target/interface monitoring, accessible bounded charts, poll/state history, retention, reports, typed APIs, WebSocket refetch integration, dark/light styles, and contract tests. Scheduling, alert rules, topology, traps, and real hotel-network polling remain excluded.

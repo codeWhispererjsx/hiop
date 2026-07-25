@@ -10,7 +10,7 @@ from app.core.security import get_db, require_roles
 from app.models.snmp import (
     SNMPCredential, SNMPDeviceProfile, SNMPDiscoveryCandidate, SNMPInterface,
     SNMPInterfaceChange, SNMPMatchCandidate, SNMPMetric, SNMPOIDDefinition,
-    SNMPPollingConfiguration, SNMPPollRun, SNMPTarget,
+    SNMPPollingConfiguration, SNMPPollRun, SNMPStateChange, SNMPTarget,
 )
 from app.repositories.snmp_repository import (
     SNMPCredentialRepository, SNMPDeviceProfileRepository,
@@ -29,6 +29,7 @@ from app.schemas.snmp import (
     SNMPCollectionRequest, SNMPCandidateAction, SNMPCandidateLinkRequest,
     SNMPCandidateOnboardRequest, SNMPCandidateEnrichRequest, SNMPMatchRead,
     SNMPInterfaceChangeRead,
+    SNMPStateChangeRead,
 )
 from app.services.audit_service import create_audit_log
 from app.services.snmp_credential_service import SNMPCredentialService
@@ -474,3 +475,24 @@ def retention_preview(db: Session = Depends(get_db), _=Depends(admin_only)):
 @router.post("/retention/cleanup")
 def retention_cleanup(db: Session = Depends(get_db), actor=Depends(admin_only)):
     return SNMPOperationalService(db).cleanup(actor, settings.snmp_metric_retention_days, settings.snmp_poll_run_retention_days)
+
+
+@router.get("/state-changes")
+def state_changes(page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100),
+                  target_id: UUID | None = None, interface_id: UUID | None = None,
+                  state_type: str | None = None, severity: str | None = None,
+                  start_date: datetime | None = None, end_date: datetime | None = None,
+                  db: Session = Depends(get_db), _=Depends(read_only)):
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(400, "Start date must precede end date.")
+    query = db.query(SNMPStateChange)
+    if target_id: query = query.filter_by(target_id=target_id)
+    if interface_id: query = query.filter_by(interface_id=interface_id)
+    if state_type: query = query.filter_by(state_type=state_type)
+    if severity: query = query.filter_by(severity_hint=severity)
+    if start_date: query = query.filter(SNMPStateChange.detected_at >= start_date)
+    if end_date: query = query.filter(SNMPStateChange.detected_at <= end_date)
+    total = query.count()
+    rows = query.order_by(SNMPStateChange.detected_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return {"items": [SNMPStateChangeRead.model_validate(row) for row in rows],
+            "total": total, "page": page, "page_size": page_size}

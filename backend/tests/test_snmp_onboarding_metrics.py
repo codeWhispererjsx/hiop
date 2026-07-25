@@ -135,6 +135,7 @@ def test_operational_routes_are_registered():
         "/api/v1/snmp/interfaces/{interface_id}/changes",
         "/api/v1/snmp/targets/{target_id}/metric-summary",
         "/api/v1/snmp/retention/preview",
+        "/api/v1/snmp/state-changes",
     }
     assert expected.issubset(paths)
 

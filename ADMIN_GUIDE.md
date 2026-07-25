@@ -447,4 +447,6 @@ Epic 4A exposes backend configuration APIs only. Administrators can prepare encr
 
 Epic 4C requires an administrator to review every candidate. Recompute matches, inspect conflicts, and use the onboarding plan before creating, linking, or enriching a device. Mandatory Device fields are never synthesized. Use manual collection only for approved groups and authorized targets; scheduling remains unavailable. Interface disappearance is recorded only after complete inventories and the configured grace count. Retention cleanup is manual and should always be previewed first.
 
+Epic 4D exposes those workflows at `/snmp`. Create encrypted credentials first, then an authorized target with a version-compatible credential. Saving never polls. Use **Test** before explicitly confirming **Collect now**. Candidate plans identify mandatory manual values; never approve incomplete inventory. Technicians can monitor but do not receive mutation controls. Retention cleanup is preview-first and never removes audit or onboarding history.
+
 Epic 4B permits administrators to run an explicit saved-credential target test or manual approved poll. Confirm the target is in an authorized management CIDR before use. Prefer v3 authPriv with SHA-2/AES. Manual operations are rate-limited and mutually exclusive per target/credential. No scheduler or automatic onboarding exists.

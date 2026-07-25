@@ -387,3 +387,6 @@ Leaving the wizard is safe. Use **Continue** on the imports page to reload backe
 ### Finalizing and reviewing results
 
 The final step requests a fresh server readiness check and shows exact create, update, link, and skip counts. Administrators must lock the plan and acknowledge conflict review, merge review, inventory mutation, and rollback limitations before Finalize is enabled. Results survive refresh and link to affected devices. Partial sessions may retry safe failures. Rollback is available only when a fresh preview confirms every action still matches its recorded after-state.
+# SNMP Monitoring
+
+Authorized users can open **SNMP Monitoring** to review infrastructure health, recent poll runs, interfaces, metrics, state changes, and candidate evidence. Administrators additionally manage credentials/targets/profiles, perform explicit tests and collections, review candidates, and run previewed retention cleanup. Empty or unsupported metric sections are intentional; HIOP never fabricates monitoring data.
