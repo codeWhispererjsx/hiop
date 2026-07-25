@@ -23,6 +23,11 @@ from app.models.active_directory import (
     ActiveDirectorySyncError,
     ActiveDirectorySyncRun,
 )
+from app.models.snmp import (
+    SNMPCredential, SNMPTarget, SNMPDeviceProfile, SNMPOIDDefinition,
+    SNMPPollingConfiguration, SNMPPollRun, SNMPMetric, SNMPInterface,
+    SNMPDiscoveryCandidate,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

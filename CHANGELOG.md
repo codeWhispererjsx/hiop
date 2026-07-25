@@ -143,3 +143,10 @@ All notable HIOP changes are recorded here. The project follows semantic version
 - Automated backup service.
 - Multi-property authorization support.
 - Inventory merge and creation from import workflow.
+## 2.0.0-dev — Epic 4A
+
+- Added the secure, backend-only SNMP integration foundation.
+- Added encrypted credential profiles for v1, v2c, and validated SNMPv3 security combinations.
+- Added targets, profiles, OIDs, inactive polling configuration, poll runs, metrics, interfaces, and review candidates.
+- Added role-protected configuration APIs and authorized-network safeguards.
+- Added no live SNMP polling, walks, schedules, dashboards, alerts, topology, frontend, or onboarding.

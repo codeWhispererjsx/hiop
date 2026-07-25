@@ -51,6 +51,23 @@ class Settings(BaseSettings):
     ad_allow_public_hosts: bool = False
     ad_approved_hosts: list[str] = []
 
+    # SNMP foundation. Transport, polling, scheduling, and alerts remain disabled.
+    snmp_enabled: bool = False
+    snmp_default_port: int = Field(default=161, ge=1, le=65535)
+    snmp_default_timeout_seconds: int = Field(default=5, ge=1, le=60)
+    snmp_default_retries: int = Field(default=1, ge=0, le=10)
+    snmp_maximum_retries: int = Field(default=3, ge=0, le=10)
+    snmp_minimum_polling_interval_seconds: int = Field(default=60, ge=30, le=86400)
+    snmp_maximum_polling_interval_seconds: int = Field(default=86400, ge=60, le=604800)
+    snmp_maximum_oids_per_request: int = Field(default=50, ge=1, le=1000)
+    snmp_maximum_walk_rows: int = Field(default=1000, ge=1, le=100000)
+    snmp_maximum_interfaces: int = Field(default=1000, ge=1, le=10000)
+    snmp_metric_retention_days: int = Field(default=90, ge=1, le=3650)
+    snmp_poll_concurrency: int = Field(default=5, ge=1, le=100)
+    snmp_allow_legacy_protocols: bool = False
+    snmp_allow_v1: bool = False
+    snmp_v3_required_in_production: bool = True
+
     # Email Settings
     email_address: str
     email_password: str
@@ -85,6 +102,12 @@ class Settings(BaseSettings):
             raise ValueError("Insecure LDAP may only be enabled in development")
         if self.environment == "production" and not self.ad_tls_verification_required:
             raise ValueError("Active Directory TLS verification is required in production")
+        if self.snmp_default_retries > self.snmp_maximum_retries:
+            raise ValueError("SNMP default retries cannot exceed the configured maximum")
+        if self.snmp_minimum_polling_interval_seconds > self.snmp_maximum_polling_interval_seconds:
+            raise ValueError("SNMP minimum polling interval cannot exceed its maximum")
+        if self.environment == "production" and self.snmp_allow_v1:
+            raise ValueError("SNMPv1 cannot be enabled in production")
         return self
 
 

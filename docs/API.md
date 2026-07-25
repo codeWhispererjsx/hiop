@@ -99,3 +99,6 @@ Errors use FastAPI's `detail` field. The frontend safely handles string and vali
 ## Secret handling
 
 Settings responses never return the JWT secret, database credentials, SMTP password, password hashes, tokens, private keys, or raw connection strings. Tokens belong only in the authorization header or authenticated WebSocket subprotocol and must not be logged.
+## SNMP configuration foundation (2.0.0-dev)
+
+`/api/v1/snmp` provides administrator mutation and administrator/technician reads for credentials, targets, device profiles, OID definitions, inactive polling configuration, and paginated observation foundations. Credential responses expose only secret-presence booleans. There are no target-test, GET, WALK, poll, scheduler, alert, onboarding, or arbitrary endpoint-probing APIs in Epic 4A. See `SNMP.md`.

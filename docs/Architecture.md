@@ -6,6 +6,10 @@ Epics 3A–3E provide an opt-in Active Directory administration module. `ActiveD
 
 The React administration workspace provides connection health, safe secret rotation, RootDSE/search-base assistance, manual and scheduled synchronization, staged object review, mappings, reconciliation, reports, and missing/disabled queues. APScheduler reconciles deterministic per-connection jobs on startup, prevents overlap, and recovers stale runs. LDAP access is read-only: HIOP does not authenticate against AD, synchronize passwords, join domains, manage policy, or mutate AD objects. See `docs/ACTIVE_DIRECTORY.md`.
 
+## Epic 4A SNMP integration foundation
+
+The backend defines encrypted SNMP credential profiles, authorized-network targets, non-executable device profiles and OID definitions, inactive polling configuration, poll-run/metric/interface storage, and review-only discovery candidates. Configuration APIs are role-protected and secret-safe. The client contract fails closed: Epic 4A performs no SNMP network operation, polling, scheduling, alerting, topology, onboarding, or frontend work. See `docs/SNMP.md`.
+
 ## Epic 2E final import
 
 Final inventory import is a backend-orchestrated state machine. A versioned plan and unique per-row execution results provide idempotency; session row locks, configurable batches, and row savepoints provide concurrency and failure isolation. Before/after snapshots support later-change-aware compensating rollback without deleting inventory history or audit records. See `docs/IMPORT_ARCHITECTURE.md`.

@@ -64,3 +64,6 @@ Use the guarded scripts in `ops/` or standard `pg_dump`/`pg_restore`; keep encry
 ## Compatibility debt
 
 `devices.status`, `devices.department`, and `devices.location` remain compatibility fields while clients migrate to separate lifecycle/network fields and normalized hierarchy IDs. Their future removal requires a planned migration and downstream compatibility review.
+## SNMP foundation
+
+Epic 4A adds nine additive PostgreSQL tables: `snmp_credentials`, `snmp_targets`, `snmp_device_profiles`, `snmp_oid_definitions`, `snmp_polling_configurations`, `snmp_poll_runs`, `snmp_metrics`, `snmp_interfaces`, and `snmp_discovery_candidates`. Secrets are ciphertext-only. Endpoint/context and target/interface identities are unique, observation queries are indexed by target/key/time, and all inventory/discovery/hierarchy links use non-destructive `SET NULL` behavior where appropriate.

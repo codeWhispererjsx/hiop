@@ -439,3 +439,6 @@ Epic 2D stops at readiness preparation. There is no supported final bulk-create,
 Generate and review the server plan immediately before finalization. Plans are versioned and lock on execution. Create rows must satisfy the normal Device schema and uniqueness constraints. Links never overwrite inventory. Enrichment and merge apply only recorded approved fields; existing values remain unless reviewed overwrites are enabled and explicitly listed.
 
 Retry only safely retryable failures. Identifier and stale-target conflicts require renewed review. Always request a rollback preview immediately before rollback. HIOP refuses compensation after later inventory changes, retires import-created devices rather than silently deleting them, and retains audit/import history.
+## SNMP foundation
+
+Epic 4A exposes backend configuration APIs only. Administrators can prepare encrypted credential profiles, authorized-network targets, device profiles, OIDs, and disabled polling settings. Technicians may read safe configuration. Do not enable or expect live SNMP operations; no target testing, polling, scheduling, frontend page, alerting, topology, or automatic onboarding exists in this phase. See `docs/SNMP.md`.

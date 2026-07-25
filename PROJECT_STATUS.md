@@ -504,3 +504,6 @@ Frontend lint and production build pass. FastAPI compilation, import, startup, O
 ### Settings limitations and recommended stabilization
 
 Runtime SMTP credential changes, secure test email, logo uploads, automated backup/restore, multi-property profiles, server-side personal preferences, refresh tokens, MFA, session revocation, custom permissions, and login-failure auditing remain unavailable. The next stabilization phase should add automated tests to the project virtual environment, an external secrets manager, and a deployment-tested backup/restore runbook before production rollout.
+## Epic 4A — SNMP integration foundation
+
+Complete: additive SNMP models and migration, encrypted/write-only credential profiles, authorized-network targets, profiles/OIDs, inactive polling and observation foundations, role-protected configuration APIs, audit integration, offline tests, and operating documentation. Live SNMP transport, tests, walks, polling, scheduling, dashboards, alerts, topology, frontend, and onboarding are intentionally deferred.

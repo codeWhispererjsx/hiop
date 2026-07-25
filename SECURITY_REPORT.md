@@ -97,3 +97,6 @@ HIOP authenticates API calls with a bearer token explicitly placed in the `Autho
 - Fix the registry CA trust chain, then run `npm audit`; add pip-audit or another maintained Python advisory scanner in CI.
 - Add automated role-matrix integration tests backed by an isolated test database, including technician denial for every admin mutation.
 - Consider immutable, centrally shipped security logs and correlation IDs without storing tokens or request bodies.
+## Epic 4A SNMP security review
+
+SNMP secrets use authenticated encryption and write-only schemas. Target addresses are literal IPs constrained to configured private Discovery CIDRs, configuration mutation is admin-only, and no arbitrary OID or live probe API exists. Profile transforms are allow-listed and executable profile keys are rejected. SNMPv1 cannot be enabled in production configuration. This is a design/code review, not a penetration test.
