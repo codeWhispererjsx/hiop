@@ -1,6 +1,7 @@
 # Python virtual environment
 .venv/
 backend/.venv/
+backend/.verify-venv/
 
 # Environment variables
 .env

@@ -574,7 +574,12 @@ class ActiveDirectorySyncConfigService:
 
 
 class ActiveDirectorySyncService:
-    """Service skeleton for directory object staging and sync runs (Epic 3A stub)."""
+    """Deprecated Epic 3A compatibility surface.
+
+    Runtime synchronization is implemented by
+    ``ActiveDirectorySynchronizationService`` in
+    ``active_directory_sync_service``.
+    """
 
     def __init__(self, db: Session) -> None:
         self.db = db
@@ -599,27 +604,43 @@ class ActiveDirectorySyncService:
         return run
 
     def stage_directory_object(self, *args, **kwargs) -> ActiveDirectoryObject:
-        raise NotImplementedError("Directory staging execution is reserved for Epic 3B.")
+        raise NotImplementedError(
+            "Use ActiveDirectorySynchronizationService for directory staging."
+        )
 
     def finalize_sync_run(self, *args, **kwargs) -> ActiveDirectorySyncRun:
-        raise NotImplementedError("Directory synchronization is reserved for Epic 3B.")
+        raise NotImplementedError(
+            "Use ActiveDirectorySynchronizationService for sync finalization."
+        )
 
     def mark_missing_objects(self, *args, **kwargs) -> int:
-        raise NotImplementedError("Directory synchronization is reserved for Epic 3B.")
+        raise NotImplementedError(
+            "Use ActiveDirectorySynchronizationService for missing-object detection."
+        )
 
 
 class ActiveDirectoryMatchingService:
-    """Service skeleton for directory object candidate matching (Epic 3A stub)."""
+    """Deprecated Epic 3A compatibility surface.
+
+    Runtime matching is implemented by the service with the same class name in
+    ``active_directory_matching_service``.
+    """
 
     def __init__(self, db: Session) -> None:
         self.db = db
         self.repo = ActiveDirectoryMatchCandidateRepository(db)
 
     def generate_user_candidates(self, *args, **kwargs) -> list[ActiveDirectoryMatchCandidate]:
-        raise NotImplementedError("Active Directory matching is reserved for Epic 3B.")
+        raise NotImplementedError(
+            "Use active_directory_matching_service.ActiveDirectoryMatchingService."
+        )
 
     def generate_device_candidates(self, *args, **kwargs) -> list[ActiveDirectoryMatchCandidate]:
-        raise NotImplementedError("Active Directory matching is reserved for Epic 3B.")
+        raise NotImplementedError(
+            "Use active_directory_matching_service.ActiveDirectoryMatchingService."
+        )
 
     def resolve_candidate(self, *args, **kwargs) -> ActiveDirectoryMatchCandidate:
-        raise NotImplementedError("Active Directory match resolution is reserved for Epic 3B.")
+        raise NotImplementedError(
+            "Use ActiveDirectoryReconciliationService for match resolution."
+        )

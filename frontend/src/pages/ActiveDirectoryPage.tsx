@@ -48,14 +48,21 @@ function useADWebSocket(onEvent: (event: string, data: unknown) => void) {
     function connect() {
       const token = getAuthToken();
       if (!token) return;
-      const base = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8001/api/v1")
-        .replace(/^http/, "ws").replace("/api/v1", "");
+      const defaultWebSocketUrl = import.meta.env.DEV
+        ? "ws://127.0.0.1:8001/ws/dashboard"
+        : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
       try {
-        ws = new WebSocket(`${base}/ws`, ["Bearer", token]);
+        ws = new WebSocket(import.meta.env.VITE_WS_URL ?? defaultWebSocketUrl, ["hiop", token]);
         ws.onmessage = (e: MessageEvent) => {
           try {
-            const msg = JSON.parse(String(e.data)) as { event?: string; data?: unknown };
-            if (msg.event && AD_WS_EVENTS.has(msg.event)) onEvent(msg.event, msg.data);
+            const msg = JSON.parse(String(e.data)) as {
+              type?: string;
+              event?: string;
+              data?: unknown;
+              [key: string]: unknown;
+            };
+            const event = msg.type ?? msg.event;
+            if (event && AD_WS_EVENTS.has(event)) onEvent(event, msg.data ?? msg);
           } catch { /* ignore non-JSON */ }
         };
         ws.onclose = () => {

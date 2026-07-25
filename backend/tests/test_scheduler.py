@@ -136,6 +136,7 @@ class TestRegisterAdSyncJob(unittest.TestCase):
     def test_register_adds_job(self, mock_settings, mock_scheduler, MockSession):
         mock_settings.scheduler_enabled = True
         mock_settings.ad_minimum_sync_interval_minutes = 5
+        mock_settings.ad_maximum_sync_interval_minutes = 14400
         mock_settings.active_directory_enabled = True
         db = MagicMock()
         db.get.return_value = self._make_conn()
@@ -150,6 +151,30 @@ class TestRegisterAdSyncJob(unittest.TestCase):
         self.assertEqual(call_kwargs["id"], "active_directory_sync_conn-001")
         self.assertEqual(call_kwargs["replace_existing"], True)
         self.assertEqual(call_kwargs["max_instances"], 1)
+
+    @patch("app.services.scheduler_service.SessionLocal")
+    @patch("app.services.scheduler_service.scheduler", new_callable=_make_mock_scheduler)
+    @patch("app.services.scheduler_service.settings")
+    def test_register_clamps_interval_to_configured_bounds(
+        self, mock_settings, mock_scheduler, MockSession
+    ):
+        mock_settings.scheduler_enabled = True
+        mock_settings.ad_minimum_sync_interval_minutes = 15
+        mock_settings.ad_maximum_sync_interval_minutes = 120
+        mock_settings.active_directory_enabled = True
+        db = MagicMock()
+        db.get.return_value = self._make_conn()
+        db.scalar.return_value = self._make_config()
+        MockSession.return_value = db
+
+        from app.services.scheduler_service import register_ad_sync_job
+
+        self.assertTrue(register_ad_sync_job("conn-001", interval_minutes=240))
+        self.assertEqual(mock_scheduler.add_job.call_args.kwargs["minutes"], 120)
+
+        mock_scheduler.add_job.reset_mock()
+        self.assertTrue(register_ad_sync_job("conn-001", interval_minutes=1))
+        self.assertEqual(mock_scheduler.add_job.call_args.kwargs["minutes"], 15)
 
     @patch("app.services.scheduler_service.SessionLocal")
     @patch("app.services.scheduler_service.scheduler", new_callable=_make_mock_scheduler)
@@ -184,6 +209,7 @@ class TestRegisterAdSyncJob(unittest.TestCase):
     def test_update_job_calls_register(self, mock_settings, mock_scheduler, MockSession):
         mock_settings.scheduler_enabled = True
         mock_settings.ad_minimum_sync_interval_minutes = 5
+        mock_settings.ad_maximum_sync_interval_minutes = 14400
         mock_settings.active_directory_enabled = True
         db = MagicMock()
         db.get.return_value = self._make_conn()
@@ -227,6 +253,7 @@ class TestDuplicateJobPrevention(unittest.TestCase):
         """replace_existing=True is always passed so APScheduler replaces any duplicate."""
         mock_settings.scheduler_enabled = True
         mock_settings.ad_minimum_sync_interval_minutes = 5
+        mock_settings.ad_maximum_sync_interval_minutes = 14400
         mock_settings.active_directory_enabled = True
         conn = SimpleNamespace(id="dup-001", enabled=True, authentication_method="simple", encrypted_bind_secret="enc")
         config = SimpleNamespace(enabled=True, sync_users_enabled=True, sync_computers_enabled=False,

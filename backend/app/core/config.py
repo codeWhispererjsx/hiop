@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     database_pool_recycle_seconds: int = Field(default=1800, ge=300, le=86400)
     scheduler_enabled: bool = True
 
-    # Active Directory foundation (Epic 3A remains disabled and mock-only).
+    # Active Directory integration is opt-in and disabled by default.
     active_directory_enabled: bool = False
     ad_default_ldap_port: int = Field(default=389, ge=1, le=65535)
     ad_default_ldaps_port: int = Field(default=636, ge=1, le=65535)

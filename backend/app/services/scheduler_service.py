@@ -52,8 +52,13 @@ def register_ad_sync_job(connection_id: str, interval_minutes: int | None = None
         scheduler.add_job(
             scheduled_ad_sync,
             trigger="interval",
-            minutes=max(settings.ad_minimum_sync_interval_minutes,
-                        interval_minutes or config.sync_interval_minutes),
+            minutes=min(
+                settings.ad_maximum_sync_interval_minutes,
+                max(
+                    settings.ad_minimum_sync_interval_minutes,
+                    interval_minutes or config.sync_interval_minutes,
+                ),
+            ),
             id=ad_sync_job_id(connection_id),
             args=[connection_id],
             replace_existing=True,

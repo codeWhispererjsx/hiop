@@ -1,8 +1,10 @@
 # HIOP 2.0.0-dev architecture
 
-## Epic 3A Active Directory integration foundation
+## Epic 3 Active Directory integration
 
-Epic 3A adds a secure backend-only Active Directory integration foundation. `ActiveDirectoryConnection` models connection profiles; `ActiveDirectorySyncConfiguration` manages per-domain sync options; `ActiveDirectoryObject` stages directory users, computers, and groups; `ActiveDirectorySyncRun` captures execution telemetry; and `ActiveDirectoryMatchCandidate` matches staged directory objects against HIOP users and devices. Bind secrets use authenticated Fernet encryption, are treated as write-only, and are excluded from API outputs. No live LDAP connections, scheduled background sync, automatic mutations, or frontend admin pages are registered. See `docs/ACTIVE_DIRECTORY.md`.
+Epics 3A–3E provide an opt-in Active Directory administration module. `ActiveDirectoryConnection` models connection profiles; `ActiveDirectorySyncConfiguration` manages per-domain synchronization; `ActiveDirectoryObject` stages directory users, computers, and groups; `ActiveDirectorySyncRun` captures execution telemetry; and explainable candidates support reviewed matching and reconciliation with HIOP users and devices. Bind secrets use authenticated Fernet encryption, are write-only, and are excluded from API responses.
+
+The React administration workspace provides connection health, safe secret rotation, RootDSE/search-base assistance, manual and scheduled synchronization, staged object review, mappings, reconciliation, reports, and missing/disabled queues. APScheduler reconciles deterministic per-connection jobs on startup, prevents overlap, and recovers stale runs. LDAP access is read-only: HIOP does not authenticate against AD, synchronize passwords, join domains, manage policy, or mutate AD objects. See `docs/ACTIVE_DIRECTORY.md`.
 
 ## Epic 2E final import
 
