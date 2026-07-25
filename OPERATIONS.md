@@ -108,3 +108,6 @@ After sync, run matching with a bounded limit. Investigate conflict counts befor
 Keep `AD_ALLOW_INSECURE_LDAP=false` and `AD_ALLOW_PUBLIC_HOSTS=false` outside isolated development. Configure `HIOP_AD_SECRET_KEY`, an internal domain-aligned controller or explicit `AD_APPROVED_HOSTS`, and a public CA bundle reference when private PKI is used.
 
 Connection tests are administrator-only and rate-limited. Diagnose failures by safe category: network/DNS for `host_unreachable`, trust chain and hostname for `certificate_invalid`, saved credentials for `bind_failed`, configured naming contexts for base-DN errors, and directory ACLs for `access_denied`. Never paste bind secrets, raw entries, packet captures, or private CA material into logs or tickets.
+## SNMP manual operations
+
+SNMP target tests and manual polls are opt-in administrator actions. Monitor safe poll-run status and error categories; never place credentials in tickets or logs. Repeated failures are grouped for notification. There is no SNMP scheduler in Epic 4B. Stop using a target by disabling it after active work completes.

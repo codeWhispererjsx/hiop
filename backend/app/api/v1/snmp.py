@@ -1,7 +1,8 @@
 """Secure configuration APIs for the non-live SNMP foundation."""
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
@@ -23,10 +24,16 @@ from app.schemas.snmp import (
     SNMPPollingConfigurationRead, SNMPPollingConfigurationWrite,
     SNMPPollRunRead, SNMPProfileCreate, SNMPProfileRead, SNMPProfileUpdate,
     SNMPTargetCreate, SNMPTargetRead, SNMPTargetUpdate,
+    SNMPTargetTestRequest, SNMPManualPollRequest, SNMPManualPollResponse,
 )
 from app.services.audit_service import create_audit_log
 from app.services.snmp_credential_service import SNMPCredentialService
 from app.services.snmp_target_service import SNMPTargetService
+from app.services.snmp_polling_service import SNMPPollingService
+from app.core.rate_limit import (
+    snmp_cancel_limiter, snmp_identity_limiter, snmp_manual_poll_limiter,
+    snmp_target_test_limiter,
+)
 from app.core.config import settings
 
 router = APIRouter(prefix="/snmp", tags=["SNMP"])
@@ -120,6 +127,47 @@ def update_target(target_id: UUID, payload: SNMPTargetUpdate, db: Session = Depe
 @router.post("/targets/{target_id}/disable", response_model=SNMPTargetRead)
 def disable_target(target_id: UUID, db: Session = Depends(get_db), actor=Depends(admin_only)):
     return SNMPTargetService(db).disable_target(_get(db, SNMPTarget, target_id, "SNMP target"), actor)
+
+
+def _rate_key(request: Request, actor, operation: str, object_id: UUID):
+    client = request.client.host if request.client else "unknown"
+    return f"{operation}:{actor.id}:{object_id}:{client}"
+
+
+@router.post("/targets/{target_id}/test")
+def test_target(target_id: UUID, payload: SNMPTargetTestRequest, request: Request, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    snmp_target_test_limiter.check(_rate_key(request, actor, "test", target_id))
+    target = _get(db, SNMPTarget, target_id, "SNMP target")
+    return SNMPTargetService(db).test_target(
+        target, actor, include_optional_identity=payload.include_optional_identity,
+        temporary_timeout=payload.temporary_timeout_seconds,
+    )
+
+
+@router.get("/targets/{target_id}/system-identity")
+def system_identity(target_id: UUID, request: Request, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    snmp_identity_limiter.check(_rate_key(request, actor, "identity", target_id))
+    target = _get(db, SNMPTarget, target_id, "SNMP target")
+    result = SNMPTargetService(db).test_target(target, actor, include_optional_identity=True)
+    return {
+        "target_id": target_id, "identity": result["identity"],
+        "detected_version": result["detected_version"],
+        "timestamp": result["tested_at"], "warnings": result["warnings"],
+        "profile_suggestion_id": target.detected_profile_id,
+    }
+
+
+@router.post("/targets/{target_id}/poll", response_model=SNMPManualPollResponse)
+def manual_poll(target_id: UUID, payload: SNMPManualPollRequest, request: Request, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    snmp_manual_poll_limiter.check(_rate_key(request, actor, "poll", target_id))
+    _get(db, SNMPTarget, target_id, "SNMP target")
+    service = SNMPPollingService(db)
+    run = service.create_poll_run(target_id, actor, payload.poll_type)
+    run = service.execute_poll(run.id, actor)
+    return SNMPManualPollResponse(
+        poll_run_id=run.id, accepted_poll_type=run.poll_type, status=run.status,
+        warnings=[run.error_summary] if run.error_summary else [],
+    )
 
 
 @router.get("/profiles")
@@ -218,8 +266,30 @@ def _read_page(repository, schema, page, page_size, filters=None):
 
 
 @router.get("/poll-runs")
-def poll_runs(page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100), target_id: UUID | None = None, status: str | None = None, db: Session = Depends(get_db), _=Depends(read_only)):
-    return _read_page(SNMPPollRunRepository(db), SNMPPollRunRead, page, page_size, {"target_id": target_id, "status": status})
+def poll_runs(page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100), target_id: UUID | None = None, status: str | None = None, poll_type: str | None = None, trigger_type: str | None = None, start_date: datetime | None = None, end_date: datetime | None = None, db: Session = Depends(get_db), _=Depends(read_only)):
+    if start_date and end_date and start_date > end_date: raise HTTPException(400, "Start date must precede end date.")
+    result = _read_page(SNMPPollRunRepository(db), SNMPPollRunRead, page, page_size, {"target_id": target_id, "status": status, "poll_type": poll_type, "trigger_type": trigger_type})
+    if start_date: result["items"] = [row for row in result["items"] if row.started_at >= start_date]
+    if end_date: result["items"] = [row for row in result["items"] if row.started_at <= end_date]
+    return result
+
+
+@router.get("/poll-runs/{run_id}", response_model=SNMPPollRunRead)
+def poll_run_detail(run_id: UUID, db: Session = Depends(get_db), _=Depends(read_only)):
+    return _get(db, SNMPPollRun, run_id, "SNMP poll run")
+
+
+@router.post("/poll-runs/{run_id}/cancel", response_model=SNMPPollRunRead)
+def cancel_poll(run_id: UUID, request: Request, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    snmp_cancel_limiter.check(_rate_key(request, actor, "cancel", run_id))
+    run = _get(db, SNMPPollRun, run_id, "SNMP poll run")
+    return SNMPPollingService(db).cancel_poll(run, actor)
+
+
+@router.get("/poll-runs/{run_id}/results")
+def poll_results(run_id: UUID, page: int = Query(1, ge=1), page_size: int = Query(100, ge=1, le=500), db: Session = Depends(get_db), _=Depends(read_only)):
+    _get(db, SNMPPollRun, run_id, "SNMP poll run")
+    return _read_page(SNMPMetricRepository(db), SNMPMetricRead, page, page_size, {"poll_run_id": run_id})
 
 
 @router.get("/metrics")

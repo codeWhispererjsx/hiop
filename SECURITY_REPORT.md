@@ -100,3 +100,5 @@ HIOP authenticates API calls with a bearer token explicitly placed in the `Autho
 ## Epic 4A SNMP security review
 
 SNMP secrets use authenticated encryption and write-only schemas. Target addresses are literal IPs constrained to configured private Discovery CIDRs, configuration mutation is admin-only, and no arbitrary OID or live probe API exists. Profile transforms are allow-listed and executable profile keys are rejected. SNMPv1 cannot be enabled in production configuration. This is a design/code review, not a penetration test.
+
+Epic 4B preserves those boundaries for live communication: DNS results are revalidated against authorized/ignored CIDRs, secrets are decrypted immediately before adapter construction, protocol downgrade is prohibited, operations are rate/concurrency limited, walks are bounded and subtree constrained, and public raw OID operations remain absent. WebSocket, audit, error, and notification payloads contain IDs/categories/counts only. Verification used injected adapters, not production targets.

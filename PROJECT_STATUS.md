@@ -507,3 +507,7 @@ Runtime SMTP credential changes, secure test email, logo uploads, automated back
 ## Epic 4A — SNMP integration foundation
 
 Complete: additive SNMP models and migration, encrypted/write-only credential profiles, authorized-network targets, profiles/OIDs, inactive polling and observation foundations, role-protected configuration APIs, audit integration, offline tests, and operating documentation. Live SNMP transport, tests, walks, polling, scheduling, dashboards, alerts, topology, frontend, and onboarding are intentionally deferred.
+
+## Epic 4B — secure SNMP client and manual polling
+
+Complete: pinned PySNMP adapter, v1/v2c/v3 mapping, safe target tests, approved scalar/multi-GET, bounded WALK/BULK-WALK, response parsing, manual availability/system/interface/custom-profile polls, health/candidate/metric persistence, locking, cancellation, safe errors, audit, WebSockets, grouped notifications, and mocked verification. Scheduling, dashboards, alert rules, topology, traffic analytics, frontend, and onboarding remain deferred.

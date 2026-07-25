@@ -42,3 +42,8 @@
 | QA-009 | Frontend build | Low | CSS transform is the slowest Vite build phase (open technical debt). | Build time impact only. | Defer to post-1.0.0; no correctness or production impact. |
 
 Audit records in this file describe verified defects only. Feature requests and missing future capabilities remain in `PROJECT_STATUS.md`.
+## Epic 4B verification notes
+
+- Docker image verification depends on a running Docker Desktop Linux engine.
+- Existing Pydantic v1-style config and Starlette TestClient deprecation warnings remain non-blocking.
+- Real SNMP agent interoperability is intentionally unverified until an explicitly approved safe fixture or target is supplied.

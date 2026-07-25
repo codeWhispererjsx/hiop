@@ -179,7 +179,7 @@ class SNMPModelAndRouteTests(unittest.TestCase):
             "/api/v1/snmp/interfaces", "/api/v1/snmp/candidates",
         }
         self.assertTrue(required.issubset(paths))
-        self.assertFalse(any(path.endswith(("/get", "/walk", "/test", "/poll")) for path in paths if "/snmp/" in path))
+        self.assertFalse(any(path.endswith(("/get", "/walk")) for path in paths if "/snmp/" in path))
 
     def test_mutations_use_admin_role_dependency(self):
         from app.api.v1.snmp import admin_only

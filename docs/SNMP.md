@@ -66,4 +66,44 @@ Keep `SNMP_ENABLED=false` until a later epic provides reviewed transport. Use a 
 
 ## Known limitations and planned Epic 4B
 
-Epic 4A has no installed SNMP library, MIB resolution, engine-ID discovery, live compatibility checks, credential testing, metric collection, retry execution, scheduler integration, notifications, alerts, dashboards, topology, or onboarding. Epic 4B should add a bounded mocked-first transport and explicit test workflow only after approval; production polling remains a separate reviewed phase.
+Epic 4A had no installed SNMP library, MIB resolution, engine-ID discovery, live compatibility checks, credential testing, or metric collection.
+
+## Epic 4B client architecture
+
+Epic 4B uses pinned `pysnmp==7.1.27` through an injectable asynchronous transport adapter. `SecureSNMPClient` owns target authorization, short-lived decryption, version/security mapping, response parsing, retry bounds, and cleanup. Routes never construct transport credentials and no shell or subprocess operation is used. Tests inject an in-memory adapter, so verification sends no SNMP packets.
+
+Protocol mapping is exact: v1 uses community MP model 0, v2c uses MP model 1, and v3 uses `UsmUserData` with the configured security level, authentication protocol, privacy protocol, and context. SHA, SHA224, SHA256, SHA384, SHA512, AES128, AES192, and AES256 are mapped only when the installed library exports them. MD5 and DES require the legacy policy. No downgrade is attempted.
+
+## Target authorization and testing
+
+Hostnames resolve through the socket API and every resolved address must be private, inside configured Discovery CIDRs, outside ignored CIDRs, and neither link-local nor multicast. Tests are admin-only and rate-limited. The test retrieves bounded system identity, updates safe target health, records one audit result, and emits summary-only WebSocket/notification events. It never accepts temporary credentials or arbitrary OIDs.
+
+## Approved operations and standard OIDs
+
+The client provides scalar GET, ordered/deduplicated multi-GET, bounded WALK, and bounded BULK-WALK for service-selected OIDs only. There is no public raw GET/WALK route. Standard system OIDs cover sysDescr, sysObjectID, sysUpTime, sysContact, sysName, sysLocation, and sysServices. Interface preview uses bounded IF-MIB identity/status roots and excludes traffic analytics.
+
+WALK operations enforce subtree exit, repeated-OID detection, maximum rows, maximum duration, maximum repetitions, response truncation, and cooperative cancellation. SNMPv1 safely falls back from BULK-WALK to WALK.
+
+## Parsing and persistence
+
+Integer, Counter32, Counter64, Gauge, TimeTicks, OctetString, ObjectIdentifier, IpAddress, Null, noSuchObject, noSuchInstance, and endOfMibView values are normalized. TimeTicks preserve raw ticks and seconds. Unknown types become bounded warning-quality text; oversized text is truncated. Raw packets and unbounded binary values are never stored.
+
+Manual poll types are availability, system, interfaces preview, and custom profile. Runs transition from pending to running and then completed, partial, failed, or cancelled. Approved observations store numeric/text values, units, quality, target, run, OID, and optional interface identity. System polls create or update a pending review candidate and may suggest a profile; they never create inventory.
+
+## Errors, retries, concurrency, and cancellation
+
+Safe categories include host unreachable, timeout, transport error, unauthorized target, missing credential, authentication/privacy failure, unsupported version/protocol, malformed response, missing OID, access denied, too big, walk limit, cancellation, configuration, decryption, and unknown error. Only transient timeout/transport categories are marked retryable; PySNMP applies the configured bounded retry count.
+
+A global semaphore and target/credential locks prevent duplicate target polls, credential rotation during use, tests conflicting with polls, and excessive concurrent operations. Cancellation is checked between WALK batches and preserves already-persisted results. No scheduled polling exists.
+
+## Troubleshooting
+
+- `unauthorized_target`: confirm the resolved address is in Discovery authorized CIDRs and not ignored.
+- `decryption_failed`: verify `HIOP_SNMP_SECRET_KEY` matches the key used when the credential was saved.
+- `unsupported_protocol`: enable legacy policy only when explicitly required, or select a supported SHA/AES protocol.
+- `authentication_failed` or `privacy_failed`: rotate the stored secret and confirm the agent security level.
+- `timeout`: check management VLAN/firewall access and bounded timeout/retry settings.
+
+## Current limitations
+
+Epic 4B has no scheduler, long-term traffic analytics, alert rules, dashboards, topology, automatic onboarding, MIB-name resolution, traps/informs, TCP transport, or frontend. Real hotel-network polling requires separate explicit approval. Epic 4C should add reviewed scheduling and operational administration without expanding into topology or automatic inventory mutation.

@@ -76,3 +76,7 @@ class OperationRateLimiter:
 
 
 ad_connection_test_limiter = OperationRateLimiter()
+snmp_target_test_limiter = OperationRateLimiter(limit=5, window_seconds=60)
+snmp_manual_poll_limiter = OperationRateLimiter(limit=10, window_seconds=60)
+snmp_identity_limiter = OperationRateLimiter(limit=10, window_seconds=60)
+snmp_cancel_limiter = OperationRateLimiter(limit=20, window_seconds=60)

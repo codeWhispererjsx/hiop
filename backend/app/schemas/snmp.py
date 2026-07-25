@@ -3,6 +3,7 @@ import ipaddress
 import re
 from datetime import datetime
 from typing import Any
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -203,6 +204,9 @@ class SNMPTargetRead(BaseModel):
     last_successful_poll_at: datetime | None
     last_failed_poll_at: datetime | None
     consecutive_failures: int
+    last_response_time_ms: float | None = None
+    detected_sys_object_id: str | None = None
+    detected_profile_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -406,3 +410,19 @@ class SNMPPage(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class SNMPTargetTestRequest(BaseModel):
+    include_optional_identity: bool = True
+    temporary_timeout_seconds: int | None = Field(default=None, ge=1, le=30)
+
+
+class SNMPManualPollRequest(BaseModel):
+    poll_type: Literal["system", "availability", "interfaces_preview", "custom_profile"]
+
+
+class SNMPManualPollResponse(BaseModel):
+    poll_run_id: UUID
+    accepted_poll_type: str
+    status: str
+    warnings: list[str] = Field(default_factory=list)

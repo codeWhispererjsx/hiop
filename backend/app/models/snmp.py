@@ -67,10 +67,11 @@ class SNMPPollType(str, enum.Enum):
 
 class SNMPMetricQuality(str, enum.Enum):
     GOOD = "good"
-    STALE = "stale"
-    PARTIAL = "partial"
+    WARNING = "warning"
+    MISSING = "missing"
     INVALID = "invalid"
-    UNKNOWN = "unknown"
+    STALE = "stale"
+    TRUNCATED = "truncated"
 
 
 class SNMPDataType(str, enum.Enum):
@@ -122,15 +123,24 @@ class SNMPDeviceType(str, enum.Enum):
 
 
 class SNMPErrorCategory(str, enum.Enum):
-    NONE = "none"
+    HOST_UNREACHABLE = "host_unreachable"
     TIMEOUT = "timeout"
-    AUTHENTICATION = "authentication"
-    AUTHORIZATION = "authorization"
-    NETWORK = "network"
-    PROTOCOL = "protocol"
-    VALIDATION = "validation"
-    INTERNAL = "internal"
+    TRANSPORT_ERROR = "transport_error"
+    UNAUTHORIZED_TARGET = "unauthorized_target"
+    CREDENTIAL_MISSING = "credential_missing"
+    AUTHENTICATION_FAILED = "authentication_failed"
+    PRIVACY_FAILED = "privacy_failed"
+    UNSUPPORTED_VERSION = "unsupported_version"
+    UNSUPPORTED_PROTOCOL = "unsupported_protocol"
+    MALFORMED_RESPONSE = "malformed_response"
+    OID_NOT_FOUND = "oid_not_found"
+    ACCESS_DENIED = "access_denied"
+    TOO_BIG = "too_big"
+    WALK_LIMIT_EXCEEDED = "walk_limit_exceeded"
     CANCELLED = "cancelled"
+    CONFIGURATION_ERROR = "configuration_error"
+    DECRYPTION_FAILED = "decryption_failed"
+    UNKNOWN_ERROR = "unknown_error"
 
 
 class SNMPCredential(Base):
@@ -201,6 +211,7 @@ class SNMPTarget(Base):
         Index("ix_snmp_targets_last_test_status", "last_test_status"),
         Index("ix_snmp_targets_last_successful_poll_at", "last_successful_poll_at"),
         Index("ix_snmp_targets_enabled", "enabled"),
+        Index("ix_snmp_targets_detected_profile_id", "detected_profile_id"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -225,6 +236,9 @@ class SNMPTarget(Base):
     last_successful_poll_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_failed_poll_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    last_response_time_ms: Mapped[float | None] = mapped_column(Float)
+    detected_sys_object_id: Mapped[str | None] = mapped_column(String(255))
+    detected_profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_device_profiles.id", ondelete="SET NULL"))
     created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -335,7 +349,7 @@ class SNMPMetric(Base):
     value_numeric: Mapped[float | None] = mapped_column(Numeric(30, 8))
     value_text: Mapped[str | None] = mapped_column(String(1000))
     unit: Mapped[str | None] = mapped_column(String(40))
-    quality: Mapped[str] = mapped_column(String(20), default="unknown", server_default="unknown", nullable=False)
+    quality: Mapped[str] = mapped_column(String(20), default="warning", server_default="warning", nullable=False)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     poll_run: Mapped[SNMPPollRun] = relationship(back_populates="metrics")

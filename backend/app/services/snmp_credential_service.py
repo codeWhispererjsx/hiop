@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.schemas.snmp import SNMPCredentialCreate, SNMPCredentialSecretUpdate, SNMPCredentialUpdate
 from app.services.audit_service import create_audit_log
 from app.services.snmp_secret_service import SNMPSecretError, SNMPSecretService
+from app.services.snmp_runtime import credential_active
 
 
 class SNMPCredentialService:
@@ -65,6 +66,8 @@ class SNMPCredentialService:
         return row
 
     def rotate_secret(self, row: SNMPCredential, payload: SNMPCredentialSecretUpdate, actor):
+        if credential_active(row.id):
+            raise HTTPException(409, "Credential is in use by an active SNMP operation.")
         if row.version in {"v1", "v2c"} and (
             payload.authentication_secret or payload.privacy_secret or not payload.community
         ):
@@ -98,6 +101,8 @@ class SNMPCredentialService:
         return row
 
     def disable_credential(self, row: SNMPCredential, actor):
+        if credential_active(row.id):
+            raise HTTPException(409, "Credential is in use by an active SNMP operation.")
         row.enabled = False
         row.updated_by = actor.id
         create_audit_log(self.db, actor.username, "SNMP_CREDENTIAL_DISABLED", "SNMPCredential", str(row.id), f"Disabled SNMP credential profile '{row.name}'.")

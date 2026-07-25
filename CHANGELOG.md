@@ -150,3 +150,11 @@ All notable HIOP changes are recorded here. The project follows semantic version
 - Added targets, profiles, OIDs, inactive polling configuration, poll runs, metrics, interfaces, and review candidates.
 - Added role-protected configuration APIs and authorized-network safeguards.
 - Added no live SNMP polling, walks, schedules, dashboards, alerts, topology, frontend, or onboarding.
+
+## 2.0.0-dev — Epic 4B
+
+- Added pinned PySNMP transport with exact v1, v2c, and v3 security mappings.
+- Added authorized, rate-limited target testing and approved manual polling APIs.
+- Added bounded GET, multi-GET, WALK, BULK-WALK, parsing, lifecycle, cancellation, and locking.
+- Added safe metric/interface/candidate persistence, target health, audit, WebSocket, and grouped failure notifications.
+- Did not add scheduling, dashboards, alert rules, traffic analytics, topology, frontend, or onboarding.
