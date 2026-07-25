@@ -9,14 +9,16 @@ from sqlalchemy import select
 
 from app.models.snmp import (
     SNMPCredential, SNMPDeviceProfile, SNMPDiscoveryCandidate, SNMPInterface,
-    SNMPMetric, SNMPOIDDefinition, SNMPPollRun, SNMPTarget,
+    SNMPMetric, SNMPOIDDefinition, SNMPPollRun, SNMPStateChange, SNMPTarget,
 )
 from app.services.audit_service import create_audit_log
 from app.services.settings_service import read_discovery
+from app.core.config import settings
 from app.services.snmp_client_service import (
     INTERFACE_OIDS, SYSTEM_OIDS, SNMPClientError, SNMPValue, SecureSNMPClient,
 )
 from app.services.snmp_notification_service import notify_snmp
+from app.services.snmp_operational_service import SNMPOperationalService
 from app.services.snmp_runtime import snmp_operation_lock
 from app.websocket.connection_manager import manager
 
@@ -66,12 +68,12 @@ class SNMPPollingService:
         self.db.refresh(run)
         return run.status == "cancelled"
 
-    def _persist(self, run, target, metric_key, value: SNMPValue, *, interface_index=None, interface_name=None, unit=None):
+    def _persist(self, run, target, metric_key, value: SNMPValue, *, interface_index=None, interface_name=None, unit=None, observed_at=None):
         self.db.add(SNMPMetric(
             target_id=target.id, poll_run_id=run.id, metric_key=metric_key,
             oid=value.oid, interface_index=interface_index, interface_name=interface_name,
             value_numeric=value.value_numeric, value_text=value.value_text, unit=unit,
-            quality=value.quality, observed_at=datetime.now(timezone.utc),
+            quality=value.quality, observed_at=observed_at or datetime.now(timezone.utc),
         ))
 
     def _resolve_profile(self, identity):
@@ -111,8 +113,31 @@ class SNMPPollingService:
     def _system(self, client, run, target, actor):
         identity = client.get_system_identity(True)
         run.requested_oids = len(identity)
+        previous = {}
+        for key in ("system.uptime", "system.name", "system.location", "system.object_id"):
+            previous[key] = self.db.scalar(select(SNMPMetric).where(
+                SNMPMetric.target_id == target.id, SNMPMetric.metric_key == key
+            ).order_by(SNMPMetric.observed_at.desc()).limit(1))
         for key, value in identity.items():
             self._persist(run, target, key, value, unit="ticks" if key == "system.uptime" else None)
+        current_uptime = identity.get("system.uptime")
+        old_uptime = previous.get("system.uptime")
+        if current_uptime and old_uptime and current_uptime.value_numeric is not None and old_uptime.value_numeric is not None and current_uptime.value_numeric < old_uptime.value_numeric:
+            self.db.add(SNMPStateChange(
+                target_id=target.id, poll_run_id=run.id, state_type="device_reboot",
+                severity_hint="warning", previous_value=str(old_uptime.value_numeric),
+                current_value=str(current_uptime.value_numeric), evidence={"metric": "system.uptime"},
+            ))
+            manager.broadcast_from_thread({"type": "snmp_device_reboot_detected", "target_id": str(target.id), "poll_run_id": str(run.id)})
+        for key, state_type in (("system.name", "sys_name_changed"), ("system.location", "sys_location_changed"), ("system.object_id", "sys_object_id_changed")):
+            current, old = identity.get(key), previous.get(key)
+            if current and old and current.value_text and old.value_text and current.value_text != old.value_text:
+                self.db.add(SNMPStateChange(
+                    target_id=target.id, poll_run_id=run.id, state_type=state_type,
+                    severity_hint="warning" if key == "system.object_id" else "info",
+                    previous_value=old.value_text[:500], current_value=current.value_text[:500],
+                    evidence={"metric": key},
+                ))
         run.successful_oids = sum(value.quality in {"good", "warning", "truncated"} for value in identity.values())
         run.failed_oids = run.requested_oids - run.successful_oids
         profile, confidence = self._resolve_profile(identity)
@@ -131,7 +156,7 @@ class SNMPPollingService:
         return values
 
     def _interfaces(self, client, run, target):
-        max_interfaces = min(256, getattr(target.polling_configuration, "max_interfaces", 256))
+        max_interfaces = min(settings.snmp_maximum_interfaces, getattr(target.polling_configuration, "max_interfaces", 256))
         previews = client.get_interfaces_preview(max_interfaces=max_interfaces, cancelled=lambda: self._cancelled(run))
         by_index = {}
         requested = successful = 0
@@ -143,24 +168,32 @@ class SNMPPollingService:
                 except ValueError: continue
                 by_index.setdefault(index, {})[key] = value
                 successful += value.quality in {"good", "warning", "truncated"}
+        records = []
         for index, fields in list(by_index.items())[:max_interfaces]:
             name_value = fields.get("interface.name") or fields.get("interface.description")
             name = name_value.value_text if name_value else None
             for key, value in fields.items():
                 self._persist(run, target, key, value, interface_index=index, interface_name=name)
-            interface = self.db.scalar(select(SNMPInterface).where(SNMPInterface.target_id == target.id, SNMPInterface.interface_index == index))
-            if not interface:
-                interface = SNMPInterface(target_id=target.id, interface_index=index)
-                self.db.add(interface)
-            interface.name = name
-            interface.description = getattr(fields.get("interface.description"), "value_text", None)
-            interface.alias = getattr(fields.get("interface.alias"), "value_text", None)
-            interface.interface_type = str(getattr(fields.get("interface.type"), "value_numeric", "") or "") or None
-            interface.mtu = getattr(fields.get("interface.mtu"), "value_numeric", None)
-            interface.speed_bps = getattr(fields.get("interface.speed"), "value_numeric", None)
-            interface.admin_status = str(getattr(fields.get("interface.admin_status"), "value_numeric", "") or "") or None
-            interface.operational_status = str(getattr(fields.get("interface.oper_status"), "value_numeric", "") or "") or None
-            interface.last_seen_at = datetime.now(timezone.utc)
+            speed = getattr(fields.get("interface.high_speed"), "value_numeric", None)
+            speed = int(speed * 1_000_000) if speed else getattr(fields.get("interface.speed"), "value_numeric", None)
+            records.append({
+                "interface_index": index, "name": name,
+                "description": getattr(fields.get("interface.description"), "value_text", None),
+                "alias": getattr(fields.get("interface.alias"), "value_text", None),
+                "interface_type": str(getattr(fields.get("interface.type"), "value_numeric", "") or "") or None,
+                "mac_address": getattr(fields.get("interface.mac"), "value_text", None),
+                "mtu": getattr(fields.get("interface.mtu"), "value_numeric", None),
+                "speed_bps": speed,
+                "admin_status": str(getattr(fields.get("interface.admin_status"), "value_numeric", "") or "") or None,
+                "operational_status": str(getattr(fields.get("interface.oper_status"), "value_numeric", "") or "") or None,
+                "last_change": getattr(fields.get("interface.last_change"), "value_numeric", None),
+            })
+        complete = all(not result.truncated for result in previews.values())
+        SNMPOperationalService(self.db).sync_interfaces(
+            target, run, records, complete=complete,
+            grace_polls=settings.snmp_interface_missing_grace_polls,
+            max_interfaces=settings.snmp_maximum_interfaces,
+        )
         run.requested_oids, run.successful_oids = requested, int(successful)
         run.failed_oids = requested - run.successful_oids
         return by_index
@@ -169,14 +202,37 @@ class SNMPPollingService:
         profile_id = getattr(target.polling_configuration, "profile_id", None)
         definitions = self.db.scalars(select(SNMPOIDDefinition).where(
             SNMPOIDDefinition.enabled.is_(True), SNMPOIDDefinition.profile_id == profile_id,
-            SNMPOIDDefinition.collection_type == "scalar",
-        ).limit(1000)).all()
+        ).limit(settings.snmp_maximum_oids_per_request)).all()
         if not definitions:
-            raise SNMPClientError("configuration_error", "Target profile has no approved scalar OIDs.")
-        values = client.get_many([definition.oid for definition in definitions])
+            raise SNMPClientError("configuration_error", "Target profile has no approved OIDs.")
+        scalar = [d for d in definitions if d.collection_type == "scalar"]
+        values = client.get_many([definition.oid for definition in scalar]) if scalar else []
         run.requested_oids = len(values)
-        for definition, value in zip(definitions, values):
+        for definition, value in zip(scalar, values):
             self._persist(run, target, definition.metric_key, value, unit=definition.unit)
+        observations = []
+        for definition in (d for d in definitions if d.collection_type != "scalar"):
+            result = client.bulk_walk(
+                definition.oid, max_rows=min(settings.snmp_maximum_interfaces, 1000),
+                max_duration=30, max_repetitions=20, cancelled=lambda: self._cancelled(run),
+            )
+            run.requested_oids += len(result.items)
+            values.extend(result.items)
+            observed_at = datetime.now(timezone.utc)
+            for value in result.items:
+                try:
+                    index = int(value.oid.removeprefix(definition.oid + ".").split(".")[0])
+                except ValueError:
+                    continue
+                self._persist(run, target, definition.metric_key, value, unit=definition.unit,
+                              interface_index=index, observed_at=observed_at)
+                if value.value_numeric is not None:
+                    observations.append({"metric_key": definition.metric_key, "interface_index": index,
+                                         "value": int(value.value_numeric), "oid": value.oid,
+                                         "observed_at": observed_at})
+        SNMPOperationalService(self.db).persist_rates(
+            target.id, run.id, observations, max_gap_seconds=settings.snmp_rate_max_gap_seconds,
+        )
         run.successful_oids = sum(value.quality in {"good", "warning", "truncated"} for value in values)
         run.failed_oids = run.requested_oids - run.successful_oids
         return values
@@ -204,6 +260,55 @@ class SNMPPollingService:
                     return self._finalize(run, target, actor, "cancelled", started)
             status = "partial" if run.failed_oids else "completed"
             return self._finalize(run, target, actor, status, started)
+        except SNMPClientError as error:
+            return self._finalize(run, target, actor, "cancelled" if error.category == "cancelled" else "failed", started, error)
+        finally:
+            if client: client.close()
+
+    def execute_collection(self, run_id, actor, groups):
+        """Execute an explicitly approved, bounded collection plan in one run."""
+        run = self.db.get(SNMPPollRun, run_id)
+        if not run:
+            raise HTTPException(404, "SNMP poll run was not found.")
+        if len(groups) == 1:
+            mapping = {
+                "availability": "availability", "system": "system",
+                "interface_inventory": "interfaces_preview",
+                "interface_performance": "custom_profile",
+                "device_performance": "custom_profile",
+                "all_profile_metrics": "custom_profile",
+            }
+            run.poll_type = mapping[groups[0]]
+            self.db.commit()
+            return self.execute_poll(run.id, actor)
+        target = self.db.get(SNMPTarget, run.target_id)
+        credential = self.db.get(SNMPCredential, target.credential_id) if target else None
+        if not target or not credential:
+            raise HTTPException(400, "SNMP target or credential is unavailable.")
+        started = monotonic()
+        client = None
+        self.transition(run, "running")
+        self.db.commit()
+        manager.broadcast_from_thread({"type": "snmp_collection_started", "poll_run_id": str(run.id), "target_id": str(target.id), "groups": groups})
+        try:
+            with snmp_operation_lock(target.id, credential.id):
+                client = self._client(target, credential)
+                requested = successful = failed = 0
+                profile_groups = {"interface_performance", "device_performance", "all_profile_metrics"}
+                execution_groups = [g for g in groups if g not in profile_groups]
+                if profile_groups.intersection(groups):
+                    execution_groups.append("all_profile_metrics")
+                for group in execution_groups:
+                    if group == "availability": self._availability(client, run, target)
+                    elif group == "system": self._system(client, run, target, actor)
+                    elif group == "interface_inventory": self._interfaces(client, run, target)
+                    else: self._custom(client, run, target)
+                    requested += run.requested_oids; successful += run.successful_oids; failed += run.failed_oids
+                    manager.broadcast_from_thread({"type": "snmp_collection_progress", "poll_run_id": str(run.id), "group": group, "successful": run.successful_oids, "failed": run.failed_oids})
+                    if self._cancelled(run):
+                        return self._finalize(run, target, actor, "cancelled", started)
+                run.requested_oids, run.successful_oids, run.failed_oids = requested, successful, failed
+            return self._finalize(run, target, actor, "partial" if failed else "completed", started)
         except SNMPClientError as error:
             return self._finalize(run, target, actor, "cancelled" if error.category == "cancelled" else "failed", started, error)
         finally:

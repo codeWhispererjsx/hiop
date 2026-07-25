@@ -72,6 +72,9 @@ class SNMPMetricQuality(str, enum.Enum):
     INVALID = "invalid"
     STALE = "stale"
     TRUNCATED = "truncated"
+    RESET = "reset"
+    WRAPPED = "wrapped"
+    UNSUPPORTED = "unsupported"
 
 
 class SNMPDataType(str, enum.Enum):
@@ -338,6 +341,7 @@ class SNMPMetric(Base):
         Index("ix_snmp_metrics_target_metric_observed", "target_id", "metric_key", "observed_at"),
         Index("ix_snmp_metrics_poll_run_id", "poll_run_id"),
         Index("ix_snmp_metrics_observed_at", "observed_at"),
+        Index("ix_snmp_metrics_interface_metric_observed", "target_id", "interface_index", "metric_key", "observed_at"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_targets.id", ondelete="CASCADE"), nullable=False)
@@ -350,6 +354,7 @@ class SNMPMetric(Base):
     value_text: Mapped[str | None] = mapped_column(String(1000))
     unit: Mapped[str | None] = mapped_column(String(40))
     quality: Mapped[str] = mapped_column(String(20), default="warning", server_default="warning", nullable=False)
+    quality_reason: Mapped[str | None] = mapped_column(String(255))
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     poll_run: Mapped[SNMPPollRun] = relationship(back_populates="metrics")
@@ -362,6 +367,7 @@ class SNMPInterface(Base):
         Index("ix_snmp_interfaces_target_id", "target_id"),
         Index("ix_snmp_interfaces_interface_index", "interface_index"),
         Index("ix_snmp_interfaces_last_seen_at", "last_seen_at"),
+        Index("ix_snmp_interfaces_target_missing", "target_id", "is_missing"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_targets.id", ondelete="CASCADE"), nullable=False)
@@ -376,11 +382,16 @@ class SNMPInterface(Base):
     speed_bps: Mapped[int | None] = mapped_column(BigInteger)
     mtu: Mapped[int | None] = mapped_column(Integer)
     last_change: Mapped[int | None] = mapped_column(BigInteger)
+    connector_present: Mapped[bool | None] = mapped_column(Boolean)
+    is_missing: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    missed_polls: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     target: Mapped[SNMPTarget] = relationship(back_populates="interfaces")
+    changes: Mapped[list["SNMPInterfaceChange"]] = relationship(back_populates="interface", cascade="all, delete-orphan")
 
 
 class SNMPDiscoveryCandidate(Base):
@@ -411,3 +422,90 @@ class SNMPDiscoveryCandidate(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     target: Mapped[SNMPTarget] = relationship(back_populates="candidates")
+    matches: Mapped[list["SNMPMatchCandidate"]] = relationship(back_populates="candidate", cascade="all, delete-orphan")
+
+
+class SNMPMatchCandidate(Base):
+    __tablename__ = "snmp_match_candidates"
+    __table_args__ = (
+        CheckConstraint("match_score BETWEEN 0 AND 100", name="ck_snmp_match_score"),
+        UniqueConstraint("snmp_candidate_id", "candidate_type", "candidate_device_id", "candidate_discovery_id", name="uq_snmp_match_identity"),
+        Index("ix_snmp_matches_candidate_score", "snmp_candidate_id", "match_score"),
+        Index("ix_snmp_matches_status", "match_status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    snmp_candidate_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_discovery_candidates.id", ondelete="CASCADE"), nullable=False)
+    candidate_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    candidate_device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"))
+    candidate_discovery_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("discovered_devices.id", ondelete="CASCADE"))
+    match_score: Mapped[float] = mapped_column(Float, nullable=False)
+    match_level: Mapped[str] = mapped_column(String(20), nullable=False)
+    match_status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", nullable=False)
+    matching_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=func.text("'[]'::jsonb"), nullable=False)
+    conflicting_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=func.text("'[]'::jsonb"), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    recommended_action: Mapped[str] = mapped_column(String(20), nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    candidate: Mapped[SNMPDiscoveryCandidate] = relationship(back_populates="matches")
+
+
+class SNMPDeviceLink(Base):
+    __tablename__ = "snmp_device_links"
+    __table_args__ = (
+        UniqueConstraint("target_id", name="uq_snmp_device_link_target"),
+        Index("ix_snmp_device_links_device_id", "device_id"),
+        Index("ix_snmp_device_links_health", "health_status"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_targets.id", ondelete="CASCADE"), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), nullable=False)
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_device_profiles.id", ondelete="SET NULL"))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    management_ip: Mapped[str | None] = mapped_column(String(45))
+    sys_object_id: Mapped[str | None] = mapped_column(String(255))
+    health_status: Mapped[str] = mapped_column(String(30), default="unknown", server_default="unknown", nullable=False)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    linked_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SNMPInterfaceChange(Base):
+    __tablename__ = "snmp_interface_changes"
+    __table_args__ = (
+        Index("ix_snmp_interface_changes_interface_detected", "interface_id", "detected_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interface_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_interfaces.id", ondelete="CASCADE"), nullable=False)
+    poll_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_poll_runs.id", ondelete="SET NULL"))
+    change_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    changed_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=func.text("'[]'::jsonb"), nullable=False)
+    before_values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    after_values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    interface: Mapped[SNMPInterface] = relationship(back_populates="changes")
+
+
+class SNMPStateChange(Base):
+    __tablename__ = "snmp_state_changes"
+    __table_args__ = (
+        Index("ix_snmp_state_target_detected", "target_id", "detected_at"),
+        Index("ix_snmp_state_interface_detected", "interface_id", "detected_at"),
+        Index("ix_snmp_state_type", "state_type"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_targets.id", ondelete="CASCADE"), nullable=False)
+    interface_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_interfaces.id", ondelete="CASCADE"))
+    poll_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_poll_runs.id", ondelete="SET NULL"))
+    state_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    severity_hint: Mapped[str] = mapped_column(String(20), default="info", server_default="info", nullable=False)
+    previous_value: Mapped[str | None] = mapped_column(String(500))
+    current_value: Mapped[str | None] = mapped_column(String(500))
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

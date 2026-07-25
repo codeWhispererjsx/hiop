@@ -73,3 +73,6 @@ Frontend ESLint and the production build pass. All 10 backend contract tests pas
 - No persistent browser response cache was introduced because operational and authorization data must remain current. Future caching should use endpoint-specific invalidation rather than a global TTL.
 - Table virtualization is not justified for existing ten-row paginated views. Reassess only if page sizes increase substantially.
 - Production measurement should add browser Core Web Vitals, API latency percentiles, PostgreSQL `EXPLAIN ANALYZE` sampling, and connection-pool metrics using representative production volumes.
+# Epic 4C SNMP performance review
+
+Operational queries are target/time and interface/key/time indexed, paginated, and bounded. Interface inventory uses one bulk lookup and change-only history. Counter derivation queries only the latest prior sample; collection and API limits cap interfaces, OIDs, metrics, groups, and page sizes. Retention can be previewed and executed manually. Large-scale production cardinality and database-specific query plans remain to be measured with sanitized synthetic data.

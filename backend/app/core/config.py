@@ -63,6 +63,16 @@ class Settings(BaseSettings):
     snmp_maximum_walk_rows: int = Field(default=1000, ge=1, le=100000)
     snmp_maximum_interfaces: int = Field(default=1000, ge=1, le=10000)
     snmp_metric_retention_days: int = Field(default=90, ge=1, le=3650)
+    snmp_poll_run_retention_days: int = Field(default=180, ge=1, le=3650)
+    snmp_interface_history_retention_days: int = Field(default=365, ge=1, le=3650)
+    snmp_interface_missing_grace_polls: int = Field(default=2, ge=1, le=100)
+    snmp_rate_max_gap_seconds: int = Field(default=3600, ge=30, le=604800)
+    snmp_maximum_metrics_per_poll: int = Field(default=10000, ge=1, le=1000000)
+    snmp_metric_query_maximum_days: int = Field(default=31, ge=1, le=3650)
+    snmp_candidate_strong_match_threshold: int = Field(default=80, ge=0, le=100)
+    snmp_candidate_probable_match_threshold: int = Field(default=60, ge=0, le=100)
+    snmp_fill_missing_only_enrichment: bool = True
+    snmp_collection_batch_size: int = Field(default=500, ge=10, le=10000)
     snmp_poll_concurrency: int = Field(default=5, ge=1, le=100)
     snmp_allow_legacy_protocols: bool = False
     snmp_allow_v1: bool = False

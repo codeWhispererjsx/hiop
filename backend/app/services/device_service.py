@@ -11,7 +11,9 @@ from app.services.hierarchy_service import resolve_device_hierarchy
 def create_device(
     db: Session,
     device: DeviceCreate,
-    current_user: User
+    current_user: User,
+    *,
+    commit: bool = True,
 ):
     values = resolve_device_hierarchy(db, device.model_dump(exclude={"status"}))
     if device.status in {"Active", "Inactive"}:
@@ -30,12 +32,13 @@ def create_device(
         description=f"Created device {new_device.hostname}"
     )
 
-    try:
-        db.commit()
-        db.refresh(new_device)
-    except Exception:
-        db.rollback()
-        raise
+    if commit:
+        try:
+            db.commit()
+            db.refresh(new_device)
+        except Exception:
+            db.rollback()
+            raise
 
     return new_device
 

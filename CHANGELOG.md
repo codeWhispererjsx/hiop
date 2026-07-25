@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 4C
+
+- Added administrator-reviewed SNMP candidate matching, complete Device onboarding, authoritative linking, and explicit safe enrichment.
+- Added interface inventory synchronization with grace-based missing/restored handling, interface/state history, and identity-conflict evidence.
+- Added approved system/profile/interface metric collection foundations, counter wrap/reset/reboot-aware rates, utilization quality, bounded query summaries, and manual retention cleanup.
+- Added no scheduler, alerts, dashboards/frontend, topology, traps, arbitrary OID execution, or unreviewed inventory creation.
+
 ## 2.0.0-dev — Epic 3E
 
 - Added the Active Directory frontend administration interface with deep linking, live WebSocket updates, and detailed object browsing with change history.

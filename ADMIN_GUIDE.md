@@ -443,4 +443,8 @@ Retry only safely retryable failures. Identifier and stale-target conflicts requ
 
 Epic 4A exposes backend configuration APIs only. Administrators can prepare encrypted credential profiles, authorized-network targets, device profiles, OIDs, and disabled polling settings. Technicians may read safe configuration. Do not enable or expect live SNMP operations; no target testing, polling, scheduling, frontend page, alerting, topology, or automatic onboarding exists in this phase. See `docs/SNMP.md`.
 
+### Reviewed SNMP onboarding and collection
+
+Epic 4C requires an administrator to review every candidate. Recompute matches, inspect conflicts, and use the onboarding plan before creating, linking, or enriching a device. Mandatory Device fields are never synthesized. Use manual collection only for approved groups and authorized targets; scheduling remains unavailable. Interface disappearance is recorded only after complete inventories and the configured grace count. Retention cleanup is manual and should always be previewed first.
+
 Epic 4B permits administrators to run an explicit saved-credential target test or manual approved poll. Confirm the target is in an authorized management CIDR before use. Prefer v3 authPriv with SHA-2/AES. Manual operations are rate-limited and mutually exclusive per target/credential. No scheduler or automatic onboarding exists.

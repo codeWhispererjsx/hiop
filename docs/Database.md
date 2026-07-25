@@ -67,3 +67,6 @@ Use the guarded scripts in `ops/` or standard `pg_dump`/`pg_restore`; keep encry
 ## SNMP foundation
 
 Epic 4A adds nine additive PostgreSQL tables: `snmp_credentials`, `snmp_targets`, `snmp_device_profiles`, `snmp_oid_definitions`, `snmp_polling_configurations`, `snmp_poll_runs`, `snmp_metrics`, `snmp_interfaces`, and `snmp_discovery_candidates`. Secrets are ciphertext-only. Endpoint/context and target/interface identities are unique, observation queries are indexed by target/key/time, and all inventory/discovery/hierarchy links use non-destructive `SET NULL` behavior where appropriate.
+# SNMP Epic 4C additions
+
+Migration `e3a7c9d5b102` adds `snmp_match_candidates`, `snmp_device_links`, `snmp_interface_changes`, and `snmp_state_changes`. It extends interfaces with missing/grace/connector state and metrics with a bounded quality reason plus an interface/key/time index. All changes are additive and downgrade removes only Epic 4C structures.

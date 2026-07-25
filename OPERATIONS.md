@@ -111,3 +111,5 @@ Connection tests are administrator-only and rate-limited. Diagnose failures by s
 ## SNMP manual operations
 
 SNMP target tests and manual polls are opt-in administrator actions. Monitor safe poll-run status and error categories; never place credentials in tickets or logs. Repeated failures are grouped for notification. There is no SNMP scheduler in Epic 4B. Stop using a target by disabling it after active work completes.
+
+Epic 4C adds reviewed collection groups, interface inventory, rates, state history, and manual retention cleanup. Preview retention before execution. Truncated/partial inventory never marks interfaces missing. Counter resets, long gaps, and reboots intentionally suppress rates. No scheduled collection or cleanup is registered.

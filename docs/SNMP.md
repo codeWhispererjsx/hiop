@@ -1,4 +1,4 @@
-# HIOP SNMP integration foundation (Epic 4A)
+# HIOP SNMP integration (Epics 4A–4C)
 
 ## Purpose and boundary
 
@@ -104,6 +104,22 @@ A global semaphore and target/credential locks prevent duplicate target polls, c
 - `authentication_failed` or `privacy_failed`: rotate the stored secret and confirm the agent security level.
 - `timeout`: check management VLAN/firewall access and bounded timeout/retry settings.
 
+## Epic 4C reviewed onboarding and operational data
+
+Every SNMP discovery candidate remains pending until an administrator acts. Matching is explainable and ranked: explicit target/candidate links are exact; sysName plus management IP, zone, vendor, and type build strong/probable evidence; IP-only and sysName-only evidence remain weak and can never establish identity by themselves. Stored match rows retain matching fields, conflicts, score, level, and recommendation.
+
+Create-new onboarding delegates to the existing Device validator. Asset tag, serial number, MAC, department, location, and other mandatory inventory fields must be supplied—SNMP never invents them. Linking establishes one authoritative target-to-device relation and rejects contradictions. Enrichment is field allow-listed, fill-missing by default, requires explicit fields, records summarized audit evidence, and supports an optimistic `expected_updated_at` freshness check.
+
+Interface inventory uses target plus ifIndex as stable identity. A complete bounded inventory result creates/updates interfaces and increments grace counters for unseen interfaces; partial or truncated results never mark interfaces missing. Records are preserved rather than deleted. Changes record created, updated, restored, missing, status, speed, alias/name, and identity-conflict evidence. A MAC change at the same ifIndex is surfaced as an identity conflict rather than silently merged.
+
+Approved profiles may collect system, interface, and bounded vendor metrics. Canonical keys include `device.uptime_seconds`, `device.response_time_ms`, `interface.in_bps`, `interface.out_bps`, packet/error/discard rates, utilization, `device.cpu_percent`, `device.memory_percent`, `device.temperature_celsius`, `printer.toner_percent`, `ups.battery_charge_percent`, `ups.load_percent`, and `ap.client_count`. Profile transforms remain allow-listed; no public API accepts arbitrary OIDs.
+
+Raw counters remain immutable observations. Rate calculation fetches the prior interface/key sample, validates the time delta, detects credible 32/64-bit wrap, rejects uncertain resets and reboot windows, and emits a separate rate metric with `good`, `wrapped`, `reset`, `stale`, `invalid`, or `unsupported` quality and a bounded reason. Utilization requires a non-zero effective interface speed and flags values above reported capacity rather than normalizing them.
+
+Metric, interface-change, and state-history queries are indexed and paginated. Collection plans and response pages are bounded. Manual retention preview and admin-only cleanup remove expired metrics and empty old poll runs while preserving audit, onboarding, links, interfaces, and state history. No cleanup scheduler is registered.
+
+Operational APIs add candidate detail/match/plan/approve/link/enrich/review, bounded manual collection groups, target/interface metric reads, summaries, interface history, and retention preview/cleanup. Audit and WebSocket messages are operation summaries; no per-sample audit or metric broadcast occurs.
+
 ## Current limitations
 
-Epic 4B has no scheduler, long-term traffic analytics, alert rules, dashboards, topology, automatic onboarding, MIB-name resolution, traps/informs, TCP transport, or frontend. Real hotel-network polling requires separate explicit approval. Epic 4C should add reviewed scheduling and operational administration without expanding into topology or automatic inventory mutation.
+There is no scheduled polling, alert generation, frontend/dashboard, topology mapping, trap/inform receiver, automatic unreviewed onboarding, persistent rollup table, TCP transport, or MIB-name resolution. Profile OIDs must already be approved configuration. Real hotel-network polling remains prohibited without explicit approval. Epic 4D should add the reviewed frontend and visualization layer, leaving scheduling and alert rules for their designated later phases.

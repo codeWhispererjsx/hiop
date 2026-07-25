@@ -365,6 +365,7 @@ class SNMPMetricRead(BaseModel):
     value_text: str | None
     unit: str | None
     quality: str
+    quality_reason: str | None = None
     observed_at: datetime
 
 
@@ -382,6 +383,10 @@ class SNMPInterfaceRead(BaseModel):
     operational_status: str | None
     speed_bps: int | None
     mtu: int | None
+    connector_present: bool | None = None
+    is_missing: bool = False
+    missed_polls: int = 0
+    missing_since: datetime | None = None
     first_seen_at: datetime
     last_seen_at: datetime
 
@@ -426,3 +431,63 @@ class SNMPManualPollResponse(BaseModel):
     accepted_poll_type: str
     status: str
     warnings: list[str] = Field(default_factory=list)
+
+
+class SNMPCollectionRequest(BaseModel):
+    groups: list[Literal[
+        "availability", "system", "interface_inventory", "interface_performance",
+        "device_performance", "all_profile_metrics",
+    ]] = Field(min_length=1, max_length=6)
+
+    @field_validator("groups")
+    @classmethod
+    def unique_groups(cls, value):
+        if len(value) != len(set(value)):
+            raise ValueError("Collection groups must be unique.")
+        return value
+
+
+class SNMPCandidateAction(BaseModel):
+    expected_updated_at: datetime | None = None
+
+
+class SNMPCandidateLinkRequest(SNMPCandidateAction):
+    device_id: UUID
+
+
+class SNMPCandidateOnboardRequest(SNMPCandidateAction):
+    device: dict[str, Any]
+
+
+class SNMPCandidateEnrichRequest(SNMPCandidateLinkRequest):
+    fields: list[str] = Field(min_length=1, max_length=8)
+    overwrite: bool = False
+
+
+class SNMPMatchRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    snmp_candidate_id: UUID
+    candidate_type: str
+    candidate_device_id: UUID | None
+    candidate_discovery_id: UUID | None
+    match_score: float
+    match_level: str
+    match_status: str
+    matching_fields: list[str]
+    conflicting_fields: list[str]
+    evidence: dict[str, Any]
+    recommended_action: str
+    created_at: datetime
+
+
+class SNMPInterfaceChangeRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    interface_id: UUID
+    poll_run_id: UUID | None
+    change_type: str
+    changed_fields: list[str]
+    before_values: dict[str, Any]
+    after_values: dict[str, Any]
+    detected_at: datetime

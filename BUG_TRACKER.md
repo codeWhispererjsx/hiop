@@ -47,3 +47,4 @@ Audit records in this file describe verified defects only. Feature requests and 
 - Docker image verification depends on a running Docker Desktop Linux engine.
 - Existing Pydantic v1-style config and Starlette TestClient deprecation warnings remain non-blocking.
 - Real SNMP agent interoperability is intentionally unverified until an explicitly approved safe fixture or target is supplied.
+- Epic 4C metric aggregation is computed from bounded raw observations; persisted rollups and production-cardinality query-plan validation remain deferred.

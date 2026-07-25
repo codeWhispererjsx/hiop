@@ -104,3 +104,6 @@ Settings responses never return the JWT secret, database credentials, SMTP passw
 `/api/v1/snmp` provides administrator mutation and administrator/technician reads for credentials, targets, device profiles, OID definitions, inactive polling configuration, and paginated observation foundations. Credential responses expose only secret-presence booleans. There are no target-test, GET, WALK, poll, scheduler, alert, onboarding, or arbitrary endpoint-probing APIs in Epic 4A. See `SNMP.md`.
 
 Epic 4B adds admin-only `POST /targets/{id}/test`, `GET /targets/{id}/system-identity`, and `POST /targets/{id}/poll`. Poll types are limited to availability, system, interfaces preview, and custom profile. Run detail, cancellation, and bounded results are under `/poll-runs/{id}`. There remains no public raw GET, OID-array, WALK, or BULK-WALK endpoint.
+# SNMP Epic 4C
+
+`/api/v1/snmp` now includes administrator-only candidate matching and reviewed approve/link/enrich/ignore/reject/restore actions; `POST /targets/{id}/collect` accepts only allow-listed collection groups. Read roles can use bounded candidate matches, target interfaces, interface changes/metrics, target metrics, and metric summaries. Retention preview and cleanup are administrator-only. No route accepts a raw OID, community, auth secret, privacy secret, or unbounded time-series request.
