@@ -527,3 +527,7 @@ Complete at `2.0.0-dev`: lazy-loaded responsive SNMP workspace, role-aware crede
 
 Scheduled SNMP polling, reconciliation/recovery, maintenance, reviewed rules, alert deduplication/recovery, scheduler
 UI, protected retention, and health integration are implemented. Version remains `2.0.0-dev`.
+
+## Epic 5B — LLDP/CDP neighbor evidence
+
+Complete at `2.0.0-dev`: approved LLDP-MIB/Cisco CDP roots, bounded secure collection, normalized observations, stable remote identities, conservative interface/device/node matching, provisional nodes/links, bidirectional confidence, manual-link precedence, conflict evidence, grace aging/restoration, run/review APIs, mocked tests, and operations documentation. No real hotel-network collection, arbitrary walk, inventory creation, automatic confirmation, scheduling, topology UI, bridge/MAC/STP inference, or alerts were added.

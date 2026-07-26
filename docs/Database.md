@@ -78,3 +78,6 @@ Migration `e3a7c9d5b102` adds `snmp_match_candidates`, `snmp_device_links`, `snm
 
 Migration `f5e4d3c2b1a0` adds schedules, jitter, maintenance/recovery metadata, interface monitoring policy, and indexed
 `snmp_alert_rules`/`snmp_alert_events`. It is additive and includes a downgrade.
+## Epic 5B neighbor evidence
+
+Migration `e1d3f5a7b902_add_topology_neighbor_discovery.py` adds `topology_neighbor_collection_runs`, deduplicated `topology_neighbor_observations`, and reviewed `topology_neighbor_candidates`. Indexes cover topology/status/time, target/protocol, remote identity, management address, and review queues. The additive downgrade removes only these three Epic 5B tables.

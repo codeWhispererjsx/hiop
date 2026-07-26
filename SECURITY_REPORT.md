@@ -112,3 +112,6 @@ Epic 4B preserves those boundaries for live communication: DNS results are reval
 
 Schedules reuse address authorization, encrypted credentials, OID allowlisting, limits, and locks. Alert expressions
 are fixed operators. Operational mutations are admin-only; aggregate health and evidence exclude secrets and packets.
+## Epic 5B LLDP/CDP review
+
+Collection reuses encrypted write-only credentials, private approved-range enforcement, ignored-range rejection, SNMP locks, bounded WALK/BULK-WALK, admin-only execution, and safe errors. Public callers cannot supply credentials, endpoints, OIDs, roots, row limits, or transforms. Evidence is normalized and bounded; raw packets are excluded. Confirmed manual links take precedence. This is an engineering review, not formal penetration testing.

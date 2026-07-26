@@ -84,3 +84,6 @@ Operational queries are target/time and interface/key/time indexed, paginated, a
 
 Jitter, global/target locks, deterministic replacement, bounded sample windows, relevant indexes, one cleanup job, and
 controlled summary refetches bound scheduler, database, and WebSocket load.
+## Epic 5B neighbor collection
+
+Collection is bounded by targets, approved column roots, rows, duration, and SNMP concurrency. Stable-identity queries are indexed, list APIs paginate, and WebSockets broadcast counts rather than payload floods. Production-scale query plans remain pending an approved synthetic lab.

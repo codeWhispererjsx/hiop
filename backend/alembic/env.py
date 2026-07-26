@@ -33,6 +33,10 @@ from app.models.topology import (
     TopologyNodeSegment, DeviceDependency, TopologySnapshot, TopologySnapshotNode,
     TopologySnapshotLink, TopologyChange, TopologyNodePosition, TopologyGroup,
 )
+from app.models.topology_neighbor import (
+    TopologyNeighborCandidate, TopologyNeighborCollectionRun,
+    TopologyNeighborObservation,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

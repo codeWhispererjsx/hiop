@@ -60,3 +60,9 @@ Audit records in this file describe verified defects only. Feature requests and 
 
 No hotel polling occurred. SNMP remains disabled until explicitly configured. Traps, topology, device mutation, and
 advanced on-call escalation remain out of scope.
+
+## Epic 5B verification notes
+
+- Real device interoperability is intentionally unverified; parsing uses synthetic LLDP/CDP fixtures.
+- Agent-specific LLDP management-address encodings may remain unresolved.
+- Confirmed manual links are preserved; broader inference conflict resolution is deferred to Epic 5C.

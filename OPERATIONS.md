@@ -123,3 +123,6 @@ Epic 4D adds the `/snmp` monitoring workspace. WebSocket summary events trigger 
 
 SNMP is opt-in. Startup reconciles jobs and stale runs. Administrators can inspect/reconcile, pause/resume, and use
 maintenance. Daily retention at `SNMP_CLEANUP_HOUR_UTC` protects open-alert evidence and permanent histories.
+## Topology neighbor collection
+
+Apply migration `e1d3f5a7b902`, keep approved SNMP ranges narrow, and retain conservative target/row/duration limits. Collection is manual in Epic 5B. Failed/partial runs never mark prior neighbors missing. Audit/WebSocket output is summarized; raw PDUs and credentials are excluded. Deployment does not authorize hotel-network collection.

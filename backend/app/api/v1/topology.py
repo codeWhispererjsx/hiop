@@ -7,18 +7,31 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
+from app.core.config import settings
 from app.models.topology import (
     DeviceDependency, NetworkSegment, Topology, TopologyChange, TopologyGroup,
     TopologyLink, TopologyNode, TopologyNodePosition, TopologySnapshot,
     TopologySnapshotLink, TopologySnapshotNode,
+)
+from app.models.snmp import SNMPTarget
+from app.models.device import Device
+from app.models.discovered_device import DiscoveredDevice
+from app.models.topology_neighbor import (
+    TopologyNeighborCandidate, TopologyNeighborCollectionRun,
+    TopologyNeighborObservation,
 )
 from app.schemas.topology import (
     BootstrapRequest, DependencyRead, DependencyWrite, LinkRead, LinkUpdate,
     LinkWrite, NodeRead, NodeUpdate, NodeWrite, PositionWrite, SegmentRead,
     SegmentWrite, SnapshotWrite, TopologyRead, TopologyUpdate, TopologyWrite,
 )
+from app.schemas.topology_neighbor import (
+    CandidateMatchRequest, NeighborCandidateRead, NeighborCollectionRequest,
+    NeighborObservationRead, NeighborRunRead, PerTargetCollectionRequest,
+)
 from app.services.audit_service import create_audit_log
 from app.services.topology_service import TopologyService
+from app.services.topology_neighbor_collection_service import TopologyNeighborCollectionService
 
 router = APIRouter(prefix="/topology", tags=["Topology"])
 admin = require_roles(["admin"])
@@ -317,6 +330,263 @@ def orphans(topology_id: UUID, db: Session = Depends(get_db), _=Depends(reader))
     rows = db.scalars(select(TopologyNode).where(TopologyNode.topology_id == topology_id, TopologyNode.id.not_in(linked),
                                                 TopologyNode.node_type.not_in(("external_network", "internet")))).all()
     return {"items": rows, "total": len(rows)}
+
+
+@router.post("/{topology_id}/collect-neighbors")
+def collect_neighbors(topology_id: UUID, payload: NeighborCollectionRequest,
+                      db: Session = Depends(get_db), actor=Depends(admin)):
+    topology = _topology(db, topology_id)
+    if len(payload.target_ids) > settings.topology_neighbor_maximum_targets:
+        raise HTTPException(413, "Neighbor collection target limit was exceeded.")
+    runs = []
+    service = TopologyNeighborCollectionService(db)
+    for target_id in payload.target_ids:
+        target = db.get(SNMPTarget, target_id)
+        if not target:
+            raise HTTPException(404, f"SNMP target {target_id} was not found.")
+        runs.append(service.collect(topology, target, payload.protocol_mode, payload.dry_run, actor))
+    return {
+        "accepted_target_count": len(runs),
+        "collection_run_ids": [str(run.id) for run in runs],
+        "protocol_selection": payload.protocol_mode,
+        "dry_run": payload.dry_run,
+        "warnings": [run.error_summary for run in runs if run.error_summary],
+    }
+
+
+@router.post("/{topology_id}/targets/{target_id}/collect-neighbors", response_model=NeighborRunRead)
+def collect_target_neighbors(topology_id: UUID, target_id: UUID, payload: PerTargetCollectionRequest,
+                             db: Session = Depends(get_db), actor=Depends(admin)):
+    topology = _topology(db, topology_id)
+    target = _get(db, SNMPTarget, target_id, "SNMP target")
+    return TopologyNeighborCollectionService(db).collect(
+        topology, target, payload.protocol_mode, payload.dry_run, actor
+    )
+
+
+@router.get("/{topology_id}/neighbor-runs")
+def neighbor_runs(topology_id: UUID, page: int = Query(1, ge=1),
+                  page_size: int = Query(50, ge=1, le=100),
+                  target_id: UUID | None = None, status: str | None = None,
+                  protocol: str | None = Query(None, pattern="^(lldp|cdp)$"),
+                  db: Session = Depends(get_db), _=Depends(reader)):
+    _topology(db, topology_id)
+    query = db.query(TopologyNeighborCollectionRun).filter_by(topology_id=topology_id)
+    if target_id:
+        query = query.filter_by(target_id=target_id)
+    if status:
+        query = query.filter_by(status=status)
+    if protocol:
+        query = query.filter(TopologyNeighborCollectionRun.protocols_requested.contains([protocol]))
+    return _page(query.order_by(TopologyNeighborCollectionRun.started_at.desc()), NeighborRunRead, page, page_size)
+
+
+@router.get("/{topology_id}/neighbor-runs/{run_id}", response_model=NeighborRunRead)
+def neighbor_run(topology_id: UUID, run_id: UUID, db: Session = Depends(get_db), _=Depends(reader)):
+    run = _get(db, TopologyNeighborCollectionRun, run_id, "Neighbor collection run")
+    if run.topology_id != topology_id:
+        raise HTTPException(404, "Neighbor collection run was not found in this topology.")
+    return run
+
+
+@router.post("/{topology_id}/neighbor-runs/{run_id}/cancel", response_model=NeighborRunRead)
+def cancel_neighbor_run(topology_id: UUID, run_id: UUID, db: Session = Depends(get_db), actor=Depends(admin)):
+    run = neighbor_run(topology_id, run_id, db)
+    if run.status not in {"pending", "running"}:
+        raise HTTPException(409, "Only an active neighbor collection can be cancelled.")
+    run.cancellation_requested = True
+    if run.status == "pending":
+        run.status = "cancelled"
+        run.completed_at = datetime.now(timezone.utc)
+    create_audit_log(db, actor.username, "TOPOLOGY_NEIGHBOR_COLLECTION_CANCEL_REQUESTED", "TopologyNeighborCollectionRun", str(run.id), "Requested neighbor collection cancellation.")
+    db.commit()
+    db.refresh(run)
+    return run
+
+
+@router.get("/{topology_id}/neighbor-runs/{run_id}/results")
+def neighbor_run_results(topology_id: UUID, run_id: UUID, page: int = Query(1, ge=1),
+                         page_size: int = Query(50, ge=1, le=100),
+                         db: Session = Depends(get_db), _=Depends(reader)):
+    neighbor_run(topology_id, run_id, db)
+    query = db.query(TopologyNeighborObservation).filter_by(
+        topology_id=topology_id, collection_run_id=run_id
+    ).order_by(TopologyNeighborObservation.local_port_identifier)
+    return _page(query, NeighborObservationRead, page, page_size)
+
+
+@router.get("/{topology_id}/neighbor-observations")
+def neighbor_observations(topology_id: UUID, page: int = Query(1, ge=1),
+                          page_size: int = Query(50, ge=1, le=100),
+                          source_target_id: UUID | None = None, protocol: str | None = None,
+                          observation_status: str | None = None, conflict: bool | None = None,
+                          search: str | None = Query(None, max_length=100),
+                          db: Session = Depends(get_db), _=Depends(reader)):
+    _topology(db, topology_id)
+    query = db.query(TopologyNeighborObservation).filter_by(topology_id=topology_id)
+    if source_target_id:
+        query = query.filter_by(source_target_id=source_target_id)
+    if protocol:
+        query = query.filter_by(protocol=protocol)
+    if observation_status:
+        query = query.filter_by(observation_status=observation_status)
+    if conflict is not None:
+        query = query.filter(TopologyNeighborObservation.observation_status == "conflict" if conflict else TopologyNeighborObservation.observation_status != "conflict")
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(
+            TopologyNeighborObservation.remote_system_name.ilike(term),
+            TopologyNeighborObservation.remote_management_address.ilike(term),
+            TopologyNeighborObservation.local_port_identifier.ilike(term),
+        ))
+    return _page(query.order_by(TopologyNeighborObservation.last_seen_at.desc()), NeighborObservationRead, page, page_size)
+
+
+@router.get("/{topology_id}/neighbor-observations/{observation_id}", response_model=NeighborObservationRead)
+def neighbor_observation(topology_id: UUID, observation_id: UUID,
+                         db: Session = Depends(get_db), _=Depends(reader)):
+    row = _get(db, TopologyNeighborObservation, observation_id, "Neighbor observation")
+    if row.topology_id != topology_id:
+        raise HTTPException(404, "Neighbor observation was not found in this topology.")
+    return row
+
+
+@router.get("/{topology_id}/neighbor-candidates")
+def neighbor_candidates(topology_id: UUID, page: int = Query(1, ge=1),
+                        page_size: int = Query(50, ge=1, le=100),
+                        review_status: str | None = None,
+                        db: Session = Depends(get_db), _=Depends(reader)):
+    _topology(db, topology_id)
+    query = db.query(TopologyNeighborCandidate).filter_by(topology_id=topology_id)
+    if review_status:
+        query = query.filter_by(review_status=review_status)
+    return _page(query.order_by(TopologyNeighborCandidate.updated_at.desc()), NeighborCandidateRead, page, page_size)
+
+
+@router.get("/{topology_id}/neighbor-candidates/{candidate_id}", response_model=NeighborCandidateRead)
+def neighbor_candidate(topology_id: UUID, candidate_id: UUID,
+                       db: Session = Depends(get_db), _=Depends(reader)):
+    row = _get(db, TopologyNeighborCandidate, candidate_id, "Neighbor candidate")
+    if row.topology_id != topology_id:
+        raise HTTPException(404, "Neighbor candidate was not found in this topology.")
+    return row
+
+
+@router.post("/{topology_id}/neighbor-candidates/{candidate_id}/match", response_model=NeighborCandidateRead)
+@router.post("/{topology_id}/neighbor-candidates/{candidate_id}/confirm-node-match", response_model=NeighborCandidateRead)
+def match_neighbor_candidate(topology_id: UUID, candidate_id: UUID, payload: CandidateMatchRequest,
+                             db: Session = Depends(get_db), actor=Depends(admin)):
+    row = neighbor_candidate(topology_id, candidate_id, db)
+    for key, value in payload.model_dump().items():
+        setattr(row, f"matched_{key}", value)
+    if payload.topology_node_id:
+        node = _get(db, TopologyNode, payload.topology_node_id, "Topology node")
+        if node.topology_id != topology_id:
+            raise HTTPException(409, "Candidate match crosses topology boundaries.")
+    if payload.device_id:
+        _get(db, Device, payload.device_id, "Device")
+    if payload.discovered_device_id:
+        _get(db, DiscoveredDevice, payload.discovered_device_id, "Discovered device")
+    if payload.snmp_target_id:
+        _get(db, SNMPTarget, payload.snmp_target_id, "SNMP target")
+    row.review_status = "matched"
+    row.confidence_score = max(row.confidence_score, 85)
+    create_audit_log(db, actor.username, "TOPOLOGY_NEIGHBOR_CANDIDATE_MATCHED", "TopologyNeighborCandidate", str(row.id), "Confirmed a reviewed neighbor candidate match.")
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.post("/{topology_id}/neighbor-candidates/{candidate_id}/ignore", response_model=NeighborCandidateRead)
+def ignore_neighbor_candidate(topology_id: UUID, candidate_id: UUID,
+                              db: Session = Depends(get_db), actor=Depends(admin)):
+    row = neighbor_candidate(topology_id, candidate_id, db)
+    row.review_status = "ignored"
+    create_audit_log(db, actor.username, "TOPOLOGY_NEIGHBOR_CANDIDATE_IGNORED", "TopologyNeighborCandidate", str(row.id), "Ignored a neighbor candidate after review.")
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.post("/{topology_id}/neighbor-candidates/{candidate_id}/restore", response_model=NeighborCandidateRead)
+def restore_neighbor_candidate(topology_id: UUID, candidate_id: UUID,
+                               db: Session = Depends(get_db), actor=Depends(admin)):
+    row = neighbor_candidate(topology_id, candidate_id, db)
+    row.review_status = "pending"
+    create_audit_log(db, actor.username, "TOPOLOGY_NEIGHBOR_CANDIDATE_RESTORED", "TopologyNeighborCandidate", str(row.id), "Restored a neighbor candidate for review.")
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.get("/{topology_id}/candidate-links")
+def candidate_links(topology_id: UUID, page: int = Query(1, ge=1),
+                    page_size: int = Query(50, ge=1, le=100),
+                    db: Session = Depends(get_db), _=Depends(reader)):
+    _topology(db, topology_id)
+    query = db.query(TopologyLink).filter(
+        TopologyLink.topology_id == topology_id,
+        TopologyLink.discovery_method.in_(("LLDP", "CDP")),
+        TopologyLink.is_manual.is_(False),
+    ).order_by(TopologyLink.last_seen_at.desc())
+    return _page(query, LinkRead, page, page_size)
+
+
+@router.get("/{topology_id}/candidate-links/{link_id}", response_model=LinkRead)
+def candidate_link(topology_id: UUID, link_id: UUID,
+                   db: Session = Depends(get_db), _=Depends(reader)):
+    row = get_link(topology_id, link_id, db)
+    if row.is_manual or row.discovery_method not in {"LLDP", "CDP"}:
+        raise HTTPException(404, "Candidate link was not found.")
+    return row
+
+
+@router.post("/{topology_id}/candidate-links/{link_id}/confirm", response_model=LinkRead)
+def confirm_candidate_link(topology_id: UUID, link_id: UUID,
+                           db: Session = Depends(get_db), actor=Depends(admin)):
+    row = candidate_link(topology_id, link_id, db)
+    _get(db, TopologyNode, row.source_node_id, "Source node")
+    _get(db, TopologyNode, row.target_node_id, "Target node")
+    conflicting = db.scalar(select(TopologyLink.id).where(
+        TopologyLink.topology_id == topology_id,
+        TopologyLink.id != row.id,
+        TopologyLink.is_manual.is_(True), TopologyLink.is_confirmed.is_(True),
+        or_(
+            TopologyLink.source_interface_id == row.source_interface_id,
+            TopologyLink.target_interface_id == row.source_interface_id,
+        ) if row.source_interface_id else False,
+    ))
+    if conflicting:
+        raise HTTPException(409, "A confirmed manual link has precedence on this interface.")
+    row.is_confirmed = True
+    row.status = "active"
+    create_audit_log(db, actor.username, "TOPOLOGY_CANDIDATE_LINK_CONFIRMED", "TopologyLink", str(row.id), "Confirmed a reviewed protocol-discovered link.")
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.post("/{topology_id}/candidate-links/{link_id}/reject", response_model=LinkRead)
+def reject_candidate_link(topology_id: UUID, link_id: UUID,
+                          db: Session = Depends(get_db), actor=Depends(admin)):
+    row = candidate_link(topology_id, link_id, db)
+    row.status = "inactive"
+    row.is_suppressed = True
+    create_audit_log(db, actor.username, "TOPOLOGY_CANDIDATE_LINK_REJECTED", "TopologyLink", str(row.id), "Rejected a protocol-discovered candidate link.")
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@router.post("/{topology_id}/candidate-links/{link_id}/suppress", response_model=LinkRead)
+def suppress_candidate_link(topology_id: UUID, link_id: UUID,
+                            db: Session = Depends(get_db), actor=Depends(admin)):
+    row = candidate_link(topology_id, link_id, db)
+    row.is_suppressed = True
+    create_audit_log(db, actor.username, "TOPOLOGY_CANDIDATE_LINK_SUPPRESSED", "TopologyLink", str(row.id), "Suppressed a protocol-discovered candidate link.")
+    db.commit()
+    db.refresh(row)
+    return row
 
 
 @router.get("/{topology_id}/changes")

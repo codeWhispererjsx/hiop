@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0-dev — Epic 5B
+
+- Added secure bounded LLDP and Cisco CDP neighbor collection using approved fixed OID roots.
+- Added collection runs, observations, candidates, provisional nodes/links, confidence evidence, conflict handling, grace aging, review APIs, tests, and documentation.
+- Preserved manual-link precedence and excluded arbitrary walks, inventory mutation, auto-confirmation, scheduling, topology maps, and real hotel-network collection.
+
 ## 2.0.0-dev — Epic 5A
 
 - Added relational topology models, repositories, services, APIs, snapshots, bootstrap, migration, tests, and documentation.

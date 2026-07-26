@@ -398,3 +398,6 @@ Authorized users can open **SNMP Monitoring** to review infrastructure health, r
 
 Authorized users can review target health, poll history, interfaces, metrics, state changes, reports, and open
 deduplicated alerts. Administrators additionally manage rules, schedules, maintenance, and retention.
+## Topology neighbor evidence
+
+Technicians may inspect run history, normalized LLDP/CDP observations, candidates, and provisional links. Administrators control collection and review. A provisional node/link is evidence awaiting review, not an inventory device or automatically confirmed physical relationship.

@@ -117,3 +117,8 @@ Epic 4D adds the paginated `GET /api/v1/snmp/state-changes` integration endpoint
 
 Authenticated APIs cover alert-rule CRUD/enable/disable/preview, target evaluation, unresolved events, scheduler
 health/reconciliation, target pause/resume, and maintenance. Mutations are admin-only; preview creates no alerts.
+## Epic 5B topology neighbor discovery
+
+Admin-only collection and review routes are available under `/api/v1/topology/{topology_id}`: `collect-neighbors`, `targets/{target_id}/collect-neighbors`, `neighbor-runs`, run cancellation/results, `neighbor-observations`, `neighbor-candidates` with match/ignore/restore/confirm-node-match actions, and `candidate-links` with confirm/reject/suppress actions. List/detail routes allow admin and technician roles.
+
+Collection accepts only target IDs, `auto|lldp|cdp|both`, and `dry_run`. It never accepts credentials, endpoints, OIDs, or arbitrary walk roots. All lists are paginated.

@@ -458,3 +458,6 @@ Epic 4B permits administrators to run an explicit saved-credential target test o
 
 Approve ranges, credentials, targets, profiles/OIDs, and schedules in order. Preview rules before enabling, use
 maintenance for planned work, monitor scheduler health, and preview retention before manual cleanup.
+## LLDP/CDP neighbor review
+
+Use neighbor collection only for approved SNMP targets. Start with dry run, inspect warnings and counts, then run persisted collection. Review candidates and provisional links before confirmation. Confirmed manual links remain authoritative. LLDP is the default; use CDP only for a supported Cisco profile.
