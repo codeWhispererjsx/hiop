@@ -27,7 +27,18 @@ export default function DashboardLayout({
   liveEventRef.current = onLiveEvent;
   liveStateRef.current = onLiveStateChange;
   useLayoutEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    const resetScroll = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    resetScroll();
+    const frame = requestAnimationFrame(resetScroll);
+    const timer = window.setTimeout(resetScroll, 0);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
   }, [location.pathname]);
   useEffect(() => {
     void endpoints

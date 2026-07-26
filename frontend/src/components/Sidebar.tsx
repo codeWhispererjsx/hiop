@@ -38,7 +38,24 @@ export default function Sidebar({
     if (!nav) return;
     const stored = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY) ?? lastSidebarScroll);
     nav.scrollTop = stored;
-    const frame = requestAnimationFrame(() => { nav.scrollTop = stored; });
+    const frame = requestAnimationFrame(() => {
+      nav.scrollTop = stored;
+      const active = nav.querySelector<HTMLElement>(".nav-link.active");
+      if (active) {
+        const navBounds = nav.getBoundingClientRect();
+        const activeBounds = active.getBoundingClientRect();
+        const hiddenAbove = activeBounds.top < navBounds.top;
+        const hiddenBelow = activeBounds.bottom > navBounds.bottom;
+        if (hiddenAbove || hiddenBelow) {
+          nav.scrollTop = Math.max(
+            0,
+            active.offsetTop - (nav.clientHeight - active.clientHeight) / 2,
+          );
+        }
+      }
+      lastSidebarScroll = nav.scrollTop;
+      sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(lastSidebarScroll));
+    });
     const remember = () => {
       lastSidebarScroll = nav.scrollTop;
       sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(lastSidebarScroll));
@@ -49,7 +66,7 @@ export default function Sidebar({
       remember();
       nav.removeEventListener("scroll", remember);
     };
-  }, []);
+  }, [role]);
   const handleNavigation = () => {
     const nav = navRef.current;
     if (nav) {
