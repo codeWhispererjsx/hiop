@@ -91,3 +91,7 @@ Collection is bounded by targets, approved column roots, rows, duration, and SNM
 ## Epic 5E scheduled topology review
 
 Operational-run status/type/time, alert topology/time and open/severity, schedule topology, snapshot time, and existing graph queries are indexed. Collection caps targets, reuses SNMP request limits, coalesces missed jobs, adds jitter, and prevents concurrent operations per topology. Analytics use bounded adjacency/Tarjan traversal and return summarized IDs rather than graph payloads. Run/history APIs paginate; exports and cleanup are bounded. Production cardinality/query-plan testing remains pending an approved synthetic environment.
+
+## Epic 6A analytics performance review
+
+Unique metric/entity/bucket keys support idempotent upsert; metric/entity/time indexes support bounded series and history. Services batch by configured limits, API lists paginate, time series cap points/range, and manual runs cap entities and duplicate scopes. Percentiles operate on bounded bucket samples. No analytics scheduler can create background load. Production-cardinality `EXPLAIN ANALYZE` validation remains pending an approved synthetic dataset.

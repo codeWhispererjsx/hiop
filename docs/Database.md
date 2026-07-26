@@ -96,3 +96,7 @@ All changes are additive. Owning topology deletion cascades inference-only rows;
 ## Epic 5E topology operations migration
 
 Migration `fa6d8e1c4b20` adds `topology_schedule_configurations`, `topology_operational_runs`, `topology_alert_rules`, and `topology_alert_events`. It also adds protected/baseline flags to topology snapshots. Schedule topology IDs are unique; operational status/time and alert topology/open/time lookups are indexed. Downgrade removes only these additive objects and columns.
+
+## Epic 6A analytics schema
+
+Migration `b7d9e2f4a601` adds 12 tables: metric definitions, aggregates, availability, health scores/configurations, capacity policies/assessments, SLA definitions/measurements, reliability measurements, runs, and data quality. Metric/entity/bucket and entity/period uniqueness constraints provide idempotency. Entity UUIDs intentionally have no cascading source foreign key so historical analytics survive inventory retirement. Downgrade drops only analytics tables in dependency-safe order.

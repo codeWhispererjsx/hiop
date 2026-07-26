@@ -465,3 +465,7 @@ Use neighbor collection only for approved SNMP targets. Start with dry run, insp
 ## Scheduled topology administration
 
 Open **Network Topology → Settings** for the selected topology. Enable only the required collection, inference, snapshot, change, and alert jobs; configure conservative intervals, jitter, target limits, and protocol mode; then save to reconcile deterministic jobs. Create a protected baseline before enabling change rules. Rules are disabled by default and should be previewed, reviewed, and enabled individually. Use maintenance mode for planned network changes so eligible alerts are suppressed without stopping evidence collection.
+
+## Analytics foundation administration
+
+Analytics configuration is API-only in Epic 6A. Create metric definitions only for documented fixed source mappings. Health weights normalize safely, but thresholds must descend from excellent to degraded. Capacity policies and SLA definitions are disabled by default. Begin manual work with a bounded dry run, inspect its safe summary, then explicitly request persistence. No analytics scheduler or recommendation engine exists.

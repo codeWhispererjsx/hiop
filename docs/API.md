@@ -156,3 +156,7 @@ The `/topology` frontend consumes these existing bounded contracts through one t
 - `POST /topology/{id}/snapshots/{snapshot_id}/baseline`
 
 All mutations require Admin. Read endpoints require Admin or Technician. Lists are paginated and exports are bounded/formula-safe.
+
+## Epic 6A analytics API
+
+Authenticated `/analytics` endpoints provide metric-definition CRUD, paginated aggregate queries, bounded UTC time series, availability, current/historical health, health-configuration CRUD, capacity policy/assessment queries, SLA definition/measurement queries, reliability measurements, manual dry/live runs with cancellation, and system/entity summaries. Admin is required for configuration and run mutations; Admin and Technician may read. No route accepts SQL, expressions, source table names, arbitrary transforms, unbounded time ranges, or analytics schedules.

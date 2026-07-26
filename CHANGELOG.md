@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 6A
+
+- Added advanced analytics definitions, idempotent aggregates, availability, explainable health scores/configurations, capacity policies/assessments, SLA definitions/measurements, reliability, data quality, and manual-run models.
+- Added controlled source mapping, bounded UTC time-series aggregation, percentiles, unknown/maintenance-aware availability, deterministic health/capacity/SLA/MTTR/MTBF services, and authenticated APIs.
+- Added additive migration `b7d9e2f4a601`, audit/WebSocket run integration, safe settings, synthetic tests, and analytics architecture/operations documentation.
+- Excluded dashboards, AI, forecasting, anomaly detection, automatic recommendations, scheduled analytics, and real hotel-data benchmarking.
+
 ## 2.0.0-dev — Epic 5E
 
 - Added deterministic scheduled topology collection, inference, snapshots, change evaluation, health checks, startup reconciliation, stale-run recovery, jitter, coalescing, and per-topology overlap protection.

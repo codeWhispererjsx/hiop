@@ -105,6 +105,20 @@ class Settings(BaseSettings):
     topology_inference_review_threshold: int = Field(default=75, ge=0, le=100)
     topology_inference_dependency_threshold: int = Field(default=70, ge=0, le=100)
     topology_inference_maximum_paths: int = Field(default=10, ge=1, le=100)
+
+    # Advanced analytics is opt-in. Epic 6A supports manual bounded runs only.
+    analytics_enabled: bool = True
+    analytics_maximum_time_range_days: int = Field(default=366, ge=1, le=3650)
+    analytics_maximum_entities_per_run: int = Field(default=500, ge=1, le=10000)
+    analytics_aggregation_batch_size: int = Field(default=500, ge=10, le=10000)
+    analytics_default_bucket_size: Literal["5_minutes", "15_minutes", "1_hour", "1_day", "1_week", "1_month"] = "1_hour"
+    analytics_health_score_valid_minutes: int = Field(default=60, ge=5, le=10080)
+    analytics_availability_unknown_policy: Literal["exclude", "report_unknown"] = "report_unknown"
+    analytics_maintenance_exclusion_enabled: bool = True
+    analytics_maximum_time_series_points: int = Field(default=1000, ge=10, le=10000)
+    analytics_retention_days: int = Field(default=730, ge=30, le=3650)
+    analytics_default_sla_measurement_window: Literal["1_day", "1_week", "1_month"] = "1_month"
+    analytics_manual_run_rate_limit_per_hour: int = Field(default=10, ge=1, le=100)
     snmp_allow_legacy_protocols: bool = False
     snmp_allow_v1: bool = False
     snmp_v3_required_in_production: bool = True

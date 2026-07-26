@@ -171,3 +171,5 @@ from app.api.v1.topology_operations import router as topology_operations_router
 app.include_router(topology_operations_router, prefix=settings.api_prefix)
 from app.api.v1.topology import router as topology_router
 app.include_router(topology_router, prefix=settings.api_prefix)
+from app.api.v1.analytics import router as analytics_router
+app.include_router(analytics_router, prefix=settings.api_prefix)

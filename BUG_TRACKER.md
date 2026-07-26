@@ -79,3 +79,10 @@ advanced on-call escalation remain out of scope.
 - Topology ticket creation and external escalation remain disabled policy flags pending an approved assignment/routing policy.
 - Structural articulation/bridge analysis is not a guarantee of packet paths or outage impact.
 - Real LLDP/CDP collection remains intentionally unverified without an explicitly approved safe target.
+
+## Epic 6A verification notes
+
+- Initial automatic persistence is limited to approved numeric aggregate mappings; derived service orchestration across every entity type is deferred.
+- Current tickets do not store a dedicated resolved timestamp, so reliable ticket-based MTTR requires future schema evidence.
+- Availability correctly preserves unknown time, but source precedence depends on the histories available for each entity.
+- Production-scale analytics query plans remain unverified without an approved synthetic benchmark dataset.

@@ -45,6 +45,12 @@ from app.models.topology_operations import (
     TopologyAlertEvent, TopologyAlertRule, TopologyOperationalRun,
     TopologyScheduleConfiguration,
 )
+from app.models.analytics import (
+    AnalyticsAggregate, AnalyticsAvailability, AnalyticsDataQualityRecord,
+    AnalyticsMetricDefinition, AnalyticsRun, CapacityAssessment, CapacityPolicy,
+    EntityHealthScore, HealthScoreConfiguration, ReliabilityMeasurement,
+    SLADefinition, SLAMeasurement,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -543,3 +543,7 @@ Complete at `2.0.0-dev`: bounded inference runs, multi-source confidence history
 ## Epic 5E — scheduled topology operations and hardening
 
 Complete at `2.0.0-dev`: deterministic per-topology jobs, startup reconciliation, stale-run recovery, bounded collection/inference/snapshots/change/health workflows, protected baselines, deduplicated alert events with recovery and maintenance suppression, operational health/analytics/report/export APIs, retention controls, responsive administrator UI, tests, and documentation. No traps, device configuration, automatic remediation, or real hotel-network execution was added.
+
+## Epic 6A — advanced analytics foundation
+
+Complete at `2.0.0-dev`: additive analytics persistence, controlled metric mappings, idempotent UTC buckets, explicit unknown-time availability, explainable coverage-aware health scoring, threshold capacity indicators, SLA/reliability foundations, bounded manual background runs, protected query/configuration APIs, tests, and documentation. Dashboards, forecasting, anomaly detection, AI recommendations, scheduled analytics, and production benchmarking remain excluded.

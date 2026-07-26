@@ -132,3 +132,7 @@ Apply migration `e1d3f5a7b902`, keep approved SNMP ranges narrow, and retain con
 Apply migration `fa6d8e1c4b20`, then verify `alembic current`. HIOP runs one shared APScheduler instance; topology jobs use stable IDs and are reconciled during startup. Monitor `/health`, `/api/v1/topology/{id}/scheduler-status`, operational runs, stale evidence, failed runs, and open alerts. Repeated startup reconciliation is safe. Pause/resume preserves configuration. Stale runs are finalized safely at startup; missed intervals coalesce instead of replaying a burst.
 
 Before retention cleanup, preview eligible counts, confirm a protected operational baseline exists, and verify backups. Cleanup is batched and excludes protected snapshots, baselines, audit records, onboarding history, and active runs. During planned changes, start maintenance with a reason/end time and end it explicitly afterward.
+
+## Epic 6A analytics operations
+
+Apply migration `b7d9e2f4a601` and verify the current revision. Analytics runs are manual only, default to dry run, reject duplicate active scopes, enforce time/entity/point limits, and support cooperative cancellation. Monitor run status, safe error summaries, source freshness, data coverage, and calculation validity. Do not interpret unknown intervals as available or stale scores as current. Retention settings are foundations only; no cleanup job is scheduled.
