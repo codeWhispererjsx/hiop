@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/refs */
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import { endpoints } from "../lib/api";
@@ -17,6 +17,7 @@ export default function DashboardLayout({
   onLiveStateChange?: (connected: boolean) => void;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const [live, setLive] = useState(false);
   const [user, setUser] = useState<User>();
@@ -25,6 +26,9 @@ export default function DashboardLayout({
   const liveStateRef = useRef(onLiveStateChange);
   liveEventRef.current = onLiveEvent;
   liveStateRef.current = onLiveStateChange;
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname]);
   useEffect(() => {
     void endpoints
       .me()

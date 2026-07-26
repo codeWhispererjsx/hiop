@@ -2,7 +2,7 @@
 import {
   useEffect, useState, type FormEvent, type ReactNode,
 } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import Modal from "../components/Modal";
 import { Feedback } from "../components/Feedback";
@@ -88,6 +88,7 @@ function useADWebSocket(onEvent: (event: string, data: unknown) => void) {
 /* ─── root page ────────────────────────────────────────────────────────── */
 export default function ActiveDirectoryPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const user = useRequest(endpoints.me, []);
   const section = location.pathname.replace(/^\/active-directory\/?/, "").split("/")[0] || "";
 
@@ -112,6 +113,15 @@ export default function ActiveDirectoryPage() {
           </Link>
         ))}
       </nav>
+      <label className="ad-mobile-section">
+        <span>Active Directory section</span>
+        <select
+          value={section}
+          onChange={(event) => navigate(`/active-directory${event.target.value ? `/${event.target.value}` : ""}`)}
+        >
+          {tabs.map(([path, label]) => <option key={path} value={path}>{label}</option>)}
+        </select>
+      </label>
       {section === "" && <Overview />}
       {section === "connections" && <Connections />}
       {section === "sync-runs" && <SyncRuns />}
