@@ -104,3 +104,7 @@ SNMP secrets use authenticated encryption and write-only schemas. Target address
 Epic 4C preserves those controls: collection groups are allow-listed, candidates cannot create inventory without administrator review and complete Device validation, links reject contradictions, enrichment is field allow-listed and freshness-aware, and retention mutation is admin-only and audited. Metric/state broadcasts are summaries and secrets/raw responses are never included. This remains a code and configuration review, not formal penetration testing.
 
 Epic 4B preserves those boundaries for live communication: DNS results are revalidated against authorized/ignored CIDRs, secrets are decrypted immediately before adapter construction, protocol downgrade is prohibited, operations are rate/concurrency limited, walks are bounded and subtree constrained, and public raw OID operations remain absent. WebSocket, audit, error, and notification payloads contain IDs/categories/counts only. Verification used injected adapters, not production targets.
+## Epic 4E SNMP security
+
+Schedules reuse address authorization, encrypted credentials, OID allowlisting, limits, and locks. Alert expressions
+are fixed operators. Operational mutations are admin-only; aggregate health and evidence exclude secrets and packets.

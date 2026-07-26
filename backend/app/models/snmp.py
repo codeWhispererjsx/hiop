@@ -300,6 +300,20 @@ class SNMPPollingConfiguration(Base):
     max_interfaces: Mapped[int] = mapped_column(Integer, default=256, server_default="256", nullable=False)
     stale_after_seconds: Mapped[int] = mapped_column(Integer, default=900, server_default="900", nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    availability_interval_seconds: Mapped[int] = mapped_column(Integer, default=300, server_default="300", nullable=False)
+    system_interval_seconds: Mapped[int] = mapped_column(Integer, default=900, server_default="900", nullable=False)
+    interface_inventory_interval_seconds: Mapped[int] = mapped_column(Integer, default=3600, server_default="3600", nullable=False)
+    interface_performance_interval_seconds: Mapped[int] = mapped_column(Integer, default=300, server_default="300", nullable=False)
+    device_performance_interval_seconds: Mapped[int] = mapped_column(Integer, default=600, server_default="600", nullable=False)
+    jitter_seconds: Mapped[int] = mapped_column(Integer, default=30, server_default="30", nullable=False)
+    failure_threshold: Mapped[int] = mapped_column(Integer, default=3, server_default="3", nullable=False)
+    recovery_threshold: Mapped[int] = mapped_column(Integer, default=2, server_default="2", nullable=False)
+    maintenance_mode: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    maintenance_reason: Mapped[str | None] = mapped_column(String(500))
+    maintenance_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    maintenance_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    maintenance_started_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    last_scheduler_reconciliation_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     target: Mapped[SNMPTarget] = relationship(back_populates="polling_configuration")
@@ -385,6 +399,14 @@ class SNMPInterface(Base):
     connector_present: Mapped[bool | None] = mapped_column(Boolean)
     is_missing: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     missed_polls: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    monitored: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    critical: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    alert_on_down: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    alert_on_utilization: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    utilization_warning: Mapped[float | None] = mapped_column(Float)
+    utilization_critical: Mapped[float | None] = mapped_column(Float)
+    alert_on_errors: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    monitoring_notes: Mapped[str | None] = mapped_column(String(500))
     missing_since: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -509,3 +531,60 @@ class SNMPStateChange(Base):
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class SNMPAlertRule(Base):
+    __tablename__ = "snmp_alert_rules"
+    __table_args__ = (
+        CheckConstraint("comparison_operator IN ('greater_than','greater_than_or_equal','less_than','less_than_or_equal','equal','not_equal','state_changed','missing','stale')", name="ck_snmp_alert_rule_operator"),
+        CheckConstraint("severity IN ('info','warning','high','critical')", name="ck_snmp_alert_rule_severity"),
+        Index("ix_snmp_alert_rules_target_enabled", "target_id", "enabled"),
+        Index("ix_snmp_alert_rules_profile_enabled", "profile_id", "enabled"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    rule_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_targets.id", ondelete="CASCADE"))
+    profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_device_profiles.id", ondelete="CASCADE"))
+    interface_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_interfaces.id", ondelete="CASCADE"))
+    metric_key: Mapped[str | None] = mapped_column(String(120))
+    comparison_operator: Mapped[str] = mapped_column(String(40), nullable=False)
+    warning_threshold: Mapped[float | None] = mapped_column(Float)
+    critical_threshold: Mapped[float | None] = mapped_column(Float)
+    evaluation_window: Mapped[int] = mapped_column(Integer, default=5, server_default="5", nullable=False)
+    minimum_samples: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    consecutive_breaches: Mapped[int] = mapped_column(Integer, default=2, server_default="2", nullable=False)
+    recovery_samples: Mapped[int] = mapped_column(Integer, default=2, server_default="2", nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), default="warning", server_default="warning", nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    suppress_during_maintenance: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    notification_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class SNMPAlertEvent(Base):
+    __tablename__ = "snmp_alert_events"
+    __table_args__ = (
+        Index("ix_snmp_alert_events_open_severity", "is_open", "severity"),
+        Index("ix_snmp_alert_events_target_last_seen", "target_id", "last_seen_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_alert_rules.id", ondelete="CASCADE"), nullable=False)
+    target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_targets.id", ondelete="CASCADE"), nullable=False)
+    interface_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_interfaces.id", ondelete="CASCADE"))
+    poll_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_poll_runs.id", ondelete="SET NULL"))
+    metric_key: Mapped[str] = mapped_column(String(120), default="", server_default="", nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    is_open: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    breach_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    recovery_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    flapping: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    recovery_evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)

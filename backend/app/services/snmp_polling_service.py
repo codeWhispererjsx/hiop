@@ -40,7 +40,7 @@ class SNMPPollingService:
             raise HTTPException(409, f"Cannot transition SNMP poll from {run.status} to {target}.")
         run.status = target
 
-    def create_poll_run(self, target_id, actor, poll_type="system"):
+    def create_poll_run(self, target_id, actor, poll_type="system", trigger_type="manual"):
         active = self.db.scalar(select(SNMPPollRun).where(
             SNMPPollRun.target_id == target_id, SNMPPollRun.status.in_(("pending", "running"))
         ))
@@ -48,7 +48,7 @@ class SNMPPollingService:
             raise HTTPException(409, "Target already has an active SNMP poll.")
         run = SNMPPollRun(
             id=uuid.uuid4(), target_id=target_id, triggered_by=actor.id,
-            trigger_type="manual", poll_type=poll_type, status="pending",
+            trigger_type=trigger_type, poll_type=poll_type, status="pending",
         )
         self.db.add(run)
         create_audit_log(self.db, actor.username, "SNMP_POLL_STARTED", "SNMPPollRun", str(run.id), f"Created manual {poll_type} SNMP poll.")
@@ -334,6 +334,9 @@ class SNMPPollingService:
         if status in {"partial", "failed"}:
             notify_snmp(self.db, f"HIOP SNMP poll {status}", f"Poll {run.id} for target {target.id} ended {status}.")
         self.db.commit(); self.db.refresh(run)
+        if getattr(target.polling_configuration, "alerting_enabled", False):
+            from app.services.snmp_alert_service import SNMPAlertService
+            SNMPAlertService(self.db).evaluate_target(target, run, actor.username)
         return run
 
     def cancel_poll(self, run, actor):

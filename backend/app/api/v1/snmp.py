@@ -10,7 +10,7 @@ from app.core.security import get_db, require_roles
 from app.models.snmp import (
     SNMPCredential, SNMPDeviceProfile, SNMPDiscoveryCandidate, SNMPInterface,
     SNMPInterfaceChange, SNMPMatchCandidate, SNMPMetric, SNMPOIDDefinition,
-    SNMPPollingConfiguration, SNMPPollRun, SNMPStateChange, SNMPTarget,
+    SNMPAlertEvent, SNMPAlertRule, SNMPPollingConfiguration, SNMPPollRun, SNMPStateChange, SNMPTarget,
 )
 from app.repositories.snmp_repository import (
     SNMPCredentialRepository, SNMPDeviceProfileRepository,
@@ -30,6 +30,7 @@ from app.schemas.snmp import (
     SNMPCandidateOnboardRequest, SNMPCandidateEnrichRequest, SNMPMatchRead,
     SNMPInterfaceChangeRead,
     SNMPStateChangeRead,
+    SNMPAlertEventRead, SNMPAlertRuleRead, SNMPAlertRuleUpdate, SNMPAlertRuleWrite,
 )
 from app.services.audit_service import create_audit_log
 from app.services.snmp_credential_service import SNMPCredentialService
@@ -42,6 +43,11 @@ from app.core.rate_limit import (
     snmp_target_test_limiter,
 )
 from app.core.config import settings
+from app.services.snmp_alert_service import SNMPAlertService
+from app.services.scheduler_service import (
+    pause_target_jobs, reconcile_snmp_jobs, remove_snmp_jobs, resume_target_jobs,
+    scheduler, update_snmp_jobs,
+)
 
 router = APIRouter(prefix="/snmp", tags=["SNMP"])
 admin_only = require_roles(["admin"])
@@ -263,7 +269,44 @@ def put_polling_config(target_id: UUID, payload: SNMPPollingConfigurationWrite, 
     for key, value in payload.model_dump().items(): setattr(row, key, value)
     create_audit_log(db, actor.username, "SNMP_POLLING_CONFIG_UPDATED", "SNMPTarget", str(target_id), "Updated inactive SNMP polling configuration.")
     db.commit(); db.refresh(row)
+    update_snmp_jobs(str(target_id))
     return row
+
+
+@router.post("/targets/{target_id}/maintenance", response_model=SNMPPollingConfigurationRead)
+def set_maintenance(target_id: UUID, enabled: bool, reason: str | None = Query(default=None, max_length=500),
+                    ends_at: datetime | None = None, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    _get(db, SNMPTarget, target_id, "SNMP target")
+    row = db.query(SNMPPollingConfiguration).filter_by(target_id=target_id).first()
+    if not row:
+        raise HTTPException(404, "SNMP polling configuration was not found.")
+    row.maintenance_mode = enabled
+    row.maintenance_reason = reason if enabled else None
+    row.maintenance_started_at = datetime.now().astimezone() if enabled else None
+    row.maintenance_ends_at = ends_at if enabled else None
+    row.maintenance_started_by = actor.id if enabled else None
+    create_audit_log(db, actor.username, "SNMP_MAINTENANCE_ENTERED" if enabled else "SNMP_MAINTENANCE_EXITED",
+                     "SNMPTarget", str(target_id), "Changed SNMP target maintenance state.")
+    db.commit(); db.refresh(row)
+    return row
+
+
+@router.post("/targets/{target_id}/polling/pause")
+def pause_polling(target_id: UUID, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    _get(db, SNMPTarget, target_id, "SNMP target")
+    count = pause_target_jobs(str(target_id))
+    create_audit_log(db, actor.username, "SNMP_POLLING_PAUSED", "SNMPTarget", str(target_id), f"Paused {count} jobs.")
+    db.commit()
+    return {"target_id": target_id, "paused_jobs": count}
+
+
+@router.post("/targets/{target_id}/polling/resume")
+def resume_polling(target_id: UUID, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    _get(db, SNMPTarget, target_id, "SNMP target")
+    count = resume_target_jobs(str(target_id))
+    create_audit_log(db, actor.username, "SNMP_POLLING_RESUMED", "SNMPTarget", str(target_id), f"Reconciled {count} jobs.")
+    db.commit()
+    return {"target_id": target_id, "registered_jobs": count}
 
 
 def _read_page(repository, schema, page, page_size, filters=None):
@@ -496,3 +539,95 @@ def state_changes(page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, l
     rows = query.order_by(SNMPStateChange.detected_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
     return {"items": [SNMPStateChangeRead.model_validate(row) for row in rows],
             "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/alert-rules")
+def alert_rules(page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100),
+                target_id: UUID | None = None, severity: str | None = None, enabled: bool | None = None,
+                db: Session = Depends(get_db), _=Depends(read_only)):
+    query = db.query(SNMPAlertRule)
+    if target_id: query = query.filter_by(target_id=target_id)
+    if severity: query = query.filter_by(severity=severity)
+    if enabled is not None: query = query.filter_by(enabled=enabled)
+    total = query.count()
+    rows = query.order_by(SNMPAlertRule.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return {"items": [SNMPAlertRuleRead.model_validate(row) for row in rows], "total": total, "page": page, "page_size": page_size}
+
+
+@router.post("/alert-rules", response_model=SNMPAlertRuleRead, status_code=201)
+def create_alert_rule(payload: SNMPAlertRuleWrite, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    if payload.target_id: _get(db, SNMPTarget, payload.target_id, "SNMP target")
+    if payload.interface_id:
+        interface = _get(db, SNMPInterface, payload.interface_id, "SNMP interface")
+        if interface.target_id != payload.target_id: raise HTTPException(400, "Interface does not belong to the selected target.")
+    row = SNMPAlertRule(**payload.model_dump(), created_by=actor.id, updated_by=actor.id)
+    db.add(row)
+    create_audit_log(db, actor.username, "SNMP_ALERT_RULE_CREATED", "SNMPAlertRule", str(row.id), f"Created disabled-by-default SNMP rule '{row.name}'.")
+    db.commit(); db.refresh(row)
+    return row
+
+
+@router.post("/alert-rules/preview")
+def preview_alert_rule(payload: SNMPAlertRuleWrite, db: Session = Depends(get_db), _=Depends(admin_only)):
+    return SNMPAlertService(db).preview(SNMPAlertRule(**payload.model_dump()))
+
+
+@router.get("/alert-rules/{rule_id}", response_model=SNMPAlertRuleRead)
+def alert_rule(rule_id: UUID, db: Session = Depends(get_db), _=Depends(read_only)):
+    return _get(db, SNMPAlertRule, rule_id, "SNMP alert rule")
+
+
+@router.patch("/alert-rules/{rule_id}", response_model=SNMPAlertRuleRead)
+def update_alert_rule(rule_id: UUID, payload: SNMPAlertRuleUpdate, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    row = _get(db, SNMPAlertRule, rule_id, "SNMP alert rule")
+    for key, value in payload.model_dump(exclude_unset=True).items(): setattr(row, key, value)
+    row.updated_by = actor.id
+    create_audit_log(db, actor.username, "SNMP_ALERT_RULE_UPDATED", "SNMPAlertRule", str(row.id), f"Updated SNMP rule '{row.name}'.")
+    db.commit(); db.refresh(row)
+    return row
+
+
+@router.post("/alert-rules/{rule_id}/enable", response_model=SNMPAlertRuleRead)
+def enable_alert_rule(rule_id: UUID, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    return update_alert_rule(rule_id, SNMPAlertRuleUpdate(enabled=True), db, actor)
+
+
+@router.post("/alert-rules/{rule_id}/disable", response_model=SNMPAlertRuleRead)
+def disable_alert_rule(rule_id: UUID, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    return update_alert_rule(rule_id, SNMPAlertRuleUpdate(enabled=False), db, actor)
+
+
+@router.post("/targets/{target_id}/evaluate-alerts")
+def evaluate_alerts(target_id: UUID, db: Session = Depends(get_db), actor=Depends(admin_only)):
+    return SNMPAlertService(db).evaluate_target(_get(db, SNMPTarget, target_id, "SNMP target"), actor=actor.username)
+
+
+@router.get("/alerts")
+def snmp_alerts(page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100),
+                target_id: UUID | None = None, open_only: bool = True,
+                db: Session = Depends(get_db), _=Depends(read_only)):
+    query = db.query(SNMPAlertEvent)
+    if target_id: query = query.filter_by(target_id=target_id)
+    if open_only: query = query.filter_by(is_open=True)
+    total = query.count()
+    rows = query.order_by(SNMPAlertEvent.last_seen_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    return {"items": [SNMPAlertEventRead.model_validate(row) for row in rows], "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/scheduler/health")
+def snmp_scheduler_health(db: Session = Depends(get_db), _=Depends(admin_only)):
+    jobs = [job for job in scheduler.get_jobs() if job.id.startswith("snmp_")]
+    active = db.query(SNMPPollRun).filter(SNMPPollRun.status.in_(("pending", "running"))).count()
+    return {
+        "running": scheduler.running, "registered_jobs": len(jobs), "active_polls": active,
+        "jobs": [{"id": job.id, "next_run_time": job.next_run_time} for job in jobs],
+        "integration_enabled": settings.snmp_enabled, "global_concurrency": settings.snmp_poll_concurrency,
+    }
+
+
+@router.post("/scheduler/reconcile")
+def reconcile_scheduler(db: Session = Depends(get_db), actor=Depends(admin_only)):
+    result = reconcile_snmp_jobs()
+    create_audit_log(db, actor.username, "SNMP_SCHEDULER_RECONCILED", "SNMPTarget", None, f"Reconciled SNMP jobs: {result}.")
+    db.commit()
+    return result

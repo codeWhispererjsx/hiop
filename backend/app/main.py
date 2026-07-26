@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.db.database import SessionLocal
 from app.models.network_scan import NetworkScan
+from app.models.snmp import SNMPPollRun
 from app.devices.routes import router as device_router
 from app.tickets.routes import router as ticket_router
 from app.scanner.routes import router as scanner_router
@@ -90,11 +91,18 @@ def root():
 def health():
     database = "available"
     last_scan = None
+    snmp_health = {"integration_enabled": settings.snmp_enabled, "scheduler_jobs": 0, "active_polls": 0, "stale_runs": 0}
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
         latest = db.query(NetworkScan.scanned_at).order_by(NetworkScan.scanned_at.desc()).first()
         last_scan = latest[0].isoformat() if latest and latest[0] else None
+        if settings.snmp_enabled:
+            cutoff = datetime.now(timezone.utc).timestamp() - settings.snmp_stale_run_timeout_seconds
+            active = db.query(SNMPPollRun).filter(SNMPPollRun.status.in_(("pending", "running")))
+            snmp_health["active_polls"] = active.count()
+            snmp_health["stale_runs"] = sum(1 for run in active.limit(settings.snmp_poll_concurrency * 2).all() if run.started_at.timestamp() < cutoff)
+            snmp_health["scheduler_jobs"] = sum(job.id.startswith("snmp_") for job in scheduler.get_jobs())
     except Exception:
         database = "unavailable"
     finally:
@@ -113,6 +121,7 @@ def health():
         "websocket": {"status": "available", "active_connections": manager.connection_count},
         "network_scanner": "available",
         "last_scan": last_scan,
+        "snmp": snmp_health,
     }
     return JSONResponse(payload, status_code=200 if healthy else 503)
 

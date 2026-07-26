@@ -519,3 +519,7 @@ Complete at `2.0.0-dev`: explainable inventory/discovery matching, mandatory-fie
 ## Epic 4D — SNMP monitoring frontend
 
 Complete at `2.0.0-dev`: lazy-loaded responsive SNMP workspace, role-aware credential/target administration, secret rotation, structured testing, approved collection, candidate evidence, target/interface monitoring, accessible bounded charts, poll/state history, retention, reports, typed APIs, WebSocket refetch integration, dark/light styles, and contract tests. Scheduling, alert rules, topology, traps, and real hotel-network polling remain excluded.
+## Epic 4E
+
+Scheduled SNMP polling, reconciliation/recovery, maintenance, reviewed rules, alert deduplication/recovery, scheduler
+UI, protected retention, and health integration are implemented. Version remains `2.0.0-dev`.

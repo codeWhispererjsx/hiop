@@ -70,3 +70,7 @@ Epic 4A adds nine additive PostgreSQL tables: `snmp_credentials`, `snmp_targets`
 # SNMP Epic 4C additions
 
 Migration `e3a7c9d5b102` adds `snmp_match_candidates`, `snmp_device_links`, `snmp_interface_changes`, and `snmp_state_changes`. It extends interfaces with missing/grace/connector state and metrics with a bounded quality reason plus an interface/key/time index. All changes are additive and downgrade removes only Epic 4C structures.
+## SNMP Epic 4E
+
+Migration `f5e4d3c2b1a0` adds schedules, jitter, maintenance/recovery metadata, interface monitoring policy, and indexed
+`snmp_alert_rules`/`snmp_alert_events`. It is additive and includes a downgrade.

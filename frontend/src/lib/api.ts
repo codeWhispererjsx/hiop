@@ -41,7 +41,7 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
   return response.json() as Promise<T>;
 }
 
-function queryString(values: Record<string, string | number | undefined>) {
+function queryString(values: Record<string, string | number | boolean | undefined>) {
   const params = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => { if (value !== undefined && value !== "") params.set(key, String(value)); });
   const query = params.toString();
@@ -231,4 +231,15 @@ export const endpoints = {
   snmpStateChanges: (filters:Record<string,string|number|undefined>={}) => api<import("./types").SNMPPage<import("./types").SNMPStateChange>>(`/snmp/state-changes${queryString(filters)}`),
   snmpRetentionPreview: () => api<import("./types").SNMPRetentionPreview>("/snmp/retention/preview"),
   runSNMPRetentionCleanup: () => api<import("./types").SNMPRetentionPreview>("/snmp/retention/cleanup",{method:"POST"}),
+  snmpAlertRules: (filters:Record<string,string|number|boolean|undefined>={}) => api<import("./types").SNMPPage<import("./types").SNMPAlertRule>>(`/snmp/alert-rules${queryString(filters)}`),
+  createSNMPAlertRule: (body:Record<string,unknown>) => api<import("./types").SNMPAlertRule>("/snmp/alert-rules",{method:"POST",body:JSON.stringify(body)}),
+  updateSNMPAlertRule: (id:string,body:Record<string,unknown>) => api<import("./types").SNMPAlertRule>(`/snmp/alert-rules/${id}`,{method:"PATCH",body:JSON.stringify(body)}),
+  previewSNMPAlertRule: (body:Record<string,unknown>) => api<{items:Array<{target_id:string;would_trigger:boolean;sample_count:number}>;estimated_alert_count:number}>("/snmp/alert-rules/preview",{method:"POST",body:JSON.stringify(body)}),
+  snmpAlerts: (filters:Record<string,string|number|boolean|undefined>={}) => api<import("./types").SNMPPage<import("./types").SNMPAlertEvent>>(`/snmp/alerts${queryString(filters)}`),
+  evaluateSNMPAlerts: (id:string) => api<Record<string,number>>(`/snmp/targets/${id}/evaluate-alerts`,{method:"POST"}),
+  snmpSchedulerHealth: () => api<import("./types").SNMPSchedulerHealth>("/snmp/scheduler/health"),
+  reconcileSNMPScheduler: () => api<Record<string,number>>("/snmp/scheduler/reconcile",{method:"POST"}),
+  pauseSNMPPolling: (id:string) => api<Record<string,number>>(`/snmp/targets/${id}/polling/pause`,{method:"POST"}),
+  resumeSNMPPolling: (id:string) => api<Record<string,number>>(`/snmp/targets/${id}/polling/resume`,{method:"POST"}),
+  setSNMPMaintenance: (id:string,enabled:boolean,reason="") => api<import("./types").SNMPPollingConfiguration>(`/snmp/targets/${id}/maintenance${queryString({enabled,reason})}`,{method:"POST"}),
 };

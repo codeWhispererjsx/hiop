@@ -390,3 +390,7 @@ The final step requests a fresh server readiness check and shows exact create, u
 # SNMP Monitoring
 
 Authorized users can open **SNMP Monitoring** to review infrastructure health, recent poll runs, interfaces, metrics, state changes, and candidate evidence. Administrators additionally manage credentials/targets/profiles, perform explicit tests and collections, review candidates, and run previewed retention cleanup. Empty or unsupported metric sections are intentional; HIOP never fabricates monitoring data.
+## SNMP monitoring
+
+Authorized users can review target health, poll history, interfaces, metrics, state changes, reports, and open
+deduplicated alerts. Administrators additionally manage rules, schedules, maintenance, and retention.

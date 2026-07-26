@@ -115,3 +115,7 @@ SNMP target tests and manual polls are opt-in administrator actions. Monitor saf
 Epic 4C adds reviewed collection groups, interface inventory, rates, state history, and manual retention cleanup. Preview retention before execution. Truncated/partial inventory never marks interfaces missing. Counter resets, long gaps, and reboots intentionally suppress rates. No scheduled collection or cleanup is registered.
 
 Epic 4D adds the `/snmp` monitoring workspace. WebSocket summary events trigger bounded refetches; the overview uses controlled polling as fallback and charts never ingest unbounded socket streams. Use target/interface quality labels to distinguish stale, reset, missing, invalid, and unsupported samples. No SNMP scheduler or alert-rule worker is introduced.
+## SNMP scheduled monitoring
+
+SNMP is opt-in. Startup reconciles jobs and stale runs. Administrators can inspect/reconcile, pause/resume, and use
+maintenance. Daily retention at `SNMP_CLEANUP_HOUR_UTC` protects open-alert evidence and permanent histories.

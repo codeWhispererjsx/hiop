@@ -76,3 +76,7 @@ Frontend ESLint and the production build pass. All 10 backend contract tests pas
 # Epic 4C SNMP performance review
 
 Operational queries are target/time and interface/key/time indexed, paginated, and bounded. Interface inventory uses one bulk lookup and change-only history. Counter derivation queries only the latest prior sample; collection and API limits cap interfaces, OIDs, metrics, groups, and page sizes. Retention can be previewed and executed manually. Large-scale production cardinality and database-specific query plans remain to be measured with sanitized synthetic data.
+## Epic 4E SNMP performance
+
+Jitter, global/target locks, deterministic replacement, bounded sample windows, relevant indexes, one cleanup job, and
+controlled summary refetches bound scheduler, database, and WebSocket load.

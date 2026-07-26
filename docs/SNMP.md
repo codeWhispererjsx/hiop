@@ -149,3 +149,22 @@ Troubleshooting:
 ## Current limitations after Epic 4D
 
 There is no scheduled SNMP polling, alert-rule generation, topology mapping, trap/inform receiver, unreviewed onboarding, persisted metric rollup table, or real-network acceptance test. SNMP report export and a full client-side onboarding mutation form remain limited to safe plans/typed APIs until their dedicated backend/report workflows are finalized. Real hotel-network polling remains prohibited without explicit approval.
+# Epic 4E: scheduled monitoring and alerts
+
+The single HIOP APScheduler creates deterministic per-target/per-group jobs. Startup reconciliation replaces changed
+jobs, removes orphans, and recovers stale runs. Bounded jitter, `max_instances=1`, and shared locks prevent poll storms
+and overlap. Eligibility requires the integration setting, target, credential, polling flag, and polling configuration
+to be enabled; normal address, approved-OID, credential, retry, and concurrency checks still apply.
+
+Maintenance is audited and optionally time-bounded. Collection may continue, but configured rules suppress new events;
+maintenance alone never resolves existing events. Alert rules are disabled by default and use fixed comparisons.
+Events deduplicate by rule/target/interface/metric, update evidence counters, use multi-sample recovery, and mark
+flapping. Evidence excludes secrets, packets, and raw library errors.
+
+One daily cleanup job uses the previewed retention policy. Samples referenced by open alerts and all audit, onboarding,
+interface/state, and alert history are protected. Production operators must prefer SNMPv3, review authorized ranges,
+schedules, OIDs, jitter, concurrency, thresholds, maintenance, notifications, backups, and retention before enabling
+SNMP. Never poll hotel infrastructure without explicit approval.
+
+Traps, topology, device mutation, unreviewed onboarding, and complex on-call scheduling remain out of scope. Scheduling
+is inert while `SNMP_ENABLED=false`.

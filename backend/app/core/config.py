@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     snmp_fill_missing_only_enrichment: bool = True
     snmp_collection_batch_size: int = Field(default=500, ge=10, le=10000)
     snmp_poll_concurrency: int = Field(default=5, ge=1, le=100)
+    snmp_stale_run_timeout_seconds: int = Field(default=900, ge=60, le=86400)
+    snmp_maximum_jitter_seconds: int = Field(default=120, ge=0, le=3600)
+    snmp_cleanup_hour_utc: int = Field(default=3, ge=0, le=23)
+    snmp_alert_flap_window_minutes: int = Field(default=30, ge=5, le=1440)
+    snmp_alert_notification_threshold: Literal["info", "warning", "high", "critical"] = "warning"
     snmp_allow_legacy_protocols: bool = False
     snmp_allow_v1: bool = False
     snmp_v3_required_in_production: bool = True

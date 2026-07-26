@@ -77,3 +77,5 @@ HIOP is internal-use software. No public license is granted unless the repositor
 # HIOP v2 SNMP monitoring
 
 Version `2.0.0-dev` includes the Epic 4D SNMP Monitoring workspace at `/snmp`: secure credential/target administration, structured tests, approved manual collection, candidate review, target/interface monitoring, bounded metric charts, state history, retention preview, and reports. It does not schedule polls, generate alert rules, map topology, receive traps, or automatically onboard devices.
+> SNMP is opt-in and now supports reviewed onboarding, monitoring, deterministic schedules, maintenance, safe rules,
+> and protected retention. It performs no network polling until explicitly enabled and approved.

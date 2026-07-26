@@ -80,3 +80,7 @@ Docker Compose defines PostgreSQL, one-shot migrations, one backend worker, and 
 - No ticket comments, attachments, SLA engine, or ticket-specific live events.
 - No automated backup service, external metrics platform, SIEM integration, or tamper-evident audit chain.
 - Discovery currently provides architectural persistence only; it performs no network discovery or workflow actions.
+## SNMP scheduled operations (Epic 4E)
+
+SNMP uses the shared scheduler, deterministic target/group jobs, startup reconciliation, stale-run recovery, jitter,
+and existing locks. Alert evaluation is a separate post-persistence service; one cleanup job protects alert evidence.

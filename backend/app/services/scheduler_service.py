@@ -13,11 +13,171 @@ from app.models.active_directory import (
     ActiveDirectorySyncRun,
 )
 from app.services.network_service import scan_all_devices
+from app.models.snmp import SNMPCredential, SNMPPollingConfiguration, SNMPPollRun, SNMPTarget
 
 
 scheduler = BackgroundScheduler()
 logger = logging.getLogger(__name__)
 AD_JOB_PREFIX = "active_directory_sync_"
+SNMP_JOB_PREFIX = "snmp_poll_"
+SNMP_CLEANUP_JOB_ID = "snmp_retention_cleanup"
+SNMP_GROUPS = {
+    "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
+    "system": ("system_poll_enabled", "system_interval_seconds", "system"),
+    "interface_inventory": ("inventory_poll_enabled", "interface_inventory_interval_seconds", "interfaces_preview"),
+    "interface_performance": ("performance_poll_enabled", "interface_performance_interval_seconds", "custom_profile"),
+    "device_performance": ("performance_poll_enabled", "device_performance_interval_seconds", "custom_profile"),
+}
+
+
+def snmp_job_id(target_id: str, group: str) -> str:
+    return f"{SNMP_JOB_PREFIX}{target_id}_{group}"
+
+
+def _snmp_schedulable(target, config, credential) -> bool:
+    return bool(settings.snmp_enabled and target and target.enabled and target.polling_enabled
+                and config and config.enabled and credential and credential.enabled)
+
+
+def register_snmp_jobs(target_id: str) -> int:
+    if not settings.scheduler_enabled:
+        return 0
+    db = SessionLocal()
+    try:
+        target = db.get(SNMPTarget, target_id)
+        config = db.scalar(select(SNMPPollingConfiguration).where(SNMPPollingConfiguration.target_id == target_id))
+        credential = db.get(SNMPCredential, target.credential_id) if target else None
+        if not _snmp_schedulable(target, config, credential):
+            remove_snmp_jobs(target_id)
+            return 0
+        if not scheduler.running:
+            scheduler.start()
+        count = 0
+        for group, (enabled_field, interval_field, _) in SNMP_GROUPS.items():
+            job_id = snmp_job_id(target_id, group)
+            if not getattr(config, enabled_field):
+                if scheduler.get_job(job_id):
+                    scheduler.remove_job(job_id)
+                continue
+            interval = min(settings.snmp_maximum_polling_interval_seconds,
+                           max(settings.snmp_minimum_polling_interval_seconds, getattr(config, interval_field)))
+            scheduler.add_job(
+                scheduled_snmp_poll, "interval", seconds=interval, jitter=config.jitter_seconds,
+                id=job_id, args=[target_id, group], replace_existing=True, max_instances=1,
+                coalesce=True, misfire_grace_time=min(interval, 300),
+            )
+            count += 1
+        config.last_scheduler_reconciliation_at = datetime.now(timezone.utc)
+        db.commit()
+        return count
+    finally:
+        db.close()
+
+
+def update_snmp_jobs(target_id: str) -> int:
+    return register_snmp_jobs(target_id)
+
+
+def remove_snmp_jobs(target_id: str) -> int:
+    count = 0
+    prefix = f"{SNMP_JOB_PREFIX}{target_id}_"
+    for job in list(scheduler.get_jobs()):
+        if job.id.startswith(prefix):
+            scheduler.remove_job(job.id)
+            count += 1
+    return count
+
+
+def pause_target_jobs(target_id: str) -> int:
+    jobs = [job for job in scheduler.get_jobs() if job.id.startswith(f"{SNMP_JOB_PREFIX}{target_id}_")]
+    for job in jobs:
+        scheduler.pause_job(job.id)
+    return len(jobs)
+
+
+def resume_target_jobs(target_id: str) -> int:
+    return update_snmp_jobs(target_id)
+
+
+def recover_stale_snmp_runs(db=None) -> int:
+    owns = db is None
+    db = db or SessionLocal()
+    try:
+        threshold = datetime.now(timezone.utc) - timedelta(seconds=settings.snmp_stale_run_timeout_seconds)
+        rows = db.scalars(select(SNMPPollRun).where(
+            SNMPPollRun.status.in_(("pending", "running")), SNMPPollRun.started_at < threshold
+        )).all()
+        for run in rows:
+            run.status, run.completed_at = "failed", datetime.now(timezone.utc)
+            run.error_category, run.error_summary = "configuration_error", "Recovered stale poll after scheduler startup."
+        if rows:
+            db.commit()
+        return len(rows)
+    finally:
+        if owns:
+            db.close()
+
+
+def reconcile_snmp_jobs(db=None) -> dict[str, int]:
+    owns = db is None
+    db = db or SessionLocal()
+    expected, registered, removed = set(), 0, 0
+    try:
+        targets = db.scalars(select(SNMPTarget)).all()
+        for target in targets:
+            config = db.scalar(select(SNMPPollingConfiguration).where(SNMPPollingConfiguration.target_id == target.id))
+            credential = db.get(SNMPCredential, target.credential_id)
+            if _snmp_schedulable(target, config, credential):
+                for group, (enabled_field, _, _) in SNMP_GROUPS.items():
+                    if getattr(config, enabled_field):
+                        expected.add(snmp_job_id(str(target.id), group))
+                registered += register_snmp_jobs(str(target.id))
+            else:
+                removed += remove_snmp_jobs(str(target.id))
+        for job in list(scheduler.get_jobs()):
+            if job.id.startswith(SNMP_JOB_PREFIX) and job.id not in expected:
+                scheduler.remove_job(job.id)
+                removed += 1
+        return {"registered": registered, "removed": removed, "expected": len(expected)}
+    finally:
+        if owns:
+            db.close()
+
+
+def scheduled_snmp_poll(target_id: str, group: str):
+    db = SessionLocal()
+    actor = SimpleNamespace(id=None, username="scheduler")
+    try:
+        target = db.get(SNMPTarget, target_id)
+        config = db.scalar(select(SNMPPollingConfiguration).where(SNMPPollingConfiguration.target_id == target_id))
+        credential = db.get(SNMPCredential, target.credential_id) if target else None
+        if not _snmp_schedulable(target, config, credential):
+            remove_snmp_jobs(target_id)
+            return
+        _, _, poll_type = SNMP_GROUPS[group]
+        from app.services.snmp_polling_service import SNMPPollingService
+        service = SNMPPollingService(db)
+        run = service.create_poll_run(target.id, actor, poll_type=poll_type, trigger_type="scheduled")
+        service.execute_poll(run.id, actor)
+    except Exception:
+        db.rollback()
+        logger.exception("Scheduled SNMP poll failed target_id=%s group=%s", target_id, group)
+    finally:
+        db.close()
+
+
+def scheduled_snmp_retention_cleanup():
+    db = SessionLocal()
+    try:
+        from app.services.snmp_operational_service import SNMPOperationalService
+        SNMPOperationalService(db).cleanup(SimpleNamespace(username="scheduler"),
+                                           settings.snmp_metric_retention_days,
+                                           settings.snmp_poll_run_retention_days)
+    except Exception:
+        db.rollback()
+        logger.exception("Scheduled SNMP retention cleanup failed")
+    finally:
+        db.close()
 
 
 def ad_sync_job_id(connection_id: str) -> str:
@@ -257,6 +417,11 @@ def start_scheduler():
         configure_discovery_scheduler(values.get("discovery.enabled", "false") == "true", max(15, int(values.get("discovery.interval_minutes", "60"))))
         recover_stale_ad_runs(db)
         reconcile_ad_sync_jobs(db)
+        recover_stale_snmp_runs(db)
+        reconcile_snmp_jobs(db)
+        if settings.snmp_enabled:
+            scheduler.add_job(scheduled_snmp_retention_cleanup, "cron", hour=settings.snmp_cleanup_hour_utc,
+                              id=SNMP_CLEANUP_JOB_ID, replace_existing=True, max_instances=1, coalesce=True)
     finally:
         db.close()
     logger.info("HIOP scheduler started")

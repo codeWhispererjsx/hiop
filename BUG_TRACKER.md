@@ -49,3 +49,7 @@ Audit records in this file describe verified defects only. Feature requests and 
 - Real SNMP agent interoperability is intentionally unverified until an explicitly approved safe fixture or target is supplied.
 - Epic 4C metric aggregation is computed from bounded raw observations; persisted rollups and production-cardinality query-plan validation remain deferred.
 - Epic 4D SNMP reports are bounded on-screen summaries; dedicated safe CSV/PDF export endpoints and persisted rollups remain deferred.
+## Epic 4E notes
+
+No hotel polling occurred. SNMP remains disabled until explicitly configured. Traps, topology, device mutation, and
+advanced on-call escalation remain out of scope.

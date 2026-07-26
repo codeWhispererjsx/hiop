@@ -306,15 +306,23 @@ class SNMPOperationalService:
         return created
 
     def retention_preview(self, metric_days=90, poll_run_days=180):
+        from app.models.snmp import SNMPAlertEvent
         now = datetime.now(timezone.utc)
         metric_cutoff, run_cutoff = now - timedelta(days=metric_days), now - timedelta(days=poll_run_days)
-        metrics = self.db.scalar(select(func.count()).select_from(SNMPMetric).where(SNMPMetric.observed_at < metric_cutoff)) or 0
+        protected_runs = select(SNMPAlertEvent.poll_run_id).where(SNMPAlertEvent.is_open.is_(True), SNMPAlertEvent.poll_run_id.isnot(None))
+        eligible_metrics = SNMPMetric.observed_at < metric_cutoff, SNMPMetric.poll_run_id.not_in(protected_runs)
+        metrics = self.db.scalar(select(func.count()).select_from(SNMPMetric).where(*eligible_metrics)) or 0
+        protected = self.db.scalar(select(func.count()).select_from(SNMPMetric).where(
+            SNMPMetric.observed_at < metric_cutoff, SNMPMetric.poll_run_id.in_(protected_runs))) or 0
         runs = self.db.scalar(select(func.count()).select_from(SNMPPollRun).where(SNMPPollRun.completed_at < run_cutoff, ~SNMPPollRun.metrics.any())) or 0
-        return {"metric_cutoff": metric_cutoff, "poll_run_cutoff": run_cutoff, "expired_metrics": metrics, "expired_empty_poll_runs": runs}
+        return {"metric_cutoff": metric_cutoff, "poll_run_cutoff": run_cutoff, "expired_metrics": metrics, "protected_alert_metrics": protected, "expired_empty_poll_runs": runs}
 
     def cleanup(self, actor, metric_days=90, poll_run_days=180):
+        from app.models.snmp import SNMPAlertEvent
         preview = self.retention_preview(metric_days, poll_run_days)
-        deleted_metrics = self.db.execute(delete(SNMPMetric).where(SNMPMetric.observed_at < preview["metric_cutoff"])).rowcount
+        protected_runs = select(SNMPAlertEvent.poll_run_id).where(SNMPAlertEvent.is_open.is_(True), SNMPAlertEvent.poll_run_id.isnot(None))
+        deleted_metrics = self.db.execute(delete(SNMPMetric).where(
+            SNMPMetric.observed_at < preview["metric_cutoff"], SNMPMetric.poll_run_id.not_in(protected_runs))).rowcount
         deleted_runs = self.db.execute(delete(SNMPPollRun).where(SNMPPollRun.completed_at < preview["poll_run_cutoff"], ~SNMPPollRun.metrics.any())).rowcount
         create_audit_log(self.db, actor.username, "SNMP_RETENTION_CLEANUP", "SNMPMetric", None, f"Removed {deleted_metrics} expired metrics and {deleted_runs} empty poll runs.")
         self.db.commit()

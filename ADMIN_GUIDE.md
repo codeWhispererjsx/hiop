@@ -450,3 +450,7 @@ Epic 4C requires an administrator to review every candidate. Recompute matches, 
 Epic 4D exposes those workflows at `/snmp`. Create encrypted credentials first, then an authorized target with a version-compatible credential. Saving never polls. Use **Test** before explicitly confirming **Collect now**. Candidate plans identify mandatory manual values; never approve incomplete inventory. Technicians can monitor but do not receive mutation controls. Retention cleanup is preview-first and never removes audit or onboarding history.
 
 Epic 4B permits administrators to run an explicit saved-credential target test or manual approved poll. Confirm the target is in an authorized management CIDR before use. Prefer v3 authPriv with SHA-2/AES. Manual operations are rate-limited and mutually exclusive per target/credential. No scheduler or automatic onboarding exists.
+## SNMP production administration
+
+Approve ranges, credentials, targets, profiles/OIDs, and schedules in order. Preview rules before enabling, use
+maintenance for planned work, monitor scheduler health, and preview retention before manual cleanup.

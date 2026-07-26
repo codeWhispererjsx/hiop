@@ -172,3 +172,8 @@ All notable HIOP changes are recorded here. The project follows semantic version
 - Added bounded GET, multi-GET, WALK, BULK-WALK, parsing, lifecycle, cancellation, and locking.
 - Added safe metric/interface/candidate persistence, target health, audit, WebSocket, and grouped failure notifications.
 - Did not add scheduling, dashboards, alert rules, traffic analytics, topology, frontend, or onboarding.
+## Unreleased — 2.0.0-dev
+
+- Added deterministic scheduled SNMP polling, reconciliation, jitter, locks, and stale-run recovery.
+- Added reviewed rules, deduplicated evidence, multi-sample recovery, maintenance suppression, and frontend views.
+- Added protected scheduled retention and aggregate production health data.

@@ -324,6 +324,17 @@ class SNMPPollingConfigurationWrite(BaseModel):
     max_interfaces: int = Field(default=256, ge=1, le=10000)
     stale_after_seconds: int = Field(default=900, ge=30, le=604800)
     enabled: bool = False
+    availability_interval_seconds: int = Field(default=300, ge=30, le=604800)
+    system_interval_seconds: int = Field(default=900, ge=30, le=604800)
+    interface_inventory_interval_seconds: int = Field(default=3600, ge=30, le=604800)
+    interface_performance_interval_seconds: int = Field(default=300, ge=30, le=604800)
+    device_performance_interval_seconds: int = Field(default=600, ge=30, le=604800)
+    jitter_seconds: int = Field(default=30, ge=0, le=3600)
+    failure_threshold: int = Field(default=3, ge=1, le=100)
+    recovery_threshold: int = Field(default=2, ge=1, le=100)
+    maintenance_mode: bool = False
+    maintenance_reason: str | None = Field(default=None, max_length=500)
+    maintenance_ends_at: datetime | None = None
 
 
 class SNMPPollingConfigurationRead(SNMPPollingConfigurationWrite):
@@ -332,6 +343,79 @@ class SNMPPollingConfigurationRead(SNMPPollingConfigurationWrite):
     target_id: UUID
     created_at: datetime
     updated_at: datetime
+    maintenance_started_at: datetime | None = None
+    maintenance_started_by: str | None = None
+    last_scheduler_reconciliation_at: datetime | None = None
+
+
+class SNMPAlertRuleWrite(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    rule_type: str = Field(pattern=r"^(availability|authentication|poll_failures|stale_metric|metric_threshold|interface_down|interface_missing|state_change)$")
+    target_id: UUID | None = None
+    profile_id: UUID | None = None
+    interface_id: UUID | None = None
+    metric_key: str | None = Field(default=None, max_length=120)
+    comparison_operator: str = Field(pattern=r"^(greater_than|greater_than_or_equal|less_than|less_than_or_equal|equal|not_equal|state_changed|missing|stale)$")
+    warning_threshold: float | None = None
+    critical_threshold: float | None = None
+    evaluation_window: int = Field(default=5, ge=1, le=100)
+    minimum_samples: int = Field(default=1, ge=1, le=100)
+    consecutive_breaches: int = Field(default=2, ge=1, le=100)
+    recovery_samples: int = Field(default=2, ge=1, le=100)
+    severity: str = Field(default="warning", pattern=r"^(info|warning|high|critical)$")
+    enabled: bool = False
+    suppress_during_maintenance: bool = True
+    notification_enabled: bool = True
+
+    @model_validator(mode="after")
+    def validate_rule(self):
+        threshold_ops = {"greater_than", "greater_than_or_equal", "less_than", "less_than_or_equal"}
+        if self.comparison_operator in threshold_ops and self.warning_threshold is None and self.critical_threshold is None:
+            raise ValueError("Threshold comparison rules require a warning or critical threshold.")
+        if self.rule_type == "metric_threshold" and not self.metric_key:
+            raise ValueError("Metric threshold rules require an approved metric key.")
+        if self.interface_id and not self.target_id:
+            raise ValueError("Interface rules must also identify their target.")
+        return self
+
+
+class SNMPAlertRuleUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    warning_threshold: float | None = None
+    critical_threshold: float | None = None
+    evaluation_window: int | None = Field(default=None, ge=1, le=100)
+    minimum_samples: int | None = Field(default=None, ge=1, le=100)
+    consecutive_breaches: int | None = Field(default=None, ge=1, le=100)
+    recovery_samples: int | None = Field(default=None, ge=1, le=100)
+    severity: str | None = Field(default=None, pattern=r"^(info|warning|high|critical)$")
+    enabled: bool | None = None
+    suppress_during_maintenance: bool | None = None
+    notification_enabled: bool | None = None
+
+
+class SNMPAlertRuleRead(SNMPAlertRuleWrite):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class SNMPAlertEventRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    rule_id: UUID
+    target_id: UUID
+    interface_id: UUID | None
+    poll_run_id: UUID | None
+    metric_key: str
+    severity: str
+    is_open: bool
+    occurrence_count: int
+    flapping: bool
+    evidence: dict[str, Any]
+    first_seen_at: datetime
+    last_seen_at: datetime
+    resolved_at: datetime | None
 
 
 class SNMPPollRunRead(BaseModel):

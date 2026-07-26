@@ -109,3 +109,7 @@ Epic 4B adds admin-only `POST /targets/{id}/test`, `GET /targets/{id}/system-ide
 `/api/v1/snmp` now includes administrator-only candidate matching and reviewed approve/link/enrich/ignore/reject/restore actions; `POST /targets/{id}/collect` accepts only allow-listed collection groups. Read roles can use bounded candidate matches, target interfaces, interface changes/metrics, target metrics, and metric summaries. Retention preview and cleanup are administrator-only. No route accepts a raw OID, community, auth secret, privacy secret, or unbounded time-series request.
 
 Epic 4D adds the paginated `GET /api/v1/snmp/state-changes` integration endpoint with target, interface, type, severity, and date filters. It returns safe evidence only and does not create or mutate Alert records.
+## SNMP Epic 4E
+
+Authenticated APIs cover alert-rule CRUD/enable/disable/preview, target evaluation, unresolved events, scheduler
+health/reconciliation, target pause/resume, and maintenance. Mutations are admin-only; preview creates no alerts.

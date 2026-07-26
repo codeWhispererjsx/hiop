@@ -42,3 +42,16 @@ test("accessible chart fallback and deliberate empty states exist", () => {
   assert.match(page, /className="sr-only"/);
   assert.match(page, /No metric samples|No numeric samples|No state changes/);
 });
+
+test("scheduled polling and alert administration remain explicit", () => {
+  for (const method of [
+    "snmpAlertRules", "createSNMPAlertRule", "previewSNMPAlertRule", "snmpAlerts",
+    "snmpSchedulerHealth", "reconcileSNMPScheduler", "pauseSNMPPolling",
+    "resumeSNMPPolling", "setSNMPMaintenance",
+  ]) assert.ok(api.includes(`${method}:`), method);
+  assert.match(page, /Create disabled rule/);
+  assert.match(page, /Reconcile now/);
+  assert.match(page, /Administrator maintenance/);
+  assert.ok(types.includes("type SNMPAlertRule"));
+  assert.ok(types.includes("type SNMPSchedulerHealth"));
+});
