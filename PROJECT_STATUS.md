@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Epic 5D complete
+
+The frontend now provides authorized topology navigation, a real-API landing page, React Flow map with zoom/pan/drag/minimap, explicit layout persistence, automatic layouts, filters/search, node/link detail, path and impact analysis, conflict/inference review, reviewed manual links, snapshots/comparison, change history, WebSocket refresh, responsive themes, accessibility fallback, typed clients, and frontend tests. Scheduled topology collection and topology alerts remain out of scope.
+
 ## Epic 5A complete
 
 The relational topology foundation, bounded analysis APIs, bootstrap, snapshots, audit/live-event integration, migration, tests, and documentation are implemented. Interactive maps and automated inference remain later work.

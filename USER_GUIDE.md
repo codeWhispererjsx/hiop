@@ -2,7 +2,7 @@
 
 ## Topology
 
-Authorized technicians can inspect bounded graph, neighbor, path, component, impact, change, and snapshot data. Epic 5A does not include an interactive map.
+Authorized technicians can open **Network Topology** and inspect a bounded interactive map. Search or filter nodes, select nodes and links for details, switch among layered/force/grid/radial layouts, and use Path or Impact mode for evidence-based analysis. Confirmed links are solid; inferred relationships are dashed. Historical snapshots are read-only. “Potentially affected” and path results describe modeled relationships, not guaranteed packet flow or outage.
 
 ## Directory review
 

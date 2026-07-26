@@ -139,3 +139,7 @@ Reads require admin or technician access; inference execution and review resolut
 - `GET /api/v1/topology/{id}/comparison?snapshot_id=...`
 
 Inference requests may select dry-run, dependency inference, and layer suggestions. Path analysis accepts only bounded path type, depth, and result-count parameters.
+
+## Epic 5D interactive topology client
+
+The `/topology` frontend consumes these existing bounded contracts through one typed client. Initial maps use `GET /topology/{id}/graph`; explicit positions use `GET/PUT /topology/{id}/layout`; path and impact modes use `path-analysis` and `impact-analysis`; conflict/review workspaces use their paginated endpoints; and historical views use snapshots, snapshot graphs, comparison, and changes. No public route accepts arbitrary discovery algorithms, device commands, or unbounded graph input.

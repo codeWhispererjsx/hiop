@@ -2,6 +2,8 @@
 
 HIOP 2.0.0-dev is an internal operations portal for hotel IT teams. It combines device inventory, safe private-network discovery, network monitoring, alerting, service tickets, user administration, immutable audit records, reports, and runtime-safe settings in one authenticated application. Epic 5B extends the bounded relational [network topology foundation](docs/TOPOLOGY.md) with reviewed LLDP/CDP neighbor evidence.
 
+Epic 5D adds the interactive `/topology` workspace: bounded React Flow maps, saved layouts, search/filters, path and impact analysis, conflict/inference review, snapshots/comparison, change history, and authenticated live updates. It does not schedule collection or configure devices.
+
 Reviewed CSV/XLSX inventory sessions can now be finalized transactionally. Administrators receive server readiness checks, versioned plans, create/link/enrich/merge execution, Discovery linking, persistent results, safe retry, and compensating rollback. Unreviewed imports, Active Directory, SNMP, and scheduled imports remain unsupported.
 
 ## Release status

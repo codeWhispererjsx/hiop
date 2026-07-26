@@ -2,7 +2,7 @@
 
 ## Topology
 
-Apply migration `d0c2bcea6dda`, retain conservative graph/traversal limits, snapshot before major edits, and back up topology tables as a unit. No live discovery runs in Epic 5A.
+Apply topology migrations through head, retain conservative graph/traversal limits, snapshot before major edits, and back up topology tables as a unit. The interactive client loads one bounded graph, uses visible-element rendering, and performs a debounced refresh after major authenticated `topology_*` WebSocket events. Manual refresh is the fallback. Layout writes are explicit and limited to 2,000 nodes by the API; snapshot graphs remain read-only.
 
 ## Final inventory import operations
 

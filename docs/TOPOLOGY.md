@@ -93,3 +93,34 @@ Network dependencies follow higher-to-lower trusted layers over active physical 
 ### Epic 5C limitations
 
 Inference has no bridge forwarding database, MAC learning, STP, scheduled execution, live animation, alerts, interactive frontend, or device configuration. Graph-derived dependency and layer results are recommendations, not proof of cabling or service criticality. Real hotel topology execution remains prohibited without explicit approval. The recommended next epic is Epic 5D: an administrator-reviewed interactive topology frontend over these bounded APIs.
+
+## Epic 5D interactive frontend
+
+The authenticated **Network Topology** workspace is available at `/topology`. React Flow is the single graph renderer because it provides TypeScript-native custom nodes/edges, visible-element rendering, zoom/pan, dragging, selection, controls, and a minimap while fitting the existing React/Vite architecture.
+
+The landing page uses real topology, statistics, inference, conflict, and orphan APIs. Administrators can create topologies, preview bootstrap, create snapshots, and open review workflows; technicians receive bounded read-only operational views.
+
+### Map, search, filters, and layouts
+
+- Node cards expose identity, status text, role/layer, management address, provisional confidence, and conflict state. Icon/text accompany color.
+- Confirmed links use stronger strokes, inferred links are dashed, and selected paths are highlighted without claiming packet-routing certainty.
+- Search and URL-backed filters narrow identity, status, device type, layer, link type, hidden state, confidence, and orphan state.
+- Layered, force-directed, grid, radial, and saved-manual layouts are available. Automatic layouts do not overwrite saved positions; layout persistence is explicit and backend-bounded.
+- Node/link drawers expose only authorized API data. Link confirmation/suppression/restoration, inference, snapshots, and manual link creation are administrator-only.
+- Manual links reject self-links client-side and retain backend interface ownership, topology isolation, duplicate, and cycle safeguards.
+
+### Path, impact, review, and snapshots
+
+Path mode requests bounded physical, dependency, layer-aware, or combined alternatives and provides an ordered accessible summary. Results are modeled evidence, not guaranteed packet routes. Impact mode highlights **potentially affected** downstream nodes and repeats backend confidence warnings.
+
+Conflict and inference pages preserve evidence, projected impact, and graph context before approval, rejection, or ignore. Snapshot graphs are immutable/read-only, have no live overlays, and cannot persist dragging. Snapshot-to-current comparison covers added/removed nodes and links plus layer and parent changes. A bounded tabular change timeline is also available.
+
+### Live updates, performance, accessibility, and themes
+
+Topology events use the existing authenticated WebSocket. Major changes trigger one debounced graph refresh; disconnects retain manual refresh/polling fallback. Large bounded graphs display a limit warning, render visible elements only, and preserve a table fallback.
+
+The toolbar is keyboard accessible, custom nodes are focusable, status is not color-only, analyses have list/table alternatives, drawers become full-width on small screens, and reduced-motion preferences disable edge animation. Existing HIOP theme variables support dark and light modes.
+
+Troubleshooting: verify FastAPI and the `/api/v1` proxy for backend errors; bootstrap/add reviewed nodes for an empty map; reload before retrying a rejected layout write; and remember that “no modeled path” does not prove network unreachability.
+
+Known limitations: advanced building/floor container grouping requires display-name/group data not yet present in the graph schema. Link metric overlays are withheld because the graph does not yet return authoritative directional metric summaries. Non-backend graph filters operate on the already bounded response.

@@ -10,6 +10,7 @@ const links: { label: string; to: string; icon: IconName }[] = [
   { label: "Network monitor", to: "/network", icon: "network" },
   { label: "Discovery", to: "/discovery", icon: "discovery" },
   { label: "SNMP Monitoring", to: "/snmp", icon: "network" },
+  { label: "Network Topology", to: "/topology", icon: "hierarchy" },
   { label: "Alerts", to: "/alerts", icon: "alerts" },
   { label: "Service tickets", to: "/tickets", icon: "tickets" },
   { label: "Locations & structure", to: "/hierarchy", icon: "hierarchy" },
@@ -101,7 +102,7 @@ export default function Sidebar({
       <nav ref={navRef} className="sidebar-nav" aria-label="Primary navigation">
         <p className="nav-label">Workspace</p>
         {visibleLinks
-          .filter((link) => links.indexOf(link) < 8)
+          .filter((link) => links.indexOf(link) < 9)
           .map((link) => (
             <NavLink
               key={link.to}
@@ -117,7 +118,7 @@ export default function Sidebar({
           ))}
         <p className="nav-label nav-label-spaced">Administration</p>
         {visibleLinks
-          .filter((link) => links.indexOf(link) >= 8)
+          .filter((link) => links.indexOf(link) >= 9)
           .map((link) => (
             <NavLink
               key={link.to}

@@ -1,5 +1,11 @@
 # HIOP Bug Tracker
 
+## Epic 5D verification notes
+
+- No confirmed Epic 5D functional defect remains.
+- Existing Alembic autogenerate drift for two Import status enum columns remains outside topology scope.
+- Docker image verification depends on local Docker client configuration access.
+
 ## Resolved with Epic 5A
 
 - Registered the AD reconciliation report in the frontend.

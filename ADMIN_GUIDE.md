@@ -2,7 +2,7 @@
 
 ## Network topology
 
-Admins can define scoped graphs, reviewed nodes/links, segments, dependencies, layouts, and snapshots. Inventory bootstrap supports dry-run and never creates links.
+Admins can define scoped graphs, reviewed nodes/links, segments, dependencies, layouts, and snapshots. Inventory bootstrap supports dry-run and never creates links. The interactive map supports explicit layout saves, bounded inference, reviewed manual links, candidate suppression/restoration, inference review, conflict inspection, and snapshot comparison. The UI never creates inventory devices, schedules collection, or changes network device configuration.
 
 ## Hotel IT Operations Portal — Version 1.0.0
 

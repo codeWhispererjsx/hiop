@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 5D
+
+- Added the React Flow interactive Network Topology workspace, protected route, and authorized navigation.
+- Added real-API topology landing, map, details, filters, layouts, path/impact, review, conflicts, manual links, snapshots/comparison, changes, and settings.
+- Added typed topology clients/contracts, authenticated live-event refresh, responsive dark/light styling, accessible table fallbacks, and frontend tests.
+- Added `@xyflow/react` as the sole graph visualization dependency.
+
 ## 2.0.0-dev — Epic 5C
 
 - Added explainable topology inference runs, confidence history, evidence fusion, conflict records, and administrator review items.
