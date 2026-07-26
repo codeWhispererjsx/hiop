@@ -1,5 +1,9 @@
 # HIOP Enterprise Security Report
 
+## Epic 5A topology review
+
+Mutations are admin-only. Cross-topology references, contradictory identities, self-links, cycles, invalid network values, and oversized traversals are rejected. This is an engineering review, not a penetration test.
+
 ## Epic 3A Active Directory integration controls
 
 Active Directory connection configuration and bind secret management are restricted to administrators. Bind secrets are write-only, encrypted at rest with authenticated Fernet encryption, and never returned in API responses, serialized schemas, or audit log entries. Administrators and technicians have read-only access; staff are denied. Configuration validates domains, hosts, ports, timeouts, search bases, and mutually exclusive TLS modes. Automated synchronization remains disabled.

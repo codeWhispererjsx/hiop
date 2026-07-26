@@ -1,5 +1,9 @@
 # HIOP Administrator Guide
 
+## Network topology
+
+Admins can define scoped graphs, reviewed nodes/links, segments, dependencies, layouts, and snapshots. Inventory bootstrap supports dry-run and never creates links.
+
 ## Hotel IT Operations Portal — Version 1.0.0
 
 ---

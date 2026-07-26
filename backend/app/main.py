@@ -158,3 +158,5 @@ from app.api.v1.active_directory import router as active_directory_router
 app.include_router(active_directory_router, prefix=settings.api_prefix)
 from app.api.v1.snmp import router as snmp_router
 app.include_router(snmp_router, prefix=settings.api_prefix)
+from app.api.v1.topology import router as topology_router
+app.include_router(topology_router, prefix=settings.api_prefix)

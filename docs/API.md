@@ -1,5 +1,9 @@
 # HIOP 1.0.0 API
 
+## Topology API
+
+`/api/v1/topology` exposes authenticated, bounded topology CRUD and graph analysis. Admins mutate; administrators and authorized technicians read.
+
 ## Active Directory synchronization (2.0.0-dev)
 
 Administrators start staging-only full, incremental, or dry-run synchronization with `POST /api/v1/active-directory/connections/{id}/sync`. Run detail, cancellation, safe errors, summary, and projections are under `/sync-runs/{id}`. Staged detail/history are under `/objects/{id}`. Technician reads redact email/raw attributes; raw LDAP filters are never accepted.

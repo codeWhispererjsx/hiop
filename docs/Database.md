@@ -1,5 +1,9 @@
 # HIOP 2.0.0-dev database
 
+## Topology foundation
+
+Migration `d0c2bcea6dda` adds topology definitions, nodes, links/evidence, segments/memberships, dependencies, snapshots, changes, positions, and groups. It is additive.
+
 Migration `a7c3e5f90124` adds AD checkpoints, run progress/results/cancellation, missing markers, field-level change history, and sanitized sync errors. Missing staged objects are retained.
 
 Migration `b8d4f6a10235` expands AD candidates for Discovery, Department, and role suggestions; adds source/target versions; and creates record-link, department-map, OU-map, group-role-map, and reconciliation-result tables. Link uniqueness is enforced in PostgreSQL.

@@ -1,5 +1,9 @@
 # HIOP 2.0.0-dev architecture
 
+## Epic 5A network topology
+
+The topology layer is a relational graph over inventory, discovery, and SNMP identities. Nodes, links, evidence, segments, dependencies, layout state, snapshots, and reviewed changes are separate so evidence cannot silently mutate inventory. See `docs/TOPOLOGY.md`.
+
 ## Epic 3 Active Directory integration
 
 Epics 3A–3E provide an opt-in Active Directory administration module. `ActiveDirectoryConnection` models connection profiles; `ActiveDirectorySyncConfiguration` manages per-domain synchronization; `ActiveDirectoryObject` stages directory users, computers, and groups; `ActiveDirectorySyncRun` captures execution telemetry; and explainable candidates support reviewed matching and reconciliation with HIOP users and devices. Bind secrets use authenticated Fernet encryption, are write-only, and are excluded from API responses.

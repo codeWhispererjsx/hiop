@@ -1,5 +1,9 @@
 # HIOP v1.0 Performance Report
 
+## Epic 5A topology review
+
+Lists are paginated, graph/path/component/impact queries are bounded, and indexes cover graph, node-pair, source/status, location, snapshot, and review access paths.
+
 ## Epic 3C Active Directory staging
 
 LDAP paging and hard object caps bound queries. Staging commits in configurable batches (default 250), uses indexed lookups, stores changed-field snapshots instead of directory exports, and broadcasts progress at batch boundaries. Dry-run representative scopes before increasing limits.

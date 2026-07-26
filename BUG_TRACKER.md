@@ -1,5 +1,12 @@
 # HIOP Bug Tracker
 
+## Resolved with Epic 5A
+
+- Registered the AD reconciliation report in the frontend.
+- Kept Settings usable when hierarchy metadata is unavailable.
+- Prevented Active Directory live-update reconnects after cleanup.
+- Preserved desktop sidebar scroll position after navigation.
+
 ## Epic 2E known limitations
 
 - Finalization is synchronous within the API process; session/result persistence makes refresh safe, but process-crash recovery requires an administrator to inspect persisted state.

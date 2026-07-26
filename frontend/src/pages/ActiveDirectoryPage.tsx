@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect, @typescript-eslint/no-unused-vars */
 import {
-  useCallback, useEffect, useState, type FormEvent, type ReactNode,
+  useEffect, useState, type FormEvent, type ReactNode,
 } from "react";
 import { Link, useLocation } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -44,6 +44,7 @@ function useADWebSocket(onEvent: (event: string, data: unknown) => void) {
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | undefined;
+    let closed = false;
 
     function connect() {
       const token = getAuthToken();
@@ -66,7 +67,7 @@ function useADWebSocket(onEvent: (event: string, data: unknown) => void) {
           } catch { /* ignore non-JSON */ }
         };
         ws.onclose = () => {
-          reconnectTimeout = setTimeout(connect, 5000);
+          if (!closed) reconnectTimeout = setTimeout(connect, 5000);
         };
       } catch { /* WS not available, fallback to polling */ }
     }
@@ -74,6 +75,7 @@ function useADWebSocket(onEvent: (event: string, data: unknown) => void) {
     connect();
 
     return () => {
+      closed = true;
       clearTimeout(reconnectTimeout);
       ws?.close();
     };
@@ -125,10 +127,10 @@ function Overview() {
   const runs = useRequest(() => endpoints.adSyncRuns({ page_size: 5 }), []);
 
   // refresh on AD WS events
-  const handleWS = useCallback((_event: string, _payload: unknown) => {
+  const handleWS = (_event: string, _payload: unknown) => {
     void data.reload();
     void runs.reload();
-  }, [data, runs]);
+  };
   useADWebSocket(handleWS);
 
   if (data.loading || data.error || !data.data)
@@ -217,7 +219,7 @@ function Connections() {
   const [rootDse, setRootDse] = useState<ADConnection | null>(null);
   const [notice, setNotice] = useState("");
 
-  const handleWS = useCallback((_: string, __: unknown) => void list.reload(), [list]);
+  const handleWS = (_: string, __: unknown) => void list.reload();
   useADWebSocket(handleWS);
 
   const toggleEnabled = async (c: ADConnection) => {
@@ -634,10 +636,10 @@ function SyncRuns() {
     offset: (page - 1) * pageSize, page_size: pageSize,
   }), [statusFilter, modeFilter, dryFilter, page]);
 
-  const handleWS = useCallback((event: string, _: unknown) => {
+  const handleWS = (event: string, _: unknown) => {
     if (["ad_sync_started", "ad_sync_progress", "ad_sync_completed", "ad_sync_failed"].includes(event))
       void runs.reload();
-  }, [runs]);
+  };
   useADWebSocket(handleWS);
 
   // Poll while any run is active
@@ -954,9 +956,9 @@ function Matches() {
     offset: (page - 1) * pageSize, page_size: pageSize,
   }), [levelFilter, statusFilter, page]);
 
-  const handleWS = useCallback((event: string, _: unknown) => {
+  const handleWS = (event: string, _: unknown) => {
     if (["ad_match_run_completed", "ad_object_resolved"].includes(event)) void matches.reload();
-  }, [matches]);
+  };
   useADWebSocket(handleWS);
 
   const recompute = async () => {
@@ -1286,7 +1288,7 @@ function ReviewQueue() {
     offset: (page - 1) * pageSize, page_size: pageSize,
   }), [typeFilter, page]);
 
-  const handleWS = useCallback((_: string, __: unknown) => void queue.reload(), [queue]);
+  const handleWS = (_: string, __: unknown) => void queue.reload();
   useADWebSocket(handleWS);
 
   const act = async (id: string, _action: "ignore") => {

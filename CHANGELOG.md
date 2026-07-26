@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-dev — Epic 5A
+
+- Added relational topology models, repositories, services, APIs, snapshots, bootstrap, migration, tests, and documentation.
+- Fixed Settings partial loading, Reports AD reconciliation rendering, Active Directory live-update cleanup, and sidebar scroll persistence.
+
 ## 2.0.0-dev — Epic 4D
 
 - Added the responsive, theme-aware SNMP Monitoring workspace and role-aware navigation.

@@ -79,6 +79,17 @@ class Settings(BaseSettings):
     snmp_cleanup_hour_utc: int = Field(default=3, ge=0, le=23)
     snmp_alert_flap_window_minutes: int = Field(default=30, ge=5, le=1440)
     snmp_alert_notification_threshold: Literal["info", "warning", "high", "critical"] = "warning"
+
+    # Relational topology foundation; live discovery remains out of scope.
+    topology_enabled: bool = True
+    topology_maximum_nodes: int = Field(default=5000, ge=1, le=100000)
+    topology_maximum_links: int = Field(default=10000, ge=1, le=200000)
+    topology_maximum_graph_nodes: int = Field(default=2000, ge=1, le=10000)
+    topology_maximum_graph_links: int = Field(default=5000, ge=1, le=50000)
+    topology_maximum_traversal_depth: int = Field(default=20, ge=1, le=100)
+    topology_maximum_snapshots: int = Field(default=100, ge=1, le=10000)
+    topology_snapshot_retention_days: int = Field(default=365, ge=1, le=3650)
+    topology_default_confidence_threshold: int = Field(default=60, ge=0, le=100)
     snmp_allow_legacy_protocols: bool = False
     snmp_allow_v1: bool = False
     snmp_v3_required_in_production: bool = True

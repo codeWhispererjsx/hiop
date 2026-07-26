@@ -1,5 +1,9 @@
 # HIOP Operations Guide
 
+## Topology
+
+Apply migration `d0c2bcea6dda`, retain conservative graph/traversal limits, snapshot before major edits, and back up topology tables as a unit. No live discovery runs in Epic 5A.
+
 ## Final inventory import operations
 
 Confirm server readiness and the displayed plan version before finalization. Do not manually restart a session in `importing`; refresh its persisted results. Investigate `partial` sessions by safe error code and retry only through the retry endpoint.

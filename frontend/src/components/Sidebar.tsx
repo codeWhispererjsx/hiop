@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 
@@ -29,6 +30,18 @@ export default function Sidebar({
   role?: string;
   live: boolean;
 }) {
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    nav.scrollTop = Number(sessionStorage.getItem("hiop.sidebar.scroll") ?? 0);
+    const remember = () => sessionStorage.setItem("hiop.sidebar.scroll", String(nav.scrollTop));
+    nav.addEventListener("scroll", remember, { passive: true });
+    return () => nav.removeEventListener("scroll", remember);
+  }, []);
+  const closeOnMobile = () => {
+    if (window.matchMedia("(max-width: 980px)").matches) onClose();
+  };
   const visibleLinks =
     role === "admin"
       ? links
@@ -52,7 +65,7 @@ export default function Sidebar({
           <Icon name="close" />
         </button>
       </div>
-      <nav className="sidebar-nav" aria-label="Primary navigation">
+      <nav ref={navRef} className="sidebar-nav" aria-label="Primary navigation">
         <p className="nav-label">Workspace</p>
         {visibleLinks
           .filter((link) => links.indexOf(link) < 8)
@@ -60,7 +73,7 @@ export default function Sidebar({
             <NavLink
               key={link.to}
               to={link.to}
-              onClick={onClose}
+              onClick={closeOnMobile}
               className={({ isActive }) =>
                 `nav-link ${isActive ? "active" : ""}`
               }
@@ -76,7 +89,7 @@ export default function Sidebar({
             <NavLink
               key={link.to}
               to={link.to}
-              onClick={onClose}
+              onClick={closeOnMobile}
               className={({ isActive }) =>
                 `nav-link ${isActive ? "active" : ""}`
               }

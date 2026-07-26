@@ -28,6 +28,11 @@ from app.models.snmp import (
     SNMPPollingConfiguration, SNMPPollRun, SNMPMetric, SNMPInterface,
     SNMPDiscoveryCandidate,
 )
+from app.models.topology import (
+    Topology, TopologyNode, TopologyLink, TopologyLinkEvidence, NetworkSegment,
+    TopologyNodeSegment, DeviceDependency, TopologySnapshot, TopologySnapshotNode,
+    TopologySnapshotLink, TopologyChange, TopologyNodePosition, TopologyGroup,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

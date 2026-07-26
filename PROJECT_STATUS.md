@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Epic 5A complete
+
+The relational topology foundation, bounded analysis APIs, bootstrap, snapshots, audit/live-event integration, migration, tests, and documentation are implemented. Interactive maps and automated inference remain later work.
+
 ## HIOP v2 — Epic 3E Active Directory Frontend, Scheduler, Integration and Production Hardening
 
 Epic 3E is complete at `2.0.0-dev`. The AD integration features a full React frontend administration interface with deep React Router linking, secure credential transmission, WebSocket-driven live updates, and detailed object browsing with change history. The APScheduler background worker has been hardened with startup stale-run recovery, orphan job cleanup, and concurrent execution locks for connections. Integration into the Settings module and comprehensive offline test coverage for the scheduler lifecycle are included.

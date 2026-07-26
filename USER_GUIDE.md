@@ -1,5 +1,9 @@
 # HIOP User Guide
 
+## Topology
+
+Authorized technicians can inspect bounded graph, neighbor, path, component, impact, change, and snapshot data. Epic 5A does not include an interactive map.
+
 ## Directory review
 
 Directory records are staged before they affect HIOP. A match score is evidence, not approval. Review matching and conflicting fields, inspect the reconciliation plan, then choose link, fill-missing enrichment, create preparation, ignore, or conflict/defer. Disabled or missing directory accounts and computers do not automatically change HIOP status.
