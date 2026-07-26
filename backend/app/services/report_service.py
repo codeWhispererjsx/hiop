@@ -17,6 +17,7 @@ from app.models.ticket import Ticket
 from app.models.user import User
 from app.models.inventory_import import ImportSession
 from app.models.active_directory import ActiveDirectoryReconciliationResult
+from app.models.topology_operations import TopologyOperationalRun
 
 REPORTS = {
     "devices": ("Device Inventory Report", Device, Device.created_at),
@@ -28,6 +29,7 @@ REPORTS = {
     "discovery": ("Discovery Report", DiscoveredDevice, DiscoveredDevice.first_seen_at),
     "imports": ("Inventory Import Report", ImportSession, ImportSession.uploaded_at),
     "ad-reconciliation": ("Active Directory Reconciliation Report", ActiveDirectoryReconciliationResult, ActiveDirectoryReconciliationResult.reviewed_at),
+    "topology-operations": ("Topology Operations Report", TopologyOperationalRun, TopologyOperationalRun.started_at),
 }
 
 
@@ -178,6 +180,22 @@ def _ad_reconciliation_rows(db, start_date, end_date, search):
     } for row in query.order_by(ActiveDirectoryReconciliationResult.reviewed_at.desc()).all()]
 
 
+def _topology_operation_rows(db, start_date, end_date, search):
+    query = _date(db.query(TopologyOperationalRun), TopologyOperationalRun.started_at, start_date, end_date)
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.filter(or_(TopologyOperationalRun.run_type.ilike(term), TopologyOperationalRun.status.ilike(term)))
+    return [{
+        "id": str(row.id), "topology_id": str(row.topology_id), "operation": row.run_type,
+        "trigger": row.trigger_type, "status": row.status, "targets": row.target_count,
+        "succeeded": row.success_count, "failed": row.failure_count,
+        "changes": row.changes_found, "conflicts": row.conflicts,
+        "alerts": row.alerts_created, "duration_ms": row.duration_ms,
+        "started_at": _value(row.started_at), "completed_at": _value(row.completed_at),
+        "error_summary": row.error_summary,
+    } for row in query.order_by(TopologyOperationalRun.started_at.desc()).all()]
+
+
 def _sort(rows, sort_by, sort_order):
     if not rows:
         return rows
@@ -187,7 +205,7 @@ def _sort(rows, sort_by, sort_order):
 
 def get_report(db: Session, report_name: str, start_date=None, end_date=None, search=None, status=None, department=None, category=None, page=1, page_size=25, sort_by=None, sort_order="asc"):
     _validate(report_name, start_date, end_date)
-    loaders = {"devices": _device_rows, "network": _network_rows, "alerts": _alert_rows, "tickets": _ticket_rows, "users": _user_rows, "audit": _audit_rows, "discovery": _discovery_rows, "imports": _import_rows, "ad-reconciliation": _ad_reconciliation_rows}
+    loaders = {"devices": _device_rows, "network": _network_rows, "alerts": _alert_rows, "tickets": _ticket_rows, "users": _user_rows, "audit": _audit_rows, "discovery": _discovery_rows, "imports": _import_rows, "ad-reconciliation": _ad_reconciliation_rows, "topology-operations": _topology_operation_rows}
     rows = loaders[report_name](db, start_date, end_date, search)
     if status:
         rows = [row for row in rows if str(row.get("network_status", row.get("inventory_status", row.get("status", row.get("current_status", "Active" if row.get("is_active") else "Inactive"))))).lower() == status.lower()]
@@ -228,12 +246,21 @@ def get_report(db: Session, report_name: str, start_date=None, end_date=None, se
     elif report_name == "imports":
         charts = {"status": _distribution([row["status"] for row in rows])}
         metrics.update({"created": sum(row["created_devices"] for row in rows), "linked": sum(row["linked_devices"] for row in rows), "enriched": sum(row["enriched_devices"] for row in rows), "failed": sum(row["failed_rows"] for row in rows), "rolled_back": sum(row["rollback_rows"] for row in rows)})
-    else:
+    elif report_name == "ad-reconciliation":
         charts = {"action": _distribution([row["action"] for row in rows]), "status": _distribution([row["status"] for row in rows])}
         metrics.update({
             "completed": sum(row["status"] == "completed" for row in rows),
             "manual_setup": sum(row["status"] == "pending_manual_setup" for row in rows),
             "review_required": sum(row["status"] == "review_required" for row in rows),
+        })
+    else:
+        charts = {"operation": _distribution([row["operation"] for row in rows]), "status": _distribution([row["status"] for row in rows])}
+        durations = [row["duration_ms"] for row in rows if row["duration_ms"] is not None]
+        metrics.update({
+            "completed": sum(row["status"] == "completed" for row in rows),
+            "partial": sum(row["status"] == "partial" for row in rows),
+            "failed": sum(row["status"] == "failed" for row in rows),
+            "average_duration_ms": round(sum(durations) / len(durations), 2) if durations else None,
         })
     rows = _sort(rows, sort_by, sort_order)
     items, total, pages = _page(rows, page, page_size)

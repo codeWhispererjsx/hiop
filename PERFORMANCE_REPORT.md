@@ -87,3 +87,7 @@ controlled summary refetches bound scheduler, database, and WebSocket load.
 ## Epic 5B neighbor collection
 
 Collection is bounded by targets, approved column roots, rows, duration, and SNMP concurrency. Stable-identity queries are indexed, list APIs paginate, and WebSockets broadcast counts rather than payload floods. Production-scale query plans remain pending an approved synthetic lab.
+
+## Epic 5E scheduled topology review
+
+Operational-run status/type/time, alert topology/time and open/severity, schedule topology, snapshot time, and existing graph queries are indexed. Collection caps targets, reuses SNMP request limits, coalesces missed jobs, adds jitter, and prevents concurrent operations per topology. Analytics use bounded adjacency/Tarjan traversal and return summarized IDs rather than graph payloads. Run/history APIs paginate; exports and cleanup are bounded. Production cardinality/query-plan testing remains pending an approved synthetic environment.

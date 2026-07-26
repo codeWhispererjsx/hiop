@@ -11,7 +11,7 @@ from app.core.config import settings
 from app.models.device import Device
 from app.models.snmp import SNMPInterface
 from app.models.topology import (
-    DeviceDependency, NetworkSegment, Topology, TopologyChange, TopologyLink,
+    DeviceDependency, NetworkSegment, Topology, TopologyChange, TopologyGroup, TopologyLink,
     TopologyNode, TopologyNodePosition, TopologySnapshot, TopologySnapshotLink,
     TopologySnapshotNode,
 )
@@ -163,6 +163,8 @@ class TopologyService:
     def snapshot(self, topology, payload, actor):
         nodes = self.db.scalars(select(TopologyNode).where(TopologyNode.topology_id == topology.id)).all()
         links = self.db.scalars(select(TopologyLink).where(TopologyLink.topology_id == topology.id)).all()
+        segments = self.db.scalars(select(NetworkSegment).where(NetworkSegment.topology_id == topology.id)).all()
+        groups = self.db.scalars(select(TopologyGroup).where(TopologyGroup.topology_id == topology.id)).all()
         if self.db.query(TopologySnapshot).filter_by(topology_id=topology.id).count() >= settings.topology_maximum_snapshots:
             raise HTTPException(413, "Topology snapshot limit reached.")
         snapshot = TopologySnapshot(topology_id=topology.id, created_by=actor.id, status="pending", **payload.model_dump())
@@ -176,8 +178,16 @@ class TopologyService:
                 source_node_reference=link.source_node_id, target_node_reference=link.target_node_id,
                 link_type=link.link_type, status=link.status, speed_bps=link.speed_bps, vlan_id=link.vlan_id,
                 confidence_score=link.confidence_score, metadata_json=link.metadata_json))
-        checksum = hashlib.sha256(json.dumps({"nodes": sorted(str(n.id) for n in nodes), "links": sorted(str(l.id) for l in links)}).encode()).hexdigest()
-        snapshot.node_count, snapshot.link_count, snapshot.status = len(nodes), len(links), "completed"
+        checksum = hashlib.sha256(json.dumps({
+            "nodes": sorted(str(n.id) for n in nodes), "links": sorted(str(l.id) for l in links),
+            "segments": sorted(str(row.id) for row in segments), "groups": sorted(str(row.id) for row in groups),
+        }).encode()).hexdigest()
+        snapshot.node_count, snapshot.link_count, snapshot.segment_count, snapshot.status = len(nodes), len(links), len(segments), "completed"
+        snapshot.metadata_json = {
+            "segment_ids": [str(row.id) for row in segments],
+            "group_ids": [str(row.id) for row in groups],
+            "topology_type": topology.topology_type, "scope_type": topology.scope_type,
+        }
         snapshot.completed_at, snapshot.checksum = datetime.now(timezone.utc), checksum
         create_audit_log(self.db, actor.username, "TOPOLOGY_SNAPSHOT_CREATED", "TopologySnapshot", str(snapshot.id), f"Captured {len(nodes)} nodes and {len(links)} links.")
         self.db.commit(); self.db.refresh(snapshot)

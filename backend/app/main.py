@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -10,6 +10,7 @@ from app.core.logging_config import configure_logging
 from app.db.database import SessionLocal
 from app.models.network_scan import NetworkScan
 from app.models.snmp import SNMPPollRun
+from app.models.topology_operations import TopologyOperationalRun
 from app.devices.routes import router as device_router
 from app.tickets.routes import router as ticket_router
 from app.scanner.routes import router as scanner_router
@@ -92,6 +93,7 @@ def health():
     database = "available"
     last_scan = None
     snmp_health = {"integration_enabled": settings.snmp_enabled, "scheduler_jobs": 0, "active_polls": 0, "stale_runs": 0}
+    topology_health = {"scheduler_jobs": 0, "active_runs": 0, "stale_runs": 0}
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
@@ -103,6 +105,12 @@ def health():
             snmp_health["active_polls"] = active.count()
             snmp_health["stale_runs"] = sum(1 for run in active.limit(settings.snmp_poll_concurrency * 2).all() if run.started_at.timestamp() < cutoff)
             snmp_health["scheduler_jobs"] = sum(job.id.startswith("snmp_") for job in scheduler.get_jobs())
+        topology_active = db.query(TopologyOperationalRun).filter(TopologyOperationalRun.status.in_(("pending", "running")))
+        topology_health["active_runs"] = topology_active.count()
+        topology_health["stale_runs"] = topology_active.filter(
+            TopologyOperationalRun.started_at < datetime.now(timezone.utc) - timedelta(hours=1)
+        ).count()
+        topology_health["scheduler_jobs"] = sum(job.id.startswith("topology_") for job in scheduler.get_jobs())
     except Exception:
         database = "unavailable"
     finally:
@@ -122,6 +130,7 @@ def health():
         "network_scanner": "available",
         "last_scan": last_scan,
         "snmp": snmp_health,
+        "topology": topology_health,
     }
     return JSONResponse(payload, status_code=200 if healthy else 503)
 
@@ -158,5 +167,7 @@ from app.api.v1.active_directory import router as active_directory_router
 app.include_router(active_directory_router, prefix=settings.api_prefix)
 from app.api.v1.snmp import router as snmp_router
 app.include_router(snmp_router, prefix=settings.api_prefix)
+from app.api.v1.topology_operations import router as topology_operations_router
+app.include_router(topology_operations_router, prefix=settings.api_prefix)
 from app.api.v1.topology import router as topology_router
 app.include_router(topology_router, prefix=settings.api_prefix)

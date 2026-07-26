@@ -14,6 +14,9 @@ from app.models.active_directory import (
 )
 from app.services.network_service import scan_all_devices
 from app.models.snmp import SNMPCredential, SNMPPollingConfiguration, SNMPPollRun, SNMPTarget
+from app.models.topology import Topology, TopologyNode
+from app.models.topology_inference import TopologyInferenceRun
+from app.models.topology_operations import TopologyOperationalRun, TopologyScheduleConfiguration
 
 
 scheduler = BackgroundScheduler()
@@ -21,6 +24,9 @@ logger = logging.getLogger(__name__)
 AD_JOB_PREFIX = "active_directory_sync_"
 SNMP_JOB_PREFIX = "snmp_poll_"
 SNMP_CLEANUP_JOB_ID = "snmp_retention_cleanup"
+TOPOLOGY_JOB_PREFIX = "topology_"
+TOPOLOGY_CLEANUP_JOB_ID = "topology_retention_cleanup"
+TOPOLOGY_JOB_TYPES = ("collection", "inference", "snapshot", "changes", "health")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
     "system": ("system_poll_enabled", "system_interval_seconds", "system"),
@@ -176,6 +182,201 @@ def scheduled_snmp_retention_cleanup():
     except Exception:
         db.rollback()
         logger.exception("Scheduled SNMP retention cleanup failed")
+    finally:
+        db.close()
+
+
+def topology_job_id(topology_id: str, job_type: str) -> str:
+    return f"{TOPOLOGY_JOB_PREFIX}{topology_id}_{job_type}"
+
+
+def remove_topology_jobs(topology_id: str) -> int:
+    count = 0
+    for job_type in TOPOLOGY_JOB_TYPES:
+        job = scheduler.get_job(topology_job_id(topology_id, job_type))
+        if job:
+            scheduler.remove_job(job.id); count += 1
+    return count
+
+
+def register_topology_jobs(topology_id: str) -> int:
+    if not settings.scheduler_enabled:
+        return 0
+    db = SessionLocal()
+    try:
+        topology = db.get(Topology, topology_id)
+        config = db.scalar(select(TopologyScheduleConfiguration).where(TopologyScheduleConfiguration.topology_id == topology_id))
+        if not topology or not topology.enabled or not config or not config.enabled:
+            remove_topology_jobs(topology_id)
+            return 0
+        if not scheduler.running:
+            scheduler.start()
+        specifications = {
+            "collection": (config.neighbor_collection_enabled, config.neighbor_collection_interval_minutes * 60),
+            "inference": (config.inference_enabled, config.inference_interval_minutes * 60),
+            "snapshot": (config.snapshot_enabled, config.snapshot_interval_hours * 3600),
+            "changes": (config.change_evaluation_enabled, config.change_evaluation_interval_minutes * 60),
+            "health": (config.alerting_enabled, max(900, config.change_evaluation_interval_minutes * 60)),
+        }
+        count = 0
+        for job_type, (enabled, seconds) in specifications.items():
+            job_id = topology_job_id(topology_id, job_type)
+            if not enabled:
+                if scheduler.get_job(job_id): scheduler.remove_job(job_id)
+                continue
+            scheduler.add_job(
+                scheduled_topology_operation, "interval", seconds=seconds,
+                jitter=min(config.jitter_seconds, max(0, seconds // 4)),
+                id=job_id, args=[topology_id, job_type], replace_existing=True,
+                max_instances=1, coalesce=True, misfire_grace_time=min(seconds, 300),
+            )
+            count += 1
+        config.last_scheduler_reconciliation_at = datetime.now(timezone.utc)
+        db.commit()
+        return count
+    finally:
+        db.close()
+
+
+def update_topology_jobs(topology_id: str) -> int:
+    return register_topology_jobs(topology_id)
+
+
+def pause_topology_jobs(topology_id: str) -> int:
+    jobs = [job for job in scheduler.get_jobs() if job.id.startswith(f"{TOPOLOGY_JOB_PREFIX}{topology_id}_")]
+    for job in jobs: scheduler.pause_job(job.id)
+    return len(jobs)
+
+
+def resume_topology_jobs(topology_id: str) -> int:
+    return register_topology_jobs(topology_id)
+
+
+def recover_stale_topology_runs(db=None) -> int:
+    owns = db is None
+    db = db or SessionLocal()
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
+        rows = db.scalars(select(TopologyOperationalRun).where(
+            TopologyOperationalRun.status.in_(("pending", "running")),
+            TopologyOperationalRun.started_at < cutoff,
+        )).all()
+        for run in rows:
+            run.status = "failed"; run.completed_at = datetime.now(timezone.utc)
+            run.error_summary = "Recovered stale topology operation after scheduler startup."
+        stale_inference = db.scalars(select(TopologyInferenceRun).where(
+            TopologyInferenceRun.status.in_(("pending", "running")),
+            TopologyInferenceRun.started_at < cutoff,
+        )).all()
+        for run in stale_inference:
+            run.status = "failed"; run.completed_at = datetime.now(timezone.utc)
+            run.error_summary = "Recovered stale inference after scheduler startup."
+        if rows or stale_inference: db.commit()
+        return len(rows) + len(stale_inference)
+    finally:
+        if owns: db.close()
+
+
+def reconcile_topology_jobs(db=None) -> dict[str, int]:
+    owns = db is None
+    db = db or SessionLocal()
+    expected, registered, removed = set(), 0, 0
+    try:
+        configs = db.scalars(select(TopologyScheduleConfiguration)).all()
+        for config in configs:
+            topology = db.get(Topology, config.topology_id)
+            if topology and topology.enabled and config.enabled:
+                flags = {
+                    "collection": config.neighbor_collection_enabled, "inference": config.inference_enabled,
+                    "snapshot": config.snapshot_enabled, "changes": config.change_evaluation_enabled,
+                    "health": config.alerting_enabled,
+                }
+                expected.update(topology_job_id(str(config.topology_id), kind) for kind, enabled in flags.items() if enabled)
+                registered += register_topology_jobs(str(config.topology_id))
+            else:
+                removed += remove_topology_jobs(str(config.topology_id))
+        for job in list(scheduler.get_jobs()):
+            if job.id.startswith(TOPOLOGY_JOB_PREFIX) and job.id != TOPOLOGY_CLEANUP_JOB_ID and job.id not in expected:
+                scheduler.remove_job(job.id); removed += 1
+        return {"registered": registered, "removed": removed, "expected": len(expected)}
+    finally:
+        if owns: db.close()
+
+
+def scheduled_topology_operation(topology_id: str, job_type: str):
+    db = SessionLocal()
+    actor = SimpleNamespace(id=None, username="scheduler")
+    started = datetime.now(timezone.utc)
+    run = None
+    try:
+        topology = db.get(Topology, topology_id)
+        config = db.scalar(select(TopologyScheduleConfiguration).where(TopologyScheduleConfiguration.topology_id == topology_id))
+        if not topology or not topology.enabled or not config or not config.enabled:
+            remove_topology_jobs(topology_id); return
+        active = db.scalar(select(TopologyOperationalRun).where(
+            TopologyOperationalRun.topology_id == topology_id,
+            TopologyOperationalRun.status.in_(("pending", "running")),
+        ))
+        if active:
+            logger.info("Skipped overlapping topology job topology_id=%s type=%s", topology_id, job_type)
+            return
+        run = TopologyOperationalRun(topology_id=topology.id, run_type=job_type, trigger_type="scheduled")
+        db.add(run); db.commit(); db.refresh(run)
+        from app.services.topology_operational_service import TopologyOperationalService
+        operations = TopologyOperationalService(db)
+        if job_type == "collection":
+            from app.services.topology_neighbor_collection_service import TopologyNeighborCollectionService
+            target_ids = db.scalars(select(TopologyNode.snmp_target_id).where(
+                TopologyNode.topology_id == topology.id, TopologyNode.snmp_target_id.is_not(None)
+            ).distinct().limit(config.maximum_targets_per_run)).all()
+            run.target_count = len(target_ids)
+            for target_id in target_ids:
+                target = db.get(SNMPTarget, target_id)
+                if not target or not target.enabled:
+                    run.failure_count += 1; continue
+                result = TopologyNeighborCollectionService(db).collect(topology, target, config.protocol_mode, config.dry_run_default, actor)
+                result.trigger_type = "scheduled"
+                if result.status in {"completed", "partial"}: run.success_count += 1
+                else: run.failure_count += 1
+                db.commit()
+        elif job_type == "inference":
+            from app.schemas.topology_inference import InferenceRequest
+            result = __import__("app.services.topology_inference_service", fromlist=["TopologyInferenceService"]).TopologyInferenceService(db).run(
+                topology, InferenceRequest(dry_run=config.dry_run_default), actor
+            )
+            run.conflicts = result.conflicts_detected
+        elif job_type == "snapshot":
+            from app.schemas.topology import SnapshotWrite
+            snapshot = TopologyService(db).snapshot(topology, SnapshotWrite(name=f"Scheduled {datetime.now(timezone.utc):%Y-%m-%d %H:%M UTC}", snapshot_type="manual"), actor)
+            run.snapshot_id = snapshot.id
+        elif job_type == "changes":
+            result = operations.evaluate_changes(topology.id, actor=actor.username)
+            run.changes_found = result["created"]
+        elif job_type == "health":
+            result = operations.evaluate_alerts(topology.id, actor=actor.username)
+            run.alerts_created = result["opened"]
+        run.status = "partial" if run.failure_count else "completed"
+    except Exception:
+        db.rollback()
+        run = db.get(TopologyOperationalRun, run.id) if run else None
+        if run:
+            run.status = "failed"; run.error_summary = "Scheduled topology operation failed safely."
+        logger.exception("Scheduled topology operation failed topology_id=%s type=%s", topology_id, job_type)
+    finally:
+        if run:
+            run.completed_at = datetime.now(timezone.utc)
+            run.duration_ms = int((run.completed_at - started).total_seconds() * 1000)
+            db.commit()
+        db.close()
+
+
+def scheduled_topology_retention_cleanup():
+    db = SessionLocal()
+    try:
+        from app.services.topology_operational_service import TopologyOperationalService
+        TopologyOperationalService(db).cleanup(SimpleNamespace(username="scheduler"))
+    except Exception:
+        db.rollback(); logger.exception("Scheduled topology retention cleanup failed")
     finally:
         db.close()
 
@@ -422,6 +623,13 @@ def start_scheduler():
         if settings.snmp_enabled:
             scheduler.add_job(scheduled_snmp_retention_cleanup, "cron", hour=settings.snmp_cleanup_hour_utc,
                               id=SNMP_CLEANUP_JOB_ID, replace_existing=True, max_instances=1, coalesce=True)
+        recover_stale_topology_runs(db)
+        reconcile_topology_jobs(db)
+        scheduler.add_job(
+            scheduled_topology_retention_cleanup, "cron", hour=3,
+            id=TOPOLOGY_CLEANUP_JOB_ID, replace_existing=True,
+            max_instances=1, coalesce=True,
+        )
     finally:
         db.close()
     logger.info("HIOP scheduler started")

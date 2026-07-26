@@ -72,3 +72,10 @@ advanced on-call escalation remain out of scope.
 - Real device interoperability is intentionally unverified; parsing uses synthetic LLDP/CDP fixtures.
 - Agent-specific LLDP management-address encodings may remain unresolved.
 - Confirmed manual links are preserved; broader inference conflict resolution is deferred to Epic 5C.
+
+## Epic 5E verification notes
+
+- Historical neighbor observations are reported by retention preview but not deleted automatically because current link evidence can still depend on them.
+- Topology ticket creation and external escalation remain disabled policy flags pending an approved assignment/routing policy.
+- Structural articulation/bridge analysis is not a guarantee of packet paths or outage impact.
+- Real LLDP/CDP collection remains intentionally unverified without an explicitly approved safe target.

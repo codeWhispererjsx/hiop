@@ -126,3 +126,9 @@ maintenance. Daily retention at `SNMP_CLEANUP_HOUR_UTC` protects open-alert evid
 ## Topology neighbor collection
 
 Apply migration `e1d3f5a7b902`, keep approved SNMP ranges narrow, and retain conservative target/row/duration limits. Collection is manual in Epic 5B. Failed/partial runs never mark prior neighbors missing. Audit/WebSocket output is summarized; raw PDUs and credentials are excluded. Deployment does not authorize hotel-network collection.
+
+## Epic 5E topology scheduler runbook
+
+Apply migration `fa6d8e1c4b20`, then verify `alembic current`. HIOP runs one shared APScheduler instance; topology jobs use stable IDs and are reconciled during startup. Monitor `/health`, `/api/v1/topology/{id}/scheduler-status`, operational runs, stale evidence, failed runs, and open alerts. Repeated startup reconciliation is safe. Pause/resume preserves configuration. Stale runs are finalized safely at startup; missed intervals coalesce instead of replaying a burst.
+
+Before retention cleanup, preview eligible counts, confirm a protected operational baseline exists, and verify backups. Cleanup is batched and excludes protected snapshots, baselines, audit records, onboarding history, and active runs. During planned changes, start maintenance with a reason/end time and end it explicitly afterward.

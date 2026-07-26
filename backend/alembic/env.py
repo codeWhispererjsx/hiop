@@ -41,6 +41,10 @@ from app.models.topology_inference import (
     TopologyConfidenceHistory, TopologyConflict, TopologyInferenceRun,
     TopologyReviewItem,
 )
+from app.models.topology_operations import (
+    TopologyAlertEvent, TopologyAlertRule, TopologyOperationalRun,
+    TopologyScheduleConfiguration,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

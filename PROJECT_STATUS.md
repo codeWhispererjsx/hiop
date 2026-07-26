@@ -539,3 +539,7 @@ Complete at `2.0.0-dev`: approved LLDP-MIB/Cisco CDP roots, bounded secure colle
 ## Epic 5C — intelligent topology inference
 
 Complete at `2.0.0-dev`: bounded inference runs, multi-source confidence history, provisional-link canonicalization, duplicate-node recommendations, conflict records, reviewed layer/dependency/node decisions, graph normalization metadata, multiple cycle-safe path reconstruction, orphan/island/uplink analysis, snapshot comparison, audit/WebSocket integration, protected APIs, tests, and documentation. Manual links and official inventory remain authoritative. No topology frontend, scheduler, alerts, bridge/MAC/STP inference, device configuration, automatic inventory creation, or real hotel execution was added.
+
+## Epic 5E — scheduled topology operations and hardening
+
+Complete at `2.0.0-dev`: deterministic per-topology jobs, startup reconciliation, stale-run recovery, bounded collection/inference/snapshots/change/health workflows, protected baselines, deduplicated alert events with recovery and maintenance suppression, operational health/analytics/report/export APIs, retention controls, responsive administrator UI, tests, and documentation. No traps, device configuration, automatic remediation, or real hotel-network execution was added.

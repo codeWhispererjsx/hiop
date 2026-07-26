@@ -115,3 +115,7 @@ are fixed operators. Operational mutations are admin-only; aggregate health and 
 ## Epic 5B LLDP/CDP review
 
 Collection reuses encrypted write-only credentials, private approved-range enforcement, ignored-range rejection, SNMP locks, bounded WALK/BULK-WALK, admin-only execution, and safe errors. Public callers cannot supply credentials, endpoints, OIDs, roots, row limits, or transforms. Evidence is normalized and bounded; raw packets are excluded. Confirmed manual links take precedence. This is an engineering review, not formal penetration testing.
+
+## Epic 5E scheduled topology review
+
+Schedules reference persisted approved topology/SNMP targets and never accept credentials, arbitrary endpoints, OIDs, commands, or transforms. Mutation routes are admin-only; technicians receive bounded read access. Jobs retain authorized-network, encrypted-secret, concurrency, duration, row, target, and protocol controls. Alert and WebSocket payloads contain IDs/counts/safe evidence only. CSV exports are authorization-protected, size-bounded, and spreadsheet-formula neutralized. Maintenance is audited and suppresses alerts, not security validation. This remains an engineering review, not formal penetration testing.

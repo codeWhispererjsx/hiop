@@ -124,3 +124,27 @@ The toolbar is keyboard accessible, custom nodes are focusable, status is not co
 Troubleshooting: verify FastAPI and the `/api/v1` proxy for backend errors; bootstrap/add reviewed nodes for an empty map; reload before retrying a rejected layout write; and remember that “no modeled path” does not prove network unreachability.
 
 Known limitations: advanced building/floor container grouping requires display-name/group data not yet present in the graph schema. Link metric overlays are withheld because the graph does not yet return authoritative directional metric summaries. Non-backend graph filters operate on the already bounded response.
+
+## Epic 5E scheduled operations and production controls
+
+Topology scheduling reuses HIOP's single process-wide APScheduler instance. Each topology receives deterministic `topology_<uuid>_<operation>` jobs for approved neighbor collection, inference, snapshots, change evaluation, and health/alert evaluation. Startup reconciliation removes obsolete jobs, replaces changed jobs, coalesces missed intervals, recovers stale runs, applies jitter, and prevents overlapping operations for one topology. Disabled topologies or schedule configurations have no jobs.
+
+The administrator operations page at `/topology/:id/settings` exposes schedule state, bounded target and duration limits, job pause/resume, maintenance mode, run history, topology health, disabled-by-default alert rules, alert events, retention preview/cleanup, and safe node/link exports. Maintenance suppresses eligible alert creation while collection and inference continue. Manual and scheduled changes retain the same authorization, target allow-listing, protocol/OID bounds, audit, and evidence controls.
+
+### Baselines, changes, alerts, and reporting
+
+Scheduled snapshots retain nodes, links, segment/group metadata, checksums, creator/type/time, and can be marked as protected operational baselines. Change evaluation compares a completed baseline/snapshot with the current graph, deduplicates pending findings, and never mutates inventory. Alert evaluation requires configured consecutive breaches and recovery observations; open events are deduplicated per rule/entity and carry only safe summarized evidence. Structural analytics identify connected components, articulation nodes, bridge links, single-uplink nodes, and dependency impact as confidence-qualified findings—not guaranteed outage predictions.
+
+CSV node/link exports neutralize spreadsheet formulas, are bounded by graph limits, contain no credentials, and require authenticated topology read access. Retention cleanup is batched and preserves baselines, protected snapshots, audit history, onboarding decisions, and active runs.
+
+### Operational checklist
+
+1. Keep topology and global scheduler enabled, then enable only reviewed operations.
+2. Use jitter and conservative intervals; keep target/result limits below infrastructure capacity.
+3. Create and protect a known-good baseline before enabling change rules.
+4. Preview disabled alert rules, confirm confidence/occurrence thresholds, then enable explicitly.
+5. Use maintenance mode during planned changes and document the reason/end time.
+6. Review failed/stale runs, conflicts, and orphan findings before approving inference changes.
+7. Preview retention before cleanup and verify database backups and storage monitoring.
+
+Known limitations: collection remains dependent on approved SNMP targets and fixed LLDP/CDP OIDs. Ticket creation and external paging adapters are policy flags only until a reviewed routing policy is configured. Historical neighbor evidence is counted in retention preview but is not automatically deleted because active link evidence may reference it. Topology analytics are structural and do not model STP, MAC forwarding, traps, device configuration, or packet routing. No real hotel-network collection was performed.

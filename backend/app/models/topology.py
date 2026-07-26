@@ -198,6 +198,8 @@ class TopologySnapshot(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[str | None] = mapped_column(String(500))
     snapshot_type: Mapped[str] = mapped_column(String(30), default="manual", server_default="manual", nullable=False)
+    is_operational_baseline: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    is_protected: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", nullable=False)
     node_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     link_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)

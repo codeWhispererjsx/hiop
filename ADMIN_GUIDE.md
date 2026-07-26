@@ -461,3 +461,7 @@ maintenance for planned work, monitor scheduler health, and preview retention be
 ## LLDP/CDP neighbor review
 
 Use neighbor collection only for approved SNMP targets. Start with dry run, inspect warnings and counts, then run persisted collection. Review candidates and provisional links before confirmation. Confirmed manual links remain authoritative. LLDP is the default; use CDP only for a supported Cisco profile.
+
+## Scheduled topology administration
+
+Open **Network Topology → Settings** for the selected topology. Enable only the required collection, inference, snapshot, change, and alert jobs; configure conservative intervals, jitter, target limits, and protocol mode; then save to reconcile deterministic jobs. Create a protected baseline before enabling change rules. Rules are disabled by default and should be previewed, reviewed, and enabled individually. Use maintenance mode for planned network changes so eligible alerts are suppressed without stopping evidence collection.

@@ -143,3 +143,16 @@ Inference requests may select dry-run, dependency inference, and layer suggestio
 ## Epic 5D interactive topology client
 
 The `/topology` frontend consumes these existing bounded contracts through one typed client. Initial maps use `GET /topology/{id}/graph`; explicit positions use `GET/PUT /topology/{id}/layout`; path and impact modes use `path-analysis` and `impact-analysis`; conflict/review workspaces use their paginated endpoints; and historical views use snapshots, snapshot graphs, comparison, and changes. No public route accepts arbitrary discovery algorithms, device commands, or unbounded graph input.
+
+## Epic 5E topology operations API
+
+- `GET/PUT /topology/{id}/schedule`; `POST .../pause|resume`; `GET /topology/{id}/scheduler-status`
+- `POST /topology/{id}/maintenance/start|end`
+- `GET /topology/{id}/health`, `/analytics`, `/operational-runs`, and `/reports/summary`
+- `GET/POST /topology/alert-rules`; `GET/PATCH /topology/alert-rules/{id}`; enable, disable, and preview actions
+- `GET /topology/alerts`
+- `GET /topology/retention/preview`; `POST /topology/retention/cleanup`
+- `GET /topology/{id}/exports/nodes.csv|links.csv`
+- `POST /topology/{id}/snapshots/{snapshot_id}/baseline`
+
+All mutations require Admin. Read endpoints require Admin or Technician. Lists are paginated and exports are bounded/formula-safe.

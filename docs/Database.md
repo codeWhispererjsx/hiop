@@ -92,3 +92,7 @@ Migration `f2e4a6c8d013_add_topology_inference.py` adds:
 - `topology_confidence_history` for per-link score history and contribution breakdown.
 
 All changes are additive. Owning topology deletion cascades inference-only rows; optional run/reviewer references use `SET NULL`. Graph and inventory tables are not destructively altered by the migration.
+
+## Epic 5E topology operations migration
+
+Migration `fa6d8e1c4b20` adds `topology_schedule_configurations`, `topology_operational_runs`, `topology_alert_rules`, and `topology_alert_events`. It also adds protected/baseline flags to topology snapshots. Schedule topology IDs are unique; operational status/time and alert topology/open/time lookups are indexed. Downgrade removes only these additive objects and columns.

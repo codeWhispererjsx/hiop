@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 5E
+
+- Added deterministic scheduled topology collection, inference, snapshots, change evaluation, health checks, startup reconciliation, stale-run recovery, jitter, coalescing, and per-topology overlap protection.
+- Added protected baselines, deduplicated change findings, maintenance-aware alert rules/events, topology health, structural analytics, bounded operations history, retention preview/cleanup, and formula-safe CSV exports.
+- Added the topology operations frontend with schedule controls, run/health monitoring, alert-rule administration, maintenance controls, retention, exports, typed clients, tests, and operating documentation.
+- Preserved reviewed topology and inventory authority; excluded traps, device configuration, automatic remediation, and unapproved real-network collection.
+
 ## 2.0.0-dev — Epic 5D
 
 - Added the React Flow interactive Network Topology workspace, protected route, and authorized navigation.

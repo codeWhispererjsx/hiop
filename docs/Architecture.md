@@ -88,3 +88,5 @@ Docker Compose defines PostgreSQL, one-shot migrations, one backend worker, and 
 
 SNMP uses the shared scheduler, deterministic target/group jobs, startup reconciliation, stale-run recovery, jitter,
 and existing locks. Alert evaluation is a separate post-persistence service; one cleanup job protects alert evidence.
+
+Topology now follows the same single-scheduler architecture. Persisted per-topology configuration reconciles deterministic collection, inference, snapshot, change, and health jobs at startup. A topology-wide operational lock prevents overlap; existing SNMP target locks remain authoritative. Change, alert, analytics, retention, reporting, and export logic live in `TopologyOperationalService`, separate from route handlers and graph inference.

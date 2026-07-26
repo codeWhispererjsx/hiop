@@ -67,3 +67,18 @@ test("no dummy graph or real infrastructure data is embedded", () => {
   assert.doesNotMatch(page, /192\.168\.|10\.\d+\.\d+\.\d+|hotel[-_ ]?(switch|router|firewall)/i);
   assert.doesNotMatch(page, /const\s+(mock|dummy|sample)(Nodes|Links|Graph)/i);
 });
+
+test("scheduled topology operations remain bounded and administrator controlled", () => {
+  for (const method of [
+    "topologySchedule", "updateTopologySchedule", "pauseTopologySchedule",
+    "topologySchedulerStatus", "topologyHealth", "topologyOperationalRuns",
+    "topologyAlertRules", "previewTopologyAlertRule", "topologyRetentionPreview",
+    "runTopologyRetentionCleanup", "exportTopologyCsv",
+  ]) assert.match(api, new RegExp(`${method}:`));
+  assert.match(page, /Enable topology scheduler/);
+  assert.match(page, /Maximum targets per run/);
+  assert.match(page, /Start maintenance/);
+  assert.match(page, /Protected baselines and audit history are excluded from cleanup/);
+  assert.match(page, /user\?\.role!=="admin"/);
+  assert.doesNotMatch(page, /arbitrary OID/i);
+});

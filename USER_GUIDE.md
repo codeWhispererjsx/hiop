@@ -401,3 +401,7 @@ deduplicated alerts. Administrators additionally manage rules, schedules, mainte
 ## Topology neighbor evidence
 
 Technicians may inspect run history, normalized LLDP/CDP observations, candidates, and provisional links. Administrators control collection and review. A provisional node/link is evidence awaiting review, not an inventory device or automatically confirmed physical relationship.
+
+## Scheduled topology monitoring
+
+The topology operations view shows evidence freshness, recent collection/inference/snapshot runs, conflicts, orphan counts, maintenance state, and open topology alerts. “Potential impact,” articulation, and bridge findings describe the modeled graph and do not guarantee packet routing or outage scope. Administrators can configure schedules, baselines, rules, retention, and exports; technicians retain read-only monitoring access.
