@@ -17,6 +17,7 @@ from app.models.active_directory import (
     ActiveDirectoryDepartmentMapping,
     ActiveDirectoryOUMapping,
     ActiveDirectoryGroupRoleMapping,
+    ActiveDirectoryMatchCandidate,
     ActiveDirectoryReconciliationResult,
     ActiveDirectoryRecordLink,
 )

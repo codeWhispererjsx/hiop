@@ -60,8 +60,9 @@ def _all(db: Session) -> dict[str, str]:
     return values
 
 
-def _bool(value: str) -> bool:
-    return value.lower() == "true"
+def _bool(value: str | bool) -> bool:
+    """Normalize persisted text while remaining safe for already-coerced values."""
+    return value if isinstance(value, bool) else value.lower() == "true"
 
 
 def _group(values: dict[str, str], prefix: str) -> dict[str, Any]:
