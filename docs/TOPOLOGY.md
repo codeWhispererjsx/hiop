@@ -59,3 +59,37 @@ Troubleshooting should begin with approved Discovery ranges, the existing SNMP t
 ## Known limitations and next epic
 
 Epic 5B has no bridge/MAC tables, STP, final inference, interactive map, scheduled refresh, alerts, traps, or automatic device mutation. Management-address extraction depends on agent encoding. Multi-context reconciliation remains conservative. Impact analysis is structural, not proof of physical dependency. The recommended next epic is Epic 5C: reviewed inference using neighbor evidence plus separately approved bridge/STP sources.
+
+## Epic 5C inference engine
+
+`TopologyInferenceService` turns reviewed inventory, Discovery, SNMP target/interface, LLDP/CDP, manual-link, segment, and historical evidence into a normalized graph. Runs are bounded by configured node/link limits and have checksums before and after inference. The service never creates or merges official inventory devices.
+
+### Confidence model and evidence fusion
+
+Every physical link receives a fresh 0–100 score and a `TopologyConfidenceHistory` record. Contributions include base neighbor evidence, bidirectional sightings, LLDP/CDP agreement, resolved interface pairs, linked inventory/SNMP targets, historical stability, and confirmed manual authority. Missing evidence and explicit conflicts reduce the score. The current contribution breakdown is also stored in link metadata; existing `TopologyLinkEvidence` rows are retained.
+
+### Canonical links and duplicate nodes
+
+Direction-independent endpoint/interface keys identify duplicate physical links. A confirmed manual link wins; otherwise confirmation and confidence select the canonical link. Provisional duplicates are suppressed, their evidence is moved to the canonical link, timestamps are widened, merge IDs are preserved, and a topology change/audit record is created. Multiple confirmed manual links become a conflict instead of being merged.
+
+Nodes sharing a stable neighbor identity or management IP produce `merge_nodes` review items. Official inventory nodes are never automatically merged. Approval can rewire topology links and hide only the reviewed provisional duplicate; contradictory official device identities are rejected.
+
+### Conflicts and review workflow
+
+The conflict engine records multiple active peers on one interface, one management IP mapped to multiple nodes, duplicate confirmed manual links, and manual/inferred disagreement. Each conflict has severity, evidence, confidence, related entities, and a suggested resolution.
+
+Review items are `pending`, `approved`, `rejected`, or `ignored`. Supported proposals include provisional-node merges, layer assignments, and inferred dependencies. Approval revalidates topology boundaries, identity safeguards, and dependency cycles before applying changes. Resolution is audited and broadcast without sending the full graph.
+
+### Layers, link classification, and dependencies
+
+Layer suggestions use existing manual roles/layers, device type, naming hints, and graph degree to classify core, distribution, access, endpoint, service, external, or unknown nodes. Existing manual layers are never overwritten without review. Links receive explainable uplink, downlink, access, trunk, wireless, or unknown metadata.
+
+Network dependencies follow higher-to-lower trusted layers over active physical links. High-confidence, cycle-safe dependencies are marked `source_type=inferred` and `is_manual=false`; lower-confidence proposals enter review.
+
+### Path reconstruction and comparison
+
+`path-analysis` returns bounded, cycle-safe physical, dependency, layer-aware, or combined path options ordered by hop count. `impact-analysis` combines existing dependency impact with improved orphan/island/missing-uplink analysis. Snapshot comparison reports added/removed nodes and links plus parent and layer changes. Snapshot dependency/segment fidelity is limited to data retained by the Epic 5A snapshot format.
+
+### Epic 5C limitations
+
+Inference has no bridge forwarding database, MAC learning, STP, scheduled execution, live animation, alerts, interactive frontend, or device configuration. Graph-derived dependency and layer results are recommendations, not proof of cabling or service criticality. Real hotel topology execution remains prohibited without explicit approval. The recommended next epic is Epic 5D: an administrator-reviewed interactive topology frontend over these bounded APIs.

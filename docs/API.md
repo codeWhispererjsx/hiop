@@ -122,3 +122,20 @@ health/reconciliation, target pause/resume, and maintenance. Mutations are admin
 Admin-only collection and review routes are available under `/api/v1/topology/{topology_id}`: `collect-neighbors`, `targets/{target_id}/collect-neighbors`, `neighbor-runs`, run cancellation/results, `neighbor-observations`, `neighbor-candidates` with match/ignore/restore/confirm-node-match actions, and `candidate-links` with confirm/reject/suppress actions. List/detail routes allow admin and technician roles.
 
 Collection accepts only target IDs, `auto|lldp|cdp|both`, and `dry_run`. It never accepts credentials, endpoints, OIDs, or arbitrary walk roots. All lists are paginated.
+
+## Epic 5C topology inference
+
+Reads require admin or technician access; inference execution and review resolution require admin:
+
+- `GET /api/v1/topology/{id}/inference`
+- `POST /api/v1/topology/{id}/run-inference`
+- `GET /api/v1/topology/{id}/conflicts`
+- `GET /api/v1/topology/{id}/review-items`
+- `POST /api/v1/topology/{id}/review-items/{item_id}/approve`
+- `POST /api/v1/topology/{id}/review-items/{item_id}/reject`
+- `POST /api/v1/topology/{id}/review-items/{item_id}/ignore`
+- `GET /api/v1/topology/{id}/path-analysis`
+- `GET /api/v1/topology/{id}/impact-analysis`
+- `GET /api/v1/topology/{id}/comparison?snapshot_id=...`
+
+Inference requests may select dry-run, dependency inference, and layer suggestions. Path analysis accepts only bounded path type, depth, and result-count parameters.

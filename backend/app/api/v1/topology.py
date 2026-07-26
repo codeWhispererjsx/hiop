@@ -20,6 +20,9 @@ from app.models.topology_neighbor import (
     TopologyNeighborCandidate, TopologyNeighborCollectionRun,
     TopologyNeighborObservation,
 )
+from app.models.topology_inference import (
+    TopologyConflict, TopologyInferenceRun, TopologyReviewItem,
+)
 from app.schemas.topology import (
     BootstrapRequest, DependencyRead, DependencyWrite, LinkRead, LinkUpdate,
     LinkWrite, NodeRead, NodeUpdate, NodeWrite, PositionWrite, SegmentRead,
@@ -29,9 +32,15 @@ from app.schemas.topology_neighbor import (
     CandidateMatchRequest, NeighborCandidateRead, NeighborCollectionRequest,
     NeighborObservationRead, NeighborRunRead, PerTargetCollectionRequest,
 )
+from app.schemas.topology_inference import (
+    ConflictRead, InferenceRequest, InferenceRunRead, ReviewItemRead,
+    ReviewResolution,
+)
 from app.services.audit_service import create_audit_log
 from app.services.topology_service import TopologyService
 from app.services.topology_neighbor_collection_service import TopologyNeighborCollectionService
+from app.services.topology_inference_service import TopologyInferenceService
+from app.websocket.connection_manager import manager
 
 router = APIRouter(prefix="/topology", tags=["Topology"])
 admin = require_roles(["admin"])
@@ -608,3 +617,211 @@ def confirm_change(topology_id: UUID, change_id: UUID, db: Session = Depends(get
 @router.post("/{topology_id}/changes/{change_id}/ignore")
 def ignore_change(topology_id: UUID, change_id: UUID, db: Session = Depends(get_db), actor=Depends(admin)):
     row = confirm_change(topology_id, change_id, db, actor); row.review_status = "ignored"; db.commit(); return row
+
+
+@router.get("/{topology_id}/inference")
+def inference_state(topology_id: UUID, db: Session = Depends(get_db), _=Depends(reader)):
+    topology = _topology(db, topology_id)
+    latest = db.scalar(select(TopologyInferenceRun).where(
+        TopologyInferenceRun.topology_id == topology_id
+    ).order_by(TopologyInferenceRun.started_at.desc()))
+    nodes = db.scalars(select(TopologyNode).where(TopologyNode.topology_id == topology_id)).all()
+    links = db.scalars(select(TopologyLink).where(TopologyLink.topology_id == topology_id)).all()
+    return {
+        "topology_id": str(topology.id),
+        "latest_run": InferenceRunRead.model_validate(latest) if latest else None,
+        "open_conflicts": db.query(TopologyConflict).filter_by(topology_id=topology_id, status="open").count(),
+        "pending_review_items": db.query(TopologyReviewItem).filter_by(topology_id=topology_id, status="pending").count(),
+        "orphans": TopologyInferenceService.orphan_analysis(nodes, links),
+    }
+
+
+@router.post("/{topology_id}/run-inference", response_model=InferenceRunRead)
+def run_inference(topology_id: UUID, payload: InferenceRequest,
+                  db: Session = Depends(get_db), actor=Depends(admin)):
+    return TopologyInferenceService(db).run(_topology(db, topology_id), payload, actor)
+
+
+@router.get("/{topology_id}/conflicts")
+def inference_conflicts(topology_id: UUID, page: int = Query(1, ge=1),
+                        page_size: int = Query(50, ge=1, le=100),
+                        status: str | None = None, severity: str | None = None,
+                        db: Session = Depends(get_db), _=Depends(reader)):
+    _topology(db, topology_id)
+    query = db.query(TopologyConflict).filter_by(topology_id=topology_id)
+    if status:
+        query = query.filter_by(status=status)
+    if severity:
+        query = query.filter_by(severity=severity)
+    return _page(query.order_by(TopologyConflict.detected_at.desc()), ConflictRead, page, page_size)
+
+
+@router.get("/{topology_id}/review-items")
+def review_items(topology_id: UUID, page: int = Query(1, ge=1),
+                 page_size: int = Query(50, ge=1, le=100),
+                 status: str | None = None, review_type: str | None = None,
+                 db: Session = Depends(get_db), _=Depends(reader)):
+    _topology(db, topology_id)
+    query = db.query(TopologyReviewItem).filter_by(topology_id=topology_id)
+    if status:
+        query = query.filter_by(status=status)
+    if review_type:
+        query = query.filter_by(review_type=review_type)
+    return _page(query.order_by(TopologyReviewItem.created_at.desc()), ReviewItemRead, page, page_size)
+
+
+def _review_item(db, topology_id, item_id):
+    row = _get(db, TopologyReviewItem, item_id, "Topology review item")
+    if row.topology_id != topology_id:
+        raise HTTPException(404, "Topology review item was not found in this topology.")
+    return row
+
+
+def _apply_review(db, topology_id, row, actor):
+    change = row.proposed_change or {}
+    if row.review_type == "assign_layer":
+        node = _get(db, TopologyNode, UUID(change["node_id"]), "Topology node")
+        if node.topology_id != topology_id:
+            raise HTTPException(409, "Review item references another topology.")
+        before = node.layer
+        node.layer = change["layer"]
+        node.updated_by = actor.id
+        db.add(TopologyChange(
+            topology_id=topology_id, change_type="layer_changed",
+            entity_type="node", node_id=node.id, source_type="reviewed_inference",
+            confidence_score=row.confidence_score,
+            previous_values={"layer": before}, current_values={"layer": node.layer},
+        ))
+    elif row.review_type == "create_dependency":
+        upstream, downstream = UUID(change["upstream_node_id"]), UUID(change["downstream_node_id"])
+        service = TopologyService(db)
+        service._node(topology_id, upstream)
+        service._node(topology_id, downstream)
+        if service._dependency_reachable(topology_id, downstream, upstream):
+            raise HTTPException(409, "Dependency would create a cycle.")
+        exists = db.scalar(select(DeviceDependency).where(
+            DeviceDependency.topology_id == topology_id,
+            DeviceDependency.upstream_node_id == upstream,
+            DeviceDependency.downstream_node_id == downstream,
+            DeviceDependency.dependency_type == change.get("dependency_type", "network"),
+        ))
+        if not exists:
+            db.add(DeviceDependency(
+                topology_id=topology_id, upstream_node_id=upstream,
+                downstream_node_id=downstream,
+                dependency_type=change.get("dependency_type", "network"),
+                source_type="reviewed_inference", confidence_score=row.confidence_score,
+                is_manual=False, created_by=actor.id, updated_by=actor.id,
+            ))
+    elif row.review_type == "merge_nodes":
+        canonical = _get(db, TopologyNode, UUID(change["canonical_node_id"]), "Canonical topology node")
+        if canonical.topology_id != topology_id:
+            raise HTTPException(409, "Canonical node belongs to another topology.")
+        for duplicate_id in change.get("duplicate_node_ids", []):
+            duplicate = _get(db, TopologyNode, UUID(duplicate_id), "Duplicate topology node")
+            if duplicate.topology_id != topology_id:
+                raise HTTPException(409, "Duplicate node belongs to another topology.")
+            if canonical.device_id and duplicate.device_id and canonical.device_id != duplicate.device_id:
+                raise HTTPException(409, "Official inventory nodes cannot be merged automatically.")
+            links = db.scalars(select(TopologyLink).where(
+                TopologyLink.topology_id == topology_id,
+                or_(TopologyLink.source_node_id == duplicate.id, TopologyLink.target_node_id == duplicate.id),
+            )).all()
+            for link in links:
+                other = link.target_node_id if link.source_node_id == duplicate.id else link.source_node_id
+                if other == canonical.id:
+                    link.status, link.is_suppressed = "inactive", True
+                    link.metadata_json = {**(link.metadata_json or {}), "suppressed_during_node_merge": True}
+                elif link.source_node_id == duplicate.id:
+                    link.source_node_id = canonical.id
+                else:
+                    link.target_node_id = canonical.id
+            duplicate.status = "merged"
+            duplicate.is_hidden = True
+            duplicate.metadata_json = {**(duplicate.metadata_json or {}), "merged_into": str(canonical.id)}
+            db.add(TopologyChange(
+                topology_id=topology_id, change_type="provisional_node_merged",
+                entity_type="node", node_id=canonical.id, source_type="reviewed_inference",
+                confidence_score=row.confidence_score,
+                previous_values={"duplicate_node_id": str(duplicate.id)},
+                current_values={"canonical_node_id": str(canonical.id)},
+            ))
+        create_audit_log(db, actor.username, "TOPOLOGY_NODE_MERGED", "TopologyNode", str(canonical.id), "Applied a reviewed provisional-node merge without modifying inventory.")
+
+
+@router.post("/{topology_id}/review-items/{item_id}/approve", response_model=ReviewItemRead)
+def approve_review_item(topology_id: UUID, item_id: UUID, payload: ReviewResolution,
+                        db: Session = Depends(get_db), actor=Depends(admin)):
+    row = _review_item(db, topology_id, item_id)
+    if row.status != "pending":
+        raise HTTPException(409, "Only a pending review item can be approved.")
+    _apply_review(db, topology_id, row, actor)
+    row.status, row.reviewed_by, row.reviewed_at = "approved", actor.id, datetime.now(timezone.utc)
+    row.resolution_note = payload.note
+    create_audit_log(db, actor.username, "TOPOLOGY_REVIEW_APPROVED", "TopologyReviewItem", str(row.id), "Approved and applied a topology inference review item.")
+    db.commit()
+    db.refresh(row)
+    manager.broadcast_from_thread({"type": "topology_review_resolved", "topology_id": str(topology_id), "review_item_id": str(row.id), "status": row.status})
+    manager.broadcast_from_thread({"type": "topology_graph_updated", "topology_id": str(topology_id), "review_item_id": str(row.id)})
+    return row
+
+
+def _resolve_review(topology_id, item_id, status, payload, db, actor):
+    row = _review_item(db, topology_id, item_id)
+    if row.status != "pending":
+        raise HTTPException(409, "Only a pending review item can be resolved.")
+    row.status, row.reviewed_by, row.reviewed_at = status, actor.id, datetime.now(timezone.utc)
+    row.resolution_note = payload.note
+    create_audit_log(db, actor.username, f"TOPOLOGY_REVIEW_{status.upper()}", "TopologyReviewItem", str(row.id), f"Marked topology review item {status}.")
+    db.commit()
+    db.refresh(row)
+    manager.broadcast_from_thread({"type": "topology_review_resolved", "topology_id": str(topology_id), "review_item_id": str(row.id), "status": status})
+    return row
+
+
+@router.post("/{topology_id}/review-items/{item_id}/reject", response_model=ReviewItemRead)
+def reject_review_item(topology_id: UUID, item_id: UUID, payload: ReviewResolution,
+                       db: Session = Depends(get_db), actor=Depends(admin)):
+    return _resolve_review(topology_id, item_id, "rejected", payload, db, actor)
+
+
+@router.post("/{topology_id}/review-items/{item_id}/ignore", response_model=ReviewItemRead)
+def ignore_review_item(topology_id: UUID, item_id: UUID, payload: ReviewResolution,
+                       db: Session = Depends(get_db), actor=Depends(admin)):
+    return _resolve_review(topology_id, item_id, "ignored", payload, db, actor)
+
+
+@router.get("/{topology_id}/path-analysis")
+def path_analysis(topology_id: UUID, source_node_id: UUID, target_node_id: UUID,
+                  path_type: str = Query("any", pattern="^(physical|dependency|layer_aware|any)$"),
+                  max_depth: int = Query(20, ge=1, le=100),
+                  max_paths: int = Query(5, ge=1, le=20),
+                  db: Session = Depends(get_db), _=Depends(reader)):
+    _topology(db, topology_id)
+    TopologyService(db)._node(topology_id, source_node_id)
+    TopologyService(db)._node(topology_id, target_node_id)
+    links = db.scalars(select(TopologyLink).where(TopologyLink.topology_id == topology_id)).all()
+    dependencies = db.scalars(select(DeviceDependency).where(DeviceDependency.topology_id == topology_id)).all()
+    paths = TopologyInferenceService.reconstruct_paths(
+        source_node_id, target_node_id, links, dependencies, path_type, max_depth,
+        min(max_paths, settings.topology_inference_maximum_paths),
+    )
+    return {"paths": paths, "count": len(paths), "path_type": path_type}
+
+
+@router.get("/{topology_id}/impact-analysis")
+def impact_analysis(topology_id: UUID, node_id: UUID,
+                    max_depth: int = Query(20, ge=1, le=100),
+                    db: Session = Depends(get_db), _=Depends(reader)):
+    topology = _topology(db, topology_id)
+    impact_result = TopologyService(db).impact(topology.id, node_id, max_depth)
+    nodes = db.scalars(select(TopologyNode).where(TopologyNode.topology_id == topology_id)).all()
+    links = db.scalars(select(TopologyLink).where(TopologyLink.topology_id == topology_id)).all()
+    return {**impact_result, "orphan_analysis": TopologyInferenceService.orphan_analysis(nodes, links)}
+
+
+@router.get("/{topology_id}/comparison")
+def compare_topology(topology_id: UUID, snapshot_id: UUID,
+                     db: Session = Depends(get_db), _=Depends(reader)):
+    _topology(db, topology_id)
+    return TopologyInferenceService(db).compare_snapshot(topology_id, snapshot_id)

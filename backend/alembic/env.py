@@ -37,6 +37,10 @@ from app.models.topology_neighbor import (
     TopologyNeighborCandidate, TopologyNeighborCollectionRun,
     TopologyNeighborObservation,
 )
+from app.models.topology_inference import (
+    TopologyConfidenceHistory, TopologyConflict, TopologyInferenceRun,
+    TopologyReviewItem,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

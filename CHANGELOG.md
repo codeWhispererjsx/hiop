@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0-dev — Epic 5C
+
+- Added explainable topology inference runs, confidence history, evidence fusion, conflict records, and administrator review items.
+- Added safe provisional-link merging, duplicate-node recommendations, layer/link classification, dependency inference, orphan analysis, multiple path reconstruction, and snapshot comparison APIs.
+- Preserved confirmed manual links and official inventory identities; excluded frontend topology maps, scheduling, alerts, bridge/MAC/STP inference, device configuration, and real-network execution.
+
 ## 2.0.0-dev — Epic 5B
 
 - Added secure bounded LLDP and Cisco CDP neighbor collection using approved fixed OID roots.

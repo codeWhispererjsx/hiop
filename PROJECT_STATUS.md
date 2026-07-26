@@ -531,3 +531,7 @@ UI, protected retention, and health integration are implemented. Version remains
 ## Epic 5B — LLDP/CDP neighbor evidence
 
 Complete at `2.0.0-dev`: approved LLDP-MIB/Cisco CDP roots, bounded secure collection, normalized observations, stable remote identities, conservative interface/device/node matching, provisional nodes/links, bidirectional confidence, manual-link precedence, conflict evidence, grace aging/restoration, run/review APIs, mocked tests, and operations documentation. No real hotel-network collection, arbitrary walk, inventory creation, automatic confirmation, scheduling, topology UI, bridge/MAC/STP inference, or alerts were added.
+
+## Epic 5C — intelligent topology inference
+
+Complete at `2.0.0-dev`: bounded inference runs, multi-source confidence history, provisional-link canonicalization, duplicate-node recommendations, conflict records, reviewed layer/dependency/node decisions, graph normalization metadata, multiple cycle-safe path reconstruction, orphan/island/uplink analysis, snapshot comparison, audit/WebSocket integration, protected APIs, tests, and documentation. Manual links and official inventory remain authoritative. No topology frontend, scheduler, alerts, bridge/MAC/STP inference, device configuration, automatic inventory creation, or real hotel execution was added.

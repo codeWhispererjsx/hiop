@@ -81,3 +81,14 @@ Migration `f5e4d3c2b1a0` adds schedules, jitter, maintenance/recovery metadata, 
 ## Epic 5B neighbor evidence
 
 Migration `e1d3f5a7b902_add_topology_neighbor_discovery.py` adds `topology_neighbor_collection_runs`, deduplicated `topology_neighbor_observations`, and reviewed `topology_neighbor_candidates`. Indexes cover topology/status/time, target/protocol, remote identity, management address, and review queues. The additive downgrade removes only these three Epic 5B tables.
+
+## Epic 5C inference and review
+
+Migration `f2e4a6c8d013_add_topology_inference.py` adds:
+
+- `topology_inference_runs` for bounded execution, counts, summaries, and graph checksums.
+- `topology_conflicts` for severity, evidence, suggested resolution, and lifecycle.
+- `topology_review_items` for proposed changes, impact, confidence, and administrator resolution.
+- `topology_confidence_history` for per-link score history and contribution breakdown.
+
+All changes are additive. Owning topology deletion cascades inference-only rows; optional run/reviewer references use `SET NULL`. Graph and inventory tables are not destructively altered by the migration.

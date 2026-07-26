@@ -100,6 +100,11 @@ class Settings(BaseSettings):
     topology_neighbor_minimum_confidence: int = Field(default=40, ge=0, le=100)
     topology_neighbor_evidence_retention_days: int = Field(default=90, ge=1, le=3650)
     topology_neighbor_maximum_evidence_bytes: int = Field(default=4096, ge=256, le=65536)
+    topology_inference_maximum_nodes: int = Field(default=5000, ge=1, le=100000)
+    topology_inference_maximum_links: int = Field(default=10000, ge=1, le=200000)
+    topology_inference_review_threshold: int = Field(default=75, ge=0, le=100)
+    topology_inference_dependency_threshold: int = Field(default=70, ge=0, le=100)
+    topology_inference_maximum_paths: int = Field(default=10, ge=1, le=100)
     snmp_allow_legacy_protocols: bool = False
     snmp_allow_v1: bool = False
     snmp_v3_required_in_production: bool = True
