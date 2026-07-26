@@ -49,11 +49,14 @@ function useADWebSocket(onEvent: (event: string, data: unknown) => void) {
     function connect() {
       const token = getAuthToken();
       if (!token) return;
-      const defaultWebSocketUrl = import.meta.env.DEV
-        ? "ws://127.0.0.1:8001/ws/dashboard"
-        : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
+      const defaultWebSocketUrl =
+        `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
+      const configuredWebSocketUrl = import.meta.env.VITE_WS_URL;
+      const websocketUrl = configuredWebSocketUrl?.startsWith("/")
+        ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${configuredWebSocketUrl}`
+        : configuredWebSocketUrl ?? defaultWebSocketUrl;
       try {
-        ws = new WebSocket(import.meta.env.VITE_WS_URL ?? defaultWebSocketUrl, ["hiop", token]);
+        ws = new WebSocket(websocketUrl, ["hiop", token]);
         ws.onmessage = (e: MessageEvent) => {
           try {
             const msg = JSON.parse(String(e.data)) as {

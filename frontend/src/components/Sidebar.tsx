@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 
@@ -18,6 +18,8 @@ const links: { label: string; to: string; icon: IconName }[] = [
   { label: "Active Directory", to: "/active-directory", icon: "network" },
   { label: "Settings", to: "/settings", icon: "settings" },
 ];
+const SIDEBAR_SCROLL_KEY = "hiop.sidebar.scroll";
+let lastSidebarScroll = 0;
 
 export default function Sidebar({
   open,
@@ -31,16 +33,30 @@ export default function Sidebar({
   live: boolean;
 }) {
   const navRef = useRef<HTMLElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
-    nav.scrollTop = Number(sessionStorage.getItem("hiop.sidebar.scroll") ?? 0);
-    const remember = () => sessionStorage.setItem("hiop.sidebar.scroll", String(nav.scrollTop));
+    const stored = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY) ?? lastSidebarScroll);
+    nav.scrollTop = stored;
+    const frame = requestAnimationFrame(() => { nav.scrollTop = stored; });
+    const remember = () => {
+      lastSidebarScroll = nav.scrollTop;
+      sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(lastSidebarScroll));
+    };
     nav.addEventListener("scroll", remember, { passive: true });
-    return () => nav.removeEventListener("scroll", remember);
+    return () => {
+      cancelAnimationFrame(frame);
+      remember();
+      nav.removeEventListener("scroll", remember);
+    };
   }, []);
-  const closeOnMobile = () => {
-    if (window.matchMedia("(max-width: 980px)").matches) onClose();
+  const handleNavigation = () => {
+    const nav = navRef.current;
+    if (nav) {
+      lastSidebarScroll = nav.scrollTop;
+      sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(lastSidebarScroll));
+    }
+    if (window.matchMedia("(max-width: 820px)").matches) onClose();
   };
   const visibleLinks =
     role === "admin"
@@ -73,7 +89,7 @@ export default function Sidebar({
             <NavLink
               key={link.to}
               to={link.to}
-              onClick={closeOnMobile}
+              onClick={handleNavigation}
               className={({ isActive }) =>
                 `nav-link ${isActive ? "active" : ""}`
               }
@@ -89,7 +105,7 @@ export default function Sidebar({
             <NavLink
               key={link.to}
               to={link.to}
-              onClick={closeOnMobile}
+              onClick={handleNavigation}
               className={({ isActive }) =>
                 `nav-link ${isActive ? "active" : ""}`
               }
