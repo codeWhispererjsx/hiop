@@ -25,6 +25,9 @@
 ## 3.0.0-dev — Restore workflow foundation
 - Added approval-gated change requests, change windows, restore plans, and safe blocked dry-run records.
 
+## 3.0.0-dev — Automation foundation
+- Added bounded workflow definitions, approved-action metadata, dry-run records, and workflow run lifecycle storage.
+
 ## 3.0.0-dev — Hospitality foundation
 
 - Rebranded HIOP as Hospitality IT Operations Platform while preserving the acronym, repository, database, environment prefixes, and existing API routes.
