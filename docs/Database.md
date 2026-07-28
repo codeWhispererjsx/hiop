@@ -1,5 +1,9 @@
 # HIOP 2.0.0-dev database
 
+## Epic 6B analytics persistence
+
+Migration `c8e6b4d2a701` adds schedule configuration, processing checkpoints, retention policies, and run progress/checkpoint fields without changing operational source records.
+
 ## Topology foundation
 
 Migration `d0c2bcea6dda` adds topology definitions, nodes, links/evidence, segments/memberships, dependencies, snapshots, changes, positions, and groups. It is additive.

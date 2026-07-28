@@ -1,5 +1,9 @@
 # HIOP 1.0.0 API
 
+## Epic 6B analytics operations
+
+Under `/api/v1/analytics`, Epic 6B adds schedule read/update and pause/resume, scheduler status, backfill preview/start, run progress/errors/retry, bounded trends and comparison, capacity/SLA/reliability summaries, data quality, and retention preview/confirmed cleanup. Mutations require Admin.
+
 ## Topology API
 
 `/api/v1/topology` exposes authenticated, bounded topology CRUD and graph analysis. Admins mutate; administrators and authorized technicians read.

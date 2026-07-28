@@ -260,6 +260,18 @@ class AnalyticsRun(TimestampMixin, Base):
     error_summary: Mapped[str | None] = mapped_column(String(500))
     dry_run: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     cancellation_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    job_id: Mapped[str | None] = mapped_column(String(120))
+    schedule_type: Mapped[str | None] = mapped_column(String(30))
+    bucket_sizes: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    checkpoint_before: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
+    checkpoint_after: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
+    batches_total: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    batches_completed: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    records_created: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    records_updated: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    records_skipped: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    stale_recovery_status: Mapped[str | None] = mapped_column(String(30))
     result_summary: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
 
 
@@ -281,3 +293,65 @@ class AnalyticsDataQualityRecord(Base):
     quality_status: Mapped[str] = mapped_column(String(20), nullable=False)
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AnalyticsScheduleConfiguration(TimestampMixin, Base):
+    __tablename__ = "analytics_schedule_configurations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    aggregate_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    aggregate_interval_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15", nullable=False)
+    availability_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    availability_interval_minutes: Mapped[int] = mapped_column(Integer, default=30, server_default="30", nullable=False)
+    health_score_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    health_score_interval_minutes: Mapped[int] = mapped_column(Integer, default=30, server_default="30", nullable=False)
+    capacity_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    capacity_interval_minutes: Mapped[int] = mapped_column(Integer, default=60, server_default="60", nullable=False)
+    sla_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    sla_interval_hours: Mapped[int] = mapped_column(Integer, default=24, server_default="24", nullable=False)
+    reliability_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    reliability_interval_hours: Mapped[int] = mapped_column(Integer, default=24, server_default="24", nullable=False)
+    data_quality_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    data_quality_interval_minutes: Mapped[int] = mapped_column(Integer, default=60, server_default="60", nullable=False)
+    retention_cleanup_enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    retention_cleanup_interval_hours: Mapped[int] = mapped_column(Integer, default=24, server_default="24", nullable=False)
+    default_lookback_minutes: Mapped[int] = mapped_column(Integer, default=60, server_default="60", nullable=False)
+    late_data_overlap_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15", nullable=False)
+    maximum_entities_per_run: Mapped[int] = mapped_column(Integer, default=500, server_default="500", nullable=False)
+    maximum_run_duration_minutes: Mapped[int] = mapped_column(Integer, default=30, server_default="30", nullable=False)
+    batch_size: Mapped[int] = mapped_column(Integer, default=100, server_default="100", nullable=False)
+    jitter_seconds: Mapped[int] = mapped_column(Integer, default=30, server_default="30", nullable=False)
+    stale_run_timeout_minutes: Mapped[int] = mapped_column(Integer, default=60, server_default="60", nullable=False)
+    paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    last_reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AnalyticsCheckpoint(TimestampMixin, Base):
+    __tablename__ = "analytics_checkpoints"
+    __table_args__ = (
+        UniqueConstraint("metric_definition_id", "entity_type", "entity_id", "bucket_size", "calculation_type", name="uq_analytics_checkpoint_scope"),
+        Index("ix_analytics_checkpoint_updated", "updated_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    metric_definition_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("analytics_metric_definitions.id", ondelete="CASCADE"))
+    entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    bucket_size: Mapped[str] = mapped_column(String(20), nullable=False)
+    calculation_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    completed_through: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("analytics_runs.id", ondelete="SET NULL"))
+
+
+class AnalyticsRetentionPolicy(TimestampMixin, Base):
+    __tablename__ = "analytics_retention_policies"
+    __table_args__ = (UniqueConstraint("record_type", "bucket_size", name="uq_analytics_retention_type_bucket"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    record_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    bucket_size: Mapped[str | None] = mapped_column(String(20))
+    retention_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    preserve_latest: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    preserve_breaches: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    preserve_sla_periods: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))

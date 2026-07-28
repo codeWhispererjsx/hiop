@@ -1,5 +1,7 @@
 # HIOP Administrator Guide
 
+Analytics schedules are disabled by default. Administrators can configure, pause, resume, inspect, backfill, retry, and clean up analytics through authenticated `/api/v1/analytics` operations. Preview backfill and retention impact before live execution.
+
 ## Network topology
 
 Admins can define scoped graphs, reviewed nodes/links, segments, dependencies, layouts, and snapshots. Inventory bootstrap supports dry-run and never creates links. The interactive map supports explicit layout saves, bounded inference, reviewed manual links, candidate suppression/restoration, inference review, conflict inspection, and snapshot comparison. The UI never creates inventory devices, schedules collection, or changes network device configuration.

@@ -1,5 +1,9 @@
 # HIOP v1.0 Performance Report
 
+## Epic 6B analytics performance
+
+Analytics work is incremental and bounded by checkpoints, overlap, entity/time limits, batch size, and maximum points. Aggregate upserts use canonical metric/entity/bucket identity, rollups use weighted averages, and cleanup uses bounded batches.
+
 ## Epic 5A topology review
 
 Lists are paginated, graph/path/component/impact queries are bounded, and indexes cover graph, node-pair, source/status, location, snapshot, and review access paths.

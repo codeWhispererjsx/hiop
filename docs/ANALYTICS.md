@@ -1,4 +1,18 @@
-# Advanced Analytics Foundation
+# Advanced Analytics Processing
+
+## Epic 6B scheduled processing
+
+Epic 6B adds one reconciled APScheduler job per analytics responsibility: aggregation, availability, health score, capacity, SLA, reliability, data quality, and retention cleanup. Job IDs are deterministic (`analytics_<type>`), jobs coalesce missed executions, use jitter, permit one instance, and remain isolated from SNMP, topology, AD, Discovery, and network-scan jobs. Analytics scheduling remains disabled until an administrator enables the singleton schedule.
+
+Startup reconciliation removes obsolete jobs, recreates enabled jobs without duplication, and safely fails stale active runs. Pause removes analytics jobs without altering other scheduler work; resume rebuilds only configured analytics jobs.
+
+## Incremental processing, backfill, and retention
+
+`AnalyticsCheckpoint` tracks the completed timestamp for a metric, entity scope, bucket size, and calculation type. Scheduled aggregation starts at the checkpoint minus the late-data overlap and updates canonical buckets. Weighted rollups preserve sample counts, minimum, maximum, sum, latest, and quality.
+
+Backfill preview and execution require bounded types, entity scope, timezone-aware range, bucket sizes, and limits. Only one backfill is active at a time; cancellation is cooperative and progress is persisted. Trend APIs return bounded series, summaries, units, quality, and optional equal-length previous-period comparison.
+
+`AnalyticsRetentionPolicy` controls retention by record type and optional bucket. Preview reports eligible counts and cutoffs. Confirmed cleanup deletes in batches while preserving audit and operational source data.
 
 ## Purpose and architecture
 

@@ -1,5 +1,7 @@
 # HIOP User Guide
 
+Authorized analytics readers can inspect bounded trends, quality, availability, health, capacity, SLA, reliability, and run progress. Missing or stale evidence is reported explicitly and is never presented as healthy.
+
 ## Topology
 
 Authorized technicians can open **Network Topology** and inspect a bounded interactive map. Search or filter nodes, select nodes and links for details, switch among layered/force/grid/radial layouts, and use Path or Impact mode for evidence-based analysis. Confirmed links are solid; inferred relationships are dashed. Historical snapshots are read-only. “Potentially affected” and path results describe modeled relationships, not guaranteed packet flow or outage.

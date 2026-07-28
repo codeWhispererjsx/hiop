@@ -1,5 +1,7 @@
 # HIOP Enterprise Security Report
 
+Epic 6B mutations remain Admin-only, ranges and entity counts are bounded, job IDs are fixed, retention requires exact confirmation, errors are sanitized, and no endpoint accepts SQL, raw OIDs, executable transforms, credentials, or arbitrary source access.
+
 ## Epic 5A topology review
 
 Mutations are admin-only. Cross-topology references, contradictory identities, self-links, cycles, invalid network values, and oversized traversals are rejected. This is an engineering review, not a penetration test.

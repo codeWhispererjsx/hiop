@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.db.database import SessionLocal
 from app.models.analytics import AnalyticsMetricDefinition, AnalyticsRun
 from app.services.analytics_aggregation_service import AnalyticsAggregationService
+from app.services.analytics_operational_service import AnalyticsOperationalService
 from app.services.audit_service import create_audit_log
 from app.websocket.connection_manager import manager
 
@@ -21,15 +22,17 @@ def execute_analytics_run(run_id):
             run.result_summary = {"dry_run": True, "enabled_metric_definitions": db.query(AnalyticsMetricDefinition).filter_by(enabled=True).count(), "persistence": False}
             run.status = "completed"
         elif run.run_type in {"aggregate", "full"}:
-            definitions = db.scalars(select(AnalyticsMetricDefinition).where(AnalyticsMetricDefinition.enabled.is_(True)).limit(100)).all()
-            for definition in definitions:
-                if run.cancellation_requested: run.status = "cancelled"; break
-                try:
-                    rows = AnalyticsAggregationService(db).aggregate(definition, run.scope_id if run.scope_type != "global" else None, run.period_start, run.period_end, "1_hour", True)
-                    run.aggregates_created += len(rows)
-                except Exception:
-                    db.rollback(); run = db.get(AnalyticsRun, run_id); run.errors_count += 1
+            bucket_size = (run.bucket_sizes or ["1_hour"])[0]
+            AnalyticsOperationalService(db).incremental_aggregate(run, bucket_size)
             if run.status != "cancelled": run.status = "partial" if run.errors_count else "completed"
+        elif run.run_type == "data_quality":
+            created = AnalyticsOperationalService(db).assess_data_quality(run)
+            run.result_summary = {"data_quality_records_created": created}
+            run.status = "completed"
+        elif run.run_type == "capacity":
+            created = AnalyticsOperationalService(db).assess_capacity(run)
+            run.result_summary = {"capacity_assessments_created": created}
+            run.status = "completed"
         else:
             run.result_summary = {"foundation": True, "run_type": run.run_type, "message": "No supported source entities were selected."}
             run.status = "completed"

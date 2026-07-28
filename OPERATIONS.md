@@ -1,5 +1,9 @@
 # HIOP Operations Guide
 
+## Analytics scheduling
+
+Analytics scheduling is opt-in. Review `/api/v1/analytics/schedule`, confirm jobs through `/api/v1/analytics/scheduler-status`, preview backfills, and preview retention before confirmed cleanup. Startup reconciliation removes obsolete jobs and safely fails stale runs.
+
 ## Topology
 
 Apply topology migrations through head, retain conservative graph/traversal limits, snapshot before major edits, and back up topology tables as a unit. The interactive client loads one bounded graph, uses visible-element rendering, and performs a debounced refresh after major authenticated `topology_*` WebSocket events. Manual refresh is the fallback. Layout writes are explicit and limited to 2,000 nodes by the API; snapshot graphs remain read-only.

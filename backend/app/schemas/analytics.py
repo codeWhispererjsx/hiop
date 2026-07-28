@@ -178,3 +178,65 @@ class Page(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class AnalyticsScheduleWrite(BaseModel):
+    enabled: bool = False
+    aggregate_enabled: bool = True
+    aggregate_interval_minutes: int = Field(15, ge=5, le=10080)
+    availability_enabled: bool = True
+    availability_interval_minutes: int = Field(30, ge=5, le=10080)
+    health_score_enabled: bool = True
+    health_score_interval_minutes: int = Field(30, ge=5, le=10080)
+    capacity_enabled: bool = True
+    capacity_interval_minutes: int = Field(60, ge=5, le=10080)
+    sla_enabled: bool = True
+    sla_interval_hours: int = Field(24, ge=1, le=720)
+    reliability_enabled: bool = True
+    reliability_interval_hours: int = Field(24, ge=1, le=720)
+    data_quality_enabled: bool = True
+    data_quality_interval_minutes: int = Field(60, ge=5, le=10080)
+    retention_cleanup_enabled: bool = True
+    retention_cleanup_interval_hours: int = Field(24, ge=1, le=720)
+    default_lookback_minutes: int = Field(60, ge=5, le=525600)
+    late_data_overlap_minutes: int = Field(15, ge=0, le=10080)
+    maximum_entities_per_run: int = Field(500, ge=1, le=10000)
+    maximum_run_duration_minutes: int = Field(30, ge=1, le=1440)
+    batch_size: int = Field(100, ge=10, le=10000)
+    jitter_seconds: int = Field(30, ge=0, le=3600)
+    stale_run_timeout_minutes: int = Field(60, ge=5, le=10080)
+
+
+class AnalyticsScheduleRead(AnalyticsScheduleWrite):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    paused: bool
+    last_reconciled_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AnalyticsBackfillRequest(BaseModel):
+    analytics_types: list[Literal["aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality"]] = Field(min_length=1, max_length=7)
+    entity_type: EntityType
+    entity_ids: list[UUID] = Field(default_factory=list, max_length=500)
+    period_start: datetime
+    period_end: datetime
+    bucket_sizes: list[BucketSize] = Field(default_factory=lambda: ["1_hour"], min_length=1, max_length=6)
+    dry_run: bool = True
+    recalculate: bool = False
+    maximum_entities: int = Field(100, ge=1, le=500)
+
+    @model_validator(mode="after")
+    def bounded(self):
+        TimeRange(start=self.period_start, end=self.period_end)
+        if len(self.entity_ids) > self.maximum_entities:
+            raise ValueError("Entity selection exceeds maximum_entities.")
+        if len(set(self.analytics_types)) != len(self.analytics_types) or len(set(self.bucket_sizes)) != len(self.bucket_sizes):
+            raise ValueError("Backfill selections must not contain duplicates.")
+        return self
+
+
+class RetentionCleanupRequest(BaseModel):
+    confirmation: Literal["DELETE_EXPIRED_ANALYTICS"]
+    dry_run: bool = False

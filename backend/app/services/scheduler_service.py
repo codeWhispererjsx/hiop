@@ -17,6 +17,7 @@ from app.models.snmp import SNMPCredential, SNMPPollingConfiguration, SNMPPollRu
 from app.models.topology import Topology, TopologyNode
 from app.models.topology_inference import TopologyInferenceRun
 from app.models.topology_operations import TopologyOperationalRun, TopologyScheduleConfiguration
+from app.models.analytics import AnalyticsRun, AnalyticsScheduleConfiguration
 
 
 scheduler = BackgroundScheduler()
@@ -27,6 +28,8 @@ SNMP_CLEANUP_JOB_ID = "snmp_retention_cleanup"
 TOPOLOGY_JOB_PREFIX = "topology_"
 TOPOLOGY_CLEANUP_JOB_ID = "topology_retention_cleanup"
 TOPOLOGY_JOB_TYPES = ("collection", "inference", "snapshot", "changes", "health")
+ANALYTICS_JOB_PREFIX = "analytics_"
+ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
     "system": ("system_poll_enabled", "system_interval_seconds", "system"),
@@ -381,6 +384,164 @@ def scheduled_topology_retention_cleanup():
         db.close()
 
 
+def analytics_job_id(job_type: str) -> str:
+    if job_type not in ANALYTICS_JOB_TYPES:
+        raise ValueError("Unsupported analytics job type.")
+    return f"{ANALYTICS_JOB_PREFIX}{job_type.lower()}"
+
+
+def remove_analytics_jobs() -> int:
+    jobs = [job for job in scheduler.get_jobs() if job.id.startswith(ANALYTICS_JOB_PREFIX)]
+    for job in jobs:
+        scheduler.remove_job(job.id)
+    return len(jobs)
+
+
+def register_analytics_jobs(db=None) -> int:
+    owns = db is None
+    db = db or SessionLocal()
+    try:
+        config = db.scalar(select(AnalyticsScheduleConfiguration).limit(1))
+        if not settings.analytics_enabled or not config or not config.enabled or config.paused:
+            remove_analytics_jobs()
+            return 0
+        if not scheduler.running:
+            scheduler.start()
+        specs = {
+            "aggregate": (config.aggregate_enabled, config.aggregate_interval_minutes * 60),
+            "availability": (config.availability_enabled, config.availability_interval_minutes * 60),
+            "health_score": (config.health_score_enabled, config.health_score_interval_minutes * 60),
+            "capacity": (config.capacity_enabled, config.capacity_interval_minutes * 60),
+            "SLA": (config.sla_enabled, config.sla_interval_hours * 3600),
+            "reliability": (config.reliability_enabled, config.reliability_interval_hours * 3600),
+            "data_quality": (config.data_quality_enabled, config.data_quality_interval_minutes * 60),
+            "retention_cleanup": (config.retention_cleanup_enabled, config.retention_cleanup_interval_hours * 3600),
+        }
+        expected = set()
+        for job_type, (enabled, seconds) in specs.items():
+            job_id = analytics_job_id(job_type)
+            if not enabled:
+                if scheduler.get_job(job_id): scheduler.remove_job(job_id)
+                continue
+            expected.add(job_id)
+            scheduler.add_job(
+                scheduled_analytics_operation, "interval", seconds=seconds,
+                jitter=min(config.jitter_seconds, max(0, seconds // 4)),
+                id=job_id, args=[job_type], replace_existing=True,
+                max_instances=1, coalesce=True, misfire_grace_time=min(seconds, 300),
+            )
+        for job in list(scheduler.get_jobs()):
+            if job.id.startswith(ANALYTICS_JOB_PREFIX) and job.id not in expected:
+                scheduler.remove_job(job.id)
+        config.last_reconciled_at = datetime.now(timezone.utc)
+        db.commit()
+        return len(expected)
+    finally:
+        if owns: db.close()
+
+
+def update_analytics_jobs(db=None) -> int:
+    return register_analytics_jobs(db)
+
+
+def reconcile_analytics_jobs(db=None) -> dict[str, int]:
+    count = register_analytics_jobs(db)
+    return {"registered": count, "expected": count}
+
+
+def pause_analytics_jobs(db=None) -> int:
+    owns = db is None
+    db = db or SessionLocal()
+    try:
+        config = db.scalar(select(AnalyticsScheduleConfiguration).limit(1))
+        if config:
+            config.paused = True; db.commit()
+        return remove_analytics_jobs()
+    finally:
+        if owns: db.close()
+
+
+def resume_analytics_jobs(db=None) -> int:
+    owns = db is None
+    db = db or SessionLocal()
+    try:
+        config = db.scalar(select(AnalyticsScheduleConfiguration).limit(1))
+        if config:
+            config.paused = False; db.commit()
+        return register_analytics_jobs(db)
+    finally:
+        if owns: db.close()
+
+
+def recover_stale_analytics_runs(db=None) -> int:
+    owns = db is None
+    db = db or SessionLocal()
+    try:
+        config = db.scalar(select(AnalyticsScheduleConfiguration).limit(1))
+        timeout = config.stale_run_timeout_minutes if config else 60
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout)
+        rows = db.scalars(select(AnalyticsRun).where(
+            AnalyticsRun.status.in_(("pending", "running", "retry_pending")),
+            AnalyticsRun.started_at < cutoff,
+        )).all()
+        for run in rows:
+            run.status = "failed"; run.completed_at = datetime.now(timezone.utc)
+            run.stale_recovery_status = "failed_on_startup"
+            run.error_summary = "Recovered stale analytics run after scheduler startup."
+        if rows: db.commit()
+        return len(rows)
+    finally:
+        if owns: db.close()
+
+
+def scheduled_analytics_operation(job_type: str):
+    db = SessionLocal()
+    try:
+        config = db.scalar(select(AnalyticsScheduleConfiguration).limit(1))
+        if not config or not config.enabled or config.paused:
+            return
+        if db.scalar(select(AnalyticsRun).where(
+            AnalyticsRun.status.in_(("pending", "running", "retry_pending")),
+            AnalyticsRun.run_type == job_type,
+        )):
+            logger.info("Skipped overlapping analytics job type=%s", job_type)
+            return
+        end = datetime.now(timezone.utc)
+        run = AnalyticsRun(
+            run_type=job_type, scope_type="global",
+            period_start=end - timedelta(minutes=config.default_lookback_minutes),
+            period_end=end, trigger_type="scheduled", job_id=analytics_job_id(job_type),
+            schedule_type=job_type, bucket_sizes=["5_minutes"], dry_run=False,
+        )
+        cleanup_batch_size = config.batch_size
+        db.add(run); db.commit(); run_id = run.id
+    except Exception:
+        db.rollback(); logger.exception("Failed to create scheduled analytics run type=%s", job_type)
+        db.close(); return
+    db.close()
+    if job_type == "retention_cleanup":
+        cleanup_db = SessionLocal()
+        try:
+            from app.services.analytics_operational_service import AnalyticsOperationalService
+            active = cleanup_db.get(AnalyticsRun, run_id); active.status = "running"
+            result = AnalyticsOperationalService(cleanup_db).cleanup(cleanup_batch_size)
+            active.status = "completed"; active.result_summary = result
+            active.completed_at = datetime.now(timezone.utc); cleanup_db.commit()
+        except Exception:
+            cleanup_db.rollback()
+            active = cleanup_db.get(AnalyticsRun, run_id)
+            if active:
+                active.status = "failed"; active.completed_at = datetime.now(timezone.utc)
+                active.error_summary = "Scheduled analytics cleanup failed safely."
+                cleanup_db.commit()
+            logger.exception("Scheduled analytics cleanup failed")
+        finally:
+            cleanup_db.close()
+    else:
+        from app.services.analytics_run_service import execute_analytics_run
+        execute_analytics_run(run_id)
+
+
 def ad_sync_job_id(connection_id: str) -> str:
     return f"{AD_JOB_PREFIX}{connection_id}"
 
@@ -630,6 +791,8 @@ def start_scheduler():
             id=TOPOLOGY_CLEANUP_JOB_ID, replace_existing=True,
             max_instances=1, coalesce=True,
         )
+        recover_stale_analytics_runs(db)
+        reconcile_analytics_jobs(db)
     finally:
         db.close()
     logger.info("HIOP scheduler started")

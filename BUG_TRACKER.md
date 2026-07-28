@@ -1,5 +1,10 @@
 # HIOP Bug Tracker
 
+## Epic 6B verification
+
+- No open confirmed Epic 6B functional defect at implementation handoff.
+- Workstation note: pytest cannot write `backend/.pytest_cache`; test execution is unaffected.
+
 ## Epic 5D verification notes
 
 - No confirmed Epic 5D functional defect remains.

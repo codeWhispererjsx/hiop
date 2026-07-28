@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0-dev — Epic 6B
+
+- Added deterministic scheduled analytics jobs, reconciliation, pause/resume, stale-run recovery, and isolated locking.
+- Added checkpoints, late-data overlap, weighted rollups, bounded backfill, progress/retry/cancellation, trends, data quality, and retention cleanup.
+- Added migration `c8e6b4d2a701`, synthetic tests, and operations documentation.
+
 ## 2.0.0-dev — Epic 6A
 
 - Added advanced analytics definitions, idempotent aggregates, availability, explainable health scores/configurations, capacity policies/assessments, SLA definitions/measurements, reliability, data quality, and manual-run models.

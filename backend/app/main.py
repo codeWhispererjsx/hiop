@@ -11,6 +11,7 @@ from app.db.database import SessionLocal
 from app.models.network_scan import NetworkScan
 from app.models.snmp import SNMPPollRun
 from app.models.topology_operations import TopologyOperationalRun
+from app.models.analytics import AnalyticsRun
 from app.devices.routes import router as device_router
 from app.tickets.routes import router as ticket_router
 from app.scanner.routes import router as scanner_router
@@ -94,6 +95,7 @@ def health():
     last_scan = None
     snmp_health = {"integration_enabled": settings.snmp_enabled, "scheduler_jobs": 0, "active_polls": 0, "stale_runs": 0}
     topology_health = {"scheduler_jobs": 0, "active_runs": 0, "stale_runs": 0}
+    analytics_health = {"integration_enabled": settings.analytics_enabled, "scheduler_jobs": 0, "active_runs": 0, "stale_runs": 0, "last_successful_run": None}
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
@@ -111,6 +113,16 @@ def health():
             TopologyOperationalRun.started_at < datetime.now(timezone.utc) - timedelta(hours=1)
         ).count()
         topology_health["scheduler_jobs"] = sum(job.id.startswith("topology_") for job in scheduler.get_jobs())
+        analytics_active = db.query(AnalyticsRun).filter(AnalyticsRun.status.in_(("pending", "running", "retry_pending")))
+        analytics_health["active_runs"] = analytics_active.count()
+        analytics_health["stale_runs"] = analytics_active.filter(
+            AnalyticsRun.started_at < datetime.now(timezone.utc) - timedelta(hours=1)
+        ).count()
+        analytics_health["scheduler_jobs"] = sum(job.id.startswith("analytics_") for job in scheduler.get_jobs())
+        analytics_latest = db.query(AnalyticsRun.completed_at).filter(
+            AnalyticsRun.status == "completed"
+        ).order_by(AnalyticsRun.completed_at.desc()).first()
+        analytics_health["last_successful_run"] = analytics_latest[0].isoformat() if analytics_latest and analytics_latest[0] else None
     except Exception:
         database = "unavailable"
     finally:
@@ -131,6 +143,7 @@ def health():
         "last_scan": last_scan,
         "snmp": snmp_health,
         "topology": topology_health,
+        "analytics": analytics_health,
     }
     return JSONResponse(payload, status_code=200 if healthy else 503)
 
