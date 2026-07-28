@@ -27,3 +27,10 @@ manual evaluation run records, compliance results, violations, and exception
 records. Rules are structured metadata only; executable code, shell commands, and
 automatic remediation are not supported. Evaluation workers, parser expansion,
 scheduled compliance, and evidence export require a later verified increment.
+
+Epic 2E adds reviewed change-request, approval, change-window, restore-plan, and
+dry-run metadata. Restore execution is deliberately blocked while the available
+collector is non-networking: no device configuration can be changed by these APIs.
+Requester self-approval is rejected, dry runs report the missing adapter safely,
+and all restore plans require future revalidation, pre-change backup, and rollback
+evidence before any execution capability is enabled.

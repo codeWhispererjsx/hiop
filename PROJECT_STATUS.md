@@ -18,6 +18,8 @@ Epic 2C adds configuration comparison, drift records, and explicit baseline prom
 
 Epic 2D adds standards, policies, rules, compliance runs/results, violations, exceptions, and a safe compliance API foundation via migration `a7b8c9d0e1f2`.
 
+Epic 2E adds reviewed change requests, approval records, change windows, restore plans, and blocked dry-run records via migration `b8c9d0e1f2a3`.
+
 ## Epic 6E release candidate
 
 HIOP v2 is prepared as `2.0.0-rc1` with deterministic aggregate-based anomaly detection, explainable evidence, controlled anomaly lifecycle, bounded event correlation, probable shared-scope insights, scheduler registration, migration `e7f8a9b0c1d2`, and release/pilot documentation. Production acceptance remains conditional on deployment-specific security, backup/restore, monitoring, and approved pilot verification. No final v2.0.0 tag is created.
