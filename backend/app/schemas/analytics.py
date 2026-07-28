@@ -240,3 +240,22 @@ class AnalyticsBackfillRequest(BaseModel):
 class RetentionCleanupRequest(BaseModel):
     confirmation: Literal["DELETE_EXPIRED_ANALYTICS"]
     dry_run: bool = False
+
+
+class ForecastRunRequest(BaseModel):
+    entity_type: EntityType
+    entity_id: UUID
+    metric_key: str = Field(pattern=r"^[a-z][a-z0-9_.-]{2,119}$")
+    period_start: datetime
+    period_end: datetime
+    bucket_size: BucketSize = "1_hour"
+    forecast_method: Literal["linear_regression", "moving_average", "weighted_moving_average", "exponential_smoothing", "growth_percentage"] = "linear_regression"
+    horizon_points: int = Field(24, ge=1, le=120)
+    smoothing_alpha: float = Field(.35, gt=0, le=1)
+    moving_window: int = Field(5, ge=2, le=30)
+    persist: bool = True
+
+    @model_validator(mode="after")
+    def valid_range(self):
+        TimeRange(start=self.period_start, end=self.period_end)
+        return self

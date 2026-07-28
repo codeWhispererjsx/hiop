@@ -4,6 +4,10 @@
 
 Under `/api/v1/analytics`, Epic 6B adds schedule read/update and pause/resume, scheduler status, backfill preview/start, run progress/errors/retry, bounded trends and comparison, capacity/SLA/reliability summaries, data quality, and retention preview/confirmed cleanup. Mutations require Admin.
 
+## Epic 6C forecast API
+
+Forecast list, latest entity forecast, history, summary, and report endpoints allow authorized analytics readers to inspect deterministic projections. `POST /analytics/forecast/run` and forecast evaluation require Admin. Requests select an enabled metric definition, entity, bounded aggregate period, bucket, approved statistical method, and bounded horizon; arbitrary expressions and raw-source forecasting are not accepted.
+
 ## Topology API
 
 `/api/v1/topology` exposes authenticated, bounded topology CRUD and graph analysis. Admins mutate; administrators and authorized technicians read.

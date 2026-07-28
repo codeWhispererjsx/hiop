@@ -355,3 +355,37 @@ class AnalyticsRetentionPolicy(TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+
+
+class AnalyticsForecast(TimestampMixin, Base):
+    __tablename__ = "analytics_forecasts"
+    __table_args__ = (
+        Index("ix_analytics_forecast_entity_metric", "entity_type", "entity_id", "metric_key"),
+        Index("ix_analytics_forecast_created", "created_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    metric_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    forecast_method: Mapped[str] = mapped_column(String(30), nullable=False)
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    forecast_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    forecast_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    prediction_points: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    projected_value: Mapped[float] = mapped_column(Float, nullable=False)
+    lower_bound: Mapped[float] = mapped_column(Float, nullable=False)
+    upper_bound: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    growth_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    trend_direction: Mapped[str] = mapped_column(String(20), nullable=False)
+    risk_score: Mapped[float] = mapped_column(Float, nullable=False)
+    risk_level: Mapped[str] = mapped_column(String(20), nullable=False)
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    data_quality: Mapped[str] = mapped_column(String(20), nullable=False)
+    assumptions: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    calculation_version: Mapped[str] = mapped_column(String(20), default="1.0", server_default="1.0", nullable=False)
+    evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    actual_value: Mapped[float | None] = mapped_column(Float)
+    forecast_error: Mapped[float | None] = mapped_column(Float)
+    accuracy_percent: Mapped[float | None] = mapped_column(Float)

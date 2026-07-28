@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Epic 6C complete
+
+Explainable capacity forecasting is implemented at `2.0.0-dev` over persisted aggregates using linear regression, moving average, weighted moving average, simple exponential smoothing, and growth-percentage projection. Forecasts store deterministic bounds, growth, trend, confidence inputs, risk, assumptions, and actual-versus-projected evaluation. No AI, machine learning, anomaly detection, alerts, remediation, executive dashboard, or external forecasting service is included.
+
 ## Epic 6B complete
 
 Scheduled analytics processing is implemented at `2.0.0-dev` with deterministic jobs, incremental checkpoints, late-data overlap, weighted rollups, bounded backfill, run progress, trends, data quality, and retention controls. Scheduling is disabled by default. Forecasting, anomaly detection, AI recommendations, dashboards, and remediation remain out of scope.

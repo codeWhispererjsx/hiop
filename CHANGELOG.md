@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-dev — Epic 6C
+
+- Added deterministic aggregate-only forecasting with linear regression, moving average, weighted moving average, simple exponential smoothing, and growth-percentage projection.
+- Added explainable growth rates, descriptive seasonal comparison, confidence, bounds, trend direction, capacity risk, and forecast-versus-actual evaluation.
+- Added forecast APIs, summaries, bounded reports, migration `d9f7c5e3b812`, synthetic tests, and operating documentation.
+- Excluded AI, machine learning, anomaly detection, forecast alerts, remediation, recommendations, and executive dashboards.
+
 ## 2.0.0-dev — Epic 6B
 
 - Added deterministic scheduled analytics jobs, reconciliation, pause/resume, stale-run recovery, and isolated locking.

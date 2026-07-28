@@ -1,5 +1,48 @@
 # Advanced Analytics Processing
 
+## Epic 6C deterministic forecasting
+
+Forecasting uses persisted `AnalyticsAggregate` rows only. Raw SNMP samples and external services are never queried by the forecast engine.
+
+```text
+Historical aggregates
+  -> history and quality validation
+  -> deterministic trend/growth calculation
+  -> projection method
+  -> residual bounds and confidence
+  -> auditable forecast and later actual-value evaluation
+```
+
+Supported methods are:
+
+- Linear regression: least-squares slope/intercept with fit residual and R-squared stability.
+- Moving average: equal-weight recent-window level projection.
+- Weighted moving average: linearly increasing weights favoring recent buckets.
+- Simple exponential smoothing: configurable alpha with no seasonal or learned model.
+- Growth percentage: compound per-bucket growth derived from the first and last valid values.
+
+Every stored forecast records the method, historical and forecast periods, prediction points, projected value, deterministic lower/upper bounds, per-bucket growth, direction, confidence, risk, sample count, quality, calculation version, and assumptions.
+
+Growth rates are normalized into hourly, daily, weekly, and monthly percentages from the selected aggregate bucket. Seasonal comparison is descriptive only and is returned when two complete supported periods exist; it does not alter the projection silently.
+
+Confidence ranges from 0 to 100 and combines sample count, proportion of good aggregate buckets, method stability, and coefficient of variation. It is not a probability or guarantee. Forecasts are rejected when the metric is unsupported, history is missing, the method lacks its required samples, fewer than half of usable buckets are good, or historical variance is excessive.
+
+Risk is a deterministic interpretation of the projected value against reviewed metric thresholds, scaled by forecast confidence. It creates no alert and makes no business recommendation.
+
+Forecast evaluation compares a completed forecast with the first eligible aggregate at or after its forecast horizon. It stores actual value, signed error, and absolute percentage-based accuracy. A missing actual remains explicitly unevaluated.
+
+Forecast APIs:
+
+- `GET /analytics/forecasts`
+- `GET /analytics/entities/{entity_type}/{entity_id}/forecast`
+- `POST /analytics/forecast/run` (Admin)
+- `GET /analytics/forecast/history`
+- `POST /analytics/forecasts/{id}/evaluate` (Admin)
+- `GET /analytics/forecast-summary`
+- `GET /analytics/forecast-report`
+
+Troubleshooting: use hourly or daily aggregates with at least the method minimum sample count, verify aggregate quality, and shorten the historical period if unrelated operating regimes create excessive variance. Forecasting remains deterministic statistics—not AI, machine learning, anomaly detection, remediation, or an alert source.
+
 ## Epic 6B scheduled processing
 
 Epic 6B adds one reconciled APScheduler job per analytics responsibility: aggregation, availability, health score, capacity, SLA, reliability, data quality, and retention cleanup. Job IDs are deterministic (`analytics_<type>`), jobs coalesce missed executions, use jitter, permit one instance, and remain isolated from SNMP, topology, AD, Discovery, and network-scan jobs. Analytics scheduling remains disabled until an administrator enables the singleton schedule.

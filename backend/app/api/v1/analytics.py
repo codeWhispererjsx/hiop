@@ -10,19 +10,21 @@ from app.core.config import settings
 from app.core.security import get_db, require_roles
 from app.models.analytics import (
     AnalyticsAggregate, AnalyticsAvailability, AnalyticsDataQualityRecord, AnalyticsMetricDefinition,
-    AnalyticsRetentionPolicy, AnalyticsRun, AnalyticsScheduleConfiguration,
+    AnalyticsForecast, AnalyticsRetentionPolicy, AnalyticsRun, AnalyticsScheduleConfiguration,
     CapacityAssessment, CapacityPolicy, EntityHealthScore, HealthScoreConfiguration,
     ReliabilityMeasurement, SLADefinition, SLAMeasurement,
 )
 from app.schemas.analytics import (
     AnalyticsBackfillRequest, AnalyticsRunRequest, AnalyticsScheduleRead, AnalyticsScheduleWrite,
     CapacityPolicyRead, CapacityPolicyWrite, HealthConfigurationRead, RetentionCleanupRequest,
+    ForecastRunRequest,
     HealthConfigurationWrite, MetricDefinitionRead, MetricDefinitionUpdate, MetricDefinitionWrite,
     SLADefinitionRead, SLADefinitionWrite,
 )
 from app.services.analytics_aggregation_service import AnalyticsAggregationService
 from app.services.analytics_run_service import execute_analytics_run
 from app.services.analytics_operational_service import AnalyticsOperationalService
+from app.services.analytics_forecast_service import AnalyticsForecastService
 from app.services.audit_service import create_audit_log
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -373,6 +375,88 @@ def retention_cleanup(payload: RetentionCleanupRequest, db: Session = Depends(ge
     result = AnalyticsOperationalService(db).retention_preview() if payload.dry_run else AnalyticsOperationalService(db).cleanup(settings.analytics_aggregation_batch_size)
     create_audit_log(db, actor.username, "ANALYTICS_CLEANUP_EXECUTED", "AnalyticsRetentionPolicy", None, f"Analytics retention cleanup completed; dry_run={payload.dry_run}."); db.commit()
     return result
+
+
+@router.get("/forecasts")
+def forecasts(metric_key: str | None = None, entity_type: str | None = None, trend_direction: str | None = None, page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100), db: Session = Depends(get_db), _=Depends(reader)):
+    query = db.query(AnalyticsForecast)
+    if metric_key: query = query.filter_by(metric_key=metric_key)
+    if entity_type: query = query.filter_by(entity_type=entity_type)
+    if trend_direction: query = query.filter_by(trend_direction=trend_direction)
+    return _page(query.order_by(AnalyticsForecast.created_at.desc()), None, page, page_size)
+
+
+@router.get("/entities/{entity_type}/{entity_id}/forecast")
+def entity_forecast(entity_type: str, entity_id: UUID, metric_key: str | None = None, db: Session = Depends(get_db), _=Depends(reader)):
+    query = select(AnalyticsForecast).where(AnalyticsForecast.entity_type == entity_type, AnalyticsForecast.entity_id == entity_id)
+    if metric_key: query = query.where(AnalyticsForecast.metric_key == metric_key)
+    return db.scalar(query.order_by(AnalyticsForecast.created_at.desc())) or {}
+
+
+@router.post("/forecast/run", status_code=201)
+def run_forecast(payload: ForecastRunRequest, db: Session = Depends(get_db), actor=Depends(admin)):
+    AnalyticsAggregationService.validate_range(payload.period_start, payload.period_end)
+    definition = db.scalar(select(AnalyticsMetricDefinition).where(
+        AnalyticsMetricDefinition.metric_key == payload.metric_key,
+        AnalyticsMetricDefinition.entity_type == payload.entity_type,
+        AnalyticsMetricDefinition.enabled.is_(True),
+    ))
+    if not definition: raise HTTPException(422, "Forecast rejected: supported enabled metric definition was not found.")
+    forecast, interpretation = AnalyticsForecastService(db).run(
+        definition, payload.entity_id, payload.period_start, payload.period_end,
+        payload.bucket_size, payload.forecast_method, payload.horizon_points,
+        payload.smoothing_alpha, payload.moving_window, payload.persist,
+    )
+    create_audit_log(db, actor.username, "ANALYTICS_FORECAST_CREATED", "AnalyticsForecast", str(forecast.id) if forecast.id else None, f"Created deterministic {payload.forecast_method} forecast for approved metric '{payload.metric_key}'.")
+    db.commit()
+    return {"forecast": forecast, "interpretation": interpretation}
+
+
+@router.get("/forecast/history")
+def forecast_history(entity_type: str | None = None, entity_id: UUID | None = None, metric_key: str | None = None, evaluated: bool | None = None, page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100), db: Session = Depends(get_db), _=Depends(reader)):
+    query = db.query(AnalyticsForecast)
+    if entity_type: query = query.filter_by(entity_type=entity_type)
+    if entity_id: query = query.filter_by(entity_id=entity_id)
+    if metric_key: query = query.filter_by(metric_key=metric_key)
+    if evaluated is True: query = query.filter(AnalyticsForecast.evaluated_at.is_not(None))
+    if evaluated is False: query = query.filter(AnalyticsForecast.evaluated_at.is_(None))
+    return _page(query.order_by(AnalyticsForecast.created_at.desc()), None, page, page_size)
+
+
+@router.post("/forecasts/{forecast_id}/evaluate")
+def evaluate_forecast(forecast_id: UUID, db: Session = Depends(get_db), actor=Depends(admin)):
+    row = _get(db, AnalyticsForecast, forecast_id, "Analytics forecast")
+    result = AnalyticsForecastService(db).evaluate(row)
+    create_audit_log(db, actor.username, "ANALYTICS_FORECAST_EVALUATED", "AnalyticsForecast", str(row.id), "Evaluated a deterministic forecast against the first eligible actual aggregate.")
+    db.commit(); return result
+
+
+@router.get("/forecast-summary")
+def forecast_summary(db: Session = Depends(get_db), _=Depends(reader)):
+    candidates = db.query(AnalyticsForecast).order_by(AnalyticsForecast.created_at.desc()).limit(1000).all()
+    latest = {}
+    for row in candidates:
+        latest.setdefault((row.entity_type, row.entity_id, row.metric_key), row)
+    rows = list(latest.values())
+    ordered_growth = sorted(rows, key=lambda row: row.growth_rate)
+    ordered_confidence = sorted(rows, key=lambda row: row.confidence_score)
+    return {
+        "increasing_metrics": sum(row.trend_direction == "increasing" for row in rows),
+        "stable_metrics": sum(row.trend_direction == "stable" for row in rows),
+        "declining_metrics": sum(row.trend_direction == "decreasing" for row in rows),
+        "highest_growth": ordered_growth[-1] if ordered_growth else None,
+        "lowest_growth": ordered_growth[0] if ordered_growth else None,
+        "lowest_confidence": ordered_confidence[0] if ordered_confidence else None,
+        "highest_confidence": ordered_confidence[-1] if ordered_confidence else None,
+    }
+
+
+@router.get("/forecast-report")
+def forecast_report(metric_key: str | None = None, db: Session = Depends(get_db), _=Depends(reader)):
+    query = db.query(AnalyticsForecast)
+    if metric_key: query = query.filter_by(metric_key=metric_key)
+    rows = query.order_by(AnalyticsForecast.created_at.desc()).limit(500).all()
+    return {"report": "analytics-forecast", "generated_at": datetime.now(timezone.utc), "items": rows, "total": len(rows), "methods": dict(db.query(AnalyticsForecast.forecast_method, func.count(AnalyticsForecast.id)).group_by(AnalyticsForecast.forecast_method).all()), "risk_levels": dict(db.query(AnalyticsForecast.risk_level, func.count(AnalyticsForecast.id)).group_by(AnalyticsForecast.risk_level).all())}
 
 
 @router.get("/summary")

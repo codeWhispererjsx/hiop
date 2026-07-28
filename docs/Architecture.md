@@ -2,6 +2,8 @@
 
 Epic 6B adds an isolated analytics scheduler over controlled operational-source adapters. Deterministic jobs create bounded runs, checkpoints drive incremental aggregation, and retention never deletes operational source or audit data.
 
+Epic 6C adds a deterministic forecast layer above persisted aggregates. Statistical methods are explicit application code, produce auditable assumptions and bounds, and persist results in PostgreSQL without AI, ML libraries, external prediction services, or access to raw monitoring samples.
+
 ## Epic 5A network topology
 
 The topology layer is a relational graph over inventory, discovery, and SNMP identities. Nodes, links, evidence, segments, dependencies, layout state, snapshots, and reviewed changes are separate so evidence cannot silently mutate inventory. See `docs/TOPOLOGY.md`.
