@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Epic 6E release candidate
+
+HIOP v2 is prepared as `2.0.0-rc1` with deterministic aggregate-based anomaly detection, explainable evidence, controlled anomaly lifecycle, bounded event correlation, probable shared-scope insights, scheduler registration, migration `e7f8a9b0c1d2`, and release/pilot documentation. Production acceptance remains conditional on deployment-specific security, backup/restore, monitoring, and approved pilot verification. No final v2.0.0 tag is created.
+
 ## Epic 6D complete
 
 The `2.0.0-dev` frontend now includes a protected Analytics workspace with executive KPIs, health, capacity, availability, SLA, reliability, forecast, trend, and report views. It uses real typed APIs, accessible responsive SVG charts, confidence bands, URL-persisted filters, explicit loading/empty/error states, and safe JSON/CSV/print exports. No anomaly detection, AI, recommendations, or external BI integration was added.

@@ -324,6 +324,21 @@ class AnalyticsScheduleConfiguration(TimestampMixin, Base):
     stale_run_timeout_minutes: Mapped[int] = mapped_column(Integer, default=60, server_default="60", nullable=False)
     paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     last_reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    baseline_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    baseline_interval_hours: Mapped[int] = mapped_column(Integer, default=24, server_default="24", nullable=False)
+    anomaly_detection_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    anomaly_interval_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15", nullable=False)
+    correlation_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    correlation_interval_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15", nullable=False)
+    insight_refresh_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    insight_interval_minutes: Mapped[int] = mapped_column(Integer, default=30, server_default="30", nullable=False)
+    anomaly_recovery_interval_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15", nullable=False)
+    correlation_window_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15", nullable=False)
+    maximum_events_per_run: Mapped[int] = mapped_column(Integer, default=1000, server_default="1000", nullable=False)
+    maximum_groups_per_run: Mapped[int] = mapped_column(Integer, default=100, server_default="100", nullable=False)
+    anomaly_retention_days: Mapped[int] = mapped_column(Integer, default=180, server_default="180", nullable=False)
+    correlation_retention_days: Mapped[int] = mapped_column(Integer, default=365, server_default="365", nullable=False)
+    insight_retention_days: Mapped[int] = mapped_column(Integer, default=180, server_default="180", nullable=False)
 
 
 class AnalyticsCheckpoint(TimestampMixin, Base):
@@ -389,3 +404,173 @@ class AnalyticsForecast(TimestampMixin, Base):
     actual_value: Mapped[float | None] = mapped_column(Float)
     forecast_error: Mapped[float | None] = mapped_column(Float)
     accuracy_percent: Mapped[float | None] = mapped_column(Float)
+
+
+class AnalyticsBaseline(TimestampMixin, Base):
+    __tablename__ = "analytics_baselines"
+    __table_args__ = (
+        UniqueConstraint("entity_type", "entity_id", "metric_key", "baseline_type", "bucket_size", "seasonality_key", name="uq_analytics_baseline_scope"),
+        Index("ix_analytics_baseline_entity_metric", "entity_type", "entity_id", "metric_key"),
+        Index("ix_analytics_baseline_validity", "valid_until", "data_quality"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    metric_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    baseline_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    period_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    bucket_size: Mapped[str] = mapped_column(String(20), nullable=False)
+    sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    mean_value: Mapped[float] = mapped_column(Float, nullable=False)
+    median_value: Mapped[float] = mapped_column(Float, nullable=False)
+    minimum_value: Mapped[float] = mapped_column(Float, nullable=False)
+    maximum_value: Mapped[float] = mapped_column(Float, nullable=False)
+    standard_deviation: Mapped[float] = mapped_column(Float, nullable=False)
+    median_absolute_deviation: Mapped[float] = mapped_column(Float, nullable=False)
+    percentile_05: Mapped[float] = mapped_column(Float, nullable=False)
+    percentile_25: Mapped[float] = mapped_column(Float, nullable=False)
+    percentile_75: Mapped[float] = mapped_column(Float, nullable=False)
+    percentile_95: Mapped[float] = mapped_column(Float, nullable=False)
+    expected_lower_bound: Mapped[float] = mapped_column(Float, nullable=False)
+    expected_upper_bound: Mapped[float] = mapped_column(Float, nullable=False)
+    seasonality_key: Mapped[str] = mapped_column(String(40), default="", server_default="", nullable=False)
+    data_quality: Mapped[str] = mapped_column(String(20), nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    calculation_version: Mapped[str] = mapped_column(String(20), default="1.0", server_default="1.0", nullable=False)
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AnalyticsAnomalyRule(TimestampMixin, Base):
+    __tablename__ = "analytics_anomaly_rules"
+    __table_args__ = (Index("ix_analytics_anomaly_rule_metric_enabled", "metric_key", "enabled"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    metric_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    scope_type: Mapped[str] = mapped_column(String(30), default="global", server_default="global", nullable=False)
+    scope_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    detection_method: Mapped[str] = mapped_column(String(30), nullable=False)
+    sensitivity: Mapped[float] = mapped_column(Float, default=3.0, nullable=False)
+    minimum_samples: Mapped[int] = mapped_column(Integer, default=12, nullable=False)
+    baseline_window: Mapped[int] = mapped_column(Integer, default=168, nullable=False)
+    evaluation_window: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    consecutive_occurrences: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    recovery_occurrences: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    minimum_confidence: Mapped[float] = mapped_column(Float, default=60, nullable=False)
+    warning_score: Mapped[float] = mapped_column(Float, default=60, nullable=False)
+    critical_score: Mapped[float] = mapped_column(Float, default=85, nullable=False)
+    alert_creation_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    notification_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    suppress_during_maintenance: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+
+
+class AnalyticsAnomaly(TimestampMixin, Base):
+    __tablename__ = "analytics_anomalies"
+    __table_args__ = (
+        Index("ix_analytics_anomaly_status_time", "status", "last_detected_at"),
+        Index("ix_analytics_anomaly_entity_metric", "entity_type", "entity_id", "metric_key"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    metric_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    baseline_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("analytics_baselines.id", ondelete="SET NULL"))
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("analytics_anomaly_rules.id", ondelete="SET NULL"))
+    anomaly_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open", nullable=False)
+    observed_value: Mapped[float | None] = mapped_column(Float)
+    expected_value: Mapped[float | None] = mapped_column(Float)
+    expected_lower_bound: Mapped[float | None] = mapped_column(Float)
+    expected_upper_bound: Mapped[float | None] = mapped_column(Float)
+    deviation_value: Mapped[float | None] = mapped_column(Float)
+    deviation_percent: Mapped[float | None] = mapped_column(Float)
+    anomaly_score: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    detection_method: Mapped[str] = mapped_column(String(30), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
+    first_detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    occurrence_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
+    recovery_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    flap_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    source_aggregate_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("analytics_aggregates.id", ondelete="SET NULL"))
+    source_alert_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("alerts.id", ondelete="SET NULL"))
+    acknowledged_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolution_reason: Mapped[str | None] = mapped_column(String(500))
+
+
+class AnalyticsCorrelationGroup(TimestampMixin, Base):
+    __tablename__ = "analytics_correlation_groups"
+    __table_args__ = (Index("ix_analytics_correlation_status_time", "status", "last_event_at"), Index("ix_analytics_correlation_common_entity", "probable_common_entity_type", "probable_common_entity_id"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(String(1000), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open", nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    correlation_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    probable_common_entity_type: Mapped[str | None] = mapped_column(String(30))
+    probable_common_entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    topology_node_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("topology_nodes.id", ondelete="SET NULL"))
+    device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"))
+    first_event_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_event_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    event_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    alert_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    anomaly_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    affected_device_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    affected_location_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tickets.id", ondelete="SET NULL"))
+
+
+class AnalyticsCorrelationMember(Base):
+    __tablename__ = "analytics_correlation_members"
+    __table_args__ = (
+        UniqueConstraint("correlation_group_id", "member_type", "entity_type", "entity_id", "occurred_at", name="uq_analytics_correlation_member"),
+        Index("ix_analytics_correlation_member_group_time", "correlation_group_id", "occurred_at"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    correlation_group_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("analytics_correlation_groups.id", ondelete="CASCADE"), nullable=False)
+    member_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    alert_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("alerts.id", ondelete="SET NULL"))
+    anomaly_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("analytics_anomalies.id", ondelete="SET NULL"))
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tickets.id", ondelete="SET NULL"))
+    device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"))
+    entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    relationship_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    confidence_contribution: Mapped[float] = mapped_column(Float, nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AnalyticsInsight(TimestampMixin, Base):
+    __tablename__ = "analytics_insights"
+    __table_args__ = (Index("ix_analytics_insight_status_time", "status", "generated_at"), Index("ix_analytics_insight_entity", "entity_type", "entity_id"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    insight_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    entity_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    correlation_group_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("analytics_correlation_groups.id", ondelete="SET NULL"))
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    summary: Mapped[str] = mapped_column(String(1000), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
+    recommended_review_steps: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="open", server_default="open", nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reviewed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

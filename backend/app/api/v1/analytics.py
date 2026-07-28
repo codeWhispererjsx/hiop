@@ -11,6 +11,8 @@ from app.core.security import get_db, require_roles
 from app.models.analytics import (
     AnalyticsAggregate, AnalyticsAvailability, AnalyticsDataQualityRecord, AnalyticsMetricDefinition,
     AnalyticsForecast, AnalyticsRetentionPolicy, AnalyticsRun, AnalyticsScheduleConfiguration,
+    AnalyticsAnomaly, AnalyticsAnomalyRule, AnalyticsBaseline, AnalyticsCorrelationGroup,
+    AnalyticsCorrelationMember, AnalyticsInsight,
     CapacityAssessment, CapacityPolicy, EntityHealthScore, HealthScoreConfiguration,
     ReliabilityMeasurement, SLADefinition, SLAMeasurement,
 )
@@ -20,11 +22,15 @@ from app.schemas.analytics import (
     ForecastRunRequest,
     HealthConfigurationWrite, MetricDefinitionRead, MetricDefinitionUpdate, MetricDefinitionWrite,
     SLADefinitionRead, SLADefinitionWrite,
+    AnomalyRuleRead, AnomalyRuleWrite, BaselineRecalculateRequest, ReviewAction,
 )
 from app.services.analytics_aggregation_service import AnalyticsAggregationService
 from app.services.analytics_run_service import execute_analytics_run
 from app.services.analytics_operational_service import AnalyticsOperationalService
 from app.services.analytics_forecast_service import AnalyticsForecastService
+from app.services.analytics_baseline_service import AnalyticsBaselineService
+from app.services.analytics_anomaly_service import AnalyticsAnomalyService
+from app.services.analytics_correlation_service import AnalyticsCorrelationService
 from app.services.audit_service import create_audit_log
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -469,3 +475,145 @@ def summary(db: Session = Depends(get_db), _=Depends(reader)):
 @router.get("/entities/{entity_type}/{entity_id}/summary")
 def entity_summary(entity_type: str, entity_id: UUID, db: Session = Depends(get_db), _=Depends(reader)):
     return {"health": entity_health(entity_type, entity_id, db), "availability": entity_availability(entity_type, entity_id, db), "reliability": db.scalar(select(ReliabilityMeasurement).where(ReliabilityMeasurement.entity_type == entity_type, ReliabilityMeasurement.entity_id == entity_id).order_by(ReliabilityMeasurement.period_end.desc())), "capacity": db.scalars(select(CapacityAssessment).where(CapacityAssessment.entity_type == entity_type, CapacityAssessment.entity_id == entity_id).limit(20)).all(), "sla": db.scalars(select(SLAMeasurement).where(SLAMeasurement.entity_type == entity_type, SLAMeasurement.entity_id == entity_id).limit(20)).all(), "data_quality": db.scalars(select(AnalyticsDataQualityRecord).where(AnalyticsDataQualityRecord.entity_type == entity_type, AnalyticsDataQualityRecord.entity_id == entity_id).limit(20)).all()}
+
+
+@router.get("/baselines")
+def baselines(entity_type: str | None = None, entity_id: UUID | None = None, metric_key: str | None = None, page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100), db: Session = Depends(get_db), _=Depends(reader)):
+    query=db.query(AnalyticsBaseline)
+    if entity_type: query=query.filter_by(entity_type=entity_type)
+    if entity_id: query=query.filter_by(entity_id=entity_id)
+    if metric_key: query=query.filter_by(metric_key=metric_key)
+    return _page(query.order_by(AnalyticsBaseline.calculated_at.desc()),None,page,page_size)
+
+
+@router.get("/entities/{entity_type}/{entity_id}/baselines")
+def entity_baselines(entity_type: str, entity_id: UUID, db: Session = Depends(get_db), _=Depends(reader)):
+    return _page(db.query(AnalyticsBaseline).filter_by(entity_type=entity_type,entity_id=entity_id).order_by(AnalyticsBaseline.calculated_at.desc()),None,1,100)
+
+
+@router.post("/baselines/recalculate")
+def recalculate_baseline(payload: BaselineRecalculateRequest, db: Session = Depends(get_db), actor=Depends(admin)):
+    row=AnalyticsBaselineService(db).recalculate(**payload.model_dump())
+    create_audit_log(db,actor.username,"ANALYTICS_BASELINE_RECALCULATED","AnalyticsBaseline",str(row.id),f"Recalculated aggregate-only baseline for {row.metric_key}.")
+    db.commit();db.refresh(row);return row
+
+
+@router.get("/baselines/coverage")
+def baseline_coverage(db: Session = Depends(get_db), _=Depends(reader)): return AnalyticsBaselineService(db).coverage()
+
+
+@router.get("/anomalies")
+def anomalies(status: str | None=None,severity: str | None=None,metric_key: str | None=None,entity_type: str | None=None,minimum_confidence: float=Query(0,ge=0,le=100),page:int=Query(1,ge=1),page_size:int=Query(50,ge=1,le=100),db:Session=Depends(get_db),_=Depends(reader)):
+    query=db.query(AnalyticsAnomaly).filter(AnalyticsAnomaly.confidence_score>=minimum_confidence)
+    if status: query=query.filter_by(status=status)
+    if severity: query=query.filter_by(severity=severity)
+    if metric_key: query=query.filter_by(metric_key=metric_key)
+    if entity_type: query=query.filter_by(entity_type=entity_type)
+    return _page(query.order_by(AnalyticsAnomaly.last_detected_at.desc()),None,page,page_size)
+
+
+@router.get("/anomalies/{object_id}")
+def anomaly_detail(object_id:UUID,db:Session=Depends(get_db),_=Depends(reader)): return _get(db,AnalyticsAnomaly,object_id,"Analytics anomaly")
+
+
+def _anomaly_action(object_id,status,payload,db,actor):
+    row=_get(db,AnalyticsAnomaly,object_id,"Analytics anomaly")
+    try: AnalyticsAnomalyService.transition(row,status,actor.id,payload.reason)
+    except ValueError as exc: raise HTTPException(409,str(exc)) from exc
+    return _audit(db,actor,f"ANALYTICS_ANOMALY_{status.upper()}",row,f"Anomaly {status} after reviewed evidence.")
+
+
+@router.post("/anomalies/{object_id}/acknowledge")
+def acknowledge_anomaly(object_id:UUID,payload:ReviewAction,db:Session=Depends(get_db),actor=Depends(reader)): return _anomaly_action(object_id,"acknowledged",payload,db,actor)
+@router.post("/anomalies/{object_id}/resolve")
+def resolve_anomaly(object_id:UUID,payload:ReviewAction,db:Session=Depends(get_db),actor=Depends(admin)): return _anomaly_action(object_id,"resolved",payload,db,actor)
+@router.post("/anomalies/{object_id}/ignore")
+def ignore_anomaly(object_id:UUID,payload:ReviewAction,db:Session=Depends(get_db),actor=Depends(admin)): return _anomaly_action(object_id,"ignored",payload,db,actor)
+@router.post("/anomalies/{object_id}/suppress")
+def suppress_anomaly(object_id:UUID,payload:ReviewAction,db:Session=Depends(get_db),actor=Depends(admin)): return _anomaly_action(object_id,"suppressed",payload,db,actor)
+
+
+@router.get("/anomaly-rules")
+def anomaly_rules(db:Session=Depends(get_db),_=Depends(reader)): return _page(db.query(AnalyticsAnomalyRule).order_by(AnalyticsAnomalyRule.name),AnomalyRuleRead,1,100)
+@router.post("/anomaly-rules",response_model=AnomalyRuleRead,status_code=201)
+def create_anomaly_rule(payload:AnomalyRuleWrite,db:Session=Depends(get_db),actor=Depends(admin)):
+    if not db.scalar(select(AnalyticsMetricDefinition).where(AnalyticsMetricDefinition.metric_key==payload.metric_key,AnalyticsMetricDefinition.enabled.is_(True))): raise HTTPException(422,"Rule metric must be an enabled approved analytics metric.")
+    row=AnalyticsAnomalyRule(**payload.model_dump(),created_by=actor.id,updated_by=actor.id);db.add(row);db.flush()
+    return _audit(db,actor,"ANALYTICS_ANOMALY_RULE_CREATED",row,f"Created controlled anomaly rule '{row.name}'.")
+@router.get("/anomaly-rules/{object_id}",response_model=AnomalyRuleRead)
+def anomaly_rule_detail(object_id:UUID,db:Session=Depends(get_db),_=Depends(reader)): return _get(db,AnalyticsAnomalyRule,object_id,"Anomaly rule")
+@router.patch("/anomaly-rules/{object_id}",response_model=AnomalyRuleRead)
+def update_anomaly_rule(object_id:UUID,payload:AnomalyRuleWrite,db:Session=Depends(get_db),actor=Depends(admin)):
+    row=_get(db,AnalyticsAnomalyRule,object_id,"Anomaly rule")
+    for key,value in payload.model_dump().items():setattr(row,key,value)
+    row.updated_by=actor.id;return _audit(db,actor,"ANALYTICS_ANOMALY_RULE_UPDATED",row,f"Updated anomaly rule '{row.name}'.")
+@router.post("/anomaly-rules/{object_id}/enable")
+def enable_anomaly_rule(object_id:UUID,db:Session=Depends(get_db),actor=Depends(admin)):
+    row=_get(db,AnalyticsAnomalyRule,object_id,"Anomaly rule");row.enabled=True;return _audit(db,actor,"ANALYTICS_ANOMALY_RULE_ENABLED",row,"Enabled reviewed anomaly rule.")
+@router.post("/anomaly-rules/{object_id}/disable")
+def disable_anomaly_rule(object_id:UUID,db:Session=Depends(get_db),actor=Depends(admin)):
+    row=_get(db,AnalyticsAnomalyRule,object_id,"Anomaly rule");row.enabled=False;return _audit(db,actor,"ANALYTICS_ANOMALY_RULE_DISABLED",row,"Disabled anomaly rule.")
+@router.post("/anomaly-rules/{object_id}/preview")
+def preview_anomaly_rule(object_id:UUID,value:float,baseline_id:UUID,db:Session=Depends(get_db),actor=Depends(admin)):
+    rule=_get(db,AnalyticsAnomalyRule,object_id,"Anomaly rule");baseline=_get(db,AnalyticsBaseline,baseline_id,"Analytics baseline")
+    return {"persisted":False,**AnalyticsAnomalyService.evaluate(value,baseline,rule.detection_method,rule.sensitivity)}
+
+
+@router.get("/correlations")
+def correlations(status:str|None=None,page:int=Query(1,ge=1),page_size:int=Query(50,ge=1,le=100),db:Session=Depends(get_db),_=Depends(reader)):
+    query=db.query(AnalyticsCorrelationGroup)
+    if status:query=query.filter_by(status=status)
+    return _page(query.order_by(AnalyticsCorrelationGroup.last_event_at.desc()),None,page,page_size)
+@router.get("/correlations/{object_id}")
+def correlation_detail(object_id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
+    row=_get(db,AnalyticsCorrelationGroup,object_id,"Correlation group")
+    return {"group":row,"members":db.query(AnalyticsCorrelationMember).filter_by(correlation_group_id=row.id).order_by(AnalyticsCorrelationMember.occurred_at).limit(500).all()}
+def _correlation_action(object_id,status,db,actor):
+    row=_get(db,AnalyticsCorrelationGroup,object_id,"Correlation group")
+    if row.status in {"resolved","rejected","ignored"}:raise HTTPException(409,"Correlation review is already final.")
+    row.status=status;row.reviewed_by=actor.id;row.reviewed_at=datetime.now(timezone.utc)
+    return _audit(db,actor,f"ANALYTICS_CORRELATION_{status.upper()}",row,f"Correlation group {status}; probable-cause evidence retained.")
+@router.post("/correlations/{object_id}/confirm")
+def confirm_correlation(object_id:UUID,db:Session=Depends(get_db),actor=Depends(admin)):return _correlation_action(object_id,"confirmed",db,actor)
+@router.post("/correlations/{object_id}/reject")
+def reject_correlation(object_id:UUID,db:Session=Depends(get_db),actor=Depends(admin)):return _correlation_action(object_id,"rejected",db,actor)
+@router.post("/correlations/{object_id}/ignore")
+def ignore_correlation(object_id:UUID,db:Session=Depends(get_db),actor=Depends(admin)):return _correlation_action(object_id,"ignored",db,actor)
+@router.post("/correlations/run")
+def run_correlation(db:Session=Depends(get_db),actor=Depends(admin)):
+    config=AnalyticsOperationalService(db).schedule();result=AnalyticsCorrelationService(db).correlate(config.correlation_window_minutes,config.maximum_events_per_run,config.maximum_groups_per_run)
+    create_audit_log(db,actor.username,"ANALYTICS_CORRELATION_COMPLETED","AnalyticsCorrelationGroup",None,f"Correlated {result['events_evaluated']} bounded events.");db.commit();return result
+
+
+@router.get("/insights")
+def insights(status:str|None=None,page:int=Query(1,ge=1),page_size:int=Query(50,ge=1,le=100),db:Session=Depends(get_db),_=Depends(reader)):
+    query=db.query(AnalyticsInsight)
+    if status:query=query.filter_by(status=status)
+    return _page(query.order_by(AnalyticsInsight.generated_at.desc()),None,page,page_size)
+@router.get("/insights/{object_id}")
+def insight_detail(object_id:UUID,db:Session=Depends(get_db),_=Depends(reader)):return _get(db,AnalyticsInsight,object_id,"Analytics insight")
+@router.post("/insights/{object_id}/review")
+def review_insight(object_id:UUID,db:Session=Depends(get_db),actor=Depends(reader)):
+    row=_get(db,AnalyticsInsight,object_id,"Analytics insight");row.status="reviewed";row.reviewed_by=actor.id;row.reviewed_at=datetime.now(timezone.utc)
+    return _audit(db,actor,"ANALYTICS_INSIGHT_REVIEWED",row,"Reviewed deterministic insight evidence.")
+@router.post("/insights/{object_id}/ignore")
+def ignore_insight(object_id:UUID,db:Session=Depends(get_db),actor=Depends(admin)):
+    row=_get(db,AnalyticsInsight,object_id,"Analytics insight");row.status="ignored";row.reviewed_by=actor.id;row.reviewed_at=datetime.now(timezone.utc)
+    return _audit(db,actor,"ANALYTICS_INSIGHT_IGNORED",row,"Ignored deterministic insight.")
+
+
+@router.get("/anomaly-summary")
+def anomaly_summary(db:Session=Depends(get_db),_=Depends(reader)):
+    rows=db.query(AnalyticsAnomaly)
+    return {"open_anomalies":rows.filter(AnalyticsAnomaly.status.in_(("open","acknowledged","suppressed"))).count(),
+        "critical_anomalies":rows.filter_by(status="open",severity="critical").count(),
+        "new_anomalies_today":rows.filter(AnalyticsAnomaly.first_detected_at>=datetime.now(timezone.utc)-timedelta(days=1)).count(),
+        "resolved_anomalies":rows.filter_by(status="resolved").count(),"flapping_anomalies":rows.filter(AnalyticsAnomaly.flap_count>0).count(),
+        "low_confidence_anomalies":rows.filter(AnalyticsAnomaly.confidence_score<60).count(),"baseline_coverage":AnalyticsBaselineService(db).coverage()}
+@router.get("/correlation-summary")
+def correlation_summary(db:Session=Depends(get_db),_=Depends(reader)):
+    rows=db.query(AnalyticsCorrelationGroup)
+    return {"open_correlation_groups":rows.filter_by(status="open").count(),"confirmed_groups":rows.filter_by(status="confirmed").count(),
+        "high_confidence_groups":rows.filter(AnalyticsCorrelationGroup.confidence_score>=80).count(),
+        "affected_devices":db.scalar(select(func.coalesce(func.sum(AnalyticsCorrelationGroup.affected_device_count),0))),
+        "related_tickets":rows.filter(AnalyticsCorrelationGroup.ticket_id.is_not(None)).count()}

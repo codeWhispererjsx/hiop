@@ -55,3 +55,8 @@ test("scheduled polling and alert administration remain explicit", () => {
   assert.ok(types.includes("type SNMPAlertRule"));
   assert.ok(types.includes("type SNMPSchedulerHealth"));
 });
+
+test("structured SNMP gateway errors expose their safe backend message", () => {
+  assert.match(api, /"message" in detail/);
+  assert.match(api, /errorDetailMessage\(body\.detail\)/);
+});

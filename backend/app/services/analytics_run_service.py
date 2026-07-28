@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from app.db.database import SessionLocal
-from app.models.analytics import AnalyticsMetricDefinition, AnalyticsRun
+from app.models.analytics import AnalyticsMetricDefinition, AnalyticsRun, AnalyticsScheduleConfiguration
 from app.services.analytics_aggregation_service import AnalyticsAggregationService
 from app.services.analytics_operational_service import AnalyticsOperationalService
 from app.services.audit_service import create_audit_log
@@ -33,6 +33,15 @@ def execute_analytics_run(run_id):
             created = AnalyticsOperationalService(db).assess_capacity(run)
             run.result_summary = {"capacity_assessments_created": created}
             run.status = "completed"
+        elif run.run_type == "correlation":
+            from app.services.analytics_correlation_service import AnalyticsCorrelationService
+            config = db.query(AnalyticsScheduleConfiguration).first()
+            result = AnalyticsCorrelationService(db).correlate(
+                getattr(config, "correlation_window_minutes", 15) if config else 15,
+                getattr(config, "maximum_events_per_run", 1000) if config else 1000,
+                getattr(config, "maximum_groups_per_run", 100) if config else 100,
+            )
+            run.result_summary = result; run.status = "completed"
         else:
             run.result_summary = {"foundation": True, "run_type": run.run_type, "message": "No supported source entities were selected."}
             run.status = "completed"

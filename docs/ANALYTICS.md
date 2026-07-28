@@ -159,3 +159,15 @@ Reports provide JSON, formula-injection-safe CSV, and browser print/PDF. Respons
 ## Known limitations
 
 No anomaly detection, AI, recommendation engine, automatic remediation, external BI integration, or forecast-driven alerting is included.
+
+## Baselines and anomaly detection
+
+Epic 6E adds aggregate-only baselines and controlled anomaly rules. Rolling baselines record mean, median, standard deviation, MAD, IQR fences, percentile bounds, sample count, quality, confidence, and validity. Supported methods are z-score, modified z-score, IQR/percentile bounds, bounded change/trend breaks, forecast deviation, and missing/stale-data checks. A rule must reference an approved metric and cannot contain executable formulas.
+
+Anomalies retain observed/expected values, bounds, method, threshold, evidence, limitations, confidence, occurrence count, and lifecycle state. Recovery requires normal observations and a valid/fresh baseline. Low confidence or insufficient data does not become a critical anomaly. Maintenance can suppress notification/alert creation while preserving evidence.
+
+## Correlations and insights
+
+Correlation runs process a bounded recent event window and deduplicate groups. Shared timing/scope, alerts, anomalies, tickets, state changes, and topology evidence contribute confidence; provisional topology is penalized and all shared-cause language remains probable. Source alerts and tickets remain independent records. Insights are fixed evidence-backed templates with review steps, never generated free-form remediation.
+
+The analytics scheduler exposes separate deterministic jobs for baselines, anomalies, correlation, insights, recovery, and retention. These jobs are disabled by default, use stable IDs, one active instance, bounded batches, startup reconciliation, and stale-run recovery.

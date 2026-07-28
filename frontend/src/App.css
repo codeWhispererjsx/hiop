@@ -14,7 +14,7 @@
       rgba(194, 159, 4, 0.14),
       transparent 24%
     ),
-    #07110f;
+    #000000;
 }
 .login-theme-toggle {
   position: absolute;
@@ -283,7 +283,7 @@
       transparent 28%
     ),
     radial-gradient(circle at 72% 82%, rgba(30, 91, 72, 0.1), transparent 24%),
-    var(--bg);
+    #ffffff;
 }
 :root[data-theme="light"] .login-panel {
   background: rgba(255, 255, 255, 0.78);

@@ -29,7 +29,7 @@ TOPOLOGY_JOB_PREFIX = "topology_"
 TOPOLOGY_CLEANUP_JOB_ID = "topology_retention_cleanup"
 TOPOLOGY_JOB_TYPES = ("collection", "inference", "snapshot", "changes", "health")
 ANALYTICS_JOB_PREFIX = "analytics_"
-ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "retention_cleanup")
+ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
     "system": ("system_poll_enabled", "system_interval_seconds", "system"),
@@ -415,6 +415,11 @@ def register_analytics_jobs(db=None) -> int:
             "SLA": (config.sla_enabled, config.sla_interval_hours * 3600),
             "reliability": (config.reliability_enabled, config.reliability_interval_hours * 3600),
             "data_quality": (config.data_quality_enabled, config.data_quality_interval_minutes * 60),
+            "baseline": (getattr(config, "baseline_enabled", False), getattr(config, "baseline_interval_hours", 24) * 3600),
+            "anomaly": (getattr(config, "anomaly_detection_enabled", False), getattr(config, "anomaly_interval_minutes", 15) * 60),
+            "correlation": (getattr(config, "correlation_enabled", False), getattr(config, "correlation_interval_minutes", 15) * 60),
+            "insight": (getattr(config, "insight_refresh_enabled", False), getattr(config, "insight_interval_minutes", 30) * 60),
+            "anomaly_recovery": (getattr(config, "anomaly_detection_enabled", False), getattr(config, "anomaly_recovery_interval_minutes", 15) * 60),
             "retention_cleanup": (config.retention_cleanup_enabled, config.retention_cleanup_interval_hours * 3600),
         }
         expected = set()

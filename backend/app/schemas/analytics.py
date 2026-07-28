@@ -205,6 +205,21 @@ class AnalyticsScheduleWrite(BaseModel):
     batch_size: int = Field(100, ge=10, le=10000)
     jitter_seconds: int = Field(30, ge=0, le=3600)
     stale_run_timeout_minutes: int = Field(60, ge=5, le=10080)
+    baseline_enabled: bool = False
+    baseline_interval_hours: int = Field(24, ge=1, le=720)
+    anomaly_detection_enabled: bool = False
+    anomaly_interval_minutes: int = Field(15, ge=5, le=10080)
+    correlation_enabled: bool = False
+    correlation_interval_minutes: int = Field(15, ge=5, le=10080)
+    insight_refresh_enabled: bool = False
+    insight_interval_minutes: int = Field(30, ge=5, le=10080)
+    anomaly_recovery_interval_minutes: int = Field(15, ge=5, le=10080)
+    correlation_window_minutes: int = Field(15, ge=1, le=1440)
+    maximum_events_per_run: int = Field(1000, ge=10, le=5000)
+    maximum_groups_per_run: int = Field(100, ge=1, le=500)
+    anomaly_retention_days: int = Field(180, ge=30, le=3650)
+    correlation_retention_days: int = Field(365, ge=30, le=3650)
+    insight_retention_days: int = Field(180, ge=30, le=3650)
 
 
 class AnalyticsScheduleRead(AnalyticsScheduleWrite):
@@ -259,3 +274,56 @@ class ForecastRunRequest(BaseModel):
     def valid_range(self):
         TimeRange(start=self.period_start, end=self.period_end)
         return self
+
+
+DetectionMethod = Literal["z_score", "modified_z_score", "iqr", "percentile", "change_point", "trend_break", "forecast_deviation", "missing_data", "stale_data"]
+
+
+class AnomalyRuleWrite(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    entity_type: EntityType
+    metric_key: str = Field(pattern=r"^[a-z][a-z0-9_.-]{2,119}$")
+    scope_type: Literal["global", "entity", "department", "building", "floor", "network_zone"] = "global"
+    scope_id: UUID | None = None
+    detection_method: DetectionMethod
+    sensitivity: float = Field(3, ge=.5, le=10)
+    minimum_samples: int = Field(12, ge=8, le=1000)
+    baseline_window: int = Field(168, ge=8, le=8760)
+    evaluation_window: int = Field(3, ge=1, le=100)
+    consecutive_occurrences: int = Field(2, ge=1, le=20)
+    recovery_occurrences: int = Field(2, ge=1, le=20)
+    minimum_confidence: float = Field(60, ge=0, le=100)
+    warning_score: float = Field(60, ge=0, le=100)
+    critical_score: float = Field(85, ge=0, le=100)
+    alert_creation_enabled: bool = False
+    notification_enabled: bool = False
+    suppress_during_maintenance: bool = True
+    enabled: bool = False
+
+    @model_validator(mode="after")
+    def score_order(self):
+        if self.warning_score >= self.critical_score:
+            raise ValueError("Critical score must exceed warning score.")
+        if self.scope_type != "global" and not self.scope_id:
+            raise ValueError("Scoped rules require scope_id.")
+        return self
+
+
+class AnomalyRuleRead(AnomalyRuleWrite):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class BaselineRecalculateRequest(BaseModel):
+    entity_type: EntityType
+    entity_id: UUID
+    metric_key: str = Field(pattern=r"^[a-z][a-z0-9_.-]{2,119}$")
+    bucket_size: BucketSize = "1_hour"
+    baseline_type: Literal["rolling", "historical", "hour_of_day", "day_of_week", "daily", "weekly", "entity_specific", "peer_group", "manual"] = "rolling"
+    window: int = Field(168, ge=8, le=1000)
+
+
+class ReviewAction(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)

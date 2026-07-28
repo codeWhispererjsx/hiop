@@ -27,7 +27,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
-    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#07110f" : "#f5f3eb");
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#000000" : "#ffffff");
   }, [theme]);
   const value = useMemo(() => ({ theme, preference, setPreference, toggleTheme: () => setPreference(theme === "dark" ? "light" : "dark") }), [theme, preference]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -7,6 +7,19 @@ export class ApiError extends Error { status: number; constructor(message: strin
 
 const inFlightGets = new Map<string, Promise<unknown>>();
 
+function errorDetailMessage(detail: unknown): string | undefined {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => typeof item === "object" && item !== null && "msg" in item && typeof item.msg === "string" ? item.msg : "Invalid value")
+      .join(" ");
+  }
+  if (typeof detail === "object" && detail !== null && "message" in detail && typeof detail.message === "string") {
+    return detail.message;
+  }
+  return undefined;
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   const token = getAuthToken();
@@ -32,9 +45,10 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
-      const body = await response.json();
-      if (typeof body.detail === "string") message = body.detail;
-      else if (Array.isArray(body.detail)) message = body.detail.map((item: { msg?: string }) => item.msg ?? "Invalid value").join(" ");
+      const body: unknown = await response.json();
+      if (typeof body === "object" && body !== null && "detail" in body) {
+        message = errorDetailMessage(body.detail) ?? message;
+      }
     } catch { /* non-JSON response */ }
     throw new ApiError(message, response.status);
   }

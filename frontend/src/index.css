@@ -3,11 +3,11 @@
 :root {
   font-family: "DM Sans", system-ui, sans-serif;
   color: #eef2f0;
-  background: #07110f;
+  background: #000000;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --bg: #07110f;
+  --bg: #000000;
   --surface: #0d1917;
   --surface-2: #12211e;
   --surface-3: #172824;
@@ -26,8 +26,8 @@
 
 :root[data-theme="light"] {
   color: #202824;
-  background: #f5f3eb;
-  --bg: #f5f3eb;
+  background: #ffffff;
+  --bg: #ffffff;
   --surface: #ffffff;
   --surface-2: #f3f1e8;
   --surface-3: #ebe8dc;
@@ -52,7 +52,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 #root { min-height: 100vh; }
 
-::selection { color: #07110f; background: var(--gold); }
+::selection { color: #000000; background: var(--gold); }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: #29443e; background-clip: padding-box; }
 :root[data-theme="light"] ::-webkit-scrollbar-thumb { background: #bab6a7; background-clip: padding-box; }

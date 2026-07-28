@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-rc1 — Epic 6E
+
+- Added deterministic aggregate-only baselines using rolling mean/median, MAD, IQR, and percentile bounds.
+- Added controlled anomaly rules, explainable anomaly evidence/lifecycle/recovery, bounded correlation groups, deterministic insights, review APIs, summaries, and scheduler job registration.
+- Added migration `e7f8a9b0c1d2`, release-candidate documentation, production checklist, and pilot plan.
+- Hardened analytics scheduling with baseline, anomaly, correlation, insight, and recovery jobs, all disabled by default and protected by stable IDs and overlap limits.
+- Excluded AI, black-box machine learning, autonomous remediation, guaranteed root-cause claims, and final v2 release tagging.
+
 ## 2.0.0-dev — Epic 6D
 
 - Added protected Analytics navigation and the executive KPI workbench.
