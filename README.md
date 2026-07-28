@@ -1,8 +1,8 @@
-# HIOP — Hotel IT Operations Portal
+# HIOP — Hospitality IT Operations Platform
 
 HIOP v2 analytics includes opt-in scheduled aggregation, bounded historical backfill, data-quality monitoring, and retention controls. See [docs/ANALYTICS.md](docs/ANALYTICS.md).
 
-HIOP 2.0.0-rc1 is an internal operations portal for hotel IT teams. It combines device inventory, safe private-network discovery, network monitoring, alerting, service tickets, user administration, immutable audit records, reports, and runtime-safe settings in one authenticated application. Epic 5B extends the bounded relational [network topology foundation](docs/TOPOLOGY.md) with reviewed LLDP/CDP neighbor evidence.
+HIOP 3.0.0-dev is an internal hospitality IT operations platform. It combines device inventory, safe private-network discovery, network monitoring, alerting, service tickets, user administration, immutable audit records, reports, and runtime-safe settings in one authenticated application. The v3 foundation adds organization and property context while preserving existing routes and data.
 
 Epic 5D adds the interactive `/topology` workspace: bounded React Flow maps, saved layouts, search/filters, path and impact analysis, conflict/inference review, snapshots/comparison, change history, and authenticated live updates. It does not schedule collection or configure devices.
 

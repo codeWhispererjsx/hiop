@@ -168,3 +168,14 @@ All mutations require Admin. Read endpoints require Admin or Technician. Lists a
 ## Epic 6A analytics API
 
 Authenticated `/analytics` endpoints provide metric-definition CRUD, paginated aggregate queries, bounded UTC time series, availability, current/historical health, health-configuration CRUD, capacity policy/assessment queries, SLA definition/measurement queries, reliability measurements, manual dry/live runs with cancellation, and system/entity summaries. Admin is required for configuration and run mutations; Admin and Technician may read. No route accepts SQL, expressions, source table names, arbitrary transforms, unbounded time ranges, or analytics schedules.
+# Hospitality foundation APIs (v3)
+
+- `GET /api/v1/organizations` — authenticated paginated organization directory
+- `POST /api/v1/organizations` — administrator organization creation
+- `GET /api/v1/properties` — authenticated paginated/filterable property directory
+- `POST /api/v1/properties` — administrator property creation
+- `GET /api/v1/properties/{id}` — authenticated property detail
+- `PATCH /api/v1/properties/{id}` — administrator property update
+- `DELETE /api/v1/properties/{id}` — administrator safe archive
+
+These endpoints preserve existing `/api/v1/hierarchy` routes and do not create multi-tenant SaaS boundaries.

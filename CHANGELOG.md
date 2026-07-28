@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.0-dev — Hospitality foundation
+
+- Rebranded HIOP as Hospitality IT Operations Platform while preserving the acronym, repository, database, environment prefixes, and existing API routes.
+- Added additive Organization and Property domain models with hospitality types/statuses and nullable device property context.
+- Added RBAC-protected organization/property APIs and responsive frontend directories.
+- Added migration `f3a4b5c6d7e8`, compatibility tests, and `docs/HOSPITALITY_FOUNDATION.md`.
+- Excluded SaaS tenancy, billing, licensing, automation, AI, mobile, integrations, and configuration backups.
+
 ## 2.0.0-rc1 — Epic 6E
 
 - Added deterministic aggregate-only baselines using rolling mean/median, MAD, IQR, and percentile bounds.

@@ -77,6 +77,12 @@ async function download(path: string) {
 export const endpoints = {
   login: (email: string, password: string) => api<{access_token:string}>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => api<import("./types").User>("/auth/me"),
+  organizations: (query = "") => api<{items:import("./types").Organization[];total:number;page:number;page_size:number}>(`/organizations${query}`),
+  properties: (query = "") => api<{items:import("./types").Property[];total:number;page:number;page_size:number}>(`/properties${query}`),
+  createOrganization: (body: unknown) => api<import("./types").Organization>("/organizations", {method:"POST", body:JSON.stringify(body)}),
+  createProperty: (body: unknown) => api<import("./types").Property>("/properties", {method:"POST", body:JSON.stringify(body)}),
+  updateProperty: (id:string, body: unknown) => api<import("./types").Property>(`/properties/${id}`, {method:"PATCH", body:JSON.stringify(body)}),
+  archiveProperty: (id:string) => api<void>(`/properties/${id}`, {method:"DELETE"}),
   dashboard: () => api<import("./types").DashboardData>("/dashboard/"),
   devices: () => api<import("./types").Device[]>("/devices/"),
   device: (id: string) => api<import("./types").Device>(`/devices/${id}`),

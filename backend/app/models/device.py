@@ -79,6 +79,10 @@ class Device(Base):
         default="Active"
     )
 
+    property_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("properties.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     inventory_status: Mapped[str] = mapped_column(
         String(30), nullable=False, default="Active", server_default="Active"
     )

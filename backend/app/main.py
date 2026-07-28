@@ -26,6 +26,7 @@ from app.services.scheduler_service import (
 from app.websocket.routes import router as websocket_router
 from app.operations.routes import router as operations_router
 from app.hierarchy.routes import router as hierarchy_router
+from app.api.v1.hospitality import router as hospitality_router
 from app.discovery.routes import router as discovery_router
 from app.imports.routes import router as imports_router
 from app.users.routes import router as users_router
@@ -47,7 +48,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Backend API for HIOP",
+    description="Backend API for the Hospitality IT Operations Platform (HIOP)",
     lifespan=lifespan
 )
 
@@ -84,7 +85,7 @@ app.include_router(
 @app.get("/")
 def root():
     return {
-        "application": "Hotel IT Operations Portal",
+        "application": "Hospitality IT Operations Platform",
         "version": settings.app_version,
         "status": "running"
     }
@@ -173,6 +174,7 @@ app.include_router(audit_router, prefix=settings.api_prefix)
 app.include_router(reports_router, prefix=settings.api_prefix)
 app.include_router(operations_router, prefix=settings.api_prefix)
 app.include_router(hierarchy_router, prefix=settings.api_prefix)
+app.include_router(hospitality_router, prefix=settings.api_prefix)
 app.include_router(discovery_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)
 

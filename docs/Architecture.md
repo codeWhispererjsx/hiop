@@ -96,3 +96,6 @@ and existing locks. Alert evaluation is a separate post-persistence service; one
 Topology now follows the same single-scheduler architecture. Persisted per-topology configuration reconciles deterministic collection, inference, snapshot, change, and health jobs at startup. A topology-wide operational lock prevents overlap; existing SNMP target locks remain authoritative. Change, alert, analytics, retention, reporting, and export logic live in `TopologyOperationalService`, separate from route handlers and graph inference.
 
 Advanced analytics remains in the primary PostgreSQL domain. Fixed source adapters normalize existing scans/SNMP/history, repositories upsert canonical buckets, and separate availability/health/capacity/SLA/reliability services produce explainable derived records. Manual execution uses bounded background tasks only; no analytics scheduler is registered. The source-adapter boundary permits a future time-series store without changing domain/API contracts.
+# Hospitality domain foundation (v3)
+
+Version `3.0.0-dev` introduces an additive organization/property context: Organization → Property → existing Department/Room → Device. Existing route and database names remain stable, organization assignment is nullable for legacy data, and no tenant isolation is implied.

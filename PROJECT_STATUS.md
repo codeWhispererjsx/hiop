@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## HIOP v3.0.0-dev — hospitality foundation
+
+The product is rebranded as Hospitality IT Operations Platform. Additive Organization and Property models, nullable device property context, RBAC APIs, organization/property frontend directories, migration `f3a4b5c6d7e8`, and foundation documentation are complete. SaaS tenancy, billing, licensing, automation, AI, integrations, mobile, and configuration backups remain out of scope.
+
 ## Epic 6E release candidate
 
 HIOP v2 is prepared as `2.0.0-rc1` with deterministic aggregate-based anomaly detection, explainable evidence, controlled anomaly lifecycle, bounded event correlation, probable shared-scope insights, scheduler registration, migration `e7f8a9b0c1d2`, and release/pilot documentation. Production acceptance remains conditional on deployment-specific security, backup/restore, monitoring, and approved pilot verification. No final v2.0.0 tag is created.

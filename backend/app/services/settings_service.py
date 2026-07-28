@@ -12,10 +12,10 @@ from app.schemas.settings import DiscoverySettings, GeneralSettings, NetworkSett
 
 
 DEFAULTS = {
-    "general.application_name": "Hotel IT Operations Portal", "general.short_name": "HIOP", "general.timezone": "Africa/Lagos",
+    "general.application_name": "Hospitality IT Operations Platform", "general.short_name": "HIOP", "general.timezone": "Africa/Lagos",
     "general.date_format": "DD/MM/YYYY", "general.time_format": "24-hour", "general.default_page_size": "25",
     "general.default_landing_page": "/dashboard", "general.support_email": "",
-    "organization.organization_name": "Hotel IT Operations", "organization.property_name": "Hotel IT Operations",
+    "organization.organization_name": "Hospitality IT Operations", "organization.property_name": "Primary Property",
     "organization.it_department_name": "Information Technology", "organization.address": "", "organization.city": "",
     "organization.country": "", "organization.support_email": "", "organization.support_phone": "",
     "network.approved_network": "10.50.20.0/24", "network.automatic_scanning": "true", "network.scan_interval_minutes": "5",
@@ -85,7 +85,7 @@ def read_bundle(db: Session) -> dict[str, Any]:
         "discovery": read_discovery(db),
         "email": {"configured": configured, "host": "smtp.gmail.com" if settings.email_address else None, "port": 465 if settings.email_address else None, "security": "TLS" if settings.email_address else "Not configured", "credentials_editable": False},
         "security": {"authentication": "JWT bearer token", "access_token_lifetime": f"{settings.access_token_expire_minutes} minutes", "roles": ["admin", "technician"], "inactive_user_login_blocked": True, "failed_login_auditing": False, "refresh_tokens": False, "mfa": False, "session_revocation": False},
-        "application": {"product_name": "Hotel IT Operations Portal", "short_name": "HIOP", "frontend_version": "2.0.0-dev", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": settings.environment.title()},
+        "application": {"product_name": "Hospitality IT Operations Platform", "short_name": "HIOP", "frontend_version": "3.0.0-dev", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": settings.environment.title()},
     }
 
 

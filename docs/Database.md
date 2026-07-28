@@ -104,3 +104,6 @@ Migration `fa6d8e1c4b20` adds `topology_schedule_configurations`, `topology_oper
 ## Epic 6A analytics schema
 
 Migration `b7d9e2f4a601` adds 12 tables: metric definitions, aggregates, availability, health scores/configurations, capacity policies/assessments, SLA definitions/measurements, reliability measurements, runs, and data quality. Metric/entity/bucket and entity/period uniqueness constraints provide idempotency. Entity UUIDs intentionally have no cascading source foreign key so historical analytics survive inventory retirement. Downgrade drops only analytics tables in dependency-safe order.
+# Hospitality foundation (v3)
+
+Migration `f3a4b5c6d7e8` creates `organizations`, extends `properties` with organization and hospitality attributes, and adds nullable `devices.property_id`. Existing records remain functional without an organization/property assignment. Archive operations are status updates, not destructive deletes.

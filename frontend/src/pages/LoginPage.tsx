@@ -32,7 +32,7 @@ export default function LoginPage() {
   return <main className="login-page">
     <ThemeToggle className="login-theme-toggle" />
     <section className="login-story">
-      <div className="brand-lockup"><span className="brand-mark">HI</span><div><strong>HIOP</strong><span>Hotel IT Operations Portal</span></div></div>
+      <div className="brand-lockup"><span className="brand-mark">HI</span><div><strong>HIOP</strong><span>Hospitality IT Operations Platform</span></div></div>
       <div className="login-copy"><p className="login-kicker">One property. Complete visibility.</p><h1>Quiet technology. Exceptional hospitality.</h1><p>Monitor critical hotel systems, resolve service interruptions and keep guest-facing operations running from one secure command centre.</p></div>
       <div className="login-stats"><div className="login-stat"><strong><i className="status-dot" />Operational</strong><span>Platform status</span></div><div className="login-stat"><strong>24 / 7</strong><span>Infrastructure watch</span></div><div className="login-stat"><strong>Secure</strong><span>Role-based access</span></div></div>
     </section>
@@ -45,7 +45,7 @@ export default function LoginPage() {
           <button className="submit-button" disabled={busy}>{busy ? "Verifying access…" : "Enter operations portal"}</button>
         </form>
         <p className="login-message" role="alert">{message && <><Icon name="warning" size={16} />{message}</>}</p>
-        <p className="login-security">Protected access. Activity inside HIOP is recorded in the hotel IT audit trail.</p>
+        <p className="login-security">Protected access. Activity inside HIOP is recorded in the hospitality IT audit trail.</p>
       </div>
     </section>
   </main>;
