@@ -21,3 +21,9 @@ explicit baseline promotion. Scheduled jobs and live collection remain disabled
 until a production-approved collector and scheduler integration are available.
 Encrypted configuration content is never returned by comparison list endpoints;
 identical checksums are reported as unchanged.
+
+Epic 2D adds the deterministic compliance foundation: standards, policies, rules,
+manual evaluation run records, compliance results, violations, and exception
+records. Rules are structured metadata only; executable code, shell commands, and
+automatic remediation are not supported. Evaluation workers, parser expansion,
+scheduled compliance, and evidence export require a later verified increment.

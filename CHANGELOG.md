@@ -19,6 +19,9 @@
 ## 3.0.0-dev — Configuration comparison foundation
 - Added checksum-first comparison records, drift records, and explicit baseline promotion.
 
+## 3.0.0-dev — Compliance foundation
+- Added structured compliance standards, policies, rules, result, violation, and exception records.
+
 ## 3.0.0-dev — Hospitality foundation
 
 - Rebranded HIOP as Hospitality IT Operations Platform while preserving the acronym, repository, database, environment prefixes, and existing API routes.
