@@ -91,3 +91,10 @@ advanced on-call escalation remain out of scope.
 - Current tickets do not store a dedicated resolved timestamp, so reliable ticket-based MTTR requires future schema evidence.
 - Availability correctly preserves unknown time, but source precedence depends on the histories available for each entity.
 - Production-scale analytics query plans remain unverified without an approved synthetic benchmark dataset.
+## Release acceptance open items (2026-07-28)
+
+- **RC-001 — Blocker: backup/restore drill not verified.** Execute against a separate safe database and attach checksum/health/key-read evidence.
+- **RC-002 — Blocker: rollback/redeploy drill not verified.** Test prior image plus restore/forward-fix procedure before final tagging.
+- **RC-003 — Blocker: Docker controlled startup not verified.** Run backend/frontend builds, health checks, scheduler singleton, and WebSocket checks on a Docker-enabled host.
+- **RC-004 — Blocker: pilot approval not supplied.** Name owner/approver, approved scope, dates, acceptance metrics, and rollback conditions.
+- **RC-005 — Major/security risk: npm audit reports two high React Router advisories with no fix available.** Monitor upstream, document SPA mitigation, and approve risk or replace dependency before production expansion.

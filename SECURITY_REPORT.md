@@ -125,3 +125,7 @@ Schedules reference persisted approved topology/SNMP targets and never accept cr
 ## Epic 6A analytics security review
 
 Analytics reuses operational records without copying secrets or raw payloads. Source mappings are fixed in code; public contracts cannot submit SQL, expressions, tables, OIDs, or transforms. Admin controls configuration/runs and technicians have bounded reads. UTC ranges, entities, pages, points, thresholds, and active runs are constrained. WebSockets and audits summarize runs rather than emitting datasets. This is an engineering review, not formal penetration testing.
+
+## Epic 6E acceptance security review
+
+Baselines and anomaly rules accept controlled enum methods and bounded numeric settings only; no executable formulas, SQL, raw protocol payloads, or secrets are accepted. Evidence and correlation windows are bounded, probable-cause wording is fixed, lifecycle actions are role protected, and scheduler jobs are disabled by default. `pip check` passed. `npm audit --omit=dev` reports two high React Router advisories with no available fix; the application is a client-side SPA without React Server Components, but the dependency remains a release risk requiring upstream monitoring or an approved replacement before production expansion. This is not a formal penetration test.

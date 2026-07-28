@@ -10,7 +10,7 @@ Reviewed CSV/XLSX inventory sessions can now be finalized transactionally. Admin
 
 ## Release status
 
-Version `2.0.0-dev` contains the integrated Discovery module and is not a release. Discovery is disabled by default; administrators must configure authorized private CIDRs before enabling scheduled runs. The Version 1.0.0 release evidence remains in [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md).
+Version `2.0.0-rc1` contains the integrated Discovery module and remains a release candidate pending the acceptance report. Discovery is disabled by default; administrators must configure authorized private CIDRs before enabling scheduled runs. Production acceptance evidence is tracked in [HIOP_V2_ACCEPTANCE_REPORT.md](HIOP_V2_ACCEPTANCE_REPORT.md).
 
 ## Technology
 
@@ -80,7 +80,7 @@ Never commit `.env` files, credentials, tokens, database dumps, exports, backups
 HIOP is internal-use software. No public license is granted unless the repository owner states otherwise.
 # HIOP v2 SNMP monitoring
 
-Version `2.0.0-dev` includes the Epic 4D SNMP Monitoring workspace at `/snmp`: secure credential/target administration, structured tests, approved manual collection, candidate review, target/interface monitoring, bounded metric charts, state history, retention preview, and reports. It does not schedule polls, generate alert rules, map topology, receive traps, or automatically onboard devices.
+Version `2.0.0-rc1` includes the Epic 4D SNMP Monitoring workspace at `/snmp`: secure credential/target administration, structured tests, approved manual collection, candidate review, target/interface monitoring, bounded metric charts, state history, retention preview, and reports. It does not schedule polls, generate alert rules, map topology, receive traps, or automatically onboard devices.
 > SNMP is opt-in and now supports reviewed onboarding, monitoring, deterministic schedules, maintenance, safe rules,
 > and protected retention. It performs no network polling until explicitly enabled and approved.
 
