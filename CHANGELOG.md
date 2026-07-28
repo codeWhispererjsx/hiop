@@ -13,6 +13,9 @@
 ## 3.0.0-dev — Configuration management foundation
 - Added encrypted manual configuration version storage, profiles, policies, runs, and metadata APIs.
 
+## 3.0.0-dev — Collector foundation
+- Added safe mock collector workflow, known-host trust records, and connectivity-test run metadata.
+
 ## 3.0.0-dev — Hospitality foundation
 
 - Rebranded HIOP as Hospitality IT Operations Platform while preserving the acronym, repository, database, environment prefixes, and existing API routes.

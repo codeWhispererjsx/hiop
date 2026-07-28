@@ -6,6 +6,8 @@ from app.core.security import get_db, require_roles
 from app.models.device import Device
 from app.models.configuration_management import ConfigurationDeviceProfile, ConfigurationBackupPolicy, ConfigurationBackupRun, DeviceConfigurationVersion
 from app.services.secret_encryption_service import SecretEncryptionService
+from app.models.configuration_collectors import ConfigurationKnownHost, ConfigurationConnectionTestRun
+from app.services.configuration_collector_service import MockCollector
 router=APIRouter(prefix="/configuration-management",tags=["Configuration management"]); reader=require_roles(["admin","technician","viewer"]); admin=require_roles(["admin"])
 def page(q,page=1,size=50): return {"items":q.offset((page-1)*size).limit(size).all(),"total":q.count(),"page":page,"page_size":size}
 @router.get("/profiles")
@@ -20,6 +22,23 @@ def create_policy(name:str,db:Session=Depends(get_db),_=Depends(admin)): row=Con
 def runs(db:Session=Depends(get_db),_=Depends(reader)): return page(db.query(ConfigurationBackupRun).order_by(ConfigurationBackupRun.created_at.desc()))
 @router.get("/versions")
 def versions(db:Session=Depends(get_db),_=Depends(reader)): return page(db.query(DeviceConfigurationVersion).order_by(DeviceConfigurationVersion.captured_at.desc()))
+@router.get("/known-hosts")
+def known_hosts(db:Session=Depends(get_db),_=Depends(reader)): return page(db.query(ConfigurationKnownHost).order_by(ConfigurationKnownHost.created_at.desc()))
+@router.post("/known-hosts/{host_id}/trust")
+def trust_host(host_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    row=db.get(ConfigurationKnownHost,host_id)
+    if not row: raise HTTPException(404,"Known host not found")
+    row.trust_status="trusted";row.approved_by=user.username;db.commit();return {"status":"trusted"}
+@router.post("/known-hosts/{host_id}/reject")
+def reject_host(host_id:UUID,db:Session=Depends(get_db),_=Depends(admin)):
+    row=db.get(ConfigurationKnownHost,host_id)
+    if not row: raise HTTPException(404,"Known host not found")
+    row.trust_status="rejected";db.commit();return {"status":"rejected"}
+@router.post("/assignments/{assignment_id}/test")
+def test_assignment(assignment_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    result=MockCollector().test_connection(); row=ConfigurationConnectionTestRun(status=result["status"],triggered_by=user.username,safe_message="Mock collector; no device connection performed");db.add(row);db.commit();db.refresh(row);return {"test_run_id":str(row.id),**result}
+@router.get("/connection-tests")
+def connection_tests(db:Session=Depends(get_db),_=Depends(reader)): return page(db.query(ConfigurationConnectionTestRun).order_by(ConfigurationConnectionTestRun.created_at.desc()))
 @router.post("/devices/{device_id}/upload",status_code=201)
 async def upload(device_id:UUID,file:UploadFile=File(...),configuration_scope:str=Form("full"),db:Session=Depends(get_db),_=Depends(admin)):
     device=db.get(Device,device_id)
