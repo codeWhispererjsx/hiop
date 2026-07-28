@@ -10,6 +10,8 @@ Epic 1C adds active property context, property access assignments, backend conte
 
 Epic 1D adds hospitality asset classification foundations, property technology services, operations summary APIs, and a property operations page via migration `c3d4e5f6a7b8`.
 
+Epic 2A adds encrypted configuration-management foundation tables, secure manual upload metadata, versioning, and configuration management navigation via migration `d4e5f6a7b8c9`.
+
 ## Epic 6E release candidate
 
 HIOP v2 is prepared as `2.0.0-rc1` with deterministic aggregate-based anomaly detection, explainable evidence, controlled anomaly lifecycle, bounded event correlation, probable shared-scope insights, scheduler registration, migration `e7f8a9b0c1d2`, and release/pilot documentation. Production acceptance remains conditional on deployment-specific security, backup/restore, monitoring, and approved pilot verification. No final v2.0.0 tag is created.

@@ -10,6 +10,9 @@
 ## 3.0.0-dev — Hospitality operations
 - Added hospitality asset categories/types, technology services, operations summaries, and property operations navigation.
 
+## 3.0.0-dev — Configuration management foundation
+- Added encrypted manual configuration version storage, profiles, policies, runs, and metadata APIs.
+
 ## 3.0.0-dev — Hospitality foundation
 
 - Rebranded HIOP as Hospitality IT Operations Platform while preserving the acronym, repository, database, environment prefixes, and existing API routes.

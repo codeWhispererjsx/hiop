@@ -16,6 +16,7 @@ const links: { label: string; to: string; icon: IconName }[] = [
     { label: "Properties", to: "/properties", icon: "hierarchy" },
     { label: "Buildings", to: "/buildings", icon: "hierarchy" },
     { label: "Property Operations", to: "/operations", icon: "dashboard" },
+    { label: "Configuration Management", to: "/configuration-management", icon: "settings" },
   { label: "Alerts", to: "/alerts", icon: "alerts" },
   { label: "Service tickets", to: "/tickets", icon: "tickets" },
   { label: "Locations & structure", to: "/hierarchy", icon: "hierarchy" },
