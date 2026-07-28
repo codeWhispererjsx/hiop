@@ -1,0 +1,20 @@
+import uuid
+from datetime import datetime
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Float, Index
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+from app.db.database import Base
+
+class HospitalityAssetCategory(Base):
+    __tablename__="hospitality_asset_categories"
+    id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4); name:Mapped[str]=mapped_column(String(120),nullable=False); code:Mapped[str]=mapped_column(String(40),unique=True,nullable=False); description:Mapped[str|None]=mapped_column(String(255)); icon_key:Mapped[str|None]=mapped_column(String(40)); color_token:Mapped[str|None]=mapped_column(String(40)); criticality_default:Mapped[str]=mapped_column(String(20),default="medium",server_default="medium"); enabled:Mapped[bool]=mapped_column(Boolean,default=True,server_default="true"); sort_order:Mapped[int]=mapped_column(Integer,default=0,server_default="0")
+class HospitalityAssetType(Base):
+    __tablename__="hospitality_asset_types"
+    id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4); category_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("hospitality_asset_categories.id",ondelete="RESTRICT"),nullable=False,index=True); name:Mapped[str]=mapped_column(String(120),nullable=False); code:Mapped[str]=mapped_column(String(50),unique=True,nullable=False); default_device_type:Mapped[str|None]=mapped_column(String(60)); default_criticality:Mapped[str]=mapped_column(String(20),default="medium",server_default="medium"); enabled:Mapped[bool]=mapped_column(Boolean,default=True,server_default="true")
+class HospitalityTechnologyService(Base):
+    __tablename__="hospitality_technology_services"
+    id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4); property_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id",ondelete="CASCADE"),nullable=False,index=True); name:Mapped[str]=mapped_column(String(160),nullable=False); code:Mapped[str]=mapped_column(String(50),nullable=False); service_category:Mapped[str]=mapped_column(String(60),nullable=False); criticality:Mapped[str]=mapped_column(String(20),default="medium",server_default="medium"); status:Mapped[str]=mapped_column(String(20),default="unknown",server_default="unknown"); description:Mapped[str|None]=mapped_column(String(255));
+    __table_args__=(Index("uq_hospitality_service_property_code","property_id","code",unique=True),)
+class DeviceTechnologyService(Base):
+    __tablename__="device_technology_services"
+    id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4); device_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("devices.id",ondelete="CASCADE"),nullable=False,index=True); technology_service_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("hospitality_technology_services.id",ondelete="CASCADE"),nullable=False,index=True); relationship_type:Mapped[str]=mapped_column(String(30),default="supports",server_default="supports"); is_primary:Mapped[bool]=mapped_column(Boolean,default=False,server_default="false"); confidence_score:Mapped[float|None]=mapped_column(Float)

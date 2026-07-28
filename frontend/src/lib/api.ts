@@ -81,6 +81,7 @@ export const endpoints = {
   me: () => api<import("./types").User>("/auth/me"),
   context: () => api<unknown>("/context"),
   selectProperty: (property_id:string) => api<unknown>("/context/property", {method:"POST",body:JSON.stringify({property_id})}),
+  operationsSummary: (id:string) => api<unknown>(`/properties/${id}/operations-summary`),
   buildings: (query = "") => api<{items:import("./types").Building[];total:number}>(`/buildings${query}`),
   floors: (query = "") => api<{items:import("./types").Floor[];total:number}>(`/floors${query}`),
   zones: (query = "") => api<{items:import("./types").Zone[];total:number}>(`/zones${query}`),
