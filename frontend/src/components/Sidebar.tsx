@@ -5,6 +5,7 @@ import { Icon, type IconName } from "./Icon";
 const links: { label: string; to: string; icon: IconName }[] = [
   { label: "Overview", to: "/dashboard", icon: "dashboard" },
   { label: "Reports", to: "/reports", icon: "audit" },
+  { label: "Analytics", to: "/analytics", icon: "dashboard" },
   { label: "Devices", to: "/devices", icon: "devices" },
   { label: "Inventory Import", to: "/imports", icon: "import" },
   { label: "Network monitor", to: "/network", icon: "network" },
@@ -102,7 +103,7 @@ export default function Sidebar({
       <nav ref={navRef} className="sidebar-nav" aria-label="Primary navigation">
         <p className="nav-label">Workspace</p>
         {visibleLinks
-          .filter((link) => links.indexOf(link) < 9)
+          .filter((link) => links.indexOf(link) < 10)
           .map((link) => (
             <NavLink
               key={link.to}
@@ -118,7 +119,7 @@ export default function Sidebar({
           ))}
         <p className="nav-label nav-label-spaced">Administration</p>
         {visibleLinks
-          .filter((link) => links.indexOf(link) >= 9)
+          .filter((link) => links.indexOf(link) >= 10)
           .map((link) => (
             <NavLink
               key={link.to}

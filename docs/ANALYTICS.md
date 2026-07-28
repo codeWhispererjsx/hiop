@@ -148,6 +148,14 @@ All query ranges, pages, points, entities, samples, metric keys, scopes, thresho
 
 Indexes cover metric/time, entity/time, policy/time, health/time, run status/time, and data-quality time. Retention settings exist for future manual/automated cleanup, but Epic 6A schedules no retention job.
 
-## Known limitations and Epic 6B
+## Analytics dashboard and workbench
 
-Initial persisted execution is focused on approved numeric aggregation; availability, health, capacity, SLA, and reliability services provide deterministic calculation foundations and require explicit source/entity orchestration in later work. There is no analytics dashboard, forecasting, machine learning, anomaly detection, recommendation engine, real hotel benchmark, billing, or scheduled analytics. Epic 6B should build reviewed analytics workflows and visualization over these bounded contracts.
+The authenticated `/analytics` workspace provides executive summary, health, capacity, availability, SLA, reliability, forecast, trend, and report views. Cards and charts consume existing APIs; the browser does not recalculate forecasts, health scores, SLA outcomes, or trends.
+
+KPI definitions follow backend contracts. Forecast charts combine persisted history, projected values, and server-calculated confidence bounds. Time-range, bucket, and health filters persist in the URL. Scope controls remain disabled until matching API dimensions exist, so the UI never simulates filtering.
+
+Reports provide JSON, formula-injection-safe CSV, and browser print/PDF. Responsive SVG charts include text summaries and tabular fallbacks. Administrators and technicians may view analytics under current policy; backend authorization remains authoritative.
+
+## Known limitations
+
+No anomaly detection, AI, recommendation engine, automatic remediation, external BI integration, or forecast-driven alerting is included.

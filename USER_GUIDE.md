@@ -410,4 +410,6 @@ The topology operations view shows evidence freshness, recent collection/inferen
 
 ## Analytics interpretation
 
+Open **Analytics** for the executive overview or choose Health, Capacity, Availability, SLA, Reliability, Forecasts, Trends, or Reports. Time range, aggregation bucket, and health status are shareable URL filters. Forecast bands communicate uncertainty; they are deterministic statistical projections, not guarantees. Expand a chart's data table for an accessible numeric view. Reports support JSON, formula-safe CSV, and browser print/PDF.
+
 Health scores are deterministic weighted summaries, not AI. Open the contributing factors and data coverage before acting. `Unknown` means evidence is insufficient or stale—not healthy or failed. Availability excludes unknown time from the percentage and reports it separately. Capacity statuses compare observed samples with reviewed thresholds and do not predict future demand.

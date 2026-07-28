@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-dev — Epic 6D
+
+- Added protected Analytics navigation and the executive KPI workbench.
+- Added health, capacity, availability, SLA, reliability, forecast, trend, and report views backed only by existing APIs.
+- Added responsive, theme-aware line, area, bar, donut, and heatmap components with confidence bands and accessible tabular summaries.
+- Added URL-persisted filters, loading/empty/error states, safe JSON/CSV/print exports, aligned TypeScript contracts, and frontend tests.
+- Excluded anomaly detection, AI recommendations, new forecasting logic, and external BI integrations.
+
 ## 2.0.0-dev — Epic 6C
 
 - Added deterministic aggregate-only forecasting with linear regression, moving average, weighted moving average, simple exponential smoothing, and growth-percentage projection.

@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Epic 6D complete
+
+The `2.0.0-dev` frontend now includes a protected Analytics workspace with executive KPIs, health, capacity, availability, SLA, reliability, forecast, trend, and report views. It uses real typed APIs, accessible responsive SVG charts, confidence bands, URL-persisted filters, explicit loading/empty/error states, and safe JSON/CSV/print exports. No anomaly detection, AI, recommendations, or external BI integration was added.
+
 ## Epic 6C complete
 
 Explainable capacity forecasting is implemented at `2.0.0-dev` over persisted aggregates using linear regression, moving average, weighted moving average, simple exponential smoothing, and growth-percentage projection. Forecasts store deterministic bounds, growth, trend, confidence inputs, risk, assumptions, and actual-versus-projected evaluation. No AI, machine learning, anomaly detection, alerts, remediation, executive dashboard, or external forecasting service is included.

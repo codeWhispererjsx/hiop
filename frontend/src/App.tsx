@@ -28,6 +28,7 @@ const ImportWizardPage = lazy(() => import("./pages/ImportWizardPage"));
 const ActiveDirectoryPage = lazy(() => import("./pages/ActiveDirectoryPage"));
 const SNMPPage = lazy(() => import("./pages/SNMPPage"));
 const TopologyPage = lazy(() => import("./pages/TopologyPage"));
+const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -59,6 +60,7 @@ export default function App() {
     <Route path="/active-directory/*" element={protectedPage(<ActiveDirectoryPage />)} />
     <Route path="/snmp/*" element={protectedPage(<SNMPPage />)} />
     <Route path="/topology/*" element={protectedPage(<TopologyPage />)} />
+    <Route path="/analytics/*" element={protectedPage(<AnalyticsPage />)} />
     <Route path="/alerts" element={protectedPage(<AlertsPage />)} />
     <Route path="/tickets" element={protectedPage(<TicketsPage />)} />
     <Route path="/tickets/new" element={protectedPage(<TicketFormPage mode="create" />)} />

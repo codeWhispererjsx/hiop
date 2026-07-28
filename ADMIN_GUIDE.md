@@ -470,4 +470,6 @@ Open **Network Topology → Settings** for the selected topology. Enable only th
 
 ## Analytics foundation administration
 
+The `/analytics` workspace is read-only visualization over existing analytics APIs. Confirm scheduled jobs and source coverage before interpreting empty or stale charts. Scope selectors the backend cannot enforce are disabled. Trends use bounded server-side comparisons, while Reports provides authenticated JSON, formula-safe CSV, and browser print/PDF. Technicians may inspect analytics; configuration and operational mutations remain administrator-only and backend-enforced.
+
 Analytics configuration is API-only in Epic 6A. Create metric definitions only for documented fixed source mappings. Health weights normalize safely, but thresholds must descend from excellent to degraded. Capacity policies and SLA definitions are disabled by default. Begin manual work with a bounded dry run, inspect its safe summary, then explicitly request persistence. No analytics scheduler or recommendation engine exists.
