@@ -15,3 +15,9 @@ stages without contacting devices. Host keys remain pending until an administrat
 trusts them; unknown or changed keys must never be silently accepted. Real SSH,
 HTTPS, SCP, and SFTP collectors require a separately approved implementation and
 lab verification.
+
+Epic 2C adds comparison and drift metadata with bounded, checksum-first APIs and
+explicit baseline promotion. Scheduled jobs and live collection remain disabled
+until a production-approved collector and scheduler integration are available.
+Encrypted configuration content is never returned by comparison list endpoints;
+identical checksums are reported as unchanged.
