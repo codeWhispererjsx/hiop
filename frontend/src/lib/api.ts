@@ -77,6 +77,9 @@ async function download(path: string) {
 export const endpoints = {
   login: (email: string, password: string) => api<{access_token:string}>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => api<import("./types").User>("/auth/me"),
+  buildings: (query = "") => api<{items:import("./types").Building[];total:number}>(`/buildings${query}`),
+  floors: (query = "") => api<{items:import("./types").Floor[];total:number}>(`/floors${query}`),
+  zones: (query = "") => api<{items:import("./types").Zone[];total:number}>(`/zones${query}`),
   organizations: (query = "") => api<{items:import("./types").Organization[];total:number;page:number;page_size:number}>(`/organizations${query}`),
   properties: (query = "") => api<{items:import("./types").Property[];total:number;page:number;page_size:number}>(`/properties${query}`),
   createOrganization: (body: unknown) => api<import("./types").Organization>("/organizations", {method:"POST", body:JSON.stringify(body)}),

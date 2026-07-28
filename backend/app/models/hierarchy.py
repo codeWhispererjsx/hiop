@@ -47,21 +47,41 @@ class Organization(Base):
 class Building(NamedEntity, Base):
     __tablename__ = "buildings"
     property_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="RESTRICT"), index=True)
+    code: Mapped[str | None] = mapped_column(String(40), index=True)
+    description: Mapped[str | None] = mapped_column(String(255))
+    number_of_floors: Mapped[int | None] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="active", server_default="active", nullable=False)
 
 
 class Floor(NamedEntity, Base):
     __tablename__ = "floors"
     building_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("buildings.id", ondelete="RESTRICT"), index=True)
+    floor_number: Mapped[int | None] = mapped_column(Integer)
+    display_name: Mapped[str | None] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(String(255))
+    zone_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="active", server_default="active", nullable=False)
+
+
+class Zone(NamedEntity, Base):
+    __tablename__ = "zones"
+    floor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("floors.id", ondelete="RESTRICT"), index=True)
+    code: Mapped[str | None] = mapped_column(String(40), index=True)
+    type: Mapped[str] = mapped_column(String(40), default="unknown", server_default="unknown", nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(20), default="active", server_default="active", nullable=False)
 
 
 class Room(NamedEntity, Base):
     __tablename__ = "rooms"
     floor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("floors.id", ondelete="RESTRICT"), index=True)
+    zone_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("zones.id", ondelete="SET NULL"), index=True)
 
 
 class Department(NamedEntity, Base):
     __tablename__ = "departments"
     property_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="RESTRICT"), index=True)
+    zone_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("zones.id", ondelete="SET NULL"), index=True)
 
 
 class NetworkZone(NamedEntity, Base):
@@ -71,7 +91,7 @@ class NetworkZone(NamedEntity, Base):
     vlan_id: Mapped[int | None] = mapped_column(Integer)
 
 
-for entity in (Property, Building, Floor, Room, Department, NetworkZone):
+for entity in (Property, Building, Floor, Zone, Room, Department, NetworkZone):
     Index(f"uq_{entity.__tablename__}_name_lower", func.lower(entity.name), unique=True)
 
 Index("uq_network_zones_cidr", NetworkZone.cidr, unique=True, postgresql_where=NetworkZone.cidr.is_not(None))
