@@ -10,6 +10,8 @@ class IncidentWrite(BaseModel): property_id:UUID; title:str; description:str|Non
 class TaskWrite(BaseModel): title:str; assigned_user_id:str|None=None
 class TimelineWrite(BaseModel): entry_type:str="note"; title:str; summary:str|None=None
 class ParticipantWrite(BaseModel): user_id:str; participant_role:str="responder"
+class SourceWrite(BaseModel): source_type:str; source_entity_id:UUID|None=None; relationship_type:str="related"
+class TaskStatusWrite(BaseModel): status:str; output_summary:str|None=None
 @router.get("")
 def list_incidents(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(OperationalIncident).order_by(OperationalIncident.created_at.desc()).limit(100).all()}
 @router.post("",status_code=201)
@@ -42,3 +44,15 @@ def add_participant(incident_id:UUID,p:ParticipantWrite,db:Session=Depends(get_d
     row=IncidentParticipant(incident_id=incident_id,**p.model_dump());db.add(row);db.commit();db.refresh(row);return row
 @router.get("/{incident_id}/participants")
 def participants(incident_id:UUID,db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(IncidentParticipant).filter_by(incident_id=incident_id,active=True).limit(100).all()}
+@router.post("/{incident_id}/sources",status_code=201)
+def add_source(incident_id:UUID,p:SourceWrite,db:Session=Depends(get_db),user=Depends(admin)):
+    if not db.get(OperationalIncident,incident_id): raise HTTPException(404,"Incident not found")
+    row=OperationalIncidentSource(incident_id=incident_id,**p.model_dump());db.add(row);db.commit();db.refresh(row);return row
+@router.get("/{incident_id}/sources")
+def sources(incident_id:UUID,db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(OperationalIncidentSource).filter_by(incident_id=incident_id).limit(100).all()}
+@router.patch("/{incident_id}/tasks/{task_id}")
+def update_task(incident_id:UUID,task_id:UUID,p:TaskStatusWrite,db:Session=Depends(get_db),user=Depends(admin)):
+    row=db.query(IncidentTask).filter_by(id=task_id,incident_id=incident_id).first()
+    if not row: raise HTTPException(404,"Task not found")
+    if p.status not in {"open","in_progress","blocked","completed","cancelled"}: raise HTTPException(422,"Invalid task status")
+    row.status=p.status;row.output_summary=p.output_summary;db.commit();db.refresh(row);return row
