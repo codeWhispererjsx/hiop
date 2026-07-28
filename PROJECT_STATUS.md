@@ -24,6 +24,8 @@ Epic 3A adds the approval-safe automation workflow foundation, action registry, 
 
 Epic 3B adds internal event records, trigger subscriptions, workflow schedule metadata, and replay-safe trigger execution records via migration `d0e1f2a3b4c5`.
 
+Epic 3C adds property-scoped incident records, controlled status transitions, incident tasks, and append-only timelines via migration `e1f2a3b4c5d6`.
+
 ## Epic 6E release candidate
 
 HIOP v2 is prepared as `2.0.0-rc1` with deterministic aggregate-based anomaly detection, explainable evidence, controlled anomaly lifecycle, bounded event correlation, probable shared-scope insights, scheduler registration, migration `e7f8a9b0c1d2`, and release/pilot documentation. Production acceptance remains conditional on deployment-specific security, backup/restore, monitoring, and approved pilot verification. No final v2.0.0 tag is created.

@@ -31,6 +31,9 @@
 ## 3.0.0-dev — Internal automation triggers
 - Added allowlisted internal events, trigger subscriptions, schedule metadata, and deduplication records.
 
+## 3.0.0-dev — Incident management foundation
+- Added property-scoped incidents, controlled lifecycle transitions, tasks, and incident timelines.
+
 ## 3.0.0-dev — Hospitality foundation
 
 - Rebranded HIOP as Hospitality IT Operations Platform while preserving the acronym, repository, database, environment prefixes, and existing API routes.

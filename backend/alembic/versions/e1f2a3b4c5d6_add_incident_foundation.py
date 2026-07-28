@@ -1,0 +1,14 @@
+"""add operational incident foundation"""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+revision="e1f2a3b4c5d6"; down_revision="d0e1f2a3b4c5"; branch_labels=None; depends_on=None
+def upgrade():
+ u=postgresql.UUID(as_uuid=True)
+ op.create_table("operational_incidents",sa.Column("id",u,primary_key=True),sa.Column("property_id",u,sa.ForeignKey("properties.id"),nullable=False),sa.Column("incident_number",sa.String(40),unique=True),sa.Column("title",sa.String(180)),sa.Column("description",sa.Text()),sa.Column("incident_type",sa.String(50)),sa.Column("status",sa.String(20)),sa.Column("severity",sa.String(20)),sa.Column("priority",sa.String(4)),sa.Column("guest_impact_level",sa.String(20)),sa.Column("revenue_impact_level",sa.String(20)),sa.Column("incident_commander_id",sa.String()),sa.Column("created_by",sa.String()),sa.Column("detected_at",sa.DateTime(timezone=True),server_default=sa.func.now()),sa.Column("created_at",sa.DateTime(timezone=True),server_default=sa.func.now()));op.create_index("ix_incident_status","operational_incidents",["status"]);op.create_index("ix_incident_severity","operational_incidents",["severity"])
+ op.create_table("operational_incident_sources",sa.Column("id",u,primary_key=True),sa.Column("incident_id",u,sa.ForeignKey("operational_incidents.id",ondelete="CASCADE")),sa.Column("source_type",sa.String(40)),sa.Column("source_entity_id",u),sa.Column("relationship_type",sa.String(30)))
+ op.create_table("incident_participants",sa.Column("id",u,primary_key=True),sa.Column("incident_id",u,sa.ForeignKey("operational_incidents.id",ondelete="CASCADE")),sa.Column("user_id",sa.String()),sa.Column("participant_role",sa.String(30)),sa.Column("active",sa.Boolean(),server_default=sa.text("true")))
+ op.create_table("incident_tasks",sa.Column("id",u,primary_key=True),sa.Column("incident_id",u,sa.ForeignKey("operational_incidents.id",ondelete="CASCADE")),sa.Column("title",sa.String(180)),sa.Column("status",sa.String(20)),sa.Column("assigned_user_id",sa.String()),sa.Column("due_at",sa.DateTime(timezone=True)),sa.Column("output_summary",sa.Text()))
+ op.create_table("incident_timeline_entries",sa.Column("id",u,primary_key=True),sa.Column("incident_id",u,sa.ForeignKey("operational_incidents.id",ondelete="CASCADE")),sa.Column("entry_type",sa.String(30)),sa.Column("title",sa.String(180)),sa.Column("summary",sa.Text()),sa.Column("actor_user_id",sa.String()),sa.Column("occurred_at",sa.DateTime(timezone=True),server_default=sa.func.now()))
+def downgrade():
+ op.drop_table("incident_timeline_entries");op.drop_table("incident_tasks");op.drop_table("incident_participants");op.drop_table("operational_incident_sources");op.drop_index("ix_incident_severity",table_name="operational_incidents");op.drop_index("ix_incident_status",table_name="operational_incidents");op.drop_table("operational_incidents")
