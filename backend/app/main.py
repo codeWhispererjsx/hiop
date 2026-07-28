@@ -28,6 +28,7 @@ from app.operations.routes import router as operations_router
 from app.hierarchy.routes import router as hierarchy_router
 from app.api.v1.hospitality import router as hospitality_router
 from app.api.v1.physical import router as physical_router
+from app.api.v1.context import router as context_router
 from app.discovery.routes import router as discovery_router
 from app.imports.routes import router as imports_router
 from app.users.routes import router as users_router
@@ -177,6 +178,7 @@ app.include_router(operations_router, prefix=settings.api_prefix)
 app.include_router(hierarchy_router, prefix=settings.api_prefix)
 app.include_router(hospitality_router, prefix=settings.api_prefix)
 app.include_router(physical_router, prefix=settings.api_prefix)
+app.include_router(context_router, prefix=settings.api_prefix)
 app.include_router(discovery_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)
 

@@ -6,6 +6,8 @@ The product is rebranded as Hospitality IT Operations Platform. Additive Organiz
 
 Epic 1B adds the physical infrastructure hierarchy (buildings, floors, and zones) with migration `a1b2c3d4e5f6`, secured CRUD APIs, and a responsive property explorer.
 
+Epic 1C adds active property context, property access assignments, backend context resolution, and automatic frontend context headers via migration `b2c3d4e5f6a7`.
+
 ## Epic 6E release candidate
 
 HIOP v2 is prepared as `2.0.0-rc1` with deterministic aggregate-based anomaly detection, explainable evidence, controlled anomaly lifecycle, bounded event correlation, probable shared-scope insights, scheduler registration, migration `e7f8a9b0c1d2`, and release/pilot documentation. Production acceptance remains conditional on deployment-specific security, backup/restore, monitoring, and approved pilot verification. No final v2.0.0 tag is created.

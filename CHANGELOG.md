@@ -4,6 +4,9 @@
 
 - Added property-aware buildings, floors, zones, hierarchy APIs, and management pages.
 
+## 3.0.0-dev — Property context
+- Added authorized property context resolution and user-property access assignments.
+
 ## 3.0.0-dev — Hospitality foundation
 
 - Rebranded HIOP as Hospitality IT Operations Platform while preserving the acronym, repository, database, environment prefixes, and existing API routes.

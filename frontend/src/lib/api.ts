@@ -36,6 +36,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 async function performRequest<T>(path: string, init: RequestInit, token: string | null): Promise<T> {
   const headers = new Headers(init.headers);
+  const activeProperty = window.localStorage.getItem("hiop.active_property_id");
+  if (activeProperty && !headers.has("X-HIOP-Property-ID")) headers.set("X-HIOP-Property-ID", activeProperty);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   let response: Response;
@@ -77,6 +79,8 @@ async function download(path: string) {
 export const endpoints = {
   login: (email: string, password: string) => api<{access_token:string}>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => api<import("./types").User>("/auth/me"),
+  context: () => api<unknown>("/context"),
+  selectProperty: (property_id:string) => api<unknown>("/context/property", {method:"POST",body:JSON.stringify({property_id})}),
   buildings: (query = "") => api<{items:import("./types").Building[];total:number}>(`/buildings${query}`),
   floors: (query = "") => api<{items:import("./types").Floor[];total:number}>(`/floors${query}`),
   zones: (query = "") => api<{items:import("./types").Zone[];total:number}>(`/zones${query}`),
