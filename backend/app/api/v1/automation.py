@@ -9,6 +9,7 @@ from app.services.automation_validation_service import validate_graph
 router=APIRouter(prefix="/automation",tags=["Automation"]); reader=require_roles(["admin","technician","viewer"]); admin=require_roles(["admin"])
 class WorkflowWrite(BaseModel): property_id:UUID|None=None; name:str; code:str; workflow_category:str="custom"
 class VersionWrite(BaseModel): trigger_definition:dict=Field(default_factory=dict); workflow_graph:dict=Field(default_factory=dict)
+class RunWrite(BaseModel): idempotency_key:str|None=None; dry_run:bool=True
 @router.get("/workflows")
 def workflows(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(AutomationWorkflow).order_by(AutomationWorkflow.name).limit(100).all()}
 @router.post("/workflows",status_code=201)
@@ -63,3 +64,15 @@ def dry_run(workflow_id:UUID,db:Session=Depends(get_db),_=Depends(admin)):
     db.add(row);db.commit();db.refresh(row);return row
 @router.get("/runs")
 def runs(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(AutomationWorkflowRun).order_by(AutomationWorkflowRun.created_at.desc()).limit(100).all()}
+@router.post("/workflows/{workflow_id}/run",status_code=202)
+def run_workflow(workflow_id:UUID,p:RunWrite,db:Session=Depends(get_db),user=Depends(admin)):
+    workflow=db.get(AutomationWorkflow,workflow_id)
+    if not workflow: raise HTTPException(404,"Workflow not found")
+    version=db.get(AutomationWorkflowVersion,workflow.current_version_id) if workflow.current_version_id else None
+    if not version or version.status!="approved": raise HTTPException(409,"No approved workflow version")
+    if not p.dry_run: raise HTTPException(409,"Live workflow execution requires an approved action handler")
+    if p.idempotency_key:
+        existing=db.query(AutomationWorkflowRun).filter_by(idempotency_key=p.idempotency_key).first()
+        if existing: return {"run_id":existing.id,"status":existing.status,"replayed":True}
+    row=AutomationWorkflowRun(property_id=workflow.property_id,workflow_id=workflow.id,workflow_version_id=version.id,status="completed",trigger_type="manual",triggered_by=user.username,idempotency_key=p.idempotency_key,error_summary="Dry run completed; no side effects executed")
+    db.add(row);db.commit();db.refresh(row);return {"run_id":row.id,"status":row.status,"dry_run":True,"replayed":False}
