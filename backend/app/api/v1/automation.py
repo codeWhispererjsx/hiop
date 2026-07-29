@@ -1,15 +1,39 @@
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel,Field
+import hashlib,json
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.models.automation import AutomationWorkflow,AutomationWorkflowVersion,AutomationAction,AutomationDryRun,AutomationWorkflowRun
 router=APIRouter(prefix="/automation",tags=["Automation"]); reader=require_roles(["admin","technician","viewer"]); admin=require_roles(["admin"])
 class WorkflowWrite(BaseModel): property_id:UUID|None=None; name:str; code:str; workflow_category:str="custom"
+class VersionWrite(BaseModel): trigger_definition:dict=Field(default_factory=dict); workflow_graph:dict=Field(default_factory=dict)
 @router.get("/workflows")
 def workflows(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(AutomationWorkflow).order_by(AutomationWorkflow.name).limit(100).all()}
 @router.post("/workflows",status_code=201)
 def create_workflow(p:WorkflowWrite,db:Session=Depends(get_db),user=Depends(admin)): row=AutomationWorkflow(**p.model_dump(),created_by=user.username);db.add(row);db.commit();db.refresh(row);return row
+@router.get("/workflows/{workflow_id}/versions")
+def versions(workflow_id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
+    if not db.get(AutomationWorkflow,workflow_id): raise HTTPException(404,"Workflow not found")
+    return {"items":db.query(AutomationWorkflowVersion).filter_by(workflow_id=workflow_id).order_by(AutomationWorkflowVersion.version_number.desc()).limit(100).all()}
+@router.post("/workflows/{workflow_id}/versions",status_code=201)
+def create_version(workflow_id:UUID,p:VersionWrite,db:Session=Depends(get_db),user=Depends(admin)):
+    workflow=db.get(AutomationWorkflow,workflow_id)
+    if not workflow: raise HTTPException(404,"Workflow not found")
+    number=(db.query(AutomationWorkflowVersion).filter_by(workflow_id=workflow_id).count()+1)
+    graph=json.dumps(p.workflow_graph,separators=(",",":"),sort_keys=True); trigger=json.dumps(p.trigger_definition,separators=(",",":"),sort_keys=True)
+    if len(graph)>100000 or len(trigger)>20000: raise HTTPException(422,"Workflow definition exceeds safe size limits")
+    checksum=hashlib.sha256((trigger+"\n"+graph).encode()).hexdigest()
+    row=AutomationWorkflowVersion(workflow_id=workflow_id,version_number=number,trigger_definition=trigger,workflow_graph=graph,checksum=checksum,created_by=user.username)
+    db.add(row);db.commit();db.refresh(row);return row
+@router.post("/workflow-versions/{version_id}/approve")
+def approve_version(version_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    row=db.get(AutomationWorkflowVersion,version_id)
+    if not row: raise HTTPException(404,"Workflow version not found")
+    if row.status not in {"draft","rejected"}: raise HTTPException(409,"Only draft or rejected versions can be approved")
+    workflow=db.get(AutomationWorkflow,row.workflow_id)
+    if workflow.requires_approval and row.created_by==user.username: raise HTTPException(409,"Requester cannot approve their own version")
+    row.status="approved";row.approved_by=user.username;workflow.current_version_id=row.id;workflow.status="approved";db.commit();db.refresh(row);return row
 @router.get("/actions")
 def actions(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(AutomationAction).filter_by(enabled=True).all()}
 @router.post("/workflows/{workflow_id}/dry-run")
