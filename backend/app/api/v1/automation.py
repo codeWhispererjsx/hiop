@@ -46,6 +46,26 @@ def approve_version(version_id:UUID,db:Session=Depends(get_db),user=Depends(admi
     workflow=db.get(AutomationWorkflow,row.workflow_id)
     if workflow.requires_approval and row.created_by==user.username: raise HTTPException(409,"Requester cannot approve their own version")
     row.status="approved";row.approved_by=user.username;workflow.current_version_id=row.id;workflow.status="approved";db.commit();db.refresh(row);return row
+@router.post("/workflow-versions/{version_id}/reject")
+def reject_version(version_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    row=db.get(AutomationWorkflowVersion,version_id)
+    if not row: raise HTTPException(404,"Workflow version not found")
+    if row.status not in {"draft","approved"}: raise HTTPException(409,"Version cannot be rejected in its current state")
+    row.status="rejected";row.approved_by=None;db.commit();return {"status":row.status}
+@router.post("/workflows/{workflow_id}/enable")
+def enable_workflow(workflow_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    workflow=db.get(AutomationWorkflow,workflow_id)
+    if not workflow: raise HTTPException(404,"Workflow not found")
+    version=db.get(AutomationWorkflowVersion,workflow.current_version_id) if workflow.current_version_id else None
+    if not version or version.status!="approved": raise HTTPException(409,"An approved version is required")
+    errors=validate_graph(json.loads(version.workflow_graph or "{}"),{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()})
+    if errors: raise HTTPException(409,{"message":"Workflow is no longer valid","errors":errors})
+    workflow.enabled=True;workflow.status="enabled";db.commit();return {"enabled":True,"status":workflow.status}
+@router.post("/workflows/{workflow_id}/disable")
+def disable_workflow(workflow_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    workflow=db.get(AutomationWorkflow,workflow_id)
+    if not workflow: raise HTTPException(404,"Workflow not found")
+    workflow.enabled=False;workflow.status="disabled";db.commit();return {"enabled":False,"status":workflow.status}
 @router.get("/actions")
 def actions(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(AutomationAction).filter_by(enabled=True).all()}
 @router.post("/workflows/{workflow_id}/dry-run")
