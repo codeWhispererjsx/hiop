@@ -1,46 +1,61 @@
 # Automation engine
 
-Epic 3A provides property-scoped workflow definitions, immutable version
-metadata, an approved action catalogue, structured condition evaluation, dry-run
-records, and manual-run lifecycle storage. Workflow definitions contain bounded
-structured data only: no `eval`, executable plugins, shell commands, arbitrary
-URLs, or dynamic module imports are supported.
+Epic 3A provides property-scoped workflow definitions, immutable versions, an
+approved action catalogue, bounded structured conditions, deterministic
+step/dependency plans, dry runs, approvals, and persisted execution lifecycle.
+Definitions contain structured data only: no `eval`, executable plugins, shell
+commands, arbitrary URLs, SQL, or dynamic module imports are supported.
 
-Automatic schedules, event triggers, autonomous remediation, and infrastructure
-changes remain constrained. The dry-run API validates graph structure, action
-references, and bounded execution paths. Approved live runs execute only explicit
-in-process safe handlers (`noop` and `record_event`); unknown handlers, shell
-commands, arbitrary code, and unapproved external side effects are rejected.
+Approved live runs execute only fixed in-process safe handlers (`noop` and
+`record_event`). Unknown handlers, arbitrary code, and unapproved external side
+effects are rejected. Versions use canonical JSON checksums, separate approval
+when required, explicit enable/disable controls, idempotent runs, bounded retry
+and timeout handling, verification summaries, cancellation, and fixed
+compensation handlers.
 
-Workflow versions use canonical JSON checksums, separate approval when required,
-explicit enable/disable controls, idempotent manual runs, run detail/cancellation,
-and summarized audit records. Scheduled and event-triggered orchestration remains
-the responsibility of Epic 3B.
+## Scheduled and internal-event orchestration
 
-Epic 3B adds an internal-event and schedule foundation. Events are restricted to
-an allowlisted catalogue with bounded safe payloads and property scope. Trigger
-subscriptions store cooldown and deduplication controls. Schedules are disabled
-by default and reference exact workflow versions; external webhooks, broker
-consumers, and autonomous workflow execution remain disabled.
+Epic 3B's core implements scheduled and trusted internal-event orchestration on the same
+approved, version-pinned execution engine. Events are restricted to a fixed
+catalogue with bounded, secret-rejecting payloads and property scope. Trigger
+subscriptions support allowlisted structured filters, conditions, safe input
+mapping, correlation/deduplication windows, cooldowns, per-window run limits,
+bounded delays, approval gates, and maintenance/blackout behavior. External
+webhooks and arbitrary event types are not exposed.
 
-## Execution lifecycle
+Schedules support bounded recurring intervals and one-time execution. They are
+disabled by default, pin an exact approved workflow version, use deterministic
+APScheduler job IDs, prevent overlapping runs, and honor maximum-run,
+maintenance, blackout, and approval policies. Startup reconciliation creates,
+updates, or removes jobs from persisted state without duplication. Stale
+pending/running runs are recovered as failed, and shutdown uses the shared
+scheduler lifecycle.
 
-Administrators create a draft workflow and immutable version, add bounded steps
-and same-version dependencies, validate the graph, obtain a separate approval
-where required, and explicitly enable it. Execution plans use deterministic
-topological ordering and reject cycles, self-dependencies, unknown steps, disabled
-dependencies, excessive graph sizes, and unknown handlers.
+## Event safeguards
 
-Manual runs support dry-run simulation, idempotency keys, stored step runs,
-bounded retries, per-step timeouts, cancellation, approval checkpoints,
-verification summaries, and fixed compensation handlers. A requester cannot
-approve their own version or execution checkpoint. WebSocket events contain IDs,
-states, and counts rather than workflow inputs or outputs. Email notifications
-respect the existing notification settings.
+The internal catalogue includes controlled alert, ticket, device, Discovery,
+directory, SNMP, topology, analytics, hospitality-service, configuration,
+compliance, and maintenance events. The authenticated Admin event endpoint is an
+internal integration and testing surface, not a public webhook. Replay-safe
+event IDs, SHA-256 deduplication keys, correlation windows, cooldowns, and storm
+limits prevent repeated execution.
 
-## Frontend
+Failed filters, inactive workflows, maintenance windows, blackouts, and run
+limits produce stored suppression reasons. Delayed executions use bounded
+one-time jobs. Approval-required triggers and schedules create waiting runs and
+human approval requests rather than executing automatically. Approved runs then
+use the same retry, timeout, verification, cancellation, and compensation
+processing as manual runs.
 
-The protected `/automation` workspace lists property-visible workflows, immutable
-versions, recent runs, and pending approvals, and provides a safe workflow-creation
-foundation backed by the typed API client. It does not expose arbitrary action
-code, scripts, URLs, SQL, credentials, or raw executable expressions.
+## Frontend and operations
+
+The protected `/automation` workspace lists property-visible workflows,
+versions, runs, pending approvals, subscriptions, schedules, and scheduler
+health. Admins can create disabled-by-default schedules and approval-gated
+triggers through the typed client. Readers receive property-scoped records.
+WebSocket payloads contain identifiers, state, and counts instead of workflow
+inputs or outputs; grouped notifications use existing notification settings.
+
+The UI never accepts arbitrary action code, scripts, URLs, SQL, credentials,
+raw executable expressions, public webhook URLs, or unreviewed destructive
+actions.

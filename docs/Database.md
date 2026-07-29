@@ -9,6 +9,15 @@ Unique workflow/step keys and a database self-dependency constraint reinforce th
 service-level cycle and ownership validation. Migration `f3a4b5c6d7e9` seeds
 only the two fixed safe handlers (`noop` and `record_event`).
 
+## Epic 3B automation orchestration
+
+Migration `f4b5c6d7e8f9` expands the additive automation event, trigger, and
+schedule tables with structured filter/condition/input-mapping storage,
+correlation and storm controls, delay and approval policies, maintenance and
+blackout windows, safe event metadata, processing timestamps, and schedule run
+status. Trigger execution rows preserve deduplication and suppression history.
+No existing workflow, version, or run records are rewritten.
+
 ## Epic 6B analytics persistence
 
 Migration `c8e6b4d2a701` adds schedule configuration, processing checkpoints, retention policies, and run progress/checkpoint fields without changing operational source records.

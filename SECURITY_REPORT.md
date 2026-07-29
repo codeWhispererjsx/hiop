@@ -129,3 +129,14 @@ Analytics reuses operational records without copying secrets or raw payloads. So
 ## Epic 6E acceptance security review
 
 Baselines and anomaly rules accept controlled enum methods and bounded numeric settings only; no executable formulas, SQL, raw protocol payloads, or secrets are accepted. Evidence and correlation windows are bounded, probable-cause wording is fixed, lifecycle actions are role protected, and scheduler jobs are disabled by default. `pip check` passed. `npm audit --omit=dev` reports two high React Router advisories with no available fix; the application is a client-side SPA without React Server Components, but the dependency remains a release risk requiring upstream monitoring or an approved replacement before production expansion. This is not a formal penetration test.
+
+## Epic 3B automation security review
+
+Events and triggers are authenticated, property-scoped, and limited to a
+code-controlled catalogue. Payloads are size/depth bounded and reject
+credential-like fields. Filters and input mappings use allowlisted fields;
+conditions use the non-executable structured evaluator. Schedules pin exact
+approved versions, default disabled, prevent overlap, and honor approval,
+maintenance, blackout, deduplication, cooldown, and storm controls. There are no
+external webhooks, arbitrary cron strings, shell commands, dynamic code, or
+user-defined network actions. This is not a penetration test.

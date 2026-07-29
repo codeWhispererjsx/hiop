@@ -91,6 +91,14 @@ advanced on-call escalation remain out of scope.
 - Current tickets do not store a dedicated resolved timestamp, so reliable ticket-based MTTR requires future schema evidence.
 - Availability correctly preserves unknown time, but source precedence depends on the histories available for each entity.
 - Production-scale analytics query plans remain unverified without an approved synthetic benchmark dataset.
+## Epic 3B automation
+
+- No release-blocking defect remains in the implemented interval/one-time
+  scheduler and fixed-catalogue internal-trigger workflows.
+- Deferred capabilities are tracked explicitly: transactional outbox/dead-letter
+  queue, multi-event correlation groups, recovery-event cancellation,
+  daily/weekly/monthly calendar recurrence, and scheduled retention cleanup.
+
 ## Release acceptance open items (2026-07-28)
 
 - **RC-001 — Blocker: backup/restore drill not verified.** Execute against a separate safe database and attach checksum/health/key-read evidence.

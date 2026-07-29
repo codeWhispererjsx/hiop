@@ -140,3 +140,13 @@ Before retention cleanup, preview eligible counts, confirm a protected operation
 ## Epic 6A analytics operations
 
 Apply migration `b7d9e2f4a601` and verify the current revision. Analytics runs are manual only, default to dry run, reject duplicate active scopes, enforce time/entity/point limits, and support cooperative cancellation. Monitor run status, safe error summaries, source freshness, data coverage, and calculation validity. Do not interpret unknown intervals as available or stale scores as current. Retention settings are foundations only; no cleanup job is scheduled.
+
+## Epic 3B automation scheduler runbook
+
+Apply migration `f4b5c6d7e8f9`, verify one Alembic head, and confirm
+`GET /api/v1/automation/scheduler-status`. The shared scheduler reconciles
+stable `automation_workflow_<schedule-id>` jobs on startup, removes orphaned or
+disabled jobs, coalesces missed intervals, and limits each schedule to one
+instance. Investigate stored suppression reasons before re-enabling a noisy
+trigger. Reprocessing is Admin-only and remains subject to current approvals and
+run limits. Do not expose the internal event endpoint as an Internet webhook.

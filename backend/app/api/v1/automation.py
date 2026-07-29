@@ -204,11 +204,12 @@ def decide_approval(approval_id:UUID,p:ApprovalDecision,db:Session=Depends(get_d
     row=db.get(AutomationApprovalRequest,approval_id)
     if not row: raise HTTPException(404,"Approval request not found")
     if row.status!="pending" or p.decision not in {"approved","rejected"}: raise HTTPException(409,"Invalid approval decision")
-    run=db.get(AutomationWorkflowRun,row.workflow_run_id);sr=db.get(AutomationStepRun,row.step_run_id)
+    run=db.get(AutomationWorkflowRun,row.workflow_run_id);sr=db.get(AutomationStepRun,row.step_run_id) if row.step_run_id else None
     if row.requested_by==user.username: raise HTTPException(409,"Requester cannot approve their own execution checkpoint")
-    row.status=p.decision;row.reviewed_by=user.username;row.decision_reason=p.reason;sr.status="completed" if p.decision=="approved" else "rejected";sr.completed_at=datetime.now(timezone.utc)
+    row.status=p.decision;row.reviewed_by=user.username;row.decision_reason=p.reason
+    if sr: sr.status="completed" if p.decision=="approved" else "rejected";sr.completed_at=datetime.now(timezone.utc)
     if p.decision=="rejected": run.status="rejected"
-    else: _execute_steps(db,run,db.get(AutomationWorkflowVersion,run.workflow_version_id),start_after=sr.step_id)
+    else: _execute_steps(db,run,db.get(AutomationWorkflowVersion,run.workflow_version_id),start_after=sr.step_id if sr else None)
     create_audit_log(db,user.username,"AUTOMATION_APPROVAL_DECIDED","AutomationApprovalRequest",str(row.id),f"Workflow approval {p.decision}");db.commit();_publish("automation_approval_decided",approval_id=row.id,run_id=run.id,status=row.status);return {"status":row.status,"run_status":run.status}
 @router.post("/runs/{run_id}/retry",status_code=202)
 def retry_run(run_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):

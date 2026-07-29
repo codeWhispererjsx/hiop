@@ -9,6 +9,17 @@ authorized properties for non-administrators. Definitions accept structured,
 bounded JSON only; no endpoint accepts shell commands, executable code, arbitrary
 network requests, or dynamic handler references.
 
+## Epic 3B scheduled and event-triggered automation
+
+`/api/v1/automation/events`, `/triggers`, `/trigger-executions`, `/schedules`,
+and `/scheduler-status` expose property-scoped orchestration state. Admins may
+submit only registered internal event types, manage trigger subscriptions, and
+create/update/delete schedules. Readers see only authorized property records.
+Schedules pin approved workflow versions and support recurring intervals or
+one-time execution. Event payloads are bounded and reject secret-bearing fields;
+no public webhook, arbitrary event, executable expression, or arbitrary network
+action endpoint exists.
+
 ## Epic 6B analytics operations
 
 Under `/api/v1/analytics`, Epic 6B adds schedule read/update and pause/resume, scheduler status, backfill preview/start, run progress/errors/retry, bounded trends and comparison, capacity/SLA/reliability summaries, data quality, and retention preview/confirmed cleanup. Mutations require Admin.

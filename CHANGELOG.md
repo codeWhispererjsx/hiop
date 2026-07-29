@@ -29,8 +29,10 @@
 - Completed approval-safe automation definitions, immutable versions, structured conditions, step dependencies, deterministic plans, safe fixed handlers, dry runs, manual execution, approval checkpoints, retry/cancellation, compensation foundations, audit/live events, grouped notifications, typed frontend APIs, and the Automation workspace.
 - Added additive execution migration `f2a3b4c5d6e7` and fixed safe-action seed migration `f3a4b5c6d7e9`; arbitrary code, shell commands, external webhooks, autonomous remediation, and unreviewed destructive actions remain unavailable.
 
-## 3.0.0-dev — Internal automation triggers
-- Added allowlisted internal events, trigger subscriptions, schedule metadata, and deduplication records.
+## 3.0.0-dev — Scheduled and event-triggered automation
+- Added fixed-catalogue internal events, structured trigger filters/conditions/input mappings, replay protection, correlation-window deduplication, cooldown, storm limits, delayed execution, approval gates, and maintenance/blackout suppression.
+- Added recurring and one-time APScheduler jobs with stable IDs, overlap prevention, startup reconciliation, stale-run recovery, scheduler health, property-scoped APIs, audit/live updates, and Automation workspace controls.
+- Added additive orchestration migration `f4b5c6d7e8f9`; public webhooks, arbitrary event ingestion, arbitrary code, and unreviewed destructive actions remain unavailable.
 
 ## 3.0.0-dev — Incident management foundation
 - Added property-scoped incidents, controlled lifecycle transitions, tasks, and incident timelines.

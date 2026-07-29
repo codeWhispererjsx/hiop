@@ -18,6 +18,8 @@ from app.models.topology import Topology, TopologyNode
 from app.models.topology_inference import TopologyInferenceRun
 from app.models.topology_operations import TopologyOperationalRun, TopologyScheduleConfiguration
 from app.models.analytics import AnalyticsRun, AnalyticsScheduleConfiguration
+from app.models.automation import AutomationApprovalRequest, AutomationWorkflow, AutomationWorkflowRun, AutomationWorkflowVersion
+from app.models.automation_triggers import AutomationEventRecord,AutomationTriggerExecution,AutomationTriggerSubscription,AutomationWorkflowSchedule
 
 
 scheduler = BackgroundScheduler()
@@ -29,6 +31,8 @@ TOPOLOGY_JOB_PREFIX = "topology_"
 TOPOLOGY_CLEANUP_JOB_ID = "topology_retention_cleanup"
 TOPOLOGY_JOB_TYPES = ("collection", "inference", "snapshot", "changes", "health")
 ANALYTICS_JOB_PREFIX = "analytics_"
+AUTOMATION_JOB_PREFIX = "automation_workflow_"
+AUTOMATION_DELAY_JOB_PREFIX = "automation_delayed_"
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -37,6 +41,96 @@ SNMP_GROUPS = {
     "interface_performance": ("performance_poll_enabled", "interface_performance_interval_seconds", "custom_profile"),
     "device_performance": ("performance_poll_enabled", "device_performance_interval_seconds", "custom_profile"),
 }
+
+def automation_job_id(schedule_id: str) -> str:
+    return f"{AUTOMATION_JOB_PREFIX}{schedule_id}"
+
+def remove_automation_job(schedule_id: str) -> bool:
+    job=scheduler.get_job(automation_job_id(schedule_id))
+    if job:scheduler.remove_job(job.id);return True
+    return False
+
+def scheduled_automation_workflow(schedule_id: str) -> None:
+    db=SessionLocal()
+    try:
+        schedule=db.get(AutomationWorkflowSchedule,schedule_id)
+        if not schedule or not schedule.enabled:return
+        now=datetime.now(timezone.utc)
+        if schedule.maximum_runs is not None and schedule.runs_completed>=schedule.maximum_runs:
+            schedule.enabled=False;db.commit();remove_automation_job(schedule_id);return
+        if schedule.blackout_start and schedule.blackout_end and schedule.blackout_start<=now<=schedule.blackout_end:
+            schedule.last_run_at=now;schedule.last_run_status="suppressed_blackout";db.commit();return
+        if schedule.maintenance_behavior=="suppress":
+            from app.services.automation_trigger_service import _maintenance_active
+            if _maintenance_active(db,schedule.property_id):schedule.last_run_at=now;schedule.last_run_status="suppressed_maintenance";db.commit();return
+        workflow=db.get(AutomationWorkflow,schedule.workflow_id);version=db.get(AutomationWorkflowVersion,schedule.workflow_version_id)
+        if not workflow or not workflow.enabled or not version or version.status!="approved":
+            schedule.last_run_at=now;schedule.last_run_status="invalid_configuration";db.commit();return
+        active=db.query(AutomationWorkflowRun).filter(AutomationWorkflowRun.workflow_id==workflow.id,AutomationWorkflowRun.status.in_(("pending","running","waiting_approval"))).first()
+        if active:schedule.last_run_at=now;schedule.last_run_status="overlap_blocked";db.commit();return
+        if schedule.approval_mode=="always_require":
+            created_run=AutomationWorkflowRun(property_id=schedule.property_id,workflow_id=workflow.id,workflow_version_id=version.id,status="waiting_approval",trigger_type="scheduled",triggered_by="scheduler",idempotency_key=f"schedule:{schedule.id}:{now.isoformat()}");db.add(created_run);db.flush();db.add(AutomationApprovalRequest(workflow_run_id=created_run.id,requested_by="scheduler"));result={"status":"waiting_approval"}
+        else:
+            from app.api.v1.automation import RunWrite,run_workflow
+            result=run_workflow(workflow.id,RunWrite(idempotency_key=f"schedule:{schedule.id}:{now.isoformat()}",dry_run=False),db,SimpleNamespace(id=None,username="scheduler",role="admin"))
+            created_run=db.get(AutomationWorkflowRun,result["run_id"]);created_run.trigger_type="scheduled"
+        schedule.runs_completed+=1;schedule.last_run_at=now;schedule.last_run_status=result["status"];db.commit()
+        if schedule.schedule_type=="one_time":schedule.enabled=False;db.commit();remove_automation_job(schedule_id)
+    except Exception:
+        db.rollback();logger.exception("Scheduled automation workflow failed schedule_id=%s",schedule_id)
+    finally:db.close()
+
+def delayed_automation_event(workflow_id: str, event_id: str, subscription_id: str, execution_id: str) -> None:
+    db=SessionLocal()
+    try:
+        workflow=db.get(AutomationWorkflow,workflow_id);subscription=db.get(AutomationTriggerSubscription,subscription_id);execution=db.get(AutomationTriggerExecution,execution_id);event=db.query(AutomationEventRecord).filter_by(event_id=event_id).first()
+        if not workflow or not subscription or not execution or not event or not workflow.enabled or not subscription.enabled:
+            if execution:execution.status="suppressed";execution.suppression_reason="delayed_trigger_invalid";db.commit()
+            return
+        now=datetime.now(timezone.utc)
+        if subscription.blackout_behavior=="suppress" and subscription.blackout_start and subscription.blackout_end and subscription.blackout_start<=now<=subscription.blackout_end:
+            execution.status="suppressed";execution.suppression_reason="blackout_window";db.commit();return
+        if subscription.maintenance_behavior=="suppress":
+            from app.services.automation_trigger_service import _maintenance_active
+            if _maintenance_active(db,subscription.property_id):execution.status="suppressed";execution.suppression_reason="maintenance_window";db.commit();return
+        from app.api.v1.automation import RunWrite,run_workflow
+        result=run_workflow(workflow.id,RunWrite(idempotency_key=f"event:{event_id}:{subscription_id}",dry_run=False),db,SimpleNamespace(id=None,username="automation:delayed",role="admin"))
+        run=db.get(AutomationWorkflowRun,result["run_id"]);run.trigger_type="internal_event";execution.status="triggered";db.commit()
+    except Exception:
+        db.rollback()
+        try:
+            execution=db.get(AutomationTriggerExecution,execution_id)
+            if execution:execution.status="failed";execution.suppression_reason="delayed_execution_failed";db.commit()
+        except Exception:db.rollback()
+        logger.exception("Delayed automation event failed execution_id=%s",execution_id)
+    finally:db.close()
+
+def reconcile_automation_jobs(db) -> dict[str,int]:
+    if not settings.scheduler_enabled:return {"registered":0,"removed":0}
+    if not scheduler.running:scheduler.start()
+    registered=removed=0;expected=set()
+    for row in db.query(AutomationWorkflowSchedule).all():
+        job_id=automation_job_id(str(row.id))
+        workflow=db.get(AutomationWorkflow,row.workflow_id);version=db.get(AutomationWorkflowVersion,row.workflow_version_id)
+        valid=row.enabled and workflow and workflow.enabled and version and version.status=="approved"
+        if not valid:
+            if scheduler.get_job(job_id):scheduler.remove_job(job_id);removed+=1
+            continue
+        expected.add(job_id)
+        common={"id":job_id,"replace_existing":True,"max_instances":1,"coalesce":True,"misfire_grace_time":300}
+        if row.schedule_type=="interval" and row.interval_minutes:
+            scheduler.add_job(scheduled_automation_workflow,"interval",minutes=row.interval_minutes,args=[str(row.id)],**common);registered+=1
+        elif row.schedule_type=="one_time" and row.next_run_at and row.next_run_at>datetime.now(timezone.utc):
+            scheduler.add_job(scheduled_automation_workflow,"date",run_date=row.next_run_at,args=[str(row.id)],**common);registered+=1
+    for job in list(scheduler.get_jobs()):
+        if job.id.startswith(AUTOMATION_JOB_PREFIX) and job.id not in expected:scheduler.remove_job(job.id);removed+=1
+    return {"registered":registered,"removed":removed}
+
+def recover_stale_automation_runs(db,timeout_minutes: int=30) -> int:
+    cutoff=datetime.now(timezone.utc)-timedelta(minutes=timeout_minutes);rows=db.query(AutomationWorkflowRun).filter(AutomationWorkflowRun.trigger_type.in_(("scheduled","internal_event","retry")),AutomationWorkflowRun.status.in_(("pending","running")),AutomationWorkflowRun.created_at<cutoff).all()
+    for row in rows:row.status="failed";row.error_summary="Recovered stale automation run after scheduler startup."
+    if rows:db.commit()
+    return len(rows)
 
 
 def snmp_job_id(target_id: str, group: str) -> str:
@@ -798,6 +892,8 @@ def start_scheduler():
         )
         recover_stale_analytics_runs(db)
         reconcile_analytics_jobs(db)
+        recover_stale_automation_runs(db)
+        reconcile_automation_jobs(db)
     finally:
         db.close()
     logger.info("HIOP scheduler started")

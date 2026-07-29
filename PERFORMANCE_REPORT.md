@@ -99,3 +99,12 @@ Operational-run status/type/time, alert topology/time and open/severity, schedul
 ## Epic 6A analytics performance review
 
 Unique metric/entity/bucket keys support idempotent upsert; metric/entity/time indexes support bounded series and history. Services batch by configured limits, API lists paginate, time series cap points/range, and manual runs cap entities and duplicate scopes. Percentiles operate on bounded bucket samples. No analytics scheduler can create background load. Production-cardinality `EXPLAIN ANALYZE` validation remains pending an approved synthetic dataset.
+
+## Epic 3B automation performance review
+
+Event matching indexes event type and property; event IDs and correlation keys
+are indexed, while history responses are bounded. Scheduler job IDs are
+deterministic, missed intervals coalesce, and `max_instances=1` prevents
+per-schedule overlap. Payload, delay, condition depth/count, run window, and run
+frequency are bounded. Production event-storm load testing remains pending an
+approved synthetic benchmark.
