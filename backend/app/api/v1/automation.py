@@ -5,6 +5,7 @@ import hashlib,json
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.models.automation import AutomationWorkflow,AutomationWorkflowVersion,AutomationAction,AutomationDryRun,AutomationWorkflowRun
+from app.services.automation_validation_service import validate_graph
 router=APIRouter(prefix="/automation",tags=["Automation"]); reader=require_roles(["admin","technician","viewer"]); admin=require_roles(["admin"])
 class WorkflowWrite(BaseModel): property_id:UUID|None=None; name:str; code:str; workflow_category:str="custom"
 class VersionWrite(BaseModel): trigger_definition:dict=Field(default_factory=dict); workflow_graph:dict=Field(default_factory=dict)
@@ -22,10 +23,20 @@ def create_version(workflow_id:UUID,p:VersionWrite,db:Session=Depends(get_db),us
     if not workflow: raise HTTPException(404,"Workflow not found")
     number=(db.query(AutomationWorkflowVersion).filter_by(workflow_id=workflow_id).count()+1)
     graph=json.dumps(p.workflow_graph,separators=(",",":"),sort_keys=True); trigger=json.dumps(p.trigger_definition,separators=(",",":"),sort_keys=True)
+    errors=validate_graph(p.workflow_graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()})
+    if errors: raise HTTPException(422,{"message":"Invalid workflow definition","errors":errors})
     if len(graph)>100000 or len(trigger)>20000: raise HTTPException(422,"Workflow definition exceeds safe size limits")
     checksum=hashlib.sha256((trigger+"\n"+graph).encode()).hexdigest()
     row=AutomationWorkflowVersion(workflow_id=workflow_id,version_number=number,trigger_definition=trigger,workflow_graph=graph,checksum=checksum,created_by=user.username)
     db.add(row);db.commit();db.refresh(row);return row
+@router.post("/workflow-versions/{version_id}/validate")
+def validate_version(version_id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
+    row=db.get(AutomationWorkflowVersion,version_id)
+    if not row: raise HTTPException(404,"Workflow version not found")
+    try: graph=json.loads(row.workflow_graph or "{}")
+    except json.JSONDecodeError: return {"valid":False,"errors":["workflow graph is not valid JSON"]}
+    errors=validate_graph(graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()})
+    return {"valid":not errors,"errors":errors,"checksum":row.checksum}
 @router.post("/workflow-versions/{version_id}/approve")
 def approve_version(version_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
     row=db.get(AutomationWorkflowVersion,version_id)
