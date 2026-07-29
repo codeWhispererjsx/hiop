@@ -20,7 +20,7 @@ Epic 2D adds standards, policies, rules, compliance runs/results, violations, ex
 
 Epic 2E adds reviewed change requests, approval records, change windows, restore plans, and blocked dry-run records via migration `b8c9d0e1f2a3`.
 
-Epic 3A adds the approval-safe automation workflow foundation, action registry, structured condition helper, dry-run records, and workflow run metadata via migration `c9d0e1f2a3b4`.
+Epic 3A is complete with property-aware workflow/version management, immutable approval, bounded structured conditions, safe fixed handlers, deterministic step/dependency planning, dry runs, manual execution, approval checkpoints, retry/cancellation, compensation foundations, audit, summarized live events, grouped notifications, an Automation frontend workspace, execution persistence migration `f2a3b4c5d6e7`, and code-controlled safe-action seed migration `f3a4b5c6d7e9`. Arbitrary code, shell commands, external webhooks, autonomous remediation, and unreviewed destructive actions remain prohibited.
 
 Epic 3B adds internal event records, trigger subscriptions, workflow schedule metadata, and replay-safe trigger execution records via migration `d0e1f2a3b4c5`.
 

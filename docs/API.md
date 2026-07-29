@@ -1,5 +1,14 @@
 # HIOP 1.0.0 API
 
+## Epic 3A automation
+
+`/api/v1/automation` provides role-protected workflow, immutable version, step,
+dependency, execution-plan, dry-run, manual-run, run-step, approval, cancellation,
+and retry APIs. Workflow mutations require Admin. Read access is filtered to
+authorized properties for non-administrators. Definitions accept structured,
+bounded JSON only; no endpoint accepts shell commands, executable code, arbitrary
+network requests, or dynamic handler references.
+
 ## Epic 6B analytics operations
 
 Under `/api/v1/analytics`, Epic 6B adds schedule read/update and pause/resume, scheduler status, backfill preview/start, run progress/errors/retry, bounded trends and comparison, capacity/SLA/reliability summaries, data quality, and retention preview/confirmed cleanup. Mutations require Admin.

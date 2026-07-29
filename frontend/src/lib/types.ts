@@ -9,7 +9,7 @@ export type Ticket = { id: string; device_id: string | null; title: string; desc
 export type TicketInput = { title: string; description: string; priority: "Low" | "Medium" | "High"; device_id?: string | null };
 export type Scan = { id: string; device_id: string; ip_address: string; status: string; response_time: number | null; scanned_at: string };
 export type DashboardData = { devices: { total: number; online: number; offline: number; unknown: number }; tickets: { open: number; in_progress: number; closed: number }; network: { last_scan: string | null } };
-export type LiveEvent = { event: string; device_id?: string; discovery_id?: string; run_id?: string; hostname?: string; ip_address?: string; previous_status?: string; current_status?: string; message?: string };
+export type LiveEvent = { event: string; type?: string; device_id?: string; discovery_id?: string; run_id?: string; hostname?: string; ip_address?: string; previous_status?: string; current_status?: string; message?: string };
 
 export type SNMPPage<T> = {items:T[];total:number;page:number;page_size:number};
 export type SNMPCredential = {id:string;name:string;version:"v1"|"v2c"|"v3";username:string|null;authentication_protocol:string;privacy_protocol:string;security_level:string;context_name:string|null;enabled:boolean;description:string|null;has_community:boolean;has_authentication_secret:boolean;has_privacy_secret:boolean;created_at:string;updated_at:string};
@@ -148,6 +148,11 @@ export type TopologyAlertEvent = {id:string;topology_id:string;rule_id:string;en
 export type TopologyRetentionPreview = {eligible_snapshots:number;eligible_observations:number;eligible_evidence:number;eligible_runs:number;protected_records:number;snapshot_cutoff:string;evidence_cutoff:string;run_cutoff:string;deleted_snapshots?:number;deleted_runs?:number};
 
 export type AnalyticsPage<T> = {items:T[];total:number;page:number;page_size:number};
+export type AutomationWorkflow = {id:string;property_id:string|null;name:string;code:string;workflow_category:string;status:string;enabled:boolean;requires_approval:boolean;current_version_id:string|null;created_by:string;created_at:string};
+export type AutomationVersion = {id:string;workflow_id:string;version_number:number;status:string;checksum:string|null;created_by:string;approved_by:string|null;created_at:string};
+export type AutomationStep = {id:string;workflow_version_id:string;step_key:string;name:string;step_type:string;action_key:string|null;sequence_order:number;timeout_seconds:number;approval_required:boolean;continue_on_failure:boolean;enabled:boolean};
+export type AutomationRun = {id:string;workflow_id:string;workflow_version_id:string;status:string;trigger_type:string;triggered_by:string;created_at:string;error_summary:string|null};
+export type AutomationApproval = {id:string;workflow_run_id:string;step_run_id:string|null;status:string;requested_by:string;reviewed_by:string|null;created_at:string};
 export type AnalyticsMetricDefinition = {id:string;metric_key:string;name:string;description:string|null;entity_type:string;unit:string|null;aggregation_method:string;enabled:boolean};
 export type AnalyticsRun = {id:string;run_type:string;status:string;trigger_type:string;started_at:string;completed_at:string|null;duration_ms:number|null;records_created:number;records_updated:number;errors_count:number};
 export type AnalyticsHealthScore = {id:string;entity_type:string;entity_id:string;score:number;status:string;availability_component:number|null;performance_component:number|null;reliability_component:number|null;alert_component:number|null;capacity_component:number|null;topology_component:number|null;data_quality_component:number|null;contributing_factors:Array<Record<string,unknown>>;calculated_at:string;valid_until:string};

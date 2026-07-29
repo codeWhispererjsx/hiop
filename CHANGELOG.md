@@ -26,7 +26,8 @@
 - Added approval-gated change requests, change windows, restore plans, and safe blocked dry-run records.
 
 ## 3.0.0-dev — Automation foundation
-- Added bounded workflow definitions, approved-action metadata, dry-run records, and workflow run lifecycle storage.
+- Completed approval-safe automation definitions, immutable versions, structured conditions, step dependencies, deterministic plans, safe fixed handlers, dry runs, manual execution, approval checkpoints, retry/cancellation, compensation foundations, audit/live events, grouped notifications, typed frontend APIs, and the Automation workspace.
+- Added additive execution migration `f2a3b4c5d6e7` and fixed safe-action seed migration `f3a4b5c6d7e9`; arbitrary code, shell commands, external webhooks, autonomous remediation, and unreviewed destructive actions remain unavailable.
 
 ## 3.0.0-dev — Internal automation triggers
 - Added allowlisted internal events, trigger subscriptions, schedule metadata, and deduplication records.

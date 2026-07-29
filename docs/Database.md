@@ -1,5 +1,14 @@
 # HIOP 2.0.0-dev database
 
+## Epic 3A automation execution
+
+Migrations `c9d0e1f2a3b4` and `f2a3b4c5d6e7` add workflow definitions and
+versions, the controlled action catalogue, dry runs, workflow runs, immutable
+version steps, same-version dependencies, step runs, and human approval requests.
+Unique workflow/step keys and a database self-dependency constraint reinforce the
+service-level cycle and ownership validation. Migration `f3a4b5c6d7e9` seeds
+only the two fixed safe handlers (`noop` and `record_event`).
+
 ## Epic 6B analytics persistence
 
 Migration `c8e6b4d2a701` adds schedule configuration, processing checkpoints, retention policies, and run progress/checkpoint fields without changing operational source records.
