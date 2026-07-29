@@ -7,6 +7,7 @@ from app.core.security import get_db,require_roles
 from app.models.automation import AutomationWorkflow,AutomationWorkflowVersion,AutomationAction,AutomationDryRun,AutomationWorkflowRun
 from app.services.automation_validation_service import validate_graph
 from app.services.automation_execution_service import execute_graph,SAFE_HANDLERS
+from app.services.audit_service import create_audit_log
 router=APIRouter(prefix="/automation",tags=["Automation"]); reader=require_roles(["admin","technician","viewer"]); admin=require_roles(["admin"])
 class WorkflowWrite(BaseModel): property_id:UUID|None=None; name:str; code:str; workflow_category:str="custom"
 class VersionWrite(BaseModel): trigger_definition:dict=Field(default_factory=dict); workflow_graph:dict=Field(default_factory=dict)
@@ -14,7 +15,7 @@ class RunWrite(BaseModel): idempotency_key:str|None=None; dry_run:bool=True
 @router.get("/workflows")
 def workflows(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(AutomationWorkflow).order_by(AutomationWorkflow.name).limit(100).all()}
 @router.post("/workflows",status_code=201)
-def create_workflow(p:WorkflowWrite,db:Session=Depends(get_db),user=Depends(admin)): row=AutomationWorkflow(**p.model_dump(),created_by=user.username);db.add(row);db.commit();db.refresh(row);return row
+def create_workflow(p:WorkflowWrite,db:Session=Depends(get_db),user=Depends(admin)): row=AutomationWorkflow(**p.model_dump(),created_by=user.username);db.add(row);db.flush();create_audit_log(db,user.username,"AUTOMATION_WORKFLOW_CREATED","AutomationWorkflow",str(row.id),f"Created workflow {row.code}");db.commit();db.refresh(row);return row
 @router.get("/workflows/{workflow_id}/versions")
 def versions(workflow_id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
     if not db.get(AutomationWorkflow,workflow_id): raise HTTPException(404,"Workflow not found")
@@ -46,7 +47,7 @@ def approve_version(version_id:UUID,db:Session=Depends(get_db),user=Depends(admi
     if row.status not in {"draft","rejected"}: raise HTTPException(409,"Only draft or rejected versions can be approved")
     workflow=db.get(AutomationWorkflow,row.workflow_id)
     if workflow.requires_approval and row.created_by==user.username: raise HTTPException(409,"Requester cannot approve their own version")
-    row.status="approved";row.approved_by=user.username;workflow.current_version_id=row.id;workflow.status="approved";db.commit();db.refresh(row);return row
+    row.status="approved";row.approved_by=user.username;workflow.current_version_id=row.id;workflow.status="approved";create_audit_log(db,user.username,"AUTOMATION_VERSION_APPROVED","AutomationWorkflowVersion",str(row.id),"Approved immutable workflow version");db.commit();db.refresh(row);return row
 @router.post("/workflow-versions/{version_id}/reject")
 def reject_version(version_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
     row=db.get(AutomationWorkflowVersion,version_id)
@@ -77,7 +78,7 @@ def dry_run(workflow_id:UUID,db:Session=Depends(get_db),_=Depends(admin)):
     if not version: raise HTTPException(409,"No approved workflow version")
     try: graph=json.loads(version.workflow_graph or "{}")
     except json.JSONDecodeError: raise HTTPException(422,"Workflow graph is invalid JSON")
-    errors=validate_graph(graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()})
+    errors=validate_graph(graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()} | SAFE_HANDLERS)
     actions=[n.get("action_key") for n in graph.get("nodes",[]) if isinstance(n,dict) and n.get("type")=="action"]
     warnings=["Dry run performs no external side effects."]
     if workflow.requires_approval: warnings.append("Workflow requires a separate approved execution request.")
@@ -85,6 +86,17 @@ def dry_run(workflow_id:UUID,db:Session=Depends(get_db),_=Depends(admin)):
     db.add(row);db.commit();db.refresh(row);return row
 @router.get("/runs")
 def runs(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(AutomationWorkflowRun).order_by(AutomationWorkflowRun.created_at.desc()).limit(100).all()}
+@router.get("/runs/{run_id}")
+def run_detail(run_id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
+    row=db.get(AutomationWorkflowRun,run_id)
+    if not row: raise HTTPException(404,"Workflow run not found")
+    return row
+@router.post("/runs/{run_id}/cancel")
+def cancel_run(run_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    row=db.get(AutomationWorkflowRun,run_id)
+    if not row: raise HTTPException(404,"Workflow run not found")
+    if row.status not in {"pending","running","retry_pending"}: raise HTTPException(409,"Only active workflow runs can be cancelled")
+    row.status="cancelled";create_audit_log(db,user.username,"AUTOMATION_RUN_CANCELLED","AutomationWorkflowRun",str(row.id),"Cancelled active workflow run");db.commit();return {"status":row.status}
 @router.post("/workflows/{workflow_id}/run",status_code=202)
 def run_workflow(workflow_id:UUID,p:RunWrite,db:Session=Depends(get_db),user=Depends(admin)):
     workflow=db.get(AutomationWorkflow,workflow_id)
@@ -100,4 +112,4 @@ def run_workflow(workflow_id:UUID,p:RunWrite,db:Session=Depends(get_db),user=Dep
         existing=db.query(AutomationWorkflowRun).filter_by(idempotency_key=p.idempotency_key).first()
         if existing: return {"run_id":existing.id,"status":existing.status,"replayed":True}
     row=AutomationWorkflowRun(property_id=workflow.property_id,workflow_id=workflow.id,workflow_version_id=version.id,status="completed",trigger_type="manual",triggered_by=user.username,idempotency_key=p.idempotency_key,error_summary=json.dumps(result,separators=(",",":")))
-    db.add(row);db.commit();db.refresh(row);return {"run_id":row.id,"status":row.status,"dry_run":p.dry_run,"result":result,"replayed":False}
+    db.add(row);db.flush();create_audit_log(db,user.username,"AUTOMATION_RUN_COMPLETED","AutomationWorkflowRun",str(row.id),f"Completed {'dry' if p.dry_run else 'approved safe'} workflow run");db.commit();db.refresh(row);return {"run_id":row.id,"status":row.status,"dry_run":p.dry_run,"result":result,"replayed":False}
