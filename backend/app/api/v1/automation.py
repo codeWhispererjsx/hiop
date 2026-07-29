@@ -53,6 +53,13 @@ def dry_run(workflow_id:UUID,db:Session=Depends(get_db),_=Depends(admin)):
     if not workflow: raise HTTPException(404,"Workflow not found")
     version=db.query(AutomationWorkflowVersion).filter_by(workflow_id=workflow.id,status="approved").first()
     if not version: raise HTTPException(409,"No approved workflow version")
-    row=AutomationDryRun(workflow_version_id=version.id,property_id=workflow.property_id,execution_path="manual workflow execution is not enabled in this foundation",eligible_for_execution=False);db.add(row);db.commit();db.refresh(row);return row
+    try: graph=json.loads(version.workflow_graph or "{}")
+    except json.JSONDecodeError: raise HTTPException(422,"Workflow graph is invalid JSON")
+    errors=validate_graph(graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()})
+    actions=[n.get("action_key") for n in graph.get("nodes",[]) if isinstance(n,dict) and n.get("type")=="action"]
+    warnings=["Dry run performs no external side effects."]
+    if workflow.requires_approval: warnings.append("Workflow requires a separate approved execution request.")
+    row=AutomationDryRun(workflow_version_id=version.id,property_id=workflow.property_id,status="failed" if errors else "passed",warnings_count=len(errors)+len(warnings),execution_path=json.dumps({"nodes":len(graph.get("nodes",[])),"edges":len(graph.get("edges",[])),"actions":actions,"warnings":warnings,"errors":errors},separators=(",",":")),eligible_for_execution=not errors and not workflow.requires_approval)
+    db.add(row);db.commit();db.refresh(row);return row
 @router.get("/runs")
 def runs(db:Session=Depends(get_db),_=Depends(reader)): return {"items":db.query(AutomationWorkflowRun).order_by(AutomationWorkflowRun.created_at.desc()).limit(100).all()}
