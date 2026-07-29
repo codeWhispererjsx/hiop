@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.models.automation import AutomationWorkflow,AutomationWorkflowVersion,AutomationAction,AutomationDryRun,AutomationWorkflowRun
 from app.services.automation_validation_service import validate_graph
+from app.services.automation_execution_service import execute_graph,SAFE_HANDLERS
 router=APIRouter(prefix="/automation",tags=["Automation"]); reader=require_roles(["admin","technician","viewer"]); admin=require_roles(["admin"])
 class WorkflowWrite(BaseModel): property_id:UUID|None=None; name:str; code:str; workflow_category:str="custom"
 class VersionWrite(BaseModel): trigger_definition:dict=Field(default_factory=dict); workflow_graph:dict=Field(default_factory=dict)
@@ -24,7 +25,7 @@ def create_version(workflow_id:UUID,p:VersionWrite,db:Session=Depends(get_db),us
     if not workflow: raise HTTPException(404,"Workflow not found")
     number=(db.query(AutomationWorkflowVersion).filter_by(workflow_id=workflow_id).count()+1)
     graph=json.dumps(p.workflow_graph,separators=(",",":"),sort_keys=True); trigger=json.dumps(p.trigger_definition,separators=(",",":"),sort_keys=True)
-    errors=validate_graph(p.workflow_graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()})
+    errors=validate_graph(p.workflow_graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()} | SAFE_HANDLERS)
     if errors: raise HTTPException(422,{"message":"Invalid workflow definition","errors":errors})
     if len(graph)>100000 or len(trigger)>20000: raise HTTPException(422,"Workflow definition exceeds safe size limits")
     checksum=hashlib.sha256((trigger+"\n"+graph).encode()).hexdigest()
@@ -36,7 +37,7 @@ def validate_version(version_id:UUID,db:Session=Depends(get_db),_=Depends(reader
     if not row: raise HTTPException(404,"Workflow version not found")
     try: graph=json.loads(row.workflow_graph or "{}")
     except json.JSONDecodeError: return {"valid":False,"errors":["workflow graph is not valid JSON"]}
-    errors=validate_graph(graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()})
+    errors=validate_graph(graph,{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()} | SAFE_HANDLERS)
     return {"valid":not errors,"errors":errors,"checksum":row.checksum}
 @router.post("/workflow-versions/{version_id}/approve")
 def approve_version(version_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
@@ -58,7 +59,7 @@ def enable_workflow(workflow_id:UUID,db:Session=Depends(get_db),user=Depends(adm
     if not workflow: raise HTTPException(404,"Workflow not found")
     version=db.get(AutomationWorkflowVersion,workflow.current_version_id) if workflow.current_version_id else None
     if not version or version.status!="approved": raise HTTPException(409,"An approved version is required")
-    errors=validate_graph(json.loads(version.workflow_graph or "{}"),{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()})
+    errors=validate_graph(json.loads(version.workflow_graph or "{}"),{a.action_key for a in db.query(AutomationAction).filter_by(enabled=True).all()} | SAFE_HANDLERS)
     if errors: raise HTTPException(409,{"message":"Workflow is no longer valid","errors":errors})
     workflow.enabled=True;workflow.status="enabled";db.commit();return {"enabled":True,"status":workflow.status}
 @router.post("/workflows/{workflow_id}/disable")
@@ -90,9 +91,13 @@ def run_workflow(workflow_id:UUID,p:RunWrite,db:Session=Depends(get_db),user=Dep
     if not workflow: raise HTTPException(404,"Workflow not found")
     version=db.get(AutomationWorkflowVersion,workflow.current_version_id) if workflow.current_version_id else None
     if not version or version.status!="approved": raise HTTPException(409,"No approved workflow version")
-    if not p.dry_run: raise HTTPException(409,"Live workflow execution requires an approved action handler")
+    if not p.dry_run:
+        if not workflow.enabled: raise HTTPException(409,"Workflow is disabled")
+        try: result=execute_graph(json.loads(version.workflow_graph or "{}"))
+        except (ValueError,json.JSONDecodeError) as exc: raise HTTPException(409,str(exc))
+    else: result={"executed":[],"side_effects":False}
     if p.idempotency_key:
         existing=db.query(AutomationWorkflowRun).filter_by(idempotency_key=p.idempotency_key).first()
         if existing: return {"run_id":existing.id,"status":existing.status,"replayed":True}
-    row=AutomationWorkflowRun(property_id=workflow.property_id,workflow_id=workflow.id,workflow_version_id=version.id,status="completed",trigger_type="manual",triggered_by=user.username,idempotency_key=p.idempotency_key,error_summary="Dry run completed; no side effects executed")
-    db.add(row);db.commit();db.refresh(row);return {"run_id":row.id,"status":row.status,"dry_run":True,"replayed":False}
+    row=AutomationWorkflowRun(property_id=workflow.property_id,workflow_id=workflow.id,workflow_version_id=version.id,status="completed",trigger_type="manual",triggered_by=user.username,idempotency_key=p.idempotency_key,error_summary=json.dumps(result,separators=(",",":")))
+    db.add(row);db.commit();db.refresh(row);return {"run_id":row.id,"status":row.status,"dry_run":p.dry_run,"result":result,"replayed":False}
