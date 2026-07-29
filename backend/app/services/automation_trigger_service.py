@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from app.models.automation import AutomationApprovalRequest, AutomationWorkflow, AutomationWorkflowRun, AutomationWorkflowVersion
-from app.models.automation_triggers import AutomationEventRecord, AutomationTriggerExecution, AutomationTriggerSubscription
+from app.models.automation_triggers import AutomationEventRecord, AutomationTriggerCorrelationGroup, AutomationTriggerExecution, AutomationTriggerSubscription
 from app.services.workflow_condition_service import evaluate
 from app.websocket.connection_manager import manager
 
@@ -105,6 +105,8 @@ def validate_subscription(payload):
         if invalid: errors.append(f"Filter fields are not allowed: {', '.join(sorted(invalid))}")
     if payload.maximum_runs_per_window<1 or payload.maximum_runs_per_window>100: errors.append("Run limit is outside safe bounds")
     if payload.delay_seconds>3600: errors.append("Delay exceeds safe limit")
+    if payload.correlation_threshold<1 or payload.correlation_threshold>payload.maximum_correlation_members or payload.maximum_correlation_members>500:errors.append("Correlation limits are invalid")
+    if payload.recovery_event_type and payload.recovery_event_type not in EVENT_CATALOG:errors.append("Recovery event type is not registered")
     if payload.trigger_mode not in {"notify_only","execute","request_approval","create_pending_run"}: errors.append("Trigger mode is not supported")
     if payload.approval_mode not in {"use_workflow_policy","always_require"}: errors.append("Approval mode is not supported")
     if payload.maintenance_behavior not in {"suppress","allow"} or payload.blackout_behavior not in {"suppress","allow"}: errors.append("Window behavior is not supported")
@@ -140,8 +142,20 @@ def preview_subscription(sub,event):
 def process_event(db,event,subscription_ids=None,bypass_deduplication=False):
     now=datetime.now(timezone.utc);payload=json.loads(event.safe_payload or "{}")
     context={"severity":event.severity,"status":event.status,"source_entity_id":str(event.source_entity_id) if event.source_entity_id else None,"property_id":str(event.property_id) if event.property_id else None,**{k:v for k,v in payload.items() if isinstance(v,(str,int,float,bool,type(None)))}}
+    recovery_subscriptions=db.query(AutomationTriggerSubscription).filter_by(recovery_event_type=event.event_type,enabled=True).all()
+    for recovery in recovery_subscriptions:
+        if recovery.property_id and recovery.property_id!=event.property_id:continue
+        related=db.query(AutomationTriggerExecution).join(AutomationEventRecord,AutomationEventRecord.id==AutomationTriggerExecution.event_id).filter(AutomationTriggerExecution.subscription_id==recovery.id,AutomationTriggerExecution.status=="delayed")
+        if event.correlation_key:related=related.filter(AutomationEventRecord.correlation_key==event.correlation_key)
+        elif event.source_entity_id:related=related.filter(AutomationEventRecord.source_entity_id==event.source_entity_id)
+        for pending in related.all():
+            from app.services.scheduler_service import scheduler,AUTOMATION_DELAY_JOB_PREFIX
+            job=scheduler.get_job(f"{AUTOMATION_DELAY_JOB_PREFIX}{pending.id}")
+            if job:scheduler.remove_job(job.id)
+            pending.status="cancelled";pending.suppression_reason="recovery_event"
     subscriptions=db.query(AutomationTriggerSubscription).filter_by(event_type=event.event_type,enabled=True).all();matched=triggered=suppressed=0
     for sub in subscriptions:
+        created_run=None
         if subscription_ids is not None and sub.id not in subscription_ids:continue
         if sub.property_id and sub.property_id!=event.property_id: continue
         matched+=1;dedupe=hashlib.sha256(f"{sub.id}:{event.correlation_key or event.source_entity_id or event.event_id}".encode()).hexdigest()
@@ -157,18 +171,38 @@ def process_event(db,event,subscription_ids=None,bypass_deduplication=False):
         elif sub.condition_definition and not evaluate(json.loads(sub.condition_definition),context)["result"]: reason="condition_not_matched"
         execution=AutomationTriggerExecution(subscription_id=sub.id,event_id=event.id,property_id=event.property_id,deduplication_key=dedupe,status="suppressed" if reason else "matched",suppression_reason=reason);db.add(execution)
         if reason: suppressed+=1;continue
+        if sub.correlation_threshold>1:
+            key=event.correlation_key or str(event.source_entity_id or event.event_id)
+            group=db.query(AutomationTriggerCorrelationGroup).filter_by(subscription_id=sub.id,correlation_key=key,status="collecting").first()
+            if group and group.expires_at<=now:
+                group.status="expired";group=None
+            if not group:
+                group=AutomationTriggerCorrelationGroup(subscription_id=sub.id,property_id=event.property_id,correlation_key=key,first_event_at=now,last_event_at=now,event_count=0,member_event_ids="[]",expires_at=now+timedelta(seconds=sub.correlation_window_seconds));db.add(group);db.flush()
+            members=json.loads(group.member_event_ids or "[]")
+            if str(event.event_id) not in members and len(members)<sub.maximum_correlation_members:members.append(str(event.event_id))
+            group.member_event_ids=json.dumps(members,separators=(",",":"));group.event_count=len(members);group.last_event_at=now
+            if group.event_count<sub.correlation_threshold:
+                execution.status="collecting";execution.suppression_reason="correlation_window";continue
+            group.threshold_reached=True;group.status="ready"
         workflow=db.get(AutomationWorkflow,sub.workflow_id);version=db.get(AutomationWorkflowVersion,sub.workflow_version_id)
         if not workflow or not version or not workflow.enabled or version.status!="approved": execution.status="suppressed";execution.suppression_reason="workflow_not_active";suppressed+=1;continue
-        if sub.trigger_mode=="notify_only": execution.status="notified";continue
+        if sub.trigger_mode=="notify_only":
+            execution.status="notified"
+            if sub.correlation_threshold>1:group.status="triggered"
+            continue
         mapped_inputs=_mapped_inputs(sub,event,payload)
         if sub.delay_seconds and sub.trigger_mode not in {"request_approval","create_pending_run"} and sub.approval_mode!="always_require":
             from app.services.scheduler_service import scheduler,delayed_automation_event,AUTOMATION_DELAY_JOB_PREFIX
-            db.flush();scheduler.add_job(delayed_automation_event,"date",run_date=now+timedelta(seconds=sub.delay_seconds),args=[str(workflow.id),str(event.event_id),str(sub.id),str(execution.id)],id=f"{AUTOMATION_DELAY_JOB_PREFIX}{execution.id}",replace_existing=True,max_instances=1,misfire_grace_time=300);execution.status="delayed";triggered+=1;continue
+            db.flush();scheduler.add_job(delayed_automation_event,"date",run_date=now+timedelta(seconds=sub.delay_seconds),args=[str(workflow.id),str(event.event_id),str(sub.id),str(execution.id)],id=f"{AUTOMATION_DELAY_JOB_PREFIX}{execution.id}",replace_existing=True,max_instances=1,misfire_grace_time=300);execution.status="delayed";triggered+=1
+            if sub.correlation_threshold>1:group.status="triggered"
+            continue
         if sub.trigger_mode in {"request_approval","create_pending_run"} or sub.approval_mode=="always_require":
-            run=AutomationWorkflowRun(property_id=event.property_id,workflow_id=workflow.id,workflow_version_id=version.id,status="waiting_approval",trigger_type="internal_event",triggered_by="automation:event",idempotency_key=f"event:{event.event_id}:{sub.id}",error_summary=json.dumps({"mapped_inputs":mapped_inputs},separators=(",",":")));db.add(run);db.flush();db.add(AutomationApprovalRequest(workflow_run_id=run.id,requested_by="automation:event"));execution.status="triggered";triggered+=1
+            run=AutomationWorkflowRun(property_id=event.property_id,workflow_id=workflow.id,workflow_version_id=version.id,status="waiting_approval",trigger_type="internal_event",triggered_by="automation:event",idempotency_key=f"event:{event.event_id}:{sub.id}",error_summary=json.dumps({"mapped_inputs":mapped_inputs},separators=(",",":")));db.add(run);db.flush();db.add(AutomationApprovalRequest(workflow_run_id=run.id,requested_by="automation:event"));created_run=run;execution.status="triggered";triggered+=1
         else:
             from app.api.v1.automation import RunWrite,run_workflow
-            result=run_workflow(workflow.id,RunWrite(idempotency_key=f"event:{event.event_id}:{sub.id}",dry_run=False),db,SimpleNamespace(id=None,username="automation:event",role="admin"));created=db.get(AutomationWorkflowRun,result["run_id"]);created.trigger_type="internal_event";created.error_summary=json.dumps({"mapped_inputs":mapped_inputs,"execution":result.get("result",{})},separators=(",",":"));execution.status="triggered";triggered+=1
-    event.processing_status="triggered" if triggered else "suppressed" if suppressed else "unmatched";event.processed_at=now
+            result=run_workflow(workflow.id,RunWrite(idempotency_key=f"event:{event.event_id}:{sub.id}",dry_run=False),db,SimpleNamespace(id=None,username="automation:event",role="admin"));created=db.get(AutomationWorkflowRun,result["run_id"]);created.trigger_type="internal_event";created.error_summary=json.dumps({"mapped_inputs":mapped_inputs,"execution":result.get("result",{})},separators=(",",":"));created_run=created;execution.status="triggered";triggered+=1
+        if sub.correlation_threshold>1:
+            group.status="triggered";group.workflow_run_id=created_run.id if created_run else None
+    event.processing_status="triggered" if triggered else "suppressed" if suppressed else "matched" if matched else "unmatched";event.processed_at=now
     manager.broadcast_from_thread({"type":"automation_event_processed","event_id":str(event.event_id),"matched":matched,"triggered":triggered,"suppressed":suppressed})
     return {"matched":matched,"triggered":triggered,"suppressed":suppressed}

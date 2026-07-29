@@ -87,3 +87,9 @@ Version `2.0.0-rc1` includes the Epic 4D SNMP Monitoring workspace at `/snmp`: s
 Epic 5E adds opt-in scheduled topology operations: deterministic LLDP/CDP collection, inference, snapshots, change/health evaluation, protected baselines, maintenance-aware alerts, structural analytics, retention controls, and bounded exports. Scheduling is disabled until an administrator enables both the topology and its reviewed schedule.
 
 Epic 6A adds an additive advanced analytics backend foundation: controlled source mappings, idempotent time buckets, availability with explicit unknown time, explainable health scores, threshold-only capacity assessments, SLA measurements, MTTR/MTBF, data quality, bounded manual runs, and protected APIs. It includes no analytics dashboard, forecasting, AI, anomaly detection, recommendations, or scheduled processing.
+
+Epic 3B adds property-scoped scheduled and internal-event automation. Approved
+workflow versions can run from validated interval/calendar schedules or fixed
+HIOP events through a transactional outbox, bounded correlation, recovery
+cancellation, approval gates, and dead-letter review. No external webhook,
+arbitrary code, raw cron, or unreviewed destructive action is supported.

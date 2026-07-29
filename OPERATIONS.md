@@ -143,10 +143,14 @@ Apply migration `b7d9e2f4a601` and verify the current revision. Analytics runs a
 
 ## Epic 3B automation scheduler runbook
 
-Apply migration `f4b5c6d7e8f9`, verify one Alembic head, and confirm
+Apply migrations `f4b5c6d7e8f9` and `f5c6d7e8f9a0`, verify one Alembic head, and confirm
 `GET /api/v1/automation/scheduler-status`. The shared scheduler reconciles
 stable `automation_workflow_<schedule-id>` jobs on startup, removes orphaned or
 disabled jobs, coalesces missed intervals, and limits each schedule to one
 instance. Investigate stored suppression reasons before re-enabling a noisy
 trigger. Reprocessing is Admin-only and remains subject to current approvals and
 run limits. Do not expose the internal event endpoint as an Internet webhook.
+Monitor event backlog, collecting correlation groups, and dead letters in the
+scheduler-status response. The one-minute outbox job and daily retention job use
+stable IDs and single-instance execution. Review dead letters before retrying;
+retention never removes dead letters or trigger-linked workflow evidence.

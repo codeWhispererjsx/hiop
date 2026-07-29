@@ -108,3 +108,9 @@ deterministic, missed intervals coalesce, and `max_instances=1` prevents
 per-schedule overlap. Payload, delay, condition depth/count, run window, and run
 frequency are bounded. Production event-storm load testing remains pending an
 approved synthetic benchmark.
+
+Outbox processing is capped at 100 records per minute with indexed status/next
+attempt lookup and bounded exponential retry. Correlation membership is capped
+at 500, scheduler histories are bounded, and retention deletes at most 1,000
+eligible published rows per transaction while protecting dead letters and
+workflow evidence.

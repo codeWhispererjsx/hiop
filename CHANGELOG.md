@@ -33,6 +33,7 @@
 - Added fixed-catalogue internal events, structured trigger filters/conditions/input mappings, replay protection, correlation-window deduplication, cooldown, storm limits, delayed execution, approval gates, and maintenance/blackout suppression.
 - Added recurring and one-time APScheduler jobs with stable IDs, overlap prevention, startup reconciliation, stale-run recovery, scheduler health, property-scoped APIs, audit/live updates, and Automation workspace controls.
 - Added additive orchestration migration `f4b5c6d7e8f9`; public webhooks, arbitrary event ingestion, arbitrary code, and unreviewed destructive actions remain unavailable.
+- Completed transactional outbox/dead-letter processing, bounded multi-event correlation, recovery cancellation, checksum-backed trigger revisions, validated daily/weekly/monthly recurrence, retention cleanup, reporting summaries, and migration `f5c6d7e8f9a0`.
 
 ## 3.0.0-dev — Incident management foundation
 - Added property-scoped incidents, controlled lifecycle transitions, tasks, and incident timelines.

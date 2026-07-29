@@ -140,3 +140,9 @@ approved versions, default disabled, prevent overlap, and honor approval,
 maintenance, blackout, deduplication, cooldown, and storm controls. There are no
 external webhooks, arbitrary cron strings, shell commands, dynamic code, or
 user-defined network actions. This is not a penetration test.
+
+The transactional outbox stores only validated safe envelopes. Retries are
+bounded, dead-letter review is role-protected, reprocessing creates a new event
+identity, correlation groups are property-scoped and member-limited, and
+recovery events can cancel only delayed—not running—workflows. Calendar
+schedules use validated timezones and structured fields instead of raw cron.

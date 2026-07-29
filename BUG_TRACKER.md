@@ -95,9 +95,9 @@ advanced on-call escalation remain out of scope.
 
 - No release-blocking defect remains in the implemented interval/one-time
   scheduler and fixed-catalogue internal-trigger workflows.
-- Deferred capabilities are tracked explicitly: transactional outbox/dead-letter
-  queue, multi-event correlation groups, recovery-event cancellation,
-  daily/weekly/monthly calendar recurrence, and scheduled retention cleanup.
+- Transactional outbox/dead-letter processing, multi-event correlation groups,
+  recovery-event cancellation, calendar recurrence, and scheduled retention
+  cleanup are implemented in migration `f5c6d7e8f9a0`.
 
 ## Release acceptance open items (2026-07-28)
 

@@ -408,6 +408,14 @@ Technicians may inspect run history, normalized LLDP/CDP observations, candidate
 
 The topology operations view shows evidence freshness, recent collection/inference/snapshot runs, conflicts, orphan counts, maintenance state, and open topology alerts. “Potential impact,” articulation, and bridge findings describe the modeled graph and do not guarantee packet routing or outage scope. Administrators can configure schedules, baselines, rules, retention, and exports; technicians retain read-only monitoring access.
 
+## Automation workspace
+
+Authorized users can review workflows, schedules, internal-event status,
+correlation summaries, approvals, and recent runs under **Automation**.
+Administrators manage schedules and triggers. Automatic actions always reference
+an approved workflow version; a waiting-approval status requires explicit human
+review before execution continues.
+
 ## Analytics interpretation
 
 Open **Analytics** for the executive overview or choose Health, Capacity, Availability, SLA, Reliability, Forecasts, Trends, or Reports. Time range, aggregation bucket, and health status are shareable URL filters. Forecast bands communicate uncertainty; they are deterministic statistical projections, not guarantees. Expand a chart's data table for an accessible numeric view. Reports support JSON, formula-safe CSV, and browser print/PDF.

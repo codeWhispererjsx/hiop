@@ -468,6 +468,15 @@ Use neighbor collection only for approved SNMP targets. Start with dry run, insp
 
 Open **Network Topology → Settings** for the selected topology. Enable only the required collection, inference, snapshot, change, and alert jobs; configure conservative intervals, jitter, target limits, and protocol mode; then save to reconcile deterministic jobs. Create a protected baseline before enabling change rules. Rules are disabled by default and should be previewed, reviewed, and enabled individually. Use maintenance mode for planned network changes so eligible alerts are suppressed without stopping evidence collection.
 
+## Automation administration
+
+Open **Automation**, select an approved workflow version, then create a disabled
+schedule or approval-gated internal trigger. Validate filters and mappings before
+enabling. Use run-now only after confirmation. Monitor scheduler health, event
+backlog, correlation groups, suppression reasons, pending approvals, and dead
+letters. Retry dead letters only after resolving the underlying configuration;
+never expose internal event publication as an external webhook.
+
 ## Analytics foundation administration
 
 The `/analytics` workspace is read-only visualization over existing analytics APIs. Confirm scheduled jobs and source coverage before interpreting empty or stale charts. Scope selectors the backend cannot enforce are disabled. Trends use bounded server-side comparisons, while Reports provides authenticated JSON, formula-safe CSV, and browser print/PDF. Technicians may inspect analytics; configuration and operational mutations remain administrator-only and backend-enforced.

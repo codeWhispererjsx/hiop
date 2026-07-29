@@ -33,6 +33,8 @@ TOPOLOGY_JOB_TYPES = ("collection", "inference", "snapshot", "changes", "health"
 ANALYTICS_JOB_PREFIX = "analytics_"
 AUTOMATION_JOB_PREFIX = "automation_workflow_"
 AUTOMATION_DELAY_JOB_PREFIX = "automation_delayed_"
+AUTOMATION_OUTBOX_JOB_ID = "automation_event_outbox"
+AUTOMATION_RETENTION_JOB_ID = "automation_retention_cleanup"
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -58,7 +60,10 @@ def scheduled_automation_workflow(schedule_id: str) -> None:
         now=datetime.now(timezone.utc)
         if schedule.maximum_runs is not None and schedule.runs_completed>=schedule.maximum_runs:
             schedule.enabled=False;db.commit();remove_automation_job(schedule_id);return
-        if schedule.blackout_start and schedule.blackout_end and schedule.blackout_start<=now<=schedule.blackout_end:
+        if schedule.end_at and now>schedule.end_at:
+            schedule.enabled=False;schedule.last_run_at=now;schedule.last_run_status="expired";db.commit();remove_automation_job(schedule_id);return
+        if schedule.start_at and now<schedule.start_at:return
+        if schedule.blackout_behavior=="suppress" and schedule.blackout_start and schedule.blackout_end and schedule.blackout_start<=now<=schedule.blackout_end:
             schedule.last_run_at=now;schedule.last_run_status="suppressed_blackout";db.commit();return
         if schedule.maintenance_behavior=="suppress":
             from app.services.automation_trigger_service import _maintenance_active
@@ -119,9 +124,14 @@ def reconcile_automation_jobs(db) -> dict[str,int]:
         expected.add(job_id)
         common={"id":job_id,"replace_existing":True,"max_instances":1,"coalesce":True,"misfire_grace_time":300}
         if row.schedule_type=="interval" and row.interval_minutes:
-            scheduler.add_job(scheduled_automation_workflow,"interval",minutes=row.interval_minutes,args=[str(row.id)],**common);registered+=1
+            scheduler.add_job(scheduled_automation_workflow,"interval",minutes=row.interval_minutes,start_date=row.start_at,end_date=row.end_at,jitter=row.jitter_seconds or None,args=[str(row.id)],**common);registered+=1
         elif row.schedule_type=="one_time" and row.next_run_at and row.next_run_at>datetime.now(timezone.utc):
             scheduler.add_job(scheduled_automation_workflow,"date",run_date=row.next_run_at,args=[str(row.id)],**common);registered+=1
+        elif row.schedule_type in {"daily","weekly","monthly"} and row.preferred_time:
+            hour,minute=(int(part) for part in row.preferred_time.split(":"));cron={"hour":hour,"minute":minute,"timezone":row.timezone,"start_date":row.start_at,"end_date":row.end_at,"jitter":row.jitter_seconds or None}
+            if row.schedule_type=="weekly":cron["day_of_week"]=row.day_of_week
+            if row.schedule_type=="monthly":cron["day"]=row.day_of_month
+            scheduler.add_job(scheduled_automation_workflow,"cron",args=[str(row.id)],**cron,**common);registered+=1
     for job in list(scheduler.get_jobs()):
         if job.id.startswith(AUTOMATION_JOB_PREFIX) and job.id not in expected:scheduler.remove_job(job.id);removed+=1
     return {"registered":registered,"removed":removed}
@@ -131,6 +141,22 @@ def recover_stale_automation_runs(db,timeout_minutes: int=30) -> int:
     for row in rows:row.status="failed";row.error_summary="Recovered stale automation run after scheduler startup."
     if rows:db.commit()
     return len(rows)
+
+def scheduled_automation_outbox():
+    db=SessionLocal()
+    try:
+        from app.services.automation_event_outbox_service import process_outbox_batch
+        process_outbox_batch(db,100)
+    except Exception:db.rollback();logger.exception("Automation outbox processing failed")
+    finally:db.close()
+
+def scheduled_automation_retention():
+    db=SessionLocal()
+    try:
+        from app.services.automation_event_outbox_service import cleanup_retention
+        cleanup_retention(db,30,500)
+    except Exception:db.rollback();logger.exception("Automation retention cleanup failed")
+    finally:db.close()
 
 
 def snmp_job_id(target_id: str, group: str) -> str:
@@ -894,6 +920,8 @@ def start_scheduler():
         reconcile_analytics_jobs(db)
         recover_stale_automation_runs(db)
         reconcile_automation_jobs(db)
+        scheduler.add_job(scheduled_automation_outbox,"interval",minutes=1,id=AUTOMATION_OUTBOX_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
+        scheduler.add_job(scheduled_automation_retention,"cron",hour=4,id=AUTOMATION_RETENTION_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
     finally:
         db.close()
     logger.info("HIOP scheduler started")

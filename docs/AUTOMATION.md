@@ -15,7 +15,7 @@ compensation handlers.
 
 ## Scheduled and internal-event orchestration
 
-Epic 3B's core implements scheduled and trusted internal-event orchestration on the same
+Epic 3B implements scheduled and trusted internal-event orchestration on the same
 approved, version-pinned execution engine. Events are restricted to a fixed
 catalogue with bounded, secret-rejecting payloads and property scope. Trigger
 subscriptions support allowlisted structured filters, conditions, safe input
@@ -30,6 +30,11 @@ maintenance, blackout, and approval policies. Startup reconciliation creates,
 updates, or removes jobs from persisted state without duplication. Stale
 pending/running runs are recovered as failed, and shutdown uses the shared
 scheduler lifecycle.
+
+Daily, weekly, and monthly schedules use validated IANA timezones and structured
+calendar fields rather than raw cron strings. Start/end windows, jitter, bounded
+monthly dates, and exact workflow-version references are persisted. Editing a
+trigger creates a checksum-backed revision and disables it for explicit review.
 
 ## Event safeguards
 
@@ -46,6 +51,23 @@ one-time jobs. Approval-required triggers and schedules create waiting runs and
 human approval requests rather than executing automatically. Approved runs then
 use the same retry, timeout, verification, cancellation, and compensation
 processing as manual runs.
+
+Internal domain services can publish through the transactional outbox. A stable
+single-instance job processes bounded batches, retries with bounded backoff, and
+moves repeatedly failing records to a reviewable dead-letter state. Admins can
+retry or ignore dead letters; neither action bypasses current validation,
+approval, or idempotency controls.
+
+Correlation groups collect a bounded number of events with the same
+subscription/property/correlation key and trigger only after the configured
+threshold. Evidence keeps contributing event IDs without claiming root cause.
+A registered recovery event cancels a still-delayed matching trigger, records
+the cancellation, and never cancels an already-running workflow.
+
+Retention preview and confirmed cleanup remove only old published outbox rows in
+bounded batches. Trigger-linked event evidence, dead letters, workflow runs,
+approvals, and audit history remain protected. Summary reporting exposes
+schedules, subscriptions, events, trigger/suppression counts, and dead letters.
 
 ## Frontend and operations
 

@@ -7,6 +7,7 @@ from app.models.ticket import Ticket
 from app.models.user import User
 from app.websocket.connection_manager import manager
 from app.services.settings_service import read_network
+from app.services.automation_event_outbox_service import publish_internal_event
 
 def scan_single_device(
     db: Session,
@@ -51,6 +52,9 @@ def scan_single_device(
         )
 
         db.add(alert)
+        db.flush()
+        publish_internal_event(db,event_type="alert_created",property_id=device.property_id,source_entity_type="alert",source_entity_id=alert.id,safe_payload={},severity="critical" if new_scan.status=="Offline" else "informational",status="open",correlation_key=f"device:{device.id}:network")
+        publish_internal_event(db,event_type="device_offline" if new_scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={},severity="critical" if new_scan.status=="Offline" else "informational",status=new_scan.status.lower(),correlation_key=f"device:{device.id}:network")
 
         live_event = {
             "event": "device_status_changed",

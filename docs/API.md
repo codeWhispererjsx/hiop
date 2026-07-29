@@ -20,6 +20,14 @@ one-time execution. Event payloads are bounded and reject secret-bearing fields;
 no public webhook, arbitrary event, executable expression, or arbitrary network
 action endpoint exists.
 
+Operational endpoints include `/event-catalogue`, event detail/reprocessing,
+trigger validation/testing/history, schedule enable/disable/run-now/history,
+`/correlation-groups`, `/dead-letter-events`, `/outbox/process`,
+`/retention/preview`, confirmed `/retention/cleanup`, `/reports/summary`, and
+`/scheduler-status`. Mutations require Admin; reader results remain
+property-scoped. The event POST is an authenticated internal/testing surface,
+not an unauthenticated or externally trusted webhook.
+
 ## Epic 6B analytics operations
 
 Under `/api/v1/analytics`, Epic 6B adds schedule read/update and pause/resume, scheduler status, backfill preview/start, run progress/errors/retry, bounded trends and comparison, capacity/SLA/reliability summaries, data quality, and retention preview/confirmed cleanup. Mutations require Admin.

@@ -1,5 +1,6 @@
 import uuid
 import json
+import hashlib
 from datetime import datetime, timezone
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException
@@ -7,17 +8,19 @@ from pydantic import BaseModel,Field
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.models.automation import AutomationWorkflow,AutomationWorkflowRun,AutomationWorkflowVersion
-from app.models.automation_triggers import AutomationEventRecord,AutomationTriggerSubscription,AutomationWorkflowSchedule,AutomationTriggerExecution
+from app.models.automation_triggers import AutomationEventOutbox,AutomationEventRecord,AutomationTriggerCorrelationGroup,AutomationTriggerRevision,AutomationTriggerSubscription,AutomationWorkflowSchedule,AutomationTriggerExecution
 from app.models.property_access import UserPropertyAccess
 from app.services.automation_trigger_service import EVENT_CATALOG,preview_subscription,process_event,validate_payload,validate_subscription
 from app.services.scheduler_service import reconcile_automation_jobs,remove_automation_job,scheduled_automation_workflow
 from app.services.audit_service import create_audit_log
+from app.services.automation_event_outbox_service import cleanup_retention,process_outbox_batch,retention_preview,retry_dead_letter
 router=APIRouter(prefix="/automation",tags=["Automation triggers"]); reader=require_roles(["admin","technician","viewer"]); admin=require_roles(["admin"])
 ALLOWED_EVENTS=set(EVENT_CATALOG)
 class EventWrite(BaseModel): event_type:str; event_id:UUID|None=None; property_id:UUID|None=None; source_entity_type:str|None=None; source_entity_id:UUID|None=None; severity:str|None=None; status:str|None=None; correlation_key:str|None=Field(None,max_length=160); safe_payload:dict=Field(default_factory=dict)
-class SubscriptionWrite(BaseModel): workflow_id:UUID; workflow_version_id:UUID; property_id:UUID|None=None; event_type:str; trigger_mode:str="notify_only"; filter_definition:dict=Field(default_factory=dict); condition_definition:dict=Field(default_factory=dict); input_mapping:dict=Field(default_factory=dict); cooldown_seconds:int=Field(default=300,ge=0,le=86400); deduplication_window_seconds:int=Field(default=300,ge=0,le=86400); correlation_window_seconds:int=Field(default=300,ge=0,le=86400); maximum_runs_per_window:int=Field(default=5,ge=1,le=100); run_window_seconds:int=Field(default=3600,ge=60,le=86400); delay_seconds:int=Field(default=0,ge=0,le=3600); approval_mode:str="use_workflow_policy"; maintenance_behavior:str="suppress"; blackout_behavior:str="suppress"; blackout_start:datetime|None=None; blackout_end:datetime|None=None
-class ScheduleWrite(BaseModel): workflow_id:UUID; workflow_version_id:UUID; property_id:UUID|None=None; name:str=Field(min_length=1,max_length=120); schedule_type:str="interval"; timezone:str="UTC"; interval_minutes:int|None=Field(default=None,ge=5,le=10080); next_run_at:datetime|None=None; maximum_runs:int|None=Field(default=None,ge=1,le=10000); approval_mode:str="use_workflow_policy"; maintenance_behavior:str="suppress"; blackout_start:datetime|None=None; blackout_end:datetime|None=None; enabled:bool=False
+class SubscriptionWrite(BaseModel): workflow_id:UUID; workflow_version_id:UUID; property_id:UUID|None=None; event_type:str; trigger_mode:str="notify_only"; filter_definition:dict=Field(default_factory=dict); condition_definition:dict=Field(default_factory=dict); input_mapping:dict=Field(default_factory=dict); cooldown_seconds:int=Field(default=300,ge=0,le=86400); deduplication_window_seconds:int=Field(default=300,ge=0,le=86400); correlation_window_seconds:int=Field(default=300,ge=0,le=86400); correlation_threshold:int=Field(default=1,ge=1,le=500); maximum_correlation_members:int=Field(default=100,ge=1,le=500); recovery_event_type:str|None=None; maximum_runs_per_window:int=Field(default=5,ge=1,le=100); run_window_seconds:int=Field(default=3600,ge=60,le=86400); delay_seconds:int=Field(default=0,ge=0,le=3600); approval_mode:str="use_workflow_policy"; maintenance_behavior:str="suppress"; blackout_behavior:str="suppress"; blackout_start:datetime|None=None; blackout_end:datetime|None=None
+class ScheduleWrite(BaseModel): workflow_id:UUID; workflow_version_id:UUID; property_id:UUID|None=None; name:str=Field(min_length=1,max_length=120); schedule_type:str="interval"; timezone:str="UTC"; interval_minutes:int|None=Field(default=None,ge=5,le=10080); day_of_week:int|None=Field(default=None,ge=0,le=6); day_of_month:int|None=Field(default=None,ge=1,le=28); preferred_time:str|None=Field(default=None,pattern=r"^\d{2}:\d{2}$"); start_at:datetime|None=None; end_at:datetime|None=None; jitter_seconds:int=Field(default=0,ge=0,le=300); next_run_at:datetime|None=None; maximum_runs:int|None=Field(default=None,ge=1,le=10000); approval_mode:str="use_workflow_policy"; maintenance_behavior:str="suppress"; blackout_behavior:str="suppress"; blackout_start:datetime|None=None; blackout_end:datetime|None=None; enabled:bool=False
 class ReprocessWrite(BaseModel): reason:str=Field(min_length=8,max_length=500); trigger_ids:list[UUID]=Field(default_factory=list,max_length=25)
+class CleanupWrite(BaseModel): confirm:bool=False;retention_days:int=Field(default=30,ge=7,le=365);batch_size:int=Field(default=500,ge=1,le=1000)
 def _validate_event_payload(payload):
     try:validate_payload(payload)
     except ValueError as exc:raise HTTPException(422,str(exc)) from exc
@@ -30,11 +33,26 @@ def _scope(query,column,db,user):
 def _validate_workflow_scope(workflow,property_id):
     if workflow.property_id!=property_id:raise HTTPException(422,"Workflow and trigger/schedule property must match")
 def _validate_schedule(p):
-    if p.schedule_type not in {"interval","one_time"}:raise HTTPException(422,"Unsupported schedule type")
+    if p.schedule_type not in {"interval","one_time","daily","weekly","monthly"}:raise HTTPException(422,"Unsupported schedule type")
     if p.schedule_type=="interval" and not p.interval_minutes:raise HTTPException(422,"Interval schedules require interval_minutes")
     if p.schedule_type=="one_time" and not p.next_run_at:raise HTTPException(422,"One-time schedules require next_run_at")
+    if p.schedule_type in {"daily","weekly","monthly"} and not p.preferred_time:raise HTTPException(422,"Calendar schedules require preferred_time")
+    if p.preferred_time:
+        hour,minute=(int(part) for part in p.preferred_time.split(":"))
+        if hour>23 or minute>59:raise HTTPException(422,"Schedule time is invalid")
+    if p.schedule_type=="weekly" and p.day_of_week is None:raise HTTPException(422,"Weekly schedules require day_of_week")
+    if p.schedule_type=="monthly" and p.day_of_month is None:raise HTTPException(422,"Monthly schedules require day_of_month")
+    if p.start_at and p.end_at and p.end_at<=p.start_at:raise HTTPException(422,"Schedule end must be after start")
     if p.blackout_start and p.blackout_end and p.blackout_end<=p.blackout_start:raise HTTPException(422,"Blackout end must be after blackout start")
-    if p.approval_mode not in {"use_workflow_policy","always_require"} or p.maintenance_behavior not in {"suppress","allow"}:raise HTTPException(422,"Unsupported execution policy")
+    if p.approval_mode not in {"use_workflow_policy","always_require"} or p.maintenance_behavior not in {"suppress","allow"} or p.blackout_behavior not in {"suppress","allow"}:raise HTTPException(422,"Unsupported execution policy")
+    try:
+        from zoneinfo import ZoneInfo
+        ZoneInfo(p.timezone)
+    except Exception as exc:raise HTTPException(422,"Unknown schedule timezone") from exc
+def _revision(db,row,user):
+    snapshot={key:getattr(row,key) for key in ("workflow_id","workflow_version_id","property_id","event_type","trigger_mode","filter_definition","condition_definition","input_mapping","cooldown_seconds","deduplication_window_seconds","correlation_window_seconds","correlation_threshold","maximum_correlation_members","recovery_event_type","maximum_runs_per_window","run_window_seconds","delay_seconds","approval_mode","maintenance_behavior","blackout_behavior","blackout_start","blackout_end")}
+    encoded=json.dumps(snapshot,default=str,sort_keys=True,separators=(",",":"));number=db.query(AutomationTriggerRevision).filter_by(subscription_id=row.id).count()+1
+    db.add(AutomationTriggerRevision(subscription_id=row.id,revision_number=number,configuration_snapshot=encoded,checksum=hashlib.sha256(encoded.encode()).hexdigest(),status="draft",created_by=user.username))
 @router.get("/events")
 def events(db:Session=Depends(get_db),user=Depends(reader)): return {"items":_scope(db.query(AutomationEventRecord),AutomationEventRecord.property_id,db,user).order_by(AutomationEventRecord.received_at.desc()).limit(100).all()}
 @router.get("/event-catalogue")
@@ -79,7 +97,7 @@ def create_trigger(p:SubscriptionWrite,db:Session=Depends(get_db),user=Depends(a
     _validate_workflow_scope(workflow,p.property_id)
     errors=validate_subscription(p)
     if errors:raise HTTPException(422,{"message":"Invalid trigger subscription","errors":errors})
-    values=p.model_dump(exclude={"filter_definition","condition_definition","input_mapping"});row=AutomationTriggerSubscription(**values,filter_definition=json.dumps(p.filter_definition,separators=(",",":")) if p.filter_definition else None,condition_definition=json.dumps(p.condition_definition,separators=(",",":")) if p.condition_definition else None,input_mapping=json.dumps(p.input_mapping,separators=(",",":")) if p.input_mapping else None,created_by=user.username);db.add(row);create_audit_log(db,user.username,"AUTOMATION_TRIGGER_CREATED","AutomationTriggerSubscription",str(row.id),f"Created trigger for {p.event_type}");db.commit();db.refresh(row);return row
+    values=p.model_dump(exclude={"filter_definition","condition_definition","input_mapping"});row=AutomationTriggerSubscription(**values,filter_definition=json.dumps(p.filter_definition,separators=(",",":")) if p.filter_definition else None,condition_definition=json.dumps(p.condition_definition,separators=(",",":")) if p.condition_definition else None,input_mapping=json.dumps(p.input_mapping,separators=(",",":")) if p.input_mapping else None,created_by=user.username);db.add(row);db.flush();_revision(db,row,user);create_audit_log(db,user.username,"AUTOMATION_TRIGGER_CREATED","AutomationTriggerSubscription",str(row.id),f"Created trigger for {p.event_type}");db.commit();db.refresh(row);return row
 @router.put("/triggers/{trigger_id}")
 def update_trigger(trigger_id:UUID,p:SubscriptionWrite,db:Session=Depends(get_db),user=Depends(admin)):
     row=db.get(AutomationTriggerSubscription,trigger_id)
@@ -91,7 +109,7 @@ def update_trigger(trigger_id:UUID,p:SubscriptionWrite,db:Session=Depends(get_db
     values=p.model_dump(exclude={"filter_definition","condition_definition","input_mapping"})
     for key,value in values.items():setattr(row,key,value)
     row.filter_definition=json.dumps(p.filter_definition,separators=(",",":")) if p.filter_definition else None;row.condition_definition=json.dumps(p.condition_definition,separators=(",",":")) if p.condition_definition else None;row.input_mapping=json.dumps(p.input_mapping,separators=(",",":")) if p.input_mapping else None;row.enabled=False
-    create_audit_log(db,user.username,"AUTOMATION_TRIGGER_UPDATED","AutomationTriggerSubscription",str(row.id),"Updated trigger; re-enable required");db.commit();db.refresh(row);return row
+    _revision(db,row,user);create_audit_log(db,user.username,"AUTOMATION_TRIGGER_UPDATED","AutomationTriggerSubscription",str(row.id),"Updated trigger; re-enable required");db.commit();db.refresh(row);return row
 @router.post("/trigger-validation")
 def validate_trigger(p:SubscriptionWrite,db:Session=Depends(get_db),_=Depends(admin)):
     workflow=db.get(AutomationWorkflow,p.workflow_id);version=db.get(AutomationWorkflowVersion,p.workflow_version_id);errors=validate_subscription(p)
@@ -175,6 +193,38 @@ def delete_schedule(schedule_id:UUID,db:Session=Depends(get_db),_=Depends(admin)
     remove_automation_job(str(row.id));db.delete(row);db.commit()
 @router.get("/scheduler-status")
 def scheduler_status(db:Session=Depends(get_db),_=Depends(reader)):
-    from app.services.scheduler_service import scheduler,AUTOMATION_JOB_PREFIX
-    jobs=[{"id":job.id,"next_run_time":job.next_run_time} for job in scheduler.get_jobs() if job.id.startswith(AUTOMATION_JOB_PREFIX)]
-    return {"scheduler_running":scheduler.running,"jobs":jobs,"enabled_schedules":db.query(AutomationWorkflowSchedule).filter_by(enabled=True).count()}
+    from app.services.scheduler_service import scheduler,AUTOMATION_JOB_PREFIX,AUTOMATION_OUTBOX_JOB_ID,AUTOMATION_RETENTION_JOB_ID
+    jobs=[{"id":job.id,"next_run_time":job.next_run_time} for job in scheduler.get_jobs() if job.id.startswith(AUTOMATION_JOB_PREFIX) or job.id in {AUTOMATION_OUTBOX_JOB_ID,AUTOMATION_RETENTION_JOB_ID}]
+    return {"scheduler_running":scheduler.running,"jobs":jobs,"enabled_schedules":db.query(AutomationWorkflowSchedule).filter_by(enabled=True).count(),"event_backlog":db.query(AutomationEventOutbox).filter(AutomationEventOutbox.status.in_(("pending","failed"))).count(),"dead_letters":db.query(AutomationEventOutbox).filter_by(status="dead_letter").count(),"collecting_correlations":db.query(AutomationTriggerCorrelationGroup).filter_by(status="collecting").count()}
+@router.get("/correlation-groups")
+def correlation_groups(db:Session=Depends(get_db),user=Depends(reader)):
+    return {"items":_scope(db.query(AutomationTriggerCorrelationGroup),AutomationTriggerCorrelationGroup.property_id,db,user).order_by(AutomationTriggerCorrelationGroup.last_event_at.desc()).limit(100).all()}
+@router.get("/dead-letter-events")
+def dead_letters(db:Session=Depends(get_db),user=Depends(reader)):
+    return {"items":_scope(db.query(AutomationEventOutbox).filter_by(status="dead_letter"),AutomationEventOutbox.property_id,db,user).order_by(AutomationEventOutbox.created_at.desc()).limit(100).all()}
+@router.post("/dead-letter-events/{outbox_id}/retry")
+def retry_dead_letter_event(outbox_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    row=db.get(AutomationEventOutbox,outbox_id)
+    if not row or row.status!="dead_letter":raise HTTPException(404,"Dead-letter event not found")
+    retry_dead_letter(db,row);create_audit_log(db,user.username,"AUTOMATION_DEAD_LETTER_RETRIED","AutomationEventOutbox",str(row.id),"Retried reviewed dead-letter event");db.commit();return {"status":row.status}
+@router.post("/dead-letter-events/{outbox_id}/ignore")
+def ignore_dead_letter_event(outbox_id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    row=db.get(AutomationEventOutbox,outbox_id)
+    if not row or row.status!="dead_letter":raise HTTPException(404,"Dead-letter event not found")
+    row.status="ignored";create_audit_log(db,user.username,"AUTOMATION_DEAD_LETTER_IGNORED","AutomationEventOutbox",str(row.id),"Ignored reviewed dead-letter event");db.commit();return {"status":"ignored"}
+@router.post("/outbox/process")
+def process_outbox(db:Session=Depends(get_db),user=Depends(admin)):
+    result=process_outbox_batch(db);create_audit_log(db,user.username,"AUTOMATION_OUTBOX_PROCESSED","AutomationEventOutbox","batch",f"Processed {result['processed']} internal events");db.commit();return result
+@router.get("/retention/preview")
+def automation_retention_preview(retention_days:int=30,db:Session=Depends(get_db),_=Depends(admin)):return retention_preview(db,retention_days)
+@router.post("/retention/cleanup")
+def automation_retention_cleanup(p:CleanupWrite,db:Session=Depends(get_db),user=Depends(admin)):
+    if not p.confirm:raise HTTPException(422,"Explicit cleanup confirmation is required")
+    result=cleanup_retention(db,p.retention_days,p.batch_size);create_audit_log(db,user.username,"AUTOMATION_RETENTION_CLEANUP","AutomationEventOutbox","retention",f"Deleted {result['deleted_outbox']} eligible outbox records");db.commit();return result
+@router.get("/reports/summary")
+def automation_report_summary(db:Session=Depends(get_db),user=Depends(reader)):
+    allowed=_allowed_properties(db,user)
+    def scoped(query,column):
+        return query if allowed is None else query.filter(column.in_(allowed))
+    executions=scoped(db.query(AutomationTriggerExecution),AutomationTriggerExecution.property_id)
+    return {"active_schedules":scoped(db.query(AutomationWorkflowSchedule).filter_by(enabled=True),AutomationWorkflowSchedule.property_id).count(),"active_triggers":scoped(db.query(AutomationTriggerSubscription).filter_by(enabled=True),AutomationTriggerSubscription.property_id).count(),"events":scoped(db.query(AutomationEventRecord),AutomationEventRecord.property_id).count(),"triggered":executions.filter_by(status="triggered").count(),"suppressed":executions.filter_by(status="suppressed").count(),"dead_letters":scoped(db.query(AutomationEventOutbox).filter_by(status="dead_letter"),AutomationEventOutbox.property_id).count()}

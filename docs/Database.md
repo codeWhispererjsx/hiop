@@ -18,6 +18,13 @@ blackout windows, safe event metadata, processing timestamps, and schedule run
 status. Trigger execution rows preserve deduplication and suppression history.
 No existing workflow, version, or run records are rewritten.
 
+Migration `f5c6d7e8f9a0` completes orchestration persistence with transactional
+event outbox, correlation-group, and immutable trigger-revision tables. It adds
+recovery/correlation controls to subscriptions and structured calendar,
+timezone, start/end, jitter, and blackout controls to schedules. Status/time
+indexes support bounded outbox, dead-letter, correlation-expiry, revision, and
+scheduler queries.
+
 ## Epic 6B analytics persistence
 
 Migration `c8e6b4d2a701` adds schedule configuration, processing checkpoints, retention policies, and run progress/checkpoint fields without changing operational source records.

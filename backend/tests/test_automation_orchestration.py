@@ -2,8 +2,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.api.v1.automation_triggers import router
+from app.api.v1.automation_triggers import ScheduleWrite,_validate_schedule,router
+from app.models.automation_triggers import AutomationEventOutbox,AutomationTriggerCorrelationGroup,AutomationTriggerRevision
 from app.services.automation_trigger_service import EVENT_CATALOG,preview_subscription,validate_payload,validate_subscription
+from app.services.automation_event_outbox_service import publish_internal_event
 from app.services.scheduler_service import automation_job_id
 
 
@@ -14,6 +16,9 @@ def subscription(**overrides):
         input_mapping={},
         maximum_runs_per_window=5,
         delay_seconds=0,
+        correlation_threshold=1,
+        maximum_correlation_members=100,
+        recovery_event_type=None,
         trigger_mode="notify_only",
         approval_mode="use_workflow_policy",
         maintenance_behavior="suppress",
@@ -61,6 +66,10 @@ def test_orchestration_lifecycle_routes_are_registered_without_public_webhooks()
         "/automation/triggers/{trigger_id}/test",
         "/automation/schedules/{schedule_id}/run-now",
         "/automation/scheduler-status",
+        "/automation/dead-letter-events",
+        "/automation/correlation-groups",
+        "/automation/retention/preview",
+        "/automation/reports/summary",
     }
     assert expected.issubset(paths)
     assert not any("webhook" in path for path in paths)
@@ -84,3 +93,30 @@ def test_trigger_preview_is_side_effect_free_and_maps_allowlisted_inputs():
     result=preview_subscription(row,event)
     assert result["matched"] is True
     assert result["mapped_inputs"]=={"device_id":"device-1"}
+
+
+def test_persistent_orchestration_models_exist():
+    assert AutomationEventOutbox.__tablename__=="automation_event_outbox"
+    assert AutomationTriggerCorrelationGroup.__tablename__=="automation_trigger_correlation_groups"
+    assert AutomationTriggerRevision.__tablename__=="automation_trigger_revisions"
+
+
+def test_calendar_schedule_validation_is_bounded_and_timezone_aware():
+    base=dict(workflow_id="00000000-0000-0000-0000-000000000001",workflow_version_id="00000000-0000-0000-0000-000000000002",name="Daily review",schedule_type="daily",timezone="UTC",preferred_time="08:30")
+    _validate_schedule(ScheduleWrite(**base))
+    with pytest.raises(Exception,match="Weekly schedules require"):
+        _validate_schedule(ScheduleWrite(**{**base,"schedule_type":"weekly"}))
+
+
+def test_internal_publisher_creates_safe_transactional_outbox_without_commit():
+    class FakeDB:
+        def __init__(self):self.added=[];self.flushed=False
+        def add(self,row):self.added.append(row)
+        def flush(self):self.flushed=True
+    db=FakeDB()
+    row=publish_internal_event(db,event_type="device_offline",safe_payload={"status":"offline"},status="offline")
+    assert row.status=="pending"
+    assert db.flushed is True
+    assert len(db.added)==1
+    with pytest.raises(ValueError,match="prohibited"):
+        publish_internal_event(db,event_type="device_offline",safe_payload={"password":"unsafe"})

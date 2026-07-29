@@ -6,6 +6,7 @@ from app.models.device import Device
 from app.models.user import User
 from app.schemas.ticket import TicketCreate
 from app.services.audit_service import create_audit_log
+from app.services.automation_event_outbox_service import publish_internal_event
 from app.schemas.ticket import TicketCreate, TicketUpdate
 
 def create_ticket(
@@ -28,6 +29,8 @@ def create_ticket(
 
     db.add(new_ticket)
     db.flush()
+    device=db.get(Device,new_ticket.device_id) if new_ticket.device_id else None
+    publish_internal_event(db,event_type="ticket_created",property_id=device.property_id if device else None,source_entity_type="ticket",source_entity_id=new_ticket.id,safe_payload={},severity=new_ticket.priority,status=new_ticket.status,correlation_key=f"ticket:{new_ticket.id}")
 
     create_audit_log(
         db=db,
@@ -63,13 +66,16 @@ def update_ticket(
             detail="Ticket not found"
         )
 
-    update_data = ticket_data.model_dump(exclude_unset=True)
+    update_data = ticket_data.model_dump(exclude_unset=True);previous_status=ticket.status
 
     if update_data.get("device_id") is not None and not db.query(Device).filter(Device.id == update_data["device_id"]).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
 
     for key, value in update_data.items():
         setattr(ticket, key, value)
+    if ticket.status!=previous_status:
+        device=db.get(Device,ticket.device_id) if ticket.device_id else None
+        publish_internal_event(db,event_type="ticket_status_changed",property_id=device.property_id if device else None,source_entity_type="ticket",source_entity_id=ticket.id,safe_payload={},severity=ticket.priority,status=ticket.status,correlation_key=f"ticket:{ticket.id}")
 
     create_audit_log(
         db=db,
@@ -165,6 +171,8 @@ def assign_ticket(
 
     ticket.assigned_to = assignee.id
     ticket.status = "In Progress"
+    device=db.get(Device,ticket.device_id) if ticket.device_id else None
+    publish_internal_event(db,event_type="ticket_assigned",property_id=device.property_id if device else None,source_entity_type="ticket",source_entity_id=ticket.id,safe_payload={},severity=ticket.priority,status=ticket.status,correlation_key=f"ticket:{ticket.id}")
 
     create_audit_log(
         db=db,
@@ -203,6 +211,8 @@ def close_ticket(
         )
 
     ticket.status = "Closed"
+    device=db.get(Device,ticket.device_id) if ticket.device_id else None
+    publish_internal_event(db,event_type="ticket_resolved",property_id=device.property_id if device else None,source_entity_type="ticket",source_entity_id=ticket.id,safe_payload={},severity=ticket.priority,status=ticket.status,correlation_key=f"ticket:{ticket.id}")
 
     create_audit_log(
         db=db,
