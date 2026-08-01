@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.0-dev — Enterprise + Hospitality design system
+
+- Centralized color, typography, spacing, radius, elevation, focus, and z-index tokens across the React application.
+- Adopted Royal Blue/Navy enterprise structure, Emerald health semantics, and restrained Premium Gold hospitality accents.
+- Refreshed login, authenticated shell, navigation, cards, controls, tables, dialogs, notifications, charts, and responsive states without changing routes, APIs, permissions, or business behavior.
+- Added full light/dark/system theme behavior, reduced-motion support, sticky table headers, consistent focus treatment, semantic chart palettes, and design-system regression checks.
+
 ## 3.0.0-dev — Enterprise CMDB (Epic 5)
 
 - Added 16 property-aware CMDB tables, 40 hospitality CI types, 14 directional relationship types, identifiers, aliases, typed attributes, immutable attribute/relationship/lifecycle history, and source-system links.

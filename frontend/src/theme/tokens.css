@@ -1,0 +1,150 @@
+/*
+ * HIOP Enterprise + Hospitality design tokens.
+ * Literal colors intentionally live only in this file so product surfaces use
+ * semantic tokens and remain theme-safe.
+ */
+:root {
+  color-scheme: light;
+
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-active: #1e40af;
+  --color-secondary: #1e3a8a;
+  --color-accent: #10b981;
+  --color-hospitality: #d4af37;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #dc2626;
+  --color-info: #0ea5e9;
+  --color-offline: #64748b;
+  --color-maintenance: #8b5cf6;
+  --color-unknown: #94a3b8;
+  --status-success-text: #15803d;
+  --status-warning-text: #a16207;
+  --status-danger-text: #b91c1c;
+  --status-info-text: #0369a1;
+  --status-offline-text: #475569;
+  --status-maintenance-text: #6d28d9;
+  --color-white: #ffffff;
+  --color-black: #020617;
+
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --surface-soft: #f1f5f9;
+  --surface-subtle: #e2e8f0;
+  --surface-raised: #ffffff;
+  --sidebar-bg: #0f172a;
+  --sidebar-hover: #1e293b;
+  --border: #e5e7eb;
+  --border-strong: #cbd5e1;
+  --text: #111827;
+  --text-muted: #6b7280;
+  --text-disabled: #9ca3af;
+  --text-inverse: #f8fafc;
+  --input-bg: #ffffff;
+  --overlay: rgb(15 23 42 / 62%);
+
+  --primary-soft: rgb(37 99 235 / 10%);
+  --primary-soft-strong: rgb(37 99 235 / 18%);
+  --success-soft: rgb(34 197 94 / 11%);
+  --warning-soft: rgb(245 158 11 / 12%);
+  --danger-soft: rgb(220 38 38 / 10%);
+  --info-soft: rgb(14 165 233 / 11%);
+  --hospitality-soft: rgb(212 175 55 / 13%);
+  --neutral-soft: rgb(100 116 139 / 10%);
+  --surface-translucent: rgb(255 255 255 / 88%);
+  --surface-hover: rgb(37 99 235 / 5%);
+  --grid-line: rgb(100 116 139 / 14%);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-md: 0.875rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.75rem;
+  --font-size-3xl: 2.25rem;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.7;
+
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
+  --radius-full: 9999px;
+
+  --shadow-xs: 0 1px 2px rgb(15 23 42 / 5%);
+  --shadow-sm: 0 1px 3px rgb(15 23 42 / 8%), 0 1px 2px rgb(15 23 42 / 5%);
+  --shadow-md: 0 8px 24px rgb(15 23 42 / 9%);
+  --shadow-lg: 0 18px 44px rgb(15 23 42 / 14%);
+  --focus-ring: 0 0 0 3px rgb(37 99 235 / 24%);
+
+  --z-base: 1;
+  --z-sticky: 20;
+  --z-sidebar: 30;
+  --z-overlay: 70;
+  --z-modal: 80;
+  --z-toast: 100;
+
+  /* Compatibility aliases used by existing HIOP modules. */
+  --bg: var(--background);
+  --surface-2: var(--surface-soft);
+  --surface-3: var(--surface-subtle);
+  --line: var(--border);
+  --muted: var(--text-muted);
+  --primary: var(--color-primary);
+  --accent: var(--color-primary);
+  --accent-soft: var(--primary-soft);
+  --gold: var(--color-primary);
+  --gold-hover: var(--color-primary-hover);
+  --gold-soft: var(--primary-soft);
+  --emerald: var(--color-success);
+  --red: var(--color-danger);
+  --amber: var(--color-warning);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0b1220;
+  --surface: #111827;
+  --surface-soft: #172033;
+  --surface-subtle: #1e293b;
+  --surface-raised: #162033;
+  --sidebar-bg: #020617;
+  --sidebar-hover: #111827;
+  --border: #263348;
+  --border-strong: #334155;
+  --text: #f8fafc;
+  --text-muted: #a8b3c5;
+  --text-disabled: #64748b;
+  --text-inverse: #f8fafc;
+  --input-bg: #0f172a;
+  --status-success-text: #4ade80;
+  --status-warning-text: #fbbf24;
+  --status-danger-text: #f87171;
+  --status-info-text: #38bdf8;
+  --status-offline-text: #cbd5e1;
+  --status-maintenance-text: #c4b5fd;
+  --overlay: rgb(2 6 23 / 78%);
+  --surface-translucent: rgb(11 18 32 / 88%);
+  --surface-hover: rgb(59 130 246 / 9%);
+  --grid-line: rgb(148 163 184 / 13%);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 20%);
+  --shadow-sm: 0 2px 8px rgb(0 0 0 / 22%);
+  --shadow-md: 0 10px 30px rgb(0 0 0 / 25%);
+  --shadow-lg: 0 22px 54px rgb(0 0 0 / 34%);
+}

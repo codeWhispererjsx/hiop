@@ -1,8 +1,29 @@
-# HIOP 1.0.0 interface contract
+# HIOP Enterprise + Hospitality interface contract
 
-Status: implemented release candidate.
+Status: implemented for `3.0.0-dev`.
 
-The React application uses a shared authenticated shell, responsive sidebar/header, real organization identity, session status, light/dark themes, and `#C29F04` as a restrained brand accent. Page routes are lazy-loaded and every data view provides loading, empty/filtered-empty, error, unauthorized/not-found where applicable, and success feedback.
+The React application uses a shared authenticated shell, responsive sidebar/header, real organization identity, session status, and instant light/dark themes. Page routes remain lazy-loaded and every data view retains its loading, empty/filtered-empty, error, unauthorized/not-found, and success feedback.
+
+## Design system
+
+`frontend/src/theme/tokens.css` is the only source of literal interface colors. Semantic aliases preserve compatibility with existing module styles while ensuring every page follows the same theme. `frontend/src/styles/design-system.css` provides the shared presentation layer for navigation, headers, cards, buttons, forms, tables, badges, dialogs, notifications, charts, feedback, and responsive behavior.
+
+The official palette is Royal Blue for primary interaction, Navy for enterprise structure, Emerald for positive operational state, and Premium Gold only for hospitality identity or executive emphasis. Status semantics use green, amber, red, sky, slate, violet, and neutral tokens. Color is always paired with visible text, iconography, or status labels.
+
+Typography uses Inter when available and a system UI fallback. The token system defines four font weights, a type hierarchy, a consistent spacing scale, small-to-full radii, elevation levels, focus rings, and named z-index layers. Page-level CSS uses semantic variables rather than independent palettes.
+
+## Theme behavior
+
+Light mode uses the designated cool-gray background, white cards, dark text, and Navy sidebar. Dark mode uses the designated deep-blue background, raised slate cards, near-black sidebar, and high-contrast text. The inline bootstrap applies the saved or operating-system preference before React loads to avoid a theme flash. The Theme provider synchronizes system changes and persists explicit user preference in `localStorage` under `hiop_theme`.
+
+## Component standards
+
+- Primary buttons use Royal Blue; destructive actions remain red; secondary actions use bordered neutral surfaces.
+- Inputs, selectors, and text areas share hover, focus, disabled, validation, and placeholder treatment.
+- Tables provide sticky headers, row hover, horizontal overflow, readable density, and text-bearing status badges.
+- Cards and dashboard panels use soft borders, restrained shadows, consistent radii, and responsive grids.
+- Modal focus trapping, keyboard escape, toast live regions, chart text/table alternatives, and visible focus rings remain intact.
+- Existing SVG `Icon` is the single icon system; no second icon dependency was introduced.
 
 ## Pages
 
@@ -21,6 +42,8 @@ The React application uses a shared authenticated shell, responsive sidebar/head
 ## Accessibility and responsive behavior
 
 Controls use native buttons, links, inputs, selects, labels, dialog semantics, ARIA labels where visual text is absent, visible focus treatment, keyboard-operable navigation, and horizontally scrollable tables. Desktop, tablet, and narrow layouts preserve usable navigation and actions. Theme tokens maintain contrast across cards, tables, forms, charts, modals, toasts, and feedback states.
+
+The global reduced-motion rule honors operating-system preference. Mobile layouts keep primary actions full-width where needed, collapse the authenticated shell into the existing drawer navigation, and prevent horizontal overflow on the login experience. Complex data tables retain controlled horizontal scrolling rather than hiding fields.
 
 No Version 1.0.0 page exposes fake alerts, reports, health values, save controls, or unsupported actions.
 # Knowledge workspace

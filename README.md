@@ -4,6 +4,10 @@ HIOP v2 analytics includes opt-in scheduled aggregation, bounded historical back
 
 HIOP 3.0.0-dev is an internal hospitality IT operations platform. It combines device inventory, safe private-network discovery, network monitoring, alerting, service tickets, user administration, immutable audit records, reports, and runtime-safe settings in one authenticated application. The v3 foundation adds organization and property context while preserving existing routes and data.
 
+## Enterprise + Hospitality interface
+
+The React application uses a centralized semantic design system with Royal Blue primary actions, Navy enterprise navigation, Emerald operational health, and sparing Premium Gold hospitality highlights. Shared typography, spacing, radius, shadow, status, focus, and layering tokens drive every module. Light, dark, and system preferences switch instantly and remain stored locally without changing application behavior. See [UI design system](docs/UI.md).
+
 ## Epic 5: Enterprise CMDB
 
 HIOP now includes a property-aware Configuration Management Database with reviewed CIs, hospitality taxonomy, lifecycle and attribute history, deterministic dependency/impact analysis, discovery reconciliation, health metrics, reports, and scheduled validation. The workspace is `/cmdb`. See [CMDB](docs/CMDB.md), [CI Relationships](docs/CI_RELATIONSHIPS.md), and [Discovery Reconciliation](docs/DISCOVERY_RECONCILIATION.md).

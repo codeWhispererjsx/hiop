@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Enterprise + Hospitality UI theme
+
+The frontend now uses centralized semantic tokens and a shared component layer across all existing HIOP pages. Light, dark, and system modes use the official Royal Blue, Navy, Emerald, and restrained Premium Gold palette. This was a presentation-only refactor: APIs, routes, RBAC, application state, and backend behavior remain unchanged.
+
 ## Epic 5 — Enterprise Configuration Management Database
 
 Implemented the additive CMDB bounded context in migration `c0d1e2f3a4b5`: 16 tables, 40 seeded CI types across six classes, 14 relationship types, reviewed lifecycle/attributes/identifiers, dependency graph and cycle detection, impact analysis, discovery reconciliation, deterministic health, reports, seven scheduler jobs, 28 API paths, and the `/cmdb` workspace. Relationships and CI onboarding always remain human-reviewed.

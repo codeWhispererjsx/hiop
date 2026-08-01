@@ -343,5 +343,5 @@ function Panel({title,copy,children}:{title:string;copy:string;children:ReactNod
 function Table({heads,children}:{heads:string[];children:ReactNode}){return <div className="topology-table-wrap"><table className="topology-table"><thead><tr>{heads.map(h=><th key={h} scope="col">{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>}
 function activeFilterCount(filters:TopologyFilterState){return Object.entries(filters).filter(([key,value])=>key!=="search"&&value!==""&&value!==false&&value!==0).length}
 function edgeLabel(link:TopologyLink){return [link.link_type,link.vlan_id?`VLAN ${link.vlan_id}`:"",link.speed_bps?`${Math.round(link.speed_bps/1e6)} Mbps`:""].filter(Boolean).join(" · ")}
-function statusColor(status:string){return ({online:"#2fcf8f",healthy:"#2fcf8f",degraded:"#f7b955",offline:"#ee6b75",missing:"#8a93a5"} as Record<string,string>)[status]??"#8391a7"}
+function statusColor(status:string){return ({online:"var(--color-success)",healthy:"var(--color-success)",degraded:"var(--color-warning)",offline:"var(--color-danger)",missing:"var(--color-offline)"} as Record<string,string>)[status]??"var(--color-unknown)"}
 function downloadBlob(blob:Blob,filename:string){const url=URL.createObjectURL(blob),anchor=document.createElement("a");anchor.href=url;anchor.download=filename;anchor.click();URL.revokeObjectURL(url)}

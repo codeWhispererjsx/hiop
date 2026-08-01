@@ -44,6 +44,8 @@ Approved private network targets (ICMP scanner)
 
 The frontend is a Vite single-page application. React Router owns navigation and lazy-loads each page. A centralized API client attaches the session-scoped JWT, normalizes errors, coalesces identical in-flight GET requests, and redirects invalid sessions to login. `DashboardLayout` owns one authenticated WebSocket connection and distributes live device-status events to active pages.
 
+Presentation is isolated from domain behavior. `theme/tokens.css` defines the Enterprise + Hospitality palette and semantic light/dark tokens; `styles/design-system.css` defines the shared component layer; module styles consume those variables. `ThemeContext` manages only display preference and pre-render theme bootstrapping prevents a flash. The redesign does not alter route registration, API requests, authorization, feature state, or backend contracts.
+
 FastAPI groups thin route modules around authentication, devices, scanner operations, tickets, users, audit, reports, hierarchy, dashboard, settings, and WebSockets. Services contain mutation/query logic. Pydantic schemas validate transport data. SQLAlchemy sessions are dependency-scoped and mutations roll back on failure.
 
 The Discovery foundation is backend-only. Its SQLAlchemy models and Alembic migration reserve persistence and identity constraints; persistence-only repositories isolate database access; and an unimplemented service contract reserves later orchestration boundaries. Epic 1A registers no route, scheduler job, scanner, approval flow, inventory mutation, or frontend page. See `DISCOVERY.md`.

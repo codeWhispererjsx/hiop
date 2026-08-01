@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 type Point = { label: string; value: number | null; lower?: number; upper?: number; quality?: string };
-const PALETTE = ["#c29f04", "#39d39f", "#e15567", "#5e93cc", "#9d79d6", "#7f8f89"];
+const PALETTE = ["var(--color-primary)", "var(--color-success)", "var(--color-danger)", "var(--color-info)", "var(--color-maintenance)", "var(--color-offline)"];
 
 function geometry(points: Point[], width = 720, height = 240) {
   const values = points.flatMap((point) => [point.value, point.lower, point.upper]).filter((value): value is number => value !== null && value !== undefined && Number.isFinite(value));
@@ -22,7 +22,7 @@ export function AnalyticsLineChart({ title, points, area = false, confidence = f
   return <article className="analytics-chart-card">
     <header><div><h3>{title}</h3><span>{usable.length} backend samples · {minimum.toFixed(1)}–{maximum.toFixed(1)} {unit}</span></div></header>
     <svg viewBox="0 0 720 240" role="img" aria-label={`${title}. ${usable.length} points from ${usable[0].label} to ${usable[usable.length-1].label}.`}>
-      <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#c29f04" stopOpacity=".28"/><stop offset="1" stopColor="#c29f04" stopOpacity="0"/></linearGradient></defs>
+      <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--color-primary)" stopOpacity=".28"/><stop offset="1" stopColor="var(--color-primary)" stopOpacity="0"/></linearGradient></defs>
       {[.25,.5,.75].map(level=><line key={level} className="analytics-gridline" x1="18" x2="702" y1={level*220} y2={level*220}/>)}
       {confidence&&upper.length>1&&<polygon className="analytics-confidence" points={[...upper,...lower].join(" ")}/>}
       {area&&<polygon fill={`url(#${gradientId})`} points={`18,218 ${line} 702,218`}/>}
