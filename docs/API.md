@@ -207,3 +207,19 @@ Authenticated `/analytics` endpoints provide metric-definition CRUD, paginated a
 - `DELETE /api/v1/properties/{id}` — administrator safe archive
 
 These endpoints preserve existing `/api/v1/hierarchy` routes and do not create multi-tenant SaaS boundaries.
+## Incident management
+
+The protected `/api/v1/incidents` surface provides declaration and duplicate
+review, controlled transitions, sources, participants, tasks, checklists,
+timeline, evidence, decisions, communications, impact, deterministic
+recommendations, recovery verification, cause assessment, post-incident review,
+follow-ups, escalation evaluation, redacted evidence bundles, and reporting.
+`/api/v1/incidents/playbooks` and `/playbook-versions` provide admin-only
+structured playbook lifecycle management. All reads and mutations enforce
+property access; there is no public webhook or arbitrary action endpoint.
+
+Run operations under `/api/v1/incidents/playbook-runs` expose bounded
+pause/resume/cancel controls, ordered step status, explicit approval and
+verification completion, version-limited retry, and administrator-only safe
+compensation. Compensation keys are part of the approved immutable playbook
+version and must resolve to the fixed automation handler catalogue.

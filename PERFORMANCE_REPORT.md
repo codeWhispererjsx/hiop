@@ -114,3 +114,11 @@ attempt lookup and bounded exponential retry. Correlation membership is capped
 at 500, scheduler histories are bounded, and retention deletes at most 1,000
 eligible published rows per transaction while protecting dead letters and
 workflow evidence.
+## Epic 3C incident workload
+
+Incident lists, timelines, evidence, and reports are bounded and paginated.
+Active incident queries use property/status/time indexes; task escalation uses
+status/due-time indexes. Dashboard responses omit raw evidence, WebSocket events
+carry summaries only, and scheduler evaluation processes at most 1,000 active
+records per cycle. Playbook metadata is loaded separately from execution and
+evidence history.

@@ -421,3 +421,11 @@ review before execution continues.
 Open **Analytics** for the executive overview or choose Health, Capacity, Availability, SLA, Reliability, Forecasts, Trends, or Reports. Time range, aggregation bucket, and health status are shareable URL filters. Forecast bands communicate uncertainty; they are deterministic statistical projections, not guarantees. Expand a chart's data table for an accessible numeric view. Reports support JSON, formula-safe CSV, and browser print/PDF.
 
 Health scores are deterministic weighted summaries, not AI. Open the contributing factors and data coverage before acting. `Unknown` means evidence is insufficient or stale—not healthy or failed. Availability excludes unknown time from the percentage and reports it separately. Capacity statuses compare observed samples with reviewed thresholds and do not predict future demand.
+## Incident command
+
+Open **Incidents** to review property incidents or declare a new one. The
+command workspace groups status, impact, participants, tasks, checklist,
+evidence, approved communications, playbook progress, recommendations, recovery
+checks, decisions, and timeline. “Unknown” impact is intentional. Complete
+required work and attach evidence before asking an authorized commander to
+verify recovery or close the incident.

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.network_scan import NetworkScan
 from app.models.system_setting import SystemSetting
-from app.schemas.settings import DiscoverySettings, GeneralSettings, NetworkSettings, NotificationSettings, OrganizationSettings
+from app.schemas.settings import DiscoverySettings, GeneralSettings, IncidentSettings, NetworkSettings, NotificationSettings, OrganizationSettings
 
 
 DEFAULTS = {
@@ -51,6 +51,18 @@ DEFAULTS = {
     "ad_match.department_mapping_enabled": "true", "ad_match.ou_mapping_enabled": "true",
     "ad_match.admin_confirmation_required": "true", "ad_match.bulk_exact_limit": "100",
     "ad_match.reconciliation_batch_size": "50", "ad_match.conflict_penalty": "35",
+    "incidents.enabled": "true", "incidents.automatic_incident_declaration_enabled": "false",
+    "incidents.minimum_automatic_severity": "critical", "incidents.duplicate_window_minutes": "60",
+    "incidents.incident_number_format": "INC-{date}-{token}", "incidents.commander_required_severity": "high",
+    "incidents.playbook_required_severity": "high", "incidents.communication_update_interval_minutes": "60",
+    "incidents.p1_acknowledgement_minutes": "15", "incidents.p1_containment_minutes": "60",
+    "incidents.p1_recovery_minutes": "240", "incidents.p2_acknowledgement_minutes": "30",
+    "incidents.p2_containment_minutes": "120", "incidents.p2_recovery_minutes": "480",
+    "incidents.post_incident_review_required_severity": "high", "incidents.incident_retention_days": "1095",
+    "incidents.evidence_retention_days": "1095", "incidents.task_escalation_enabled": "true",
+    "incidents.external_communications_enabled": "false", "incidents.life_safety_confirmation_required": "true",
+    "incidents.remediation_recommendations_enabled": "true", "incidents.automatic_remediation_enabled": "false",
+    "incidents.incident_merge_enabled": "true", "incidents.incident_reopen_enabled": "true",
 }
 
 
@@ -83,6 +95,7 @@ def read_bundle(db: Session) -> dict[str, Any]:
         "general": _group(values, "general"), "organization": _group(values, "organization"),
         "network": _group(values, "network"), "notifications": _group(values, "notifications"),
         "discovery": read_discovery(db),
+        "incidents": read_incident_settings(db),
         "email": {"configured": configured, "host": "smtp.gmail.com" if settings.email_address else None, "port": 465 if settings.email_address else None, "security": "TLS" if settings.email_address else "Not configured", "credentials_editable": False},
         "security": {"authentication": "JWT bearer token", "access_token_lifetime": f"{settings.access_token_expire_minutes} minutes", "roles": ["admin", "technician"], "inactive_user_login_blocked": True, "failed_login_auditing": False, "refresh_tokens": False, "mfa": False, "session_revocation": False},
         "application": {"product_name": "Hospitality IT Operations Platform", "short_name": "HIOP", "frontend_version": "3.0.0-dev", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": settings.environment.title()},
@@ -151,7 +164,28 @@ def read_ad_matching_settings(db: Session) -> dict[str, Any]:
     return result
 
 
-def save_group(db: Session, prefix: str, payload: GeneralSettings | OrganizationSettings | NetworkSettings | NotificationSettings | DiscoverySettings) -> None:
+def read_incident_settings(db: Session) -> dict[str, Any]:
+    values = _group(_all(db), "incidents")
+    booleans = (
+        "enabled", "automatic_incident_declaration_enabled", "task_escalation_enabled",
+        "external_communications_enabled", "life_safety_confirmation_required",
+        "remediation_recommendations_enabled", "automatic_remediation_enabled",
+        "incident_merge_enabled", "incident_reopen_enabled",
+    )
+    integers = (
+        "duplicate_window_minutes", "communication_update_interval_minutes",
+        "p1_acknowledgement_minutes", "p1_containment_minutes", "p1_recovery_minutes",
+        "p2_acknowledgement_minutes", "p2_containment_minutes", "p2_recovery_minutes",
+        "incident_retention_days", "evidence_retention_days",
+    )
+    for key in booleans:
+        values[key] = _bool(values[key])
+    for key in integers:
+        values[key] = int(values[key])
+    return values
+
+
+def save_group(db: Session, prefix: str, payload: GeneralSettings | OrganizationSettings | NetworkSettings | NotificationSettings | DiscoverySettings | IncidentSettings) -> None:
     for key, value in payload.model_dump().items():
         setting_key = f"{prefix}.{key}"
         stored = "" if value is None else str(value).lower() if isinstance(value, bool) else str(value)

@@ -51,6 +51,20 @@ from app.models.analytics import (
     EntityHealthScore, HealthScoreConfiguration, ReliabilityMeasurement,
     SLADefinition, SLAMeasurement,
 )
+from app.models.incidents import (
+    OperationalIncident, OperationalIncidentSource, OperationalPlaybook,
+    OperationalPlaybookVersion, OperationalPlaybookStep, IncidentPlaybookRun,
+    IncidentPlaybookStepRun, IncidentParticipant, IncidentTask,
+    IncidentChecklistItem, IncidentTimelineEntry, IncidentEvidence,
+    IncidentDecision, IncidentCommunicationTemplate, IncidentCommunication,
+    IncidentEscalationRule, IncidentEscalation, IncidentResponseTarget,
+    IncidentImpactAssessment, IncidentRemediationRecommendation,
+    IncidentCauseAssessment, PostIncidentReview, IncidentFollowUpAction,
+)
+from app.models.automation import (
+    AutomationWorkflow, AutomationWorkflowVersion, AutomationAction,
+    AutomationWorkflowRun, AutomationWorkflowStep, AutomationStepRun,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

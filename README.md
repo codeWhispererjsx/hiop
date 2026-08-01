@@ -4,13 +4,22 @@ HIOP v2 analytics includes opt-in scheduled aggregation, bounded historical back
 
 HIOP 3.0.0-dev is an internal hospitality IT operations platform. It combines device inventory, safe private-network discovery, network monitoring, alerting, service tickets, user administration, immutable audit records, reports, and runtime-safe settings in one authenticated application. The v3 foundation adds organization and property context while preserving existing routes and data.
 
+Epic 3C adds property-scoped incident command and immutable operational
+playbooks. Authorized teams can coordinate roles, tasks, checklists, evidence,
+approved-template communications, deterministic escalation, human-reviewed
+remediation, verified recovery, closure, and post-incident review from
+`/incidents`. See [Incident management](docs/INCIDENT_MANAGEMENT.md).
+
 Epic 5D adds the interactive `/topology` workspace: bounded React Flow maps, saved layouts, search/filters, path and impact analysis, conflict/inference review, snapshots/comparison, change history, and authenticated live updates. It does not schedule collection or configure devices.
 
 Reviewed CSV/XLSX inventory sessions can now be finalized transactionally. Administrators receive server readiness checks, versioned plans, create/link/enrich/merge execution, Discovery linking, persistent results, safe retry, and compensating rollback. Unreviewed imports, Active Directory, SNMP, and scheduled imports remain unsupported.
 
 ## Release status
 
-Version `2.0.0-rc1` contains the integrated Discovery module and remains a release candidate pending the acceptance report. Discovery is disabled by default; administrators must configure authorized private CIDRs before enabling scheduled runs. Production acceptance evidence is tracked in [HIOP_V2_ACCEPTANCE_REPORT.md](HIOP_V2_ACCEPTANCE_REPORT.md).
+The active development version is `3.0.0-dev`; the v2 production acceptance
+evidence remains archived in [HIOP_V2_ACCEPTANCE_REPORT.md](HIOP_V2_ACCEPTANCE_REPORT.md).
+Discovery and all integration schedulers remain subject to their explicit safe
+configuration and authorization controls.
 
 ## Technology
 

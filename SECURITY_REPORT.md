@@ -146,3 +146,12 @@ bounded, dead-letter review is role-protected, reprocessing creates a new event
 identity, correlation groups are property-scoped and member-limited, and
 recovery events can cancel only delayed—not running—workflows. Calendar
 schedules use validated timezones and structured fields instead of raw cron.
+## Epic 3C incident controls
+
+Incident records, sources, participants, evidence, playbooks, and exports are
+property-authorized. Restricted evidence requires elevated access and bundles
+are redacted. Communication templates use allowlisted scalar variables.
+Approved playbook definitions reject scripts, shell commands, arbitrary URLs,
+secrets, and executable fields. Remediation uses the existing action registry
+and explicit human approval; automatic restore and destructive actions remain
+unavailable.

@@ -154,3 +154,16 @@ Monitor event backlog, collecting correlation groups, and dead letters in the
 scheduler-status response. The one-minute outbox job and daily retention job use
 stable IDs and single-instance execution. Review dead letters before retrying;
 retention never removes dead letters or trigger-linked workflow evidence.
+## Incident scheduler operations
+
+Epic 3C registers deterministic jobs for SLA evaluation, overdue tasks,
+escalation, communication reminders, monitoring completion, post-incident
+reviews, follow-ups, and conservative retention. Job IDs use `incident_*`;
+startup reconciliation replaces duplicates and stale playbook runs are marked
+timed out. Historical incidents, evidence, audits, and reviews are never
+automatically deleted.
+
+The overdue-task job also marks expired playbook steps `timed_out`, stops the
+run, records timeline context, and waits for operator review. Retry is bounded
+by the approved version. Compensation is administrator-only and can execute
+only a preconfigured handler from the fixed safe-action catalogue.

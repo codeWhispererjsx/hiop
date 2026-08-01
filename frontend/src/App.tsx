@@ -34,6 +34,7 @@ const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
   const OperationsPage = lazy(() => import("./pages/OperationsPage"));
   const ConfigurationManagementPage = lazy(() => import("./pages/ConfigurationManagementPage"));
   const AutomationPage = lazy(() => import("./pages/AutomationPage"));
+  const IncidentsPage = lazy(() => import("./pages/IncidentsPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -74,6 +75,10 @@ export default function App() {
     <Route path="/operations" element={protectedPage(<OperationsPage />)} />
     <Route path="/configuration-management" element={protectedPage(<ConfigurationManagementPage />)} />
     <Route path="/automation/*" element={protectedPage(<AutomationPage />)} />
+    <Route path="/incidents" element={protectedPage(<IncidentsPage />)} />
+    <Route path="/incidents/new" element={protectedPage(<IncidentsPage />)} />
+    <Route path="/incidents/playbooks/*" element={protectedPage(<IncidentsPage />)} />
+    <Route path="/incidents/:id/*" element={protectedPage(<IncidentsPage />)} />
     <Route path="/organizations" element={protectedPage(<HospitalityPage />)} />
     <Route path="/properties" element={protectedPage(<HospitalityPage />)} />
     <Route path="/alerts" element={protectedPage(<AlertsPage />)} />

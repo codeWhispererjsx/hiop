@@ -20,6 +20,7 @@ from app.models.topology_operations import TopologyOperationalRun, TopologySched
 from app.models.analytics import AnalyticsRun, AnalyticsScheduleConfiguration
 from app.models.automation import AutomationApprovalRequest, AutomationWorkflow, AutomationWorkflowRun, AutomationWorkflowVersion
 from app.models.automation_triggers import AutomationEventRecord,AutomationTriggerExecution,AutomationTriggerSubscription,AutomationWorkflowSchedule
+from app.models.incidents import IncidentFollowUpAction,IncidentPlaybookRun,IncidentTask,OperationalIncident,PostIncidentReview
 
 
 scheduler = BackgroundScheduler()
@@ -35,6 +36,17 @@ AUTOMATION_JOB_PREFIX = "automation_workflow_"
 AUTOMATION_DELAY_JOB_PREFIX = "automation_delayed_"
 AUTOMATION_OUTBOX_JOB_ID = "automation_event_outbox"
 AUTOMATION_RETENTION_JOB_ID = "automation_retention_cleanup"
+INCIDENT_JOB_PREFIX = "incident_"
+INCIDENT_JOB_INTERVALS = {
+    "sla_evaluation": 5,
+    "overdue_tasks": 5,
+    "escalations": 5,
+    "communication_reminders": 15,
+    "monitoring_completion": 15,
+    "post_incident_reminders": 60,
+    "follow_up_reminders": 60,
+    "retention_cleanup": 1440,
+}
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -157,6 +169,100 @@ def scheduled_automation_retention():
         cleanup_retention(db,30,500)
     except Exception:db.rollback();logger.exception("Automation retention cleanup failed")
     finally:db.close()
+
+
+def incident_job_id(job_type: str) -> str:
+    if job_type not in INCIDENT_JOB_INTERVALS:
+        raise ValueError("Unsupported incident scheduler job")
+    return f"{INCIDENT_JOB_PREFIX}{job_type}"
+
+
+def recover_stale_incident_runs(db, timeout_minutes: int = 240) -> int:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
+    rows = db.query(IncidentPlaybookRun).filter(
+        IncidentPlaybookRun.status.in_(("validating", "ready", "running")),
+        IncidentPlaybookRun.updated_at < cutoff,
+    ).all()
+    for row in rows:
+        row.status = "timed_out"
+        row.completed_at = datetime.now(timezone.utc)
+        row.error_category = "stale_run"
+        row.error_summary = "Recovered stale incident playbook run after scheduler startup."
+    if rows:
+        db.commit()
+    return len(rows)
+
+
+def scheduled_incident_evaluation(job_type: str) -> None:
+    db = SessionLocal()
+    now = datetime.now(timezone.utc)
+    try:
+        active = db.query(OperationalIncident).filter(
+            OperationalIncident.status.notin_(("closed", "cancelled", "duplicate", "merged"))
+        ).limit(1000).all()
+        if job_type in {"sla_evaluation", "escalations", "communication_reminders"}:
+            from app.services.incident_escalation_service import evaluate_incident
+            for incident in active:
+                evaluate_incident(db, incident, now)
+        if job_type == "overdue_tasks":
+            from app.services.incident_orchestration_service import process_playbook_timeouts
+            process_playbook_timeouts(db, now)
+            tasks = db.query(IncidentTask).filter(
+                IncidentTask.due_at < now,
+                IncidentTask.status.notin_(("completed", "verified", "cancelled", "overdue")),
+            ).limit(1000).all()
+            for task in tasks:
+                task.status = "overdue"
+        if job_type == "post_incident_reminders":
+            db.query(PostIncidentReview).filter(
+                PostIncidentReview.status.in_(("required", "scheduled")),
+                PostIncidentReview.scheduled_at.isnot(None),
+                PostIncidentReview.scheduled_at < now,
+            ).limit(1000).all()
+        if job_type == "follow_up_reminders":
+            actions = db.query(IncidentFollowUpAction).filter(
+                IncidentFollowUpAction.due_at < now,
+                IncidentFollowUpAction.status.notin_(("completed", "verified", "cancelled")),
+            ).limit(1000).all()
+            for action in actions:
+                action.status = "overdue"
+        # Retention is deliberately conservative: authoritative incident history,
+        # evidence, audit, and post-incident records are never automatically removed.
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Incident scheduler job failed job_type=%s", job_type)
+    finally:
+        db.close()
+
+
+def reconcile_incident_jobs() -> dict[str, int]:
+    if not settings.scheduler_enabled:
+        return {"registered": 0, "removed": 0}
+    if not scheduler.running:
+        scheduler.start()
+    expected = set()
+    for job_type, minutes in INCIDENT_JOB_INTERVALS.items():
+        job_id = incident_job_id(job_type)
+        expected.add(job_id)
+        scheduler.add_job(
+            scheduled_incident_evaluation, "interval", minutes=minutes,
+            id=job_id, args=[job_type], replace_existing=True, max_instances=1,
+            coalesce=True, misfire_grace_time=min(minutes * 60, 600),
+        )
+    removed = 0
+    for job in list(scheduler.get_jobs()):
+        if job.id.startswith(INCIDENT_JOB_PREFIX) and job.id not in expected:
+            scheduler.remove_job(job.id)
+            removed += 1
+    return {"registered": len(expected), "removed": removed}
+
+
+def remove_incident_jobs() -> int:
+    jobs = [job for job in scheduler.get_jobs() if job.id.startswith(INCIDENT_JOB_PREFIX)]
+    for job in jobs:
+        scheduler.remove_job(job.id)
+    return len(jobs)
 
 
 def snmp_job_id(target_id: str, group: str) -> str:
@@ -922,6 +1028,8 @@ def start_scheduler():
         reconcile_automation_jobs(db)
         scheduler.add_job(scheduled_automation_outbox,"interval",minutes=1,id=AUTOMATION_OUTBOX_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
         scheduler.add_job(scheduled_automation_retention,"cron",hour=4,id=AUTOMATION_RETENTION_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
+        recover_stale_incident_runs(db)
+        reconcile_incident_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

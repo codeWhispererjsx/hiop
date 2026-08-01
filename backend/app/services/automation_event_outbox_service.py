@@ -26,7 +26,10 @@ def process_outbox_batch(db,limit=100):
             if not event:
                 source_id=envelope.get("source_entity_id")
                 event=AutomationEventRecord(event_id=row.event_id,event_type=row.event_type,property_id=row.property_id,source_module=EVENT_CATALOG[row.event_type]["module"],source_entity_type=envelope.get("source_entity_type"),source_entity_id=uuid.UUID(source_id) if source_id else None,severity=envelope.get("severity"),status=envelope.get("status"),correlation_key=envelope.get("correlation_key"),safe_payload=json.dumps(envelope.get("safe_payload") or {},separators=(",",":")),occurred_at=now);db.add(event);db.flush()
-            process_event(db,event);row.status="published";row.published_at=now;row.error_summary=None;published+=1
+            process_event(db,event)
+            from app.services.incident_event_service import create_pending_incident_from_event
+            create_pending_incident_from_event(db,event)
+            row.status="published";row.published_at=now;row.error_summary=None;published+=1
         except Exception:
             row.attempts+=1;row.error_summary="Internal event processing failed"
             if row.attempts>=MAX_ATTEMPTS:row.status="dead_letter";row.next_attempt_at=None;dead_letter+=1

@@ -35,8 +35,10 @@
 - Added additive orchestration migration `f4b5c6d7e8f9`; public webhooks, arbitrary event ingestion, arbitrary code, and unreviewed destructive actions remain unavailable.
 - Completed transactional outbox/dead-letter processing, bounded multi-event correlation, recovery cancellation, checksum-backed trigger revisions, validated daily/weekly/monthly recurrence, retention cleanup, reporting summaries, and migration `f5c6d7e8f9a0`.
 
-## 3.0.0-dev — Incident management foundation
-- Added property-scoped incidents, controlled lifecycle transitions, tasks, and incident timelines.
+## 3.0.0-dev — Operational playbooks and incident orchestration
+- Completed property-scoped incident command, reviewed duplicate/merge handling, participants, tasks, checklists, decisions, evidence, approved-template communications, impact assessment, response targets, bounded escalation, deterministic remediation recommendations, verified recovery, closure safeguards, cause assessment, post-incident reviews, and follow-ups.
+- Added immutable checksum-backed playbook versions, structured steps and run state, stable `incident_*` jobs, redacted evidence bundles, reports, typed frontend APIs, the incident command workspace, and migration `f6d7e8f9a0b1`.
+- Preserved human authority: no generative AI, autonomous remediation, arbitrary code, public webhooks, external incident integrations, or automatic configuration restore.
 
 ## 3.0.0-dev — Hospitality foundation
 

@@ -1,5 +1,14 @@
 # HIOP Bug Tracker
 
+## Epic 3C verification
+
+- No open confirmed Epic 3C blocker after focused incident, migration,
+  frontend, and regression verification.
+- Workstation note: pytest cannot write `backend/.pytest_cache`; test execution
+  is unaffected.
+- External delivery and PDF evidence export are documented limitations, not
+  implemented claims.
+
 ## Epic 6B verification
 
 - No open confirmed Epic 6B functional defect at implementation handoff.

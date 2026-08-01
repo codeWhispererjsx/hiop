@@ -24,7 +24,15 @@ Epic 3A is complete with property-aware workflow/version management, immutable a
 
 Epic 3B is complete with fixed-catalogue internal events, transactional outbox and dead-letter review, property-scoped trigger subscriptions and revisions, structured filters/conditions/input mappings, replay protection and reviewed reprocessing, bounded correlation groups, recovery-event cancellation, cooldown/storm controls, delayed and approval-gated execution, interval/one-time/daily/weekly/monthly schedules, maintenance/blackout suppression, stable APScheduler jobs, overlap prevention, startup reconciliation, stale-run recovery, retention/reporting foundations, audit/live updates, scheduler monitoring, Automation workspace controls, and additive migrations `f4b5c6d7e8f9` and `f5c6d7e8f9a0`. Public webhooks, arbitrary event types, raw cron, arbitrary scripts, and unreviewed destructive actions remain prohibited.
 
-Epic 3C adds property-scoped incident records, controlled status transitions, incident tasks, and append-only timelines via migration `e1f2a3b4c5d6`.
+Epic 3C is complete at `3.0.0-dev`. Migration `f6d7e8f9a0b1` expands the
+foundation into property-scoped incident command, immutable operational
+playbooks, execution runs, participants, tasks, checklists, decisions, evidence,
+allowlisted communications, response targets, bounded escalation, hospitality
+impact, deterministic human-reviewed remediation, verified recovery, closure
+criteria, cause assessment, post-incident reviews, follow-ups, scheduler jobs,
+reports, typed APIs, and the responsive incident workspace. Generative AI,
+autonomous remediation, arbitrary scripts/network calls, public webhooks, and
+automatic configuration restore remain excluded.
 
 ## Epic 6E release candidate
 

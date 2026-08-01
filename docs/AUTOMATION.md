@@ -81,3 +81,13 @@ inputs or outputs; grouped notifications use existing notification settings.
 The UI never accepts arbitrary action code, scripts, URLs, SQL, credentials,
 raw executable expressions, public webhook URLs, or unreviewed destructive
 actions.
+
+## Incident orchestration integration
+
+Operational playbooks pin approved versions and reference only allowlisted
+automation actions. Incident runs create human tasks, checklists, approvals,
+decisions, evidence requirements, and verification gates. High-risk
+recommendations require administrator approval and never execute configuration
+restore or arbitrary device actions. Recovery stays blocked until human
+verification, and closure remains governed by the incident record. See
+`docs/INCIDENT_MANAGEMENT.md`.

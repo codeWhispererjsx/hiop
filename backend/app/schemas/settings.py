@@ -89,12 +89,40 @@ class DiscoverySettings(BaseModel):
         return self
 
 
+class IncidentSettings(BaseModel):
+    enabled: bool = True
+    automatic_incident_declaration_enabled: bool = False
+    minimum_automatic_severity: Literal["high", "critical"] = "critical"
+    duplicate_window_minutes: int = Field(60, ge=5, le=10080)
+    incident_number_format: str = Field("INC-{date}-{token}", min_length=5, max_length=80)
+    commander_required_severity: Literal["medium", "high", "critical"] = "high"
+    playbook_required_severity: Literal["medium", "high", "critical"] = "high"
+    communication_update_interval_minutes: int = Field(60, ge=5, le=1440)
+    p1_acknowledgement_minutes: int = Field(15, ge=1, le=1440)
+    p1_containment_minutes: int = Field(60, ge=1, le=10080)
+    p1_recovery_minutes: int = Field(240, ge=1, le=43200)
+    p2_acknowledgement_minutes: int = Field(30, ge=1, le=1440)
+    p2_containment_minutes: int = Field(120, ge=1, le=10080)
+    p2_recovery_minutes: int = Field(480, ge=1, le=43200)
+    post_incident_review_required_severity: Literal["high", "critical"] = "high"
+    incident_retention_days: int = Field(1095, ge=365, le=3650)
+    evidence_retention_days: int = Field(1095, ge=365, le=3650)
+    task_escalation_enabled: bool = True
+    external_communications_enabled: bool = False
+    life_safety_confirmation_required: bool = True
+    remediation_recommendations_enabled: bool = True
+    automatic_remediation_enabled: Literal[False] = False
+    incident_merge_enabled: bool = True
+    incident_reopen_enabled: bool = True
+
+
 class SettingsBundle(BaseModel):
     general: GeneralSettings
     organization: OrganizationSettings
     network: NetworkSettings
     notifications: NotificationSettings
     discovery: DiscoverySettings
+    incidents: IncidentSettings
     email: dict
     security: dict
     application: dict

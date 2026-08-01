@@ -132,3 +132,12 @@ Migration `b7d9e2f4a601` adds 12 tables: metric definitions, aggregates, availab
 # Hospitality foundation (v3)
 
 Migration `f3a4b5c6d7e8` creates `organizations`, extends `properties` with organization and hospitality attributes, and adds nullable `devices.property_id`. Existing records remain functional without an organization/property assignment. Archive operations are status updates, not destructive deletes.
+## Incident management tables
+
+Migration `f6d7e8f9a0b1` expands `operational_incidents` and its source,
+participant, task, and timeline tables without deleting data. It adds
+operational playbooks/versions/steps, playbook and step runs, checklists,
+evidence, decisions, communications/templates, escalation rules/history,
+response targets, impact assessments, remediation recommendations, cause
+assessments, post-incident reviews, and follow-up actions. Property, status,
+severity, due-time, source, and chronology indexes bound operational queries.

@@ -482,3 +482,11 @@ never expose internal event publication as an external webhook.
 The `/analytics` workspace is read-only visualization over existing analytics APIs. Confirm scheduled jobs and source coverage before interpreting empty or stale charts. Scope selectors the backend cannot enforce are disabled. Trends use bounded server-side comparisons, while Reports provides authenticated JSON, formula-safe CSV, and browser print/PDF. Technicians may inspect analytics; configuration and operational mutations remain administrator-only and backend-enforced.
 
 Analytics configuration is API-only in Epic 6A. Create metric definitions only for documented fixed source mappings. Health weights normalize safely, but thresholds must descend from excellent to degraded. Capacity policies and SLA definitions are disabled by default. Begin manual work with a bounded dry run, inspect its safe summary, then explicitly request persistence. No analytics scheduler or recommendation engine exists.
+## Operational playbooks and incident policy
+
+Admins create property-scoped playbooks under **Incidents → Playbooks**, add
+structured steps, validate the checksum, submit for review, approve, and
+activate an immutable version. Configure response targets, escalation rules,
+and approved communication templates through protected APIs. High/critical
+incidents require command control. Do not approve a remediation recommendation
+without reviewing its evidence, risk, permission, and verification definition.

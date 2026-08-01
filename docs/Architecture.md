@@ -108,3 +108,11 @@ trigger revisions, execution history, and audit records preserve explainability.
 # Hospitality domain foundation (v3)
 
 Version `3.0.0-dev` introduces an additive organization/property context: Organization → Property → existing Department/Room → Device. Existing route and database names remain stable, organization assignment is nullable for legacy data, and no tenant isolation is implied.
+## Incident orchestration
+
+The incident domain is property-scoped and authoritative. Immutable operational
+playbook versions can reference only allowlisted automation actions; playbook
+runs materialize human tasks, checklists, decisions, evidence, communications,
+and verification gates. Deterministic scheduler jobs evaluate response targets
+and bounded escalation. Recovery and closure are separate, human-confirmed
+states. See `INCIDENT_MANAGEMENT.md`.
