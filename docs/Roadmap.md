@@ -23,3 +23,7 @@ Roadmap items are not implemented controls and must pass design, authorization, 
 # Epic 3D status
 
 Knowledge Base, Runbooks, SOPs, Service Catalog, Documentation Library, Troubleshooting, Checklists, deterministic Search, relationships, publishing workflows, reporting, and scheduled maintenance are delivered as the v3 operational-documentation foundation. Future work may add deployment-specific binary preview/storage adapters; AI search and autonomous execution remain excluded.
+
+# Epic 4 status
+
+Enterprise Change Management is delivered with human-reviewed RFC, CAB, risk, maintenance, execution/rollback, release, reports, and reminder foundations. Future adapters may connect approved external calendars and deployment systems, but autonomous production changes remain excluded.

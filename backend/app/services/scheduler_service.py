@@ -22,6 +22,7 @@ from app.models.automation import AutomationApprovalRequest, AutomationWorkflow,
 from app.models.automation_triggers import AutomationEventRecord,AutomationTriggerExecution,AutomationTriggerSubscription,AutomationWorkflowSchedule
 from app.models.incidents import IncidentFollowUpAction,IncidentPlaybookRun,IncidentTask,OperationalIncident,PostIncidentReview
 from app.models.knowledge import Document, KnowledgeArticle, KnowledgeRelationship, StandardProcedure
+from app.models.change_management import ChangeApproval, ChangeRequest, MaintenanceWindow, Release, RiskAssessment
 
 
 scheduler = BackgroundScheduler()
@@ -57,6 +58,13 @@ KNOWLEDGE_JOB_INTERVALS = {
     "revision_reminders": 1440,
     "statistics": 60,
     "search_index": 1440,
+}
+CHANGE_JOB_PREFIX = "change_management_"
+CHANGE_JOB_INTERVALS = {
+    "approval_reminders": 60, "upcoming_maintenance": 60,
+    "missed_approvals": 60, "expired_rfc_cleanup": 1440,
+    "conflict_detection": 60, "release_reminders": 1440,
+    "risk_recalculation": 1440, "calendar_synchronization": 60,
 }
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
@@ -354,6 +362,62 @@ def reconcile_knowledge_jobs() -> dict[str, int]:
     for job in list(scheduler.get_jobs()):
         if job.id.startswith(KNOWLEDGE_JOB_PREFIX) and job.id not in expected:
             scheduler.remove_job(job.id); removed += 1
+    return {"registered": len(expected), "removed": removed}
+
+
+def change_job_id(job_type: str) -> str:
+    if job_type not in CHANGE_JOB_INTERVALS: raise ValueError("Unsupported change-management scheduler job")
+    return f"{CHANGE_JOB_PREFIX}{job_type}"
+
+
+def scheduled_change_job(job_type: str) -> None:
+    db = SessionLocal(); now = datetime.now(timezone.utc)
+    try:
+        notice = None
+        if job_type in {"approval_reminders", "missed_approvals"}:
+            query = db.query(ChangeApproval).filter_by(status="pending")
+            if job_type == "missed_approvals": query = query.filter(ChangeApproval.due_at < now)
+            count = query.limit(1000).count()
+            if count: notice = ("HIOP change approval reminder", f"{count} change approvals require review.")
+        elif job_type == "upcoming_maintenance":
+            count = db.query(MaintenanceWindow).filter(MaintenanceWindow.status == "approved", MaintenanceWindow.start_at >= now, MaintenanceWindow.start_at <= now + timedelta(hours=24)).limit(1000).count()
+            if count: notice = ("Upcoming HIOP maintenance", f"{count} approved maintenance windows begin within 24 hours.")
+        elif job_type == "expired_rfc_cleanup":
+            cutoff = now - timedelta(days=365)
+            for row in db.query(ChangeRequest).filter(ChangeRequest.status == "draft", ChangeRequest.updated_at < cutoff).limit(500): row.status = "cancelled"; row.updated_at = now
+        elif job_type == "conflict_detection":
+            from app.services.change_management_service import detect_window_conflicts
+            for window in db.query(MaintenanceWindow).filter(MaintenanceWindow.status.in_(("draft", "approved")), MaintenanceWindow.end_at >= now).limit(1000): detect_window_conflicts(db, window)
+        elif job_type == "release_reminders":
+            count = db.query(Release).filter(Release.status.in_(("approved", "scheduled")), Release.planned_start >= now, Release.planned_start <= now + timedelta(days=7)).limit(1000).count()
+            if count: notice = ("Upcoming HIOP releases", f"{count} releases are planned within seven days.")
+        elif job_type == "risk_recalculation":
+            for change in db.query(ChangeRequest).filter(~ChangeRequest.status.in_(("closed", "cancelled"))).limit(1000):
+                latest = db.query(RiskAssessment).filter_by(change_request_id=change.id).order_by(RiskAssessment.version.desc()).first()
+                if latest: change.risk_level = latest.risk_level
+        elif job_type == "calendar_synchronization":
+            # Internal calendar state is authoritative; external calendar adapters
+            # remain explicit deployment integrations.
+            db.query(MaintenanceWindow.id).filter(MaintenanceWindow.end_at >= now).limit(5000).all()
+        if notice:
+            from app.services.change_notification_service import notify_change
+            notify_change(db, *notice)
+        db.commit()
+    except Exception:
+        db.rollback(); logger.exception("Change-management scheduler job failed job_type=%s", job_type)
+    finally: db.close()
+
+
+def reconcile_change_jobs() -> dict[str, int]:
+    if not settings.scheduler_enabled: return {"registered": 0, "removed": 0}
+    if not scheduler.running: scheduler.start()
+    expected = set()
+    for job_type, minutes in CHANGE_JOB_INTERVALS.items():
+        job_id = change_job_id(job_type); expected.add(job_id)
+        scheduler.add_job(scheduled_change_job, "interval", minutes=minutes, id=job_id, args=[job_type], replace_existing=True, max_instances=1, coalesce=True, misfire_grace_time=min(minutes * 60, 3600))
+    removed = 0
+    for job in list(scheduler.get_jobs()):
+        if job.id.startswith(CHANGE_JOB_PREFIX) and job.id not in expected: scheduler.remove_job(job.id); removed += 1
     return {"registered": len(expected), "removed": removed}
 
 
@@ -1123,6 +1187,7 @@ def start_scheduler():
         recover_stale_incident_runs(db)
         reconcile_incident_jobs()
         reconcile_knowledge_jobs()
+        reconcile_change_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

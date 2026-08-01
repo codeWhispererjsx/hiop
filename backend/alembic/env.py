@@ -66,6 +66,7 @@ from app.models.automation import (
     AutomationWorkflowRun, AutomationWorkflowStep, AutomationStepRun,
 )
 from app.models.knowledge import *  # noqa: F401,F403 - register Epic 3D metadata
+from app.models.change_management import *  # noqa: F401,F403 - register Epic 4 metadata
 from app.models.hospitality_operations import HospitalityTechnologyService
 
 # this is the Alembic Config object, which provides

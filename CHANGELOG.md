@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.0-dev — Enterprise change and release management (Epic 4)
+
+- Added property-aware RFC lifecycle, required planning, revisions, tasks, comments, attachments, relationships, and human approval controls.
+- Added deterministic ten-factor risk scoring, technical/CAB review with quorum and voting, maintenance calendars, blackout/overlap conflict detection, reviewed execution/evidence/verification, and separately approved rollback.
+- Added releases, packages, versions, deployment waves, artifacts, communications, dashboards, bounded formula-safe exports, audit, summarized WebSocket events, grouped notifications, and eight stable scheduler jobs.
+- Added the responsive `/changes` workspace, migration `b9c0d1e2f3a4`, backend/frontend tests, and operational documentation. No AI approval, arbitrary execution, autonomous deployment, or production mutation was introduced.
+
 ## 3.0.0-dev — Knowledge operations (Epic 3D)
 
 - Added centralized knowledge articles, taxonomy, ratings, favorites, comments, attachments, revisions, approvals, controlled publishing, and audit history.

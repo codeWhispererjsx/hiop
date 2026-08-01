@@ -26,3 +26,7 @@ No Version 1.0.0 page exposes fake alerts, reports, health values, save controls
 # Knowledge workspace
 
 `/knowledge` provides responsive subviews for Dashboard, Articles, Runbooks, SOPs, Service Catalog, Documents, Troubleshooting, Checklists, Search, Approvals, Favorites, Recently Viewed, and Reports. The workspace uses existing HIOP panels, cards, forms, feedback, dark/light tokens, responsive grids, and authenticated API/download clients. Markdown is displayed without unsafe HTML injection.
+
+# Change management workspace
+
+`/changes` provides a responsive tabbed workspace for dashboards, RFC register/builder/details, approvals, CAB, deterministic risk, maintenance calendar, execution, releases, timeline, reports, and audit. Mutation controls are hidden for read-only roles while the backend remains authoritative. Empty, loading, and safe error states use the existing HIOP design system.

@@ -144,3 +144,7 @@ severity, due-time, source, and chronology indexes bound operational queries.
 # Epic 3D schema
 
 Migration `a8b9c0d1e2f3` adds the knowledge article, revision, approval, category, tag, attachment, comment, rating, favorite and view tables; runbook version/execution tables; SOP/review/acknowledgement tables; service catalog/support/dependency tables; document version/approval/link tables; troubleshooting/known-issue tables; checklist template/execution tables; relationship validation and search-stat tables. Changes are additive, UUID based, property aware, indexed, and reversible.
+
+# Epic 4 schema
+
+Migration `b9c0d1e2f3a4` adds 38 tables covering change types/categories, RFCs, approvals/tasks/comments/attachments/revisions, CAB meetings and decisions, structured risk, maintenance calendars/windows/conflicts, executions/evidence/logs/rollback, releases/deployments/artifacts, communications, and polymorphic relationships. UUID primary keys, property/service/user foreign keys, scoped indexes, and uniqueness constraints protect identifiers, votes, attendance, task order, and relationship duplication. Downgrade drops only Epic 4 tables and seed records.

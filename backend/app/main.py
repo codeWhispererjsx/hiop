@@ -37,6 +37,7 @@ from app.api.v1.automation import router as automation_router
 from app.api.v1.automation_triggers import router as automation_triggers_router
 from app.api.v1.incidents import router as incidents_router
 from app.api.v1.knowledge import router as knowledge_router
+from app.api.v1.change_management import router as change_management_router
 from app.discovery.routes import router as discovery_router
 from app.imports.routes import router as imports_router
 from app.users.routes import router as users_router
@@ -195,6 +196,7 @@ app.include_router(automation_router, prefix=settings.api_prefix)
 app.include_router(automation_triggers_router, prefix=settings.api_prefix)
 app.include_router(incidents_router, prefix=settings.api_prefix)
 app.include_router(knowledge_router, prefix=settings.api_prefix)
+app.include_router(change_management_router, prefix=settings.api_prefix)
 app.include_router(discovery_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)
 

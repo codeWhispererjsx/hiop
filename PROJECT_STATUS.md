@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Epic 4 — Enterprise Change, Release, and Maintenance Management
+
+Implemented additive property-aware RFC, CAB, deterministic risk, maintenance window/conflict, execution/evidence/rollback, release, communications, relationships, dashboard/report, audit, WebSocket, notification, and shared-scheduler foundations in migration `b9c0d1e2f3a4`. The responsive workspace is `/changes`. All approvals and production actions remain human-controlled; external calendar and deployment adapters are intentionally deferred.
+
 ## Epic 3D — Knowledge Base and operational documentation
 
 Epic 3D adds property-aware knowledge articles and revisions, immutable runbook versions and manual executions, reviewed SOPs and acknowledgement, service catalogs, document versions, troubleshooting, reusable checklists, deterministic search, validated relationships, reports/exports, and seven stable knowledge maintenance jobs via additive migration `a8b9c0d1e2f3`. The responsive Knowledge workspace is available at `/knowledge`. Binary preview/storage adapters remain deployment-specific; AI search and autonomous runbook execution remain intentionally excluded.

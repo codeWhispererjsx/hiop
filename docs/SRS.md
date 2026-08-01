@@ -40,3 +40,7 @@ Full alert resolution/ownership, comments, attachments, SLA timers, arbitrary ne
 # Epic 3D requirements trace
 
 The system shall provide property/corporate knowledge visibility, controlled article/SOP lifecycles, immutable revisions and runbook versions, reviewed publication, manual parameterized runbook/checklist execution, deterministic bounded search, cross-module relationships, RBAC, audit history, exports, and stable scheduled maintenance. It shall reject executable Markdown, traversal paths, oversized attachments, arbitrary commands, and AI-derived content.
+
+# Epic 4 requirements trace
+
+HIOP shall provide property-aware RFC planning, technical and CAB approvals, deterministic risk scoring, approved maintenance windows, conflict detection, manual evidence-backed execution, separately authorized rollback, release records, communication history, audit, and bounded reporting. The system shall reject invalid transitions and shall not generate approvals or execute arbitrary production actions.

@@ -226,3 +226,7 @@ version and must resolve to the fixed automation handler catalogue.
 # Knowledge operations API
 
 Authenticated endpoints under `/api/v1/knowledge` cover dashboard metrics, articles and lifecycle actions, revisions/rollback, comments, ratings, favorites, categories, tags, approval queues, runbook versions/steps/executions, SOP sections/acknowledgements, service catalogs and dependencies, document versions, troubleshooting steps, checklist executions, relationships, deterministic search, reports, and bounded CSV/XLSX/PDF exports. Lists are property scoped; mutations require contributor or publisher roles. OpenAPI groups the surface under **Knowledge Management**.
+
+# Enterprise change management API
+
+Authenticated endpoints under `/api/v1/changes` provide RFC CRUD/lifecycle, approvals, tasks, comments, bounded attachments, revisions, risk, relationships, CAB meetings/membership/attendance/agenda/votes/decisions, maintenance windows/approvals/conflicts, execution checkpoints/evidence/verification/rollback, releases/packages/versions/deployments, communications, dashboards, audit, and bounded CSV/XLSX/PDF reports. Property scope and role authorization are enforced per object. There is no arbitrary command, autonomous deployment, or AI approval endpoint.
