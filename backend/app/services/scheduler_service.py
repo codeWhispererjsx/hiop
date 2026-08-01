@@ -21,6 +21,7 @@ from app.models.analytics import AnalyticsRun, AnalyticsScheduleConfiguration
 from app.models.automation import AutomationApprovalRequest, AutomationWorkflow, AutomationWorkflowRun, AutomationWorkflowVersion
 from app.models.automation_triggers import AutomationEventRecord,AutomationTriggerExecution,AutomationTriggerSubscription,AutomationWorkflowSchedule
 from app.models.incidents import IncidentFollowUpAction,IncidentPlaybookRun,IncidentTask,OperationalIncident,PostIncidentReview
+from app.models.knowledge import Document, KnowledgeArticle, KnowledgeRelationship, StandardProcedure
 
 
 scheduler = BackgroundScheduler()
@@ -46,6 +47,16 @@ INCIDENT_JOB_INTERVALS = {
     "post_incident_reminders": 60,
     "follow_up_reminders": 60,
     "retention_cleanup": 1440,
+}
+KNOWLEDGE_JOB_PREFIX = "knowledge_"
+KNOWLEDGE_JOB_INTERVALS = {
+    "scheduled_lifecycle": 5,
+    "review_reminders": 1440,
+    "expired_documents": 1440,
+    "broken_links": 1440,
+    "revision_reminders": 1440,
+    "statistics": 60,
+    "search_index": 1440,
 }
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
@@ -263,6 +274,87 @@ def remove_incident_jobs() -> int:
     for job in jobs:
         scheduler.remove_job(job.id)
     return len(jobs)
+
+
+def knowledge_job_id(job_type: str) -> str:
+    if job_type not in KNOWLEDGE_JOB_INTERVALS:
+        raise ValueError("Unsupported knowledge scheduler job")
+    return f"{KNOWLEDGE_JOB_PREFIX}{job_type}"
+
+
+def scheduled_knowledge_job(job_type: str) -> None:
+    db = SessionLocal()
+    now_value = datetime.now(timezone.utc)
+    try:
+        if job_type == "scheduled_lifecycle":
+            from app.services.knowledge_service import publish_and_archive_due
+            publish_and_archive_due(db, now_value)
+        elif job_type == "expired_documents":
+            expired = 0
+            for row in db.query(Document).filter(Document.expires_at <= now_value, Document.status.notin_(("expired", "archived"))).limit(1000):
+                row.status = "expired"; expired += 1
+            if expired:
+                from app.services.knowledge_notification_service import notify_knowledge
+                notify_knowledge(db, "HIOP knowledge documents expired", f"{expired} document records entered the expired review queue.")
+        elif job_type in {"review_reminders", "revision_reminders"}:
+            articles = db.query(KnowledgeArticle).filter(KnowledgeArticle.next_review_at <= now_value).limit(1000).count()
+            procedures = db.query(StandardProcedure).filter(StandardProcedure.next_review_at <= now_value).limit(1000).count()
+            if articles or procedures:
+                from app.services.knowledge_notification_service import notify_knowledge
+                notify_knowledge(db, "HIOP knowledge review reminder", f"Review queue: {articles} articles and {procedures} procedures are due.")
+        elif job_type == "broken_links":
+            # Validate knowledge-owned targets without deleting historical links.
+            # External operational entities remain "unchecked" because their
+            # lifecycle and access rules belong to their source modules.
+            from app.models.knowledge import (
+                CatalogItem, Document, KnowledgeArticle, Runbook,
+                StandardProcedure, TroubleshootingGuide,
+            )
+            targets = {
+                "article": KnowledgeArticle, "runbook": Runbook,
+                "sop": StandardProcedure, "service": CatalogItem,
+                "document": Document, "troubleshooting": TroubleshootingGuide,
+            }
+            for row in db.query(KnowledgeRelationship).limit(5000):
+                statuses = []
+                for entity_type, entity_id in ((row.source_type, row.source_id), (row.target_type, row.target_id)):
+                    model = targets.get(entity_type)
+                    statuses.append("unchecked" if model is None else ("valid" if db.get(model, entity_id) else "broken"))
+                row.validation_status = "broken" if "broken" in statuses else ("valid" if all(value == "valid" for value in statuses) else "unchecked")
+                row.last_validated_at = now_value
+        elif job_type == "statistics":
+            db.query(KnowledgeArticle.id, KnowledgeArticle.view_count).limit(5000).all()
+        elif job_type == "search_index" and db.bind.dialect.name == "postgresql":
+            from sqlalchemy import text
+            db.execute(text("ANALYZE knowledge_articles"))
+            db.execute(text("ANALYZE documents"))
+            db.execute(text("ANALYZE troubleshooting_guides"))
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Knowledge scheduler job failed job_type=%s", job_type)
+    finally:
+        db.close()
+
+
+def reconcile_knowledge_jobs() -> dict[str, int]:
+    if not settings.scheduler_enabled:
+        return {"registered": 0, "removed": 0}
+    if not scheduler.running:
+        scheduler.start()
+    expected = set()
+    for job_type, minutes in KNOWLEDGE_JOB_INTERVALS.items():
+        job_id = knowledge_job_id(job_type); expected.add(job_id)
+        scheduler.add_job(
+            scheduled_knowledge_job, "interval", minutes=minutes, id=job_id,
+            args=[job_type], replace_existing=True, max_instances=1,
+            coalesce=True, misfire_grace_time=min(minutes * 60, 3600),
+        )
+    removed = 0
+    for job in list(scheduler.get_jobs()):
+        if job.id.startswith(KNOWLEDGE_JOB_PREFIX) and job.id not in expected:
+            scheduler.remove_job(job.id); removed += 1
+    return {"registered": len(expected), "removed": removed}
 
 
 def snmp_job_id(target_id: str, group: str) -> str:
@@ -1030,6 +1122,7 @@ def start_scheduler():
         scheduler.add_job(scheduled_automation_retention,"cron",hour=4,id=AUTOMATION_RETENTION_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
         recover_stale_incident_runs(db)
         reconcile_incident_jobs()
+        reconcile_knowledge_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

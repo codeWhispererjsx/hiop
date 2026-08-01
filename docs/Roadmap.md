@@ -20,3 +20,6 @@ Completed: authentication/RBAC, dashboard, device inventory and hierarchy, scann
 - Automated encrypted backups, external metrics/tracing/SIEM, correlation IDs, and tamper-evident audit retention.
 
 Roadmap items are not implemented controls and must pass design, authorization, migration, security, and acceptance review before development.
+# Epic 3D status
+
+Knowledge Base, Runbooks, SOPs, Service Catalog, Documentation Library, Troubleshooting, Checklists, deterministic Search, relationships, publishing workflows, reporting, and scheduled maintenance are delivered as the v3 operational-documentation foundation. Future work may add deployment-specific binary preview/storage adapters; AI search and autonomous execution remain excluded.

@@ -116,3 +116,6 @@ runs materialize human tasks, checklists, decisions, evidence, communications,
 and verification gates. Deterministic scheduler jobs evaluate response targets
 and bounded escalation. Recovery and closure are separate, human-confirmed
 states. See `INCIDENT_MANAGEMENT.md`.
+# Epic 3D knowledge architecture
+
+The knowledge bounded context is implemented by `app.models.knowledge`, a service layer for lifecycle/search/execution rules, a fixed `/api/v1/knowledge` router, and the existing shared APScheduler instance. Property scope is enforced before record access. Immutable revision/version records preserve reviewed content; polymorphic relationships preserve cross-module evidence without introducing foreign-key coupling to every operational domain. PostgreSQL GIN indexes accelerate approved text fields while deterministic fallback matching supports test databases.

@@ -37,3 +37,6 @@ HIOP is the internal source of truth for hotel IT inventory, availability checks
 ## Version 1.0.0 exclusions
 
 Full alert resolution/ownership, comments, attachments, SLA timers, arbitrary network execution, remote device control, refresh tokens, MFA, email recovery, custom roles, automated backup/restore UI, multi-property permissions, and external SIEM/metrics are not implemented.
+# Epic 3D requirements trace
+
+The system shall provide property/corporate knowledge visibility, controlled article/SOP lifecycles, immutable revisions and runbook versions, reviewed publication, manual parameterized runbook/checklist execution, deterministic bounded search, cross-module relationships, RBAC, audit history, exports, and stable scheduled maintenance. It shall reject executable Markdown, traversal paths, oversized attachments, arbitrary commands, and AI-derived content.

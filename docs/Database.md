@@ -141,3 +141,6 @@ evidence, decisions, communications/templates, escalation rules/history,
 response targets, impact assessments, remediation recommendations, cause
 assessments, post-incident reviews, and follow-up actions. Property, status,
 severity, due-time, source, and chronology indexes bound operational queries.
+# Epic 3D schema
+
+Migration `a8b9c0d1e2f3` adds the knowledge article, revision, approval, category, tag, attachment, comment, rating, favorite and view tables; runbook version/execution tables; SOP/review/acknowledgement tables; service catalog/support/dependency tables; document version/approval/link tables; troubleshooting/known-issue tables; checklist template/execution tables; relationship validation and search-stat tables. Changes are additive, UUID based, property aware, indexed, and reversible.

@@ -4,6 +4,10 @@ HIOP v2 analytics includes opt-in scheduled aggregation, bounded historical back
 
 HIOP 3.0.0-dev is an internal hospitality IT operations platform. It combines device inventory, safe private-network discovery, network monitoring, alerting, service tickets, user administration, immutable audit records, reports, and runtime-safe settings in one authenticated application. The v3 foundation adds organization and property context while preserving existing routes and data.
 
+## Epic 3D: Knowledge operations
+
+HIOP now includes a property-aware Knowledge & Runbooks workspace for reviewed Markdown articles, immutable runbooks, SOP acknowledgement, service catalogs, document versions, troubleshooting guides, operational checklists, deterministic enterprise search, approvals, relationships, reports, and scheduled content maintenance. See [Knowledge Base](docs/KNOWLEDGE_BASE.md), [Runbooks](docs/RUNBOOKS.md), and [Search](docs/SEARCH.md).
+
 Epic 3C adds property-scoped incident command and immutable operational
 playbooks. Authorized teams can coordinate roles, tasks, checklists, evidence,
 approved-template communications, deterministic escalation, human-reviewed

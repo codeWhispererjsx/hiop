@@ -12,3 +12,6 @@
 | Quality | ESLint, TypeScript compiler, Python `unittest`, compile/import checks, Alembic verification |
 
 HIOP does not use Tailwind, Axios, TanStack Query, Recharts, or python-nmap in Version 1.0.0. External secrets, TLS certificates, PostgreSQL, and production observability remain deployment responsibilities.
+# Knowledge implementation
+
+Epic 3D uses the existing FastAPI, Pydantic, SQLAlchemy, Alembic, APScheduler, React, TypeScript, Vite, and OpenPyXL stack. PostgreSQL native full-text GIN indexes are used in production; no search server, graph library, rich-text framework, AI model, or competing state manager was introduced.

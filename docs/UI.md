@@ -23,3 +23,6 @@ The React application uses a shared authenticated shell, responsive sidebar/head
 Controls use native buttons, links, inputs, selects, labels, dialog semantics, ARIA labels where visual text is absent, visible focus treatment, keyboard-operable navigation, and horizontally scrollable tables. Desktop, tablet, and narrow layouts preserve usable navigation and actions. Theme tokens maintain contrast across cards, tables, forms, charts, modals, toasts, and feedback states.
 
 No Version 1.0.0 page exposes fake alerts, reports, health values, save controls, or unsupported actions.
+# Knowledge workspace
+
+`/knowledge` provides responsive subviews for Dashboard, Articles, Runbooks, SOPs, Service Catalog, Documents, Troubleshooting, Checklists, Search, Approvals, Favorites, Recently Viewed, and Reports. The workspace uses existing HIOP panels, cards, forms, feedback, dark/light tokens, responsive grids, and authenticated API/download clients. Markdown is displayed without unsafe HTML injection.

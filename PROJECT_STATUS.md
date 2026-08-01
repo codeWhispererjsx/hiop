@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Epic 3D — Knowledge Base and operational documentation
+
+Epic 3D adds property-aware knowledge articles and revisions, immutable runbook versions and manual executions, reviewed SOPs and acknowledgement, service catalogs, document versions, troubleshooting, reusable checklists, deterministic search, validated relationships, reports/exports, and seven stable knowledge maintenance jobs via additive migration `a8b9c0d1e2f3`. The responsive Knowledge workspace is available at `/knowledge`. Binary preview/storage adapters remain deployment-specific; AI search and autonomous runbook execution remain intentionally excluded.
+
 ## HIOP v3.0.0-dev — hospitality foundation
 
 The product is rebranded as Hospitality IT Operations Platform. Additive Organization and Property models, nullable device property context, RBAC APIs, organization/property frontend directories, migration `f3a4b5c6d7e8`, and foundation documentation are complete. SaaS tenancy, billing, licensing, automation, AI, integrations, mobile, and configuration backups remain out of scope.

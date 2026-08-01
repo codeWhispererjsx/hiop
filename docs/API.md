@@ -223,3 +223,6 @@ pause/resume/cancel controls, ordered step status, explicit approval and
 verification completion, version-limited retry, and administrator-only safe
 compensation. Compensation keys are part of the approved immutable playbook
 version and must resolve to the fixed automation handler catalogue.
+# Knowledge operations API
+
+Authenticated endpoints under `/api/v1/knowledge` cover dashboard metrics, articles and lifecycle actions, revisions/rollback, comments, ratings, favorites, categories, tags, approval queues, runbook versions/steps/executions, SOP sections/acknowledgements, service catalogs and dependencies, document versions, troubleshooting steps, checklist executions, relationships, deterministic search, reports, and bounded CSV/XLSX/PDF exports. Lists are property scoped; mutations require contributor or publisher roles. OpenAPI groups the surface under **Knowledge Management**.

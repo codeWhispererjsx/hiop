@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.0-dev — Knowledge operations (Epic 3D)
+
+- Added centralized knowledge articles, taxonomy, ratings, favorites, comments, attachments, revisions, approvals, controlled publishing, and audit history.
+- Added immutable operational runbooks with parameterized manual execution, SOP review/acknowledgement, service catalogs, document versions, troubleshooting guides, and operational checklists.
+- Added property-aware deterministic search, cross-module relationships, knowledge reports/CSV-XLSX-PDF exports, and stable scheduled content-maintenance jobs.
+- Added the responsive Knowledge & Runbooks frontend workspace and focused backend/frontend regression coverage.
+
 ## 3.0.0-dev — Physical infrastructure hierarchy
 
 - Added property-aware buildings, floors, zones, hierarchy APIs, and management pages.
