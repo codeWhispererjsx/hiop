@@ -23,6 +23,7 @@ from app.models.automation_triggers import AutomationEventRecord,AutomationTrigg
 from app.models.incidents import IncidentFollowUpAction,IncidentPlaybookRun,IncidentTask,OperationalIncident,PostIncidentReview
 from app.models.knowledge import Document, KnowledgeArticle, KnowledgeRelationship, StandardProcedure
 from app.models.change_management import ChangeApproval, ChangeRequest, MaintenanceWindow, Release, RiskAssessment
+from app.models.cmdb import CIHealthSnapshot, CIReconciliationCandidate, CIRelationship, ConfigurationItem
 
 
 scheduler = BackgroundScheduler()
@@ -65,6 +66,13 @@ CHANGE_JOB_INTERVALS = {
     "missed_approvals": 60, "expired_rfc_cleanup": 1440,
     "conflict_detection": 60, "release_reminders": 1440,
     "risk_recalculation": 1440, "calendar_synchronization": 60,
+}
+CMDB_JOB_PREFIX = "cmdb_"
+CMDB_JOB_INTERVALS = {
+    "ci_verification": 1440, "relationship_validation": 1440,
+    "health_recalculation": 360, "duplicate_detection": 1440,
+    "orphan_detection": 1440, "discovery_reconciliation": 360,
+    "expired_warranty_notifications": 1440,
 }
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
@@ -419,6 +427,46 @@ def reconcile_change_jobs() -> dict[str, int]:
     for job in list(scheduler.get_jobs()):
         if job.id.startswith(CHANGE_JOB_PREFIX) and job.id not in expected: scheduler.remove_job(job.id); removed += 1
     return {"registered": len(expected), "removed": removed}
+
+
+def cmdb_job_id(job_type: str) -> str:
+    if job_type not in CMDB_JOB_INTERVALS: raise ValueError("Unsupported CMDB scheduler job")
+    return f"{CMDB_JOB_PREFIX}{job_type}"
+
+
+def scheduled_cmdb_job(job_type: str) -> None:
+    db=SessionLocal();now=datetime.now(timezone.utc)
+    try:
+        from app.services.cmdb_service import calculate_health,graph_for,reconciliation_candidates
+        if job_type=="ci_verification":
+            db.query(ConfigurationItem).filter(ConfigurationItem.last_verified_at.is_not(None),ConfigurationItem.last_verified_at<now-timedelta(days=30),ConfigurationItem.verification_status=="verified").update({ConfigurationItem.verification_status:"stale"},synchronize_session=False)
+        elif job_type=="relationship_validation":graph_for(db,max_depth=12,max_nodes=2000)
+        elif job_type in {"health_recalculation","orphan_detection"}:
+            calculate_health(db,None)
+            property_ids=[row[0] for row in db.query(ConfigurationItem.property_id).filter(ConfigurationItem.property_id.is_not(None)).distinct().limit(1000)]
+            for property_id in property_ids:calculate_health(db,property_id)
+        elif job_type in {"duplicate_detection","discovery_reconciliation"}:reconciliation_candidates(db,None,1000,{"device","network_discovery"})
+        elif job_type=="expired_warranty_notifications":
+            from datetime import date
+            count=db.query(ConfigurationItem).filter(ConfigurationItem.status!="archived",ConfigurationItem.warranty_date<date.today()).limit(1000).count()
+            if count:
+                from app.services.cmdb_notification_service import notify_cmdb
+                notify_cmdb(db,"HIOP CMDB warranty review",f"{count} configuration items have expired warranty dates.")
+        db.commit()
+    except Exception:db.rollback();logger.exception("CMDB scheduler job failed job_type=%s",job_type)
+    finally:db.close()
+
+
+def reconcile_cmdb_jobs() -> dict[str,int]:
+    if not settings.scheduler_enabled:return {"registered":0,"removed":0}
+    if not scheduler.running:scheduler.start()
+    expected=set()
+    for job_type,minutes in CMDB_JOB_INTERVALS.items():
+        job_id=cmdb_job_id(job_type);expected.add(job_id);scheduler.add_job(scheduled_cmdb_job,"interval",minutes=minutes,id=job_id,args=[job_type],replace_existing=True,max_instances=1,coalesce=True,misfire_grace_time=min(minutes*60,3600))
+    removed=0
+    for job in list(scheduler.get_jobs()):
+        if job.id.startswith(CMDB_JOB_PREFIX) and job.id not in expected:scheduler.remove_job(job.id);removed+=1
+    return {"registered":len(expected),"removed":removed}
 
 
 def snmp_job_id(target_id: str, group: str) -> str:
@@ -1188,6 +1236,7 @@ def start_scheduler():
         reconcile_incident_jobs()
         reconcile_knowledge_jobs()
         reconcile_change_jobs()
+        reconcile_cmdb_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

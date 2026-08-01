@@ -123,3 +123,7 @@ The knowledge bounded context is implemented by `app.models.knowledge`, a servic
 # Epic 4 change architecture
 
 The `change_management` bounded context separates RFC planning, CAB decisions, deterministic risk, maintenance scheduling, execution/rollback, release records, and communication. Route handlers delegate state rules to `change_management_service`; the shared scheduler owns stable reminder and reconciliation jobs. Immutable revisions and append-only operational records retain evidence while polymorphic relationships avoid unsafe cross-domain cascades. The older configuration-restore request remains a separate compatibility context.
+
+# Epic 5 CMDB architecture
+
+`app.models.cmdb` is an additive authoritative CI context linked to, but separate from, Device Inventory and discovery sources. `cmdb_service` owns deterministic lifecycle, validation, relationship traversal, impact, reconciliation, graph snapshots, and health. `/api/v1/cmdb` enforces property scope and RBAC. The shared scheduler registers seven stable `cmdb_*` jobs; none creates CIs or relationships.

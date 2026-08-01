@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## Epic 5 — Enterprise Configuration Management Database
+
+Implemented the additive CMDB bounded context in migration `c0d1e2f3a4b5`: 16 tables, 40 seeded CI types across six classes, 14 relationship types, reviewed lifecycle/attributes/identifiers, dependency graph and cycle detection, impact analysis, discovery reconciliation, deterministic health, reports, seven scheduler jobs, 28 API paths, and the `/cmdb` workspace. Relationships and CI onboarding always remain human-reviewed.
+
 ## Epic 4 — Enterprise Change, Release, and Maintenance Management
 
 Implemented additive property-aware RFC, CAB, deterministic risk, maintenance window/conflict, execution/evidence/rollback, release, communications, relationships, dashboard/report, audit, WebSocket, notification, and shared-scheduler foundations in migration `b9c0d1e2f3a4`. The responsive workspace is `/changes`. All approvals and production actions remain human-controlled; external calendar and deployment adapters are intentionally deferred.

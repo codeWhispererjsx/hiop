@@ -30,3 +30,7 @@ No Version 1.0.0 page exposes fake alerts, reports, health values, save controls
 # Change management workspace
 
 `/changes` provides a responsive tabbed workspace for dashboards, RFC register/builder/details, approvals, CAB, deterministic risk, maintenance calendar, execution, releases, timeline, reports, and audit. Mutation controls are hidden for read-only roles while the backend remains authoritative. Empty, loading, and safe error states use the existing HIOP design system.
+
+# CMDB workspace
+
+`/cmdb` provides Dashboard, CI Explorer/detail, reviewed CI creation, Relationship Manager, accessible dependency graph/list, Impact Analysis, Reconciliation, Health, Attribute Manager, Search, and Reports. The visual graph includes a text relationship fallback. Forms use existing tokens and collapse to one column on narrow screens; unauthorized mutation controls remain hidden.

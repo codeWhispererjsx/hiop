@@ -44,3 +44,7 @@ The system shall provide property/corporate knowledge visibility, controlled art
 # Epic 4 requirements trace
 
 HIOP shall provide property-aware RFC planning, technical and CAB approvals, deterministic risk scoring, approved maintenance windows, conflict detection, manual evidence-backed execution, separately authorized rollback, release records, communication history, audit, and bounded reporting. The system shall reject invalid transitions and shall not generate approvals or execute arbitrary production actions.
+
+# Epic 5 requirements trace
+
+HIOP shall maintain property-aware CIs, taxonomy, lifecycle, custom attributes, normalized identifiers, evidence-backed directional relationships, cycle-safe dependency views, deterministic impact, reviewed reconciliation, data health, search, bounded bulk operations, reporting, audit, and scheduled validation. It shall reject self/duplicate links and shall never invent a relationship or auto-create an unreviewed CI.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.0.0-dev — Enterprise CMDB (Epic 5)
+
+- Added 16 property-aware CMDB tables, 40 hospitality CI types, 14 directional relationship types, identifiers, aliases, typed attributes, immutable attribute/relationship/lifecycle history, and source-system links.
+- Added reviewed discovery reconciliation, duplicate/orphan analysis, cycle-safe dependency graphs, deterministic impact summaries, health snapshots, bounded bulk operations, audit, summarized WebSocket events, grouped warranty notifications, and seven scheduler jobs.
+- Added 28 protected REST paths, bounded formula-safe reports, the responsive `/cmdb` workspace, focused backend/frontend coverage, and migration `c0d1e2f3a4b5`.
+- No AI relationships, automatic assumptions, unreviewed CI creation, or autonomous production actions were introduced.
+
 ## 3.0.0-dev — Enterprise change and release management (Epic 4)
 
 - Added property-aware RFC lifecycle, required planning, revisions, tasks, comments, attachments, relationships, and human approval controls.

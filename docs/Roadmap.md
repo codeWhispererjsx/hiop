@@ -27,3 +27,7 @@ Knowledge Base, Runbooks, SOPs, Service Catalog, Documentation Library, Troubles
 # Epic 4 status
 
 Enterprise Change Management is delivered with human-reviewed RFC, CAB, risk, maintenance, execution/rollback, release, reports, and reminder foundations. Future adapters may connect approved external calendars and deployment systems, but autonomous production changes remain excluded.
+
+# Epic 5 status
+
+The Enterprise CMDB foundation is delivered with authoritative CIs, reviewed relationships, lifecycle, deterministic graph/impact/reconciliation/health, reports, jobs, and frontend. Problem and Known Error Management is the recommended next bounded context. Cloud/vendor adapters remain explicit future integrations.

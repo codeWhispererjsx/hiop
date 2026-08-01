@@ -148,3 +148,7 @@ Migration `a8b9c0d1e2f3` adds the knowledge article, revision, approval, categor
 # Epic 4 schema
 
 Migration `b9c0d1e2f3a4` adds 38 tables covering change types/categories, RFCs, approvals/tasks/comments/attachments/revisions, CAB meetings and decisions, structured risk, maintenance calendars/windows/conflicts, executions/evidence/logs/rollback, releases/deployments/artifacts, communications, and polymorphic relationships. UUID primary keys, property/service/user foreign keys, scoped indexes, and uniqueness constraints protect identifiers, votes, attendance, task order, and relationship duplication. Downgrade drops only Epic 4 tables and seed records.
+
+# Epic 5 CMDB schema
+
+Migration `c0d1e2f3a4b5` adds CI classes/types/status/lifecycle, configuration items, attributes/history, identifiers, aliases, relationship types/relationships/history, lifecycle history, dependency snapshots, reconciliation candidates, and health snapshots. UUID foreign keys, unique asset/discovery links, normalized identifier uniqueness, no-self relationship checks, confidence/health bounds, and property/time indexes preserve integrity. Upgrade seeds taxonomy only; downgrade removes only Epic 5 tables.

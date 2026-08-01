@@ -230,3 +230,7 @@ Authenticated endpoints under `/api/v1/knowledge` cover dashboard metrics, artic
 # Enterprise change management API
 
 Authenticated endpoints under `/api/v1/changes` provide RFC CRUD/lifecycle, approvals, tasks, comments, bounded attachments, revisions, risk, relationships, CAB meetings/membership/attendance/agenda/votes/decisions, maintenance windows/approvals/conflicts, execution checkpoints/evidence/verification/rollback, releases/packages/versions/deployments, communications, dashboards, audit, and bounded CSV/XLSX/PDF reports. Property scope and role authorization are enforced per object. There is no arbitrary command, autonomous deployment, or AI approval endpoint.
+
+# Enterprise CMDB API
+
+The 28 protected `/api/v1/cmdb` paths cover dashboard, classes/types/status/lifecycle, paginated CI CRUD/search, lifecycle, typed attributes/history, identifiers/aliases, relationship types/relationships/history, dependency graph/snapshots, impact, reconciliation runs/decisions, health/history, bounded bulk operations, summaries, and CSV/XLSX/PDF export. Mutations require contributor/admin roles and property access. No endpoint accepts executable relationship rules or creates inferred relationships.

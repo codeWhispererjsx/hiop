@@ -12,6 +12,7 @@ from app.models.network_scan import NetworkScan
 from app.models.snmp import SNMPPollRun
 from app.models.topology_operations import TopologyOperationalRun
 from app.models.analytics import AnalyticsRun
+from app.models.cmdb import CIHealthSnapshot
 from app.devices.routes import router as device_router
 from app.tickets.routes import router as ticket_router
 from app.scanner.routes import router as scanner_router
@@ -38,6 +39,7 @@ from app.api.v1.automation_triggers import router as automation_triggers_router
 from app.api.v1.incidents import router as incidents_router
 from app.api.v1.knowledge import router as knowledge_router
 from app.api.v1.change_management import router as change_management_router
+from app.api.v1.cmdb import router as cmdb_router
 from app.discovery.routes import router as discovery_router
 from app.imports.routes import router as imports_router
 from app.users.routes import router as users_router
@@ -108,6 +110,7 @@ def health():
     snmp_health = {"integration_enabled": settings.snmp_enabled, "scheduler_jobs": 0, "active_polls": 0, "stale_runs": 0}
     topology_health = {"scheduler_jobs": 0, "active_runs": 0, "stale_runs": 0}
     analytics_health = {"integration_enabled": settings.analytics_enabled, "scheduler_jobs": 0, "active_runs": 0, "stale_runs": 0, "last_successful_run": None}
+    cmdb_health = {"scheduler_jobs": 0, "latest_score": None, "last_calculated_at": None}
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
@@ -135,6 +138,11 @@ def health():
             AnalyticsRun.status == "completed"
         ).order_by(AnalyticsRun.completed_at.desc()).first()
         analytics_health["last_successful_run"] = analytics_latest[0].isoformat() if analytics_latest and analytics_latest[0] else None
+        cmdb_health["scheduler_jobs"] = sum(job.id.startswith("cmdb_") for job in scheduler.get_jobs())
+        cmdb_latest = db.query(CIHealthSnapshot).order_by(CIHealthSnapshot.calculated_at.desc()).first()
+        if cmdb_latest:
+            cmdb_health["latest_score"] = cmdb_latest.health_score
+            cmdb_health["last_calculated_at"] = cmdb_latest.calculated_at.isoformat()
     except Exception:
         database = "unavailable"
     finally:
@@ -156,6 +164,7 @@ def health():
         "snmp": snmp_health,
         "topology": topology_health,
         "analytics": analytics_health,
+        "cmdb": cmdb_health,
     }
     return JSONResponse(payload, status_code=200 if healthy else 503)
 
@@ -197,6 +206,7 @@ app.include_router(automation_triggers_router, prefix=settings.api_prefix)
 app.include_router(incidents_router, prefix=settings.api_prefix)
 app.include_router(knowledge_router, prefix=settings.api_prefix)
 app.include_router(change_management_router, prefix=settings.api_prefix)
+app.include_router(cmdb_router, prefix=settings.api_prefix)
 app.include_router(discovery_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)
 
