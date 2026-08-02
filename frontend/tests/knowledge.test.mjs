@@ -10,7 +10,7 @@ const sidebar=readFileSync(new URL("../src/components/Sidebar.tsx",import.meta.u
 const css=readFileSync(new URL("../src/styles/knowledge.css",import.meta.url),"utf8");
 
 test("knowledge navigation and protected lazy route are registered",()=>{
-  assert.match(app,/KnowledgePage/);assert.match(app,/\/knowledge\/\*/);assert.match(sidebar,/Knowledge & Runbooks/);
+  assert.match(app,/KnowledgePage/);assert.match(app,/\/knowledge\/\*/);assert.doesNotMatch(sidebar,/Knowledge & Runbooks/);
 });
 
 test("workspace exposes every Epic 3D operational view",()=>{

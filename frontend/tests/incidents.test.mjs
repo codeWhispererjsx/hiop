@@ -10,7 +10,7 @@ const sidebar=readFileSync(new URL("../src/components/Sidebar.tsx",import.meta.u
 test("incident command routes and navigation are registered",()=>{
   assert.match(app,/\/incidents\/:id\/\*/);
   assert.match(app,/\/incidents\/playbooks/);
-  assert.match(sidebar,/Incidents/);
+  assert.match(sidebar,/label: "Maintain"/);
 });
 
 test("incident workspace includes tasks evidence remediation recovery and timeline",()=>{

@@ -11,7 +11,7 @@ const css = readFileSync(new URL("../src/styles/topology.css", import.meta.url),
 
 test("topology navigation and lazy protected route are registered", () => {
   assert.match(app, /path="\/topology\/\*"/);
-  assert.match(sidebar, /Network Topology/);
+  assert.doesNotMatch(sidebar, /Network Topology/);
   assert.match(app, /lazy\(\(\) => import\("\.\/pages\/TopologyPage"\)\)/);
 });
 

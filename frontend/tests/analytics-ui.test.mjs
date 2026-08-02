@@ -13,7 +13,7 @@ const css = readFileSync(new URL("../src/styles/analytics.css", import.meta.url)
 test("analytics navigation and protected lazy route are registered", () => {
   assert.match(app, /path="\/analytics\/\*"/);
   assert.match(app, /lazy\(\(\) => import\("\.\/pages\/AnalyticsPage"\)\)/);
-  assert.match(sidebar, /label: "Analytics"/);
+  assert.doesNotMatch(sidebar, /label: "Analytics"/);
 });
 
 test("analytics workbench exposes every requested view", () => {

@@ -8,7 +8,7 @@ const page=fs.readFileSync(new URL("../src/pages/ProblemManagementPage.tsx",impo
 const api=fs.readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
 const css=fs.readFileSync(new URL("../src/styles/problem-management.css",import.meta.url),"utf8");
 
-test("Problem Management route and navigation are protected and registered",()=>{assert.match(app,/ProblemManagementPage/);assert.match(app,/path="\/problems\/\*"/);assert.match(sidebar,/Problem Management/)});
+test("Problem Management protected route remains registered",()=>{assert.match(app,/ProblemManagementPage/);assert.match(app,/path="\/problems\/\*"/);assert.doesNotMatch(sidebar,/Problem Management/)});
 test("workspace exposes requested operational views",()=>{for(const label of ["Dashboard","Problems","RCA Workspace","5 Whys","Fishbone","Known Errors","Workarounds","CAPA","Reviews","Correlations","Relationships","Reports"])assert.match(page,new RegExp(label))});
 test("typed client covers deterministic lifecycle and exports",()=>{for(const call of ["problemDashboard","transitionProblem","problemRCA","saveFiveWhy","addFishboneCause","knownErrors","createProblemPlan","detectProblemCorrelations","problemRelationshipGraph","exportProblemReport"])assert.match(api,new RegExp(call))});
 test("responsive UI and human-control language are explicit",()=>{assert.match(css,/@media\(max-width:560px\)/);assert.match(page,/No root cause or resolution is generated automatically/);assert.match(page,/review suggestions only/)});

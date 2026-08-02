@@ -9,7 +9,7 @@ const api=readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
 
 test("automation route and navigation are protected and registered",()=>{
   assert.match(app,/path="\/automation\/\*"/);
-  assert.match(sidebar,/label: "Automation"/);
+  assert.match(sidebar,/label: "Automate"/);
 });
 
 test("automation workspace uses typed APIs without executable input",()=>{

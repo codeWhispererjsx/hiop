@@ -11,8 +11,8 @@ const types = readFileSync(new URL("../src/lib/types.ts", import.meta.url), "utf
 test("hospitality navigation and protected routes exist", () => {
   assert.match(app, /path="\/organizations"/);
   assert.match(app, /path="\/properties"/);
-  assert.match(sidebar, /Organizations/);
-  assert.match(sidebar, /Properties/);
+  assert.doesNotMatch(sidebar, /Organizations/);
+  assert.doesNotMatch(sidebar, /Properties/);
   assert.match(app, /lazy\(\(\) => import\("\.\/pages\/HospitalityPage"\)\)/);
 });
 

@@ -10,7 +10,7 @@ const sidebar = readFileSync(new URL("../src/components/Sidebar.tsx", import.met
 
 test("SNMP route and authorized navigation are registered", () => {
   assert.match(app, /path="\/snmp\/\*"/);
-  assert.match(sidebar, /SNMP Monitoring/);
+  assert.doesNotMatch(sidebar, /SNMP Monitoring/);
   assert.match(page, /Read-only monitoring/);
 });
 

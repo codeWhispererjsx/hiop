@@ -4,41 +4,12 @@ import { Icon, type IconName } from "./Icon";
 
 const primaryLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Overview", to: "/dashboard", icon: "dashboard" },
-  { label: "Incidents", to: "/incidents", icon: "alerts" },
-  { label: "Devices & Network", to: "/discovery-intelligence", icon: "discovery" },
-  { label: "Operations", to: "/operations", icon: "settings" },
-  { label: "Knowledge", to: "/knowledge", icon: "audit" },
-  { label: "Reports", to: "/reports", icon: "audit" },
+  { label: "Discover", to: "/discovery-intelligence", icon: "discovery" },
+  { label: "Monitor", to: "/network", icon: "network" },
+  { label: "Manage", to: "/devices", icon: "devices" },
+  { label: "Automate", to: "/automation", icon: "settings" },
+  { label: "Maintain", to: "/incidents", icon: "alerts" },
   { label: "Administration", to: "/settings", icon: "settings" },
-];
-const advancedLinks: { label: string; to: string; icon: IconName }[] = [
-  { label: "Analytics", to: "/analytics", icon: "dashboard" },
-  { label: "Devices", to: "/devices", icon: "devices" },
-  { label: "Inventory Import", to: "/imports", icon: "import" },
-  { label: "Network monitor", to: "/network", icon: "network" },
-  { label: "Discovery Intelligence", to: "/discovery-intelligence", icon: "discovery" },
-  { label: "SNMP Monitoring", to: "/snmp", icon: "network" },
-  { label: "Network Topology", to: "/topology", icon: "hierarchy" },
-  { label: "Organizations", to: "/organizations", icon: "users" },
-    { label: "Properties", to: "/properties", icon: "hierarchy" },
-    { label: "Buildings", to: "/buildings", icon: "hierarchy" },
-    { label: "Property Operations", to: "/operations", icon: "dashboard" },
-    { label: "Configuration Management", to: "/configuration-management", icon: "settings" },
-    { label: "Automation", to: "/automation", icon: "settings" },
-    { label: "Problem Management", to: "/problems", icon: "search" },
-    { label: "Asset & Procurement", to: "/assets", icon: "devices" },
-    { label: "Executive BI", to: "/business-intelligence", icon: "dashboard" },
-    { label: "Corporate Management", to: "/enterprise", icon: "hierarchy" },
-    { label: "Knowledge & Runbooks", to: "/knowledge", icon: "audit" },
-    { label: "Change Management", to: "/changes", icon: "settings" },
-    { label: "CMDB", to: "/cmdb", icon: "hierarchy" },
-  { label: "Alerts", to: "/alerts", icon: "alerts" },
-  { label: "Service tickets", to: "/tickets", icon: "tickets" },
-  { label: "Locations & structure", to: "/hierarchy", icon: "hierarchy" },
-  { label: "Team & access", to: "/users", icon: "users" },
-  { label: "Audit trail", to: "/audit", icon: "audit" },
-  { label: "Active Directory", to: "/active-directory", icon: "network" },
-  { label: "Settings", to: "/settings", icon: "settings" },
 ];
 const SIDEBAR_SCROLL_KEY = "hiop.sidebar.scroll";
 let lastSidebarScroll = 0;
@@ -98,7 +69,7 @@ export default function Sidebar({
     if (window.matchMedia("(max-width: 820px)").matches) onClose();
   };
   const isAdmin=["admin","superadmin"].includes(role??"");
-  const visiblePrimary=primaryLinks.filter(link=>isAdmin||!["/reports","/settings"].includes(link.to));
+  const visiblePrimary=primaryLinks.filter(link=>isAdmin||link.to!=="/settings");
   return (
     <aside className={`sidebar ${open ? "is-open" : ""}`}>
       <div className="sidebar-brand">
@@ -130,19 +101,6 @@ export default function Sidebar({
               <span>{link.label}</span>
             </NavLink>
           ))}
-        {isAdmin&&<details className="sidebar-advanced"><summary>Advanced modules</summary>{advancedLinks.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              onClick={handleNavigation}
-              className={({ isActive }) =>
-                `nav-link ${isActive ? "active" : ""}`
-              }
-            >
-              <Icon name={link.icon} />
-              <span>{link.label}</span>
-            </NavLink>
-          ))}</details>}
       </nav>
       <div className="sidebar-health">
         <div className="health-row">
