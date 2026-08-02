@@ -142,6 +142,37 @@ body { transition: color 160ms ease, background-color 160ms ease; }
   cursor: pointer;
 }
 .secondary-action:hover, button.secondary:hover { color: var(--color-primary); border-color: var(--color-primary); background: var(--primary-soft); }
+.page-actions > button:not(.primary-action):not(.danger-action),
+.change-tabs button,
+.cmdb-tabs button,
+.topology-hero button:not(.primary-action),
+.topology-panel button,
+.hospitality-panel button:not(.primary-action):not(.danger-action) {
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.page-actions > button:not(.primary-action):not(.danger-action):hover,
+.change-tabs button:hover,
+.cmdb-tabs button:hover,
+.topology-hero button:not(.primary-action):hover,
+.topology-panel button:hover,
+.hospitality-panel button:not(.primary-action):not(.danger-action):hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--primary-soft);
+}
+.change-tabs button.active, .cmdb-tabs button.active {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, var(--border));
+  background: var(--primary-soft);
+}
 .danger-action { color: var(--color-white); border-color: var(--color-danger); background: var(--color-danger); }
 .danger-action:hover { background: color-mix(in srgb, var(--color-danger) 86%, var(--color-black)); }
 button:disabled, input:disabled, select:disabled, textarea:disabled { opacity: .58; cursor: not-allowed; }

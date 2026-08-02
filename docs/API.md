@@ -1,5 +1,9 @@
 # HIOP 1.0.0 API
 
+## Epic 6 Problem Management
+
+`/api/v1/problems` provides paginated/filterable Problems, detail, patch, and guarded transitions. Subresources cover `/rca`, `/rca/causes`, `/rca/five-whys`, `/rca/fishbone`, `/known-errors`, `/workarounds`, `/capa`, `/reviews`, `/relationships/graph`, `/correlations`, `/reports`, `/search`, and CSV/XLSX/PDF export. Readers can query; technicians contribute; administrators approve, publish, retire, verify, and initiate correlation evaluation.
+
 ## Epic 3A automation
 
 `/api/v1/automation` provides role-protected workflow, immutable version, step,

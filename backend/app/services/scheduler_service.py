@@ -24,6 +24,7 @@ from app.models.incidents import IncidentFollowUpAction,IncidentPlaybookRun,Inci
 from app.models.knowledge import Document, KnowledgeArticle, KnowledgeRelationship, StandardProcedure
 from app.models.change_management import ChangeApproval, ChangeRequest, MaintenanceWindow, Release, RiskAssessment
 from app.models.cmdb import CIHealthSnapshot, CIReconciliationCandidate, CIRelationship, ConfigurationItem
+from app.models.problem_management import ActionTask, KnownError, Problem, ProblemCorrelationSuggestion
 
 
 scheduler = BackgroundScheduler()
@@ -74,6 +75,7 @@ CMDB_JOB_INTERVALS = {
     "orphan_detection": 1440, "discovery_reconciliation": 360,
     "expired_warranty_notifications": 1440,
 }
+PROBLEM_JOB_INTERVALS={"review_reminders":1440,"capa_due_reminders":60,"known_error_review_reminders":1440,"recurring_incident_detection":60,"problem_aging_alerts":1440,"dashboard_statistics":60}
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -1198,6 +1200,38 @@ def scheduled_discovery():
         db.close()
 
 
+def scheduled_problem_management(job_type: str):
+    """Deterministic reminders and review suggestions; never creates a problem or root cause."""
+    db=SessionLocal()
+    try:
+        now_at=datetime.now(timezone.utc)
+        if job_type=="recurring_incident_detection":
+            incidents=db.query(OperationalIncident).filter(OperationalIncident.created_at>=now_at-timedelta(days=30)).limit(5000).all(); groups={}
+            for incident in incidents:
+                key=incident.correlation_key or f"{incident.property_id}:{incident.technology_service_id}:{incident.incident_type}"
+                groups.setdefault(key,[]).append(incident)
+            for key,rows in groups.items():
+                if len(rows)>=3 and not db.query(ProblemCorrelationSuggestion).filter_by(correlation_key=key,status="suggested").first():
+                    import json
+                    db.add(ProblemCorrelationSuggestion(property_id=rows[0].property_id,correlation_key=key,source_type="incident",source_ids=json.dumps([str(r.id) for r in rows]),occurrence_count=len(rows),threshold=3,rationale=f"{len(rows)} incidents share a deterministic correlation key within 30 days."))
+        elif job_type=="problem_aging_alerts":
+            db.query(Problem).filter(~Problem.status.in_(("resolved","closed")),Problem.created_at<now_at-timedelta(days=30)).update({Problem.review_date:now_at},synchronize_session=False)
+        elif job_type=="capa_due_reminders":
+            db.query(ActionTask).filter(ActionTask.status=="pending",ActionTask.due_at<now_at).update({ActionTask.status:"overdue"},synchronize_session=False)
+        elif job_type=="known_error_review_reminders":
+            db.query(KnownError).filter(KnownError.status=="published",KnownError.updated_at<now_at-timedelta(days=180)).update({KnownError.status:"review_due"},synchronize_session=False)
+        db.commit()
+    except Exception:
+        db.rollback(); logger.exception("Problem Management scheduled job failed type=%s",job_type)
+    finally: db.close()
+
+
+def reconcile_problem_jobs():
+    if not settings.scheduler_enabled:return 0
+    for job_type,minutes in PROBLEM_JOB_INTERVALS.items():scheduler.add_job(scheduled_problem_management,"interval",minutes=minutes,id=f"problem_management_{job_type}",args=[job_type],replace_existing=True,max_instances=1,coalesce=True)
+    return len(PROBLEM_JOB_INTERVALS)
+
+
 def start_scheduler():
     if not settings.scheduler_enabled:
         logger.info("HIOP scheduler disabled by configuration")
@@ -1237,6 +1271,7 @@ def start_scheduler():
         reconcile_knowledge_jobs()
         reconcile_change_jobs()
         reconcile_cmdb_jobs()
+        reconcile_problem_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

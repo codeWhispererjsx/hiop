@@ -161,7 +161,7 @@ function Overview() {
         detail={d.scheduler_running ? "Scheduler active" : "Scheduler stopped"} icon="settings" />
     </section>
     <div className="ad-overview-grid">
-      <Panel title="Connection health">
+      <Panel title="Connection health" className="ad-panel-health">
         <dl className="ad-kv">
           <div><dt>Status</dt><dd>{d.integration_enabled ? "AD integration enabled" : "Globally disabled"}</dd></div>
           <div><dt>Failed tests</dt><dd>{d.failed_connection_tests}</dd></div>
@@ -170,7 +170,7 @@ function Overview() {
         </dl>
         <Link to="/active-directory/connections" className="ad-link">Manage connections →</Link>
       </Panel>
-      <Panel title="Review queues">
+      <Panel title="Review queues" className="ad-panel-review">
         <dl className="ad-kv">
           <div><dt>Pending matches</dt><dd>{d.pending_matches}</dd></div>
           <div><dt>Conflicts</dt><dd>{d.conflicts}</dd></div>
@@ -181,7 +181,7 @@ function Overview() {
           <Link to="/active-directory/review" className="ad-link">Missing review →</Link>
         </div>
       </Panel>
-      <Panel title="Production guard">
+      <Panel title="Production guard" className="ad-panel-guard">
         <p>Directory changes remain staged until an administrator explicitly reconciles them. No HIOP user or device is modified automatically.</p>
         <p className="ad-warning">Bulk Admin-role mapping requires explicit additional confirmation and is never applied silently.</p>
       </Panel>
@@ -1414,9 +1414,9 @@ function Reports() {
 function Toolbar({ title, action }: { title: string; action?: ReactNode }) {
   return <div className="ad-toolbar"><h2>{title}</h2>{action}</div>;
 }
-function Panel({ title, children, wide }: { title: string; children: ReactNode; wide?: boolean }) {
+function Panel({ title, children, wide, className = "" }: { title: string; children: ReactNode; wide?: boolean; className?: string }) {
   return (
-    <section className={`panel ad-panel${wide ? " ad-panel-wide" : ""}`}>
+    <section className={`panel ad-panel${wide ? " ad-panel-wide" : ""}${className ? ` ${className}` : ""}`}>
       <h2>{title}</h2>{children}
     </section>
   );

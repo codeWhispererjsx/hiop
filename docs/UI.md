@@ -1,5 +1,9 @@
 # HIOP Enterprise + Hospitality interface contract
 
+## Problem Management workspace
+
+The protected `/problems/*` workspace includes Dashboard, Problem List/Details, RCA Workspace, 5 Whys, Fishbone, KEDB, Workarounds, CAPA, Reviews, Correlations, Relationships, and Reports. Responsive cards collapse from three/two columns to one, tabs scroll horizontally, and graph content has a textual accessible label.
+
 Status: implemented for `3.0.0-dev`.
 
 The React application uses a shared authenticated shell, responsive sidebar/header, real organization identity, session status, and instant light/dark themes. Page routes remain lazy-loaded and every data view retains its loading, empty/filtered-empty, error, unauthorized/not-found, and success feedback.

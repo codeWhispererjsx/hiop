@@ -1,5 +1,9 @@
 # HIOP 1.0.0 software requirements specification
 
+## Epic 6 requirements
+
+The system shall maintain auditable Problem, RCA, KEDB, workaround, CAPA, review, relationship, and correlation-suggestion records. It shall enforce sequential lifecycle gates, role permissions, bounded pagination, validation, exports, scheduled reminders, and human approval. It shall not generate root causes, create Problems autonomously, or execute workarounds.
+
 ## Purpose and scope
 
 HIOP is the internal source of truth for hotel IT inventory, availability checks, operational alerts, service tickets, users, audit evidence, reports, hierarchy, and safe runtime configuration. It does not remotely configure, patch, reboot, or shut down managed devices.

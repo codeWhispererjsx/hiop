@@ -1,5 +1,9 @@
 # HIOP 2.0.0-dev database
 
+## Epic 6 Problem Management
+
+Migration `d1e2f3a4b5c6` follows the Epic 5 CMDB head and creates lookup, problem, impact, revision, review, RCA, root-cause, contributing-factor, 5 Whys, Fishbone, KEDB, workaround, attachment, CAPA, verification, relationship, and correlation-suggestion tables. Foreign keys use cascade deletion only for owned child records; cross-domain links preserve explicit references.
+
 ## Epic 3A automation execution
 
 Migrations `c9d0e1f2a3b4` and `f2a3b4c5d6e7` add workflow definitions and

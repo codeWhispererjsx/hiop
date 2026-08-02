@@ -1,5 +1,9 @@
 # HIOP 2.0.0-dev architecture
 
+## Epic 6 Problem Management
+
+Problem Management is an additive domain module with models in `app/models/problem_management.py`, REST orchestration in `app/api/v1/problem_management.py`, scheduler integration in `scheduler_service.py`, and the React workspace under `/problems/*`. It consumes incidents for deterministic grouping and stores explicit identifiers for Change, CMDB, Knowledge, service, vendor, maintenance, and automation relationships. Approval and lifecycle rules remain server-side.
+
 Epic 6B adds an isolated analytics scheduler over controlled operational-source adapters. Deterministic jobs create bounded runs, checkpoints drive incremental aggregation, and retention never deletes operational source or audit data.
 
 Epic 6C adds a deterministic forecast layer above persisted aggregates. Statistical methods are explicit application code, produce auditable assumptions and bounds, and persist results in PostgreSQL without AI, ML libraries, external prediction services, or access to raw monitoring samples.

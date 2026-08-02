@@ -1,0 +1,79 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+
+from app.db.database import Base
+
+
+def uid(): return mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+def now(): return mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ProblemCategory(Base):
+    __tablename__="problem_categories"; id:Mapped[uuid.UUID]=uid(); name:Mapped[str]=mapped_column(String(100),unique=True); code:Mapped[str]=mapped_column(String(50),unique=True); description:Mapped[str|None]=mapped_column(Text); enabled:Mapped[bool]=mapped_column(Boolean,default=True,server_default="true")
+class ProblemPriority(Base):
+    __tablename__="problem_priorities"; id:Mapped[uuid.UUID]=uid(); name:Mapped[str]=mapped_column(String(40),unique=True); rank:Mapped[int]=mapped_column(Integer,unique=True); target_days:Mapped[int|None]=mapped_column(Integer)
+class ProblemSeverity(Base):
+    __tablename__="problem_severities"; id:Mapped[uuid.UUID]=uid(); name:Mapped[str]=mapped_column(String(40),unique=True); rank:Mapped[int]=mapped_column(Integer,unique=True)
+class ProblemStatus(Base):
+    __tablename__="problem_statuses"; id:Mapped[uuid.UUID]=uid(); name:Mapped[str]=mapped_column(String(60),unique=True); code:Mapped[str]=mapped_column(String(40),unique=True); terminal:Mapped[bool]=mapped_column(Boolean,default=False,server_default="false")
+class ProblemSource(Base):
+    __tablename__="problem_sources"; id:Mapped[uuid.UUID]=uid(); name:Mapped[str]=mapped_column(String(80),unique=True); code:Mapped[str]=mapped_column(String(40),unique=True)
+
+
+class Problem(Base):
+    __tablename__="problems"
+    id:Mapped[uuid.UUID]=uid(); problem_number:Mapped[str]=mapped_column(String(30),unique=True,index=True); title:Mapped[str]=mapped_column(String(240)); description:Mapped[str]=mapped_column(Text); summary:Mapped[str|None]=mapped_column(Text)
+    category_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("problem_categories.id")); priority:Mapped[str]=mapped_column(String(20),default="normal",index=True); severity:Mapped[str]=mapped_column(String(20),default="medium",index=True); impact:Mapped[str]=mapped_column(String(20),default="medium"); business_impact:Mapped[str|None]=mapped_column(Text); technical_impact:Mapped[str|None]=mapped_column(Text); status:Mapped[str]=mapped_column(String(40),default="new",index=True); source:Mapped[str]=mapped_column(String(40),default="manual")
+    owner_id:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); assigned_team:Mapped[str|None]=mapped_column(String(160)); property_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id"),index=True); department_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("departments.id")); technology_service_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("hospitality_technology_services.id")); review_date:Mapped[datetime|None]=mapped_column(DateTime(timezone=True),index=True); closed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now(); updated_at:Mapped[datetime]=now(); version:Mapped[int]=mapped_column(Integer,default=1,server_default="1")
+    __table_args__=(Index("ix_problems_property_status","property_id","status"),)
+class ProblemImpact(Base):
+    __tablename__="problem_impacts"; id:Mapped[uuid.UUID]=uid(); problem_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id",ondelete="CASCADE"),index=True); impact_type:Mapped[str]=mapped_column(String(40)); level:Mapped[str]=mapped_column(String(20)); details:Mapped[str]=mapped_column(Text); created_at:Mapped[datetime]=now()
+class ProblemRevision(Base):
+    __tablename__="problem_revisions"; id:Mapped[uuid.UUID]=uid(); problem_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id",ondelete="CASCADE"),index=True); version:Mapped[int]=mapped_column(Integer); snapshot:Mapped[str]=mapped_column(Text); change_summary:Mapped[str]=mapped_column(String(500)); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("problem_id","version",name="uq_problem_revision"),)
+class ProblemReview(Base):
+    __tablename__="problem_reviews"; id:Mapped[uuid.UUID]=uid(); problem_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id",ondelete="CASCADE"),index=True); lessons_learned:Mapped[str]=mapped_column(Text); business_summary:Mapped[str]=mapped_column(Text); technical_summary:Mapped[str]=mapped_column(Text); timeline:Mapped[str]=mapped_column(Text,default="[]"); stakeholders:Mapped[str]=mapped_column(Text,default="[]"); action_items:Mapped[str]=mapped_column(Text,default="[]"); status:Mapped[str]=mapped_column(String(30),default="draft"); approved_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); signed_off_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now()
+
+
+class RootCauseAnalysis(Base):
+    __tablename__="root_cause_analyses"; id:Mapped[uuid.UUID]=uid(); problem_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id",ondelete="CASCADE"),unique=True,index=True); methodology:Mapped[str]=mapped_column(String(40),default="five_whys"); timeline:Mapped[str]=mapped_column(Text,default="[]"); technical_findings:Mapped[str|None]=mapped_column(Text); business_findings:Mapped[str|None]=mapped_column(Text); validation:Mapped[str|None]=mapped_column(Text); status:Mapped[str]=mapped_column(String(30),default="draft"); approved_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now(); updated_at:Mapped[datetime]=now()
+class RootCause(Base):
+    __tablename__="root_causes"; id:Mapped[uuid.UUID]=uid(); rca_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("root_cause_analyses.id",ondelete="CASCADE"),index=True); category:Mapped[str]=mapped_column(String(40)); statement:Mapped[str]=mapped_column(Text); evidence:Mapped[str]=mapped_column(Text); validated:Mapped[bool]=mapped_column(Boolean,default=False,server_default="false")
+class ContributingFactor(Base):
+    __tablename__="problem_contributing_factors"; id:Mapped[uuid.UUID]=uid(); rca_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("root_cause_analyses.id",ondelete="CASCADE"),index=True); factor_type:Mapped[str]=mapped_column(String(40)); description:Mapped[str]=mapped_column(Text); evidence:Mapped[str|None]=mapped_column(Text)
+class FiveWhys(Base):
+    __tablename__="problem_five_whys"; id:Mapped[uuid.UUID]=uid(); rca_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("root_cause_analyses.id",ondelete="CASCADE"),index=True); sequence:Mapped[int]=mapped_column(Integer); question:Mapped[str]=mapped_column(Text); answer:Mapped[str]=mapped_column(Text); evidence:Mapped[str|None]=mapped_column(Text); __table_args__=(UniqueConstraint("rca_id","sequence",name="uq_problem_five_whys_sequence"),)
+class FishboneAnalysis(Base):
+    __tablename__="problem_fishbone_analyses"; id:Mapped[uuid.UUID]=uid(); rca_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("root_cause_analyses.id",ondelete="CASCADE"),index=True); category:Mapped[str]=mapped_column(String(40)); cause:Mapped[str]=mapped_column(Text); evidence:Mapped[str|None]=mapped_column(Text)
+
+
+class KnownError(Base):
+    __tablename__="known_errors"; id:Mapped[uuid.UUID]=uid(); error_id:Mapped[str]=mapped_column(String(30),unique=True,index=True); problem_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id"),index=True); description:Mapped[str]=mapped_column(Text); symptoms:Mapped[str]=mapped_column(Text); affected_services:Mapped[str]=mapped_column(Text,default="[]"); affected_devices:Mapped[str]=mapped_column(Text,default="[]"); affected_properties:Mapped[str]=mapped_column(Text,default="[]"); root_cause:Mapped[str]=mapped_column(Text); temporary_workaround:Mapped[str|None]=mapped_column(Text); permanent_resolution:Mapped[str|None]=mapped_column(Text); status:Mapped[str]=mapped_column(String(30),default="draft",index=True); related_change_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("change_requests.id")); related_knowledge_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True)); version:Mapped[int]=mapped_column(Integer,default=1,server_default="1"); published_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); retired_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now(); updated_at:Mapped[datetime]=now()
+class KnownErrorWorkaround(Base):
+    __tablename__="known_error_workarounds"; id:Mapped[uuid.UUID]=uid(); known_error_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("known_errors.id",ondelete="CASCADE"),index=True); workaround_type:Mapped[str]=mapped_column(String(20),default="temporary"); instructions:Mapped[str]=mapped_column(Text); verification:Mapped[str]=mapped_column(Text); effectiveness_rating:Mapped[int]=mapped_column(Integer,default=0); risk_level:Mapped[str]=mapped_column(String(20),default="medium"); required_permissions:Mapped[str]=mapped_column(Text,default="[]"); validation_checklist:Mapped[str]=mapped_column(Text,default="[]"); linked_runbooks:Mapped[str]=mapped_column(Text,default="[]"); linked_sops:Mapped[str]=mapped_column(Text,default="[]"); approved:Mapped[bool]=mapped_column(Boolean,default=False,server_default="false"); created_at:Mapped[datetime]=now()
+class KnownErrorRevision(Base):
+    __tablename__="known_error_revisions"; id:Mapped[uuid.UUID]=uid(); known_error_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("known_errors.id",ondelete="CASCADE"),index=True); version:Mapped[int]=mapped_column(Integer); snapshot:Mapped[str]=mapped_column(Text); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("known_error_id","version",name="uq_known_error_revision"),)
+class KnownErrorAttachment(Base):
+    __tablename__="known_error_attachments"; id:Mapped[uuid.UUID]=uid(); known_error_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("known_errors.id",ondelete="CASCADE"),index=True); filename:Mapped[str]=mapped_column(String(255)); storage_reference:Mapped[str]=mapped_column(String(500)); checksum_sha256:Mapped[str]=mapped_column(String(64)); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now()
+
+
+class CorrectiveActionPlan(Base):
+    __tablename__="corrective_action_plans"; id:Mapped[uuid.UUID]=uid(); problem_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id",ondelete="CASCADE"),index=True); title:Mapped[str]=mapped_column(String(220)); objective:Mapped[str]=mapped_column(Text); owner_id:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); status:Mapped[str]=mapped_column(String(30),default="draft",index=True); due_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); approved_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now()
+class PreventiveActionPlan(Base):
+    __tablename__="preventive_action_plans"; id:Mapped[uuid.UUID]=uid(); problem_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id",ondelete="CASCADE"),index=True); title:Mapped[str]=mapped_column(String(220)); objective:Mapped[str]=mapped_column(Text); owner_id:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); status:Mapped[str]=mapped_column(String(30),default="draft",index=True); due_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); approved_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now()
+class CorrectiveAction(Base):
+    __tablename__="corrective_actions"; id:Mapped[uuid.UUID]=uid(); rca_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("root_cause_analyses.id",ondelete="CASCADE"),index=True); description:Mapped[str]=mapped_column(Text); owner_id:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); status:Mapped[str]=mapped_column(String(30),default="planned")
+class PreventiveAction(Base):
+    __tablename__="preventive_actions"; id:Mapped[uuid.UUID]=uid(); rca_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("root_cause_analyses.id",ondelete="CASCADE"),index=True); description:Mapped[str]=mapped_column(Text); owner_id:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); status:Mapped[str]=mapped_column(String(30),default="planned")
+class ActionTask(Base):
+    __tablename__="problem_action_tasks"; id:Mapped[uuid.UUID]=uid(); plan_type:Mapped[str]=mapped_column(String(20)); plan_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),index=True); title:Mapped[str]=mapped_column(String(220)); description:Mapped[str|None]=mapped_column(Text); assigned_to:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); due_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True),index=True); status:Mapped[str]=mapped_column(String(30),default="pending",index=True); completed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True))
+class ActionVerification(Base):
+    __tablename__="problem_action_verifications"; id:Mapped[uuid.UUID]=uid(); task_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problem_action_tasks.id",ondelete="CASCADE"),index=True); result:Mapped[str]=mapped_column(String(30)); evidence:Mapped[str]=mapped_column(Text); verified_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); verified_at:Mapped[datetime]=now()
+class ProblemRelationship(Base):
+    __tablename__="problem_relationships"; id:Mapped[uuid.UUID]=uid(); problem_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id",ondelete="CASCADE"),index=True); target_type:Mapped[str]=mapped_column(String(50),index=True); target_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),index=True); relationship_type:Mapped[str]=mapped_column(String(40),default="related"); notes:Mapped[str|None]=mapped_column(Text); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("problem_id","target_type","target_id","relationship_type",name="uq_problem_relationship"),)
+class ProblemCorrelationSuggestion(Base):
+    __tablename__="problem_correlation_suggestions"; id:Mapped[uuid.UUID]=uid(); property_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id"),index=True); correlation_key:Mapped[str]=mapped_column(String(240),index=True); source_type:Mapped[str]=mapped_column(String(40)); source_ids:Mapped[str]=mapped_column(Text,default="[]"); occurrence_count:Mapped[int]=mapped_column(Integer); threshold:Mapped[int]=mapped_column(Integer,default=3); rationale:Mapped[str]=mapped_column(Text); status:Mapped[str]=mapped_column(String(30),default="suggested",index=True); created_problem_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("problems.id")); detected_at:Mapped[datetime]=now(); reviewed_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); reviewed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True))

@@ -17,10 +17,22 @@ const contrast = (a, b) => {
 
 test("official Enterprise and Hospitality palette is centralized in theme tokens", () => {
   const tokens = read("src/theme/tokens.css").toLowerCase();
-  for (const color of ["#2563eb", "#1e3a8a", "#10b981", "#d4af37", "#f8fafc", "#0f172a", "#e5e7eb", "#111827", "#0b1220", "#020617"]) {
+  for (const color of ["#2563eb", "#1e3a8a", "#22c55e", "#d4af37", "#f8fafc", "#0f172a", "#e5e7eb", "#111827", "#0b1220", "#020617"]) {
     assert.match(tokens, new RegExp(color));
   }
   for (const scale of ["--space-", "--radius-", "--shadow-", "--z-", "--font-"]) assert.match(tokens, new RegExp(scale));
+});
+
+test("gold is the accent and green is reserved for explicit status semantics", () => {
+  const tokens = read("src/theme/tokens.css").toLowerCase();
+  const shared = read("src/styles/design-system.css");
+  const dashboard = read("src/styles/dashboard.css");
+  assert.match(tokens, /--color-accent:\s*#d4af37/);
+  assert.match(tokens, /--color-success:\s*#22c55e/);
+  assert.match(shared, /\.tone-success[\s\S]*var\(--color-success\)/);
+  assert.doesNotMatch(dashboard, /\.stat-card\s*\{[^}]*color-success/);
+  assert.doesNotMatch(dashboard, /\.panel\s*\{[^}]*color-success/);
+  assert.doesNotMatch(dashboard, /\.stat-card\s*\{[^}]*linear-gradient/);
 });
 
 test("core text and action pairs meet WCAG AA contrast", () => {

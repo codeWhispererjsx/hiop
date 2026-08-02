@@ -19,6 +19,7 @@ const links: { label: string; to: string; icon: IconName }[] = [
     { label: "Configuration Management", to: "/configuration-management", icon: "settings" },
     { label: "Automation", to: "/automation", icon: "settings" },
     { label: "Incidents", to: "/incidents", icon: "alerts" },
+    { label: "Problem Management", to: "/problems", icon: "search" },
     { label: "Knowledge & Runbooks", to: "/knowledge", icon: "audit" },
     { label: "Change Management", to: "/changes", icon: "settings" },
     { label: "CMDB", to: "/cmdb", icon: "hierarchy" },

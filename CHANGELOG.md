@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.0.0-dev — Epic 6 Enterprise Problem Management
+
+- Added auditable Problem records and guarded ITIL lifecycle transitions.
+- Added structured RCA, 5 Whys, Fishbone, validated causes, and findings.
+- Added versioned KEDB records, approval/publishing/retirement, and workarounds.
+- Added CAPA plans, assigned tasks, verification, and post-resolution review sign-off.
+- Added explicit relationships, deterministic incident-correlation suggestions, dashboards, search, reports, and CSV/XLSX/PDF exports.
+- Added scheduled review, due-date, aging, correlation, and statistics jobs.
+
 ## 3.0.0-dev — Enterprise + Hospitality design system
 
 - Centralized color, typography, spacing, radius, elevation, focus, and z-index tokens across the React application.

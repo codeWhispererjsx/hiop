@@ -76,7 +76,7 @@
   display: block;
   height: 100%;
   border-radius: 6px;
-  background: linear-gradient(90deg, var(--gold), var(--emerald));
+  background: linear-gradient(90deg, var(--color-secondary), var(--color-primary));
 }
 .import-actions {
   display: flex;
@@ -90,7 +90,7 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--text);
-  background: var(--color-success);
+  background:var(--surface);
   font-size: 9px;
   font-weight: 700;
   text-decoration: none;
@@ -107,7 +107,7 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--muted);
-  background: var(--color-success);
+  background:var(--surface);
   font-size: 9px;
   cursor: pointer;
 }
@@ -333,9 +333,9 @@
   gap: 12px;
   margin: 16px 22px 0;
   padding: 14px;
-  border: 1px solid color-mix(in srgb,var(--color-success) 20%,transparent);
+  border: 1px solid color-mix(in srgb,var(--color-primary) 20%,transparent);
   border-radius: 12px;
-  background: color-mix(in srgb,var(--color-success) 4%,transparent);
+  background: color-mix(in srgb,var(--color-primary) 4%,transparent);
 }
 .processing-state .spinner {
   width: 24px;
@@ -1020,8 +1020,8 @@
   border-radius: 14px;
 }
 .readiness-card.ready {
-  border-color: color-mix(in srgb,var(--color-success) 25%,transparent);
-  background: color-mix(in srgb,var(--color-success) 4%,transparent);
+  border-color: color-mix(in srgb,var(--color-success) 25%,var(--border));
+  background: var(--success-soft);
 }
 .readiness-card.blocked {
   border-color: color-mix(in srgb,var(--color-danger) 20%,transparent);
@@ -1183,13 +1183,13 @@
   background: var(--color-white);
 }
 :root[data-theme="light"] .comparison-grid .matching {
-  color: var(--color-success);
+  color: var(--status-success-text);
 }
 :root[data-theme="light"] .comparison-grid .conflict {
   color: var(--color-danger);
 }
 :root[data-theme="light"] .readiness-card.ready {
-  background: color-mix(in srgb,var(--color-success) 6%,transparent);
+  background: var(--success-soft);
 }
 :root[data-theme="light"] .readiness-card.blocked {
   background: color-mix(in srgb,var(--color-danger) 6%,transparent);

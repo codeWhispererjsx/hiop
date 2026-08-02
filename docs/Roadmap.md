@@ -1,5 +1,9 @@
 # HIOP roadmap
 
+## Version 3 — Epic 6 complete
+
+Enterprise Problem Management and KEDB now connect the operational lifecycle: Incident → Problem → Change → Knowledge → CMDB. Future work may add external vendor/contract adapters without changing the human-approval boundary.
+
 ## Version 1.0.0 — release candidate
 
 Completed: authentication/RBAC, dashboard, device inventory and hierarchy, scanner/scheduler, network operations, alerts, tickets, users, audit, reports/CSV, settings, authenticated live updates, security/performance stabilization, Docker/Nginx deployment baseline, health/logging/backups documentation, and release guidance.
