@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db.database import SessionLocal
 from app.core.config import settings
@@ -25,6 +25,7 @@ from app.models.knowledge import Document, KnowledgeArticle, KnowledgeRelationsh
 from app.models.change_management import ChangeApproval, ChangeRequest, MaintenanceWindow, Release, RiskAssessment
 from app.models.cmdb import CIHealthSnapshot, CIReconciliationCandidate, CIRelationship, ConfigurationItem
 from app.models.problem_management import ActionTask, KnownError, Problem, ProblemCorrelationSuggestion
+from app.models.asset_management import Contract, EnterpriseAsset, InventoryItem, SoftwareLicense, StockBalance, Vendor, VendorPerformance, Warranty
 
 
 scheduler = BackgroundScheduler()
@@ -76,6 +77,7 @@ CMDB_JOB_INTERVALS = {
     "expired_warranty_notifications": 1440,
 }
 PROBLEM_JOB_INTERVALS={"review_reminders":1440,"capa_due_reminders":60,"known_error_review_reminders":1440,"recurring_incident_detection":60,"problem_aging_alerts":1440,"dashboard_statistics":60}
+ASSET_JOB_INTERVALS={"warranty_reminders":1440,"contract_renewal_reminders":1440,"license_renewal_reminders":1440,"inventory_threshold_alerts":60,"asset_lifecycle_reviews":1440,"depreciation_recalculation":1440,"vendor_score_aggregation":1440}
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -1231,6 +1233,31 @@ def reconcile_problem_jobs():
     for job_type,minutes in PROBLEM_JOB_INTERVALS.items():scheduler.add_job(scheduled_problem_management,"interval",minutes=minutes,id=f"problem_management_{job_type}",args=[job_type],replace_existing=True,max_instances=1,coalesce=True)
     return len(PROBLEM_JOB_INTERVALS)
 
+def scheduled_asset_management(job_type: str):
+    """Finance-aware scheduled maintenance; records flags and calculations, never purchases."""
+    db=SessionLocal()
+    try:
+        now_at=datetime.now(timezone.utc); today=now_at.date(); soon=today+timedelta(days=90)
+        if job_type=="warranty_reminders":db.query(Warranty).filter(Warranty.status=="active",Warranty.end_date.between(today,soon)).update({Warranty.status:"renewal_review"},synchronize_session=False)
+        elif job_type=="contract_renewal_reminders":db.query(Contract).filter(Contract.status=="active",Contract.end_date.between(today,soon)).update({Contract.status:"renewal_review"},synchronize_session=False)
+        elif job_type=="license_renewal_reminders":db.query(SoftwareLicense).filter(SoftwareLicense.status=="active",SoftwareLicense.renewal_date.between(today,soon)).update({SoftwareLicense.status:"renewal_review"},synchronize_session=False)
+        elif job_type=="asset_lifecycle_reviews":db.query(EnterpriseAsset).filter(EnterpriseAsset.end_of_life<=today,~EnterpriseAsset.lifecycle_stage.in_(("retired","disposed","archived"))).update({EnterpriseAsset.status:"lifecycle_review"},synchronize_session=False)
+        elif job_type=="depreciation_recalculation":
+            from app.api.v1.asset_management import depreciation
+            for asset in db.query(EnterpriseAsset).filter(~EnterpriseAsset.lifecycle_stage.in_(("disposed","archived"))).limit(10000):values=depreciation(asset,today);asset.depreciation_value=values["depreciation"];asset.current_value=values["current_value"]
+        elif job_type=="vendor_score_aggregation":
+            for vendor in db.query(Vendor).all():
+                score=db.query(func.avg(VendorPerformance.overall_score)).filter_by(vendor_id=vendor.id).scalar()
+                if score is not None:vendor.rating=score
+        db.commit()
+    except Exception:db.rollback();logger.exception("Asset Management scheduled job failed type=%s",job_type)
+    finally:db.close()
+
+def reconcile_asset_jobs():
+    if not settings.scheduler_enabled:return 0
+    for job_type,minutes in ASSET_JOB_INTERVALS.items():scheduler.add_job(scheduled_asset_management,"interval",minutes=minutes,id=f"asset_management_{job_type}",args=[job_type],replace_existing=True,max_instances=1,coalesce=True)
+    return len(ASSET_JOB_INTERVALS)
+
 
 def start_scheduler():
     if not settings.scheduler_enabled:
@@ -1272,6 +1299,7 @@ def start_scheduler():
         reconcile_change_jobs()
         reconcile_cmdb_jobs()
         reconcile_problem_jobs()
+        reconcile_asset_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

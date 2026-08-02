@@ -1,5 +1,7 @@
 # HIOP — Hospitality IT Operations Platform
 
+HIOP Version 3 Epic 7 adds Enterprise Asset, Vendor, Procurement, Contract, Warranty, Software License, Inventory, and Financial Lifecycle Management. See [Asset Management](docs/ASSET_MANAGEMENT.md), [Vendors](docs/VENDOR_MANAGEMENT.md), [Procurement](docs/PROCUREMENT.md), [Contracts](docs/CONTRACT_MANAGEMENT.md), [Software Licenses](docs/SOFTWARE_LICENSES.md), and [Financial Tracking](docs/FINANCIAL_TRACKING.md).
+
 HIOP Version 3 Epic 6 adds Enterprise Problem Management, structured RCA, the Known Error Database, reusable workarounds, CAPA, post-resolution reviews, deterministic incident-correlation suggestions, relationship graphs, dashboards, reports, exports, and scheduled reminders. See [Problem Management](docs/PROBLEM_MANAGEMENT.md), [KEDB](docs/KNOWN_ERROR_DATABASE.md), [RCA](docs/ROOT_CAUSE_ANALYSIS.md), and [CAPA](docs/CAPA.md).
 
 HIOP v2 analytics includes opt-in scheduled aggregation, bounded historical backfill, data-quality monitoring, and retention controls. See [docs/ANALYTICS.md](docs/ANALYTICS.md).

@@ -238,3 +238,7 @@ Authenticated endpoints under `/api/v1/changes` provide RFC CRUD/lifecycle, appr
 # Enterprise CMDB API
 
 The 28 protected `/api/v1/cmdb` paths cover dashboard, classes/types/status/lifecycle, paginated CI CRUD/search, lifecycle, typed attributes/history, identifiers/aliases, relationship types/relationships/history, dependency graph/snapshots, impact, reconciliation runs/decisions, health/history, bounded bulk operations, summaries, and CSV/XLSX/PDF export. Mutations require contributor/admin roles and property access. No endpoint accepts executable relationship rules or creates inferred relationships.
+
+# Epic 7 Asset, Vendor and Procurement API
+
+Protected `/api/v1/asset-management` endpoints provide assets, lifecycle/timeline, depreciation/TCO, vendor approval, procurement decisions/orders/receiving, contracts/renewals, warranties/claims, licenses/compliance, inventory movements, relationships, dashboards, and bounded CSV/XLSX/PDF reports. OpenAPI exposes validation and roles; no endpoint performs autonomous purchasing.

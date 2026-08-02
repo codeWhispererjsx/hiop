@@ -35,3 +35,8 @@ Enterprise Change Management is delivered with human-reviewed RFC, CAB, risk, ma
 # Epic 5 status
 
 The Enterprise CMDB foundation is delivered with authoritative CIs, reviewed relationships, lifecycle, deterministic graph/impact/reconciliation/health, reports, jobs, and frontend. Problem and Known Error Management is the recommended next bounded context. Cloud/vendor adapters remain explicit future integrations.
+
+# Version 3 progression
+
+- [x] Epic 7 — Enterprise Asset, Vendor, Procurement & Contract Lifecycle Management
+- [ ] Epic 8 — Enterprise Reporting, Executive Dashboards & Business Intelligence

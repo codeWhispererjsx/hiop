@@ -133,3 +133,7 @@ The `change_management` bounded context separates RFC planning, CAB decisions, d
 # Epic 5 CMDB architecture
 
 `app.models.cmdb` is an additive authoritative CI context linked to, but separate from, Device Inventory and discovery sources. `cmdb_service` owns deterministic lifecycle, validation, relationship traversal, impact, reconciliation, graph snapshots, and health. `/api/v1/cmdb` enforces property scope and RBAC. The shared scheduler registers seven stable `cmdb_*` jobs; none creates CIs or relationships.
+
+# Epic 7 asset and commercial domain
+
+`asset_management` is a deterministic bounded context beside CMDB. Enterprise assets may link to legacy devices and CIs without replacing either. Procurement, vendor, contract, warranty, licensing, inventory, and finance records use shared authorization, audit, property, scheduler, and export infrastructure.

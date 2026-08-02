@@ -52,3 +52,7 @@ HIOP shall provide property-aware RFC planning, technical and CAB approvals, det
 # Epic 5 requirements trace
 
 HIOP shall maintain property-aware CIs, taxonomy, lifecycle, custom attributes, normalized identifiers, evidence-backed directional relationships, cycle-safe dependency views, deterministic impact, reviewed reconciliation, data health, search, bounded bulk operations, reporting, audit, and scheduled validation. It shall reject self/duplicate links and shall never invent a relationship or auto-create an unreviewed CI.
+
+# Epic 7 requirements
+
+HIOP shall maintain auditable multi-property asset, vendor, procurement, contract, warranty, license, inventory, and financial records. Procurement and renewals require human approval. Depreciation and compliance calculations shall be deterministic, fixed-precision, reproducible, and free of autonomous purchasing recommendations.

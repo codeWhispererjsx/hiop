@@ -61,3 +61,7 @@ No Version 1.0.0 page exposes fake alerts, reports, health values, save controls
 # CMDB workspace
 
 `/cmdb` provides Dashboard, CI Explorer/detail, reviewed CI creation, Relationship Manager, accessible dependency graph/list, Impact Analysis, Reconciliation, Health, Attribute Manager, Search, and Reports. The visual graph includes a text relationship fallback. Forms use existing tokens and collapse to one column on narrow screens; unauthorized mutation controls remain hidden.
+
+# Asset, Vendor and Procurement workspace
+
+The protected `/assets/*` workspace includes Asset Dashboard, Explorer, Timeline, Vendor Directory/Details, Procurement Center, Purchase Orders, Contracts, Warranties, Software Licensing, Inventory, and Financial Reports. Shared tokens, responsive layouts, typed APIs, status text, and role-gated controls are retained.

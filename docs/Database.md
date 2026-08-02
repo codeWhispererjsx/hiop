@@ -156,3 +156,7 @@ Migration `b9c0d1e2f3a4` adds 38 tables covering change types/categories, RFCs, 
 # Epic 5 CMDB schema
 
 Migration `c0d1e2f3a4b5` adds CI classes/types/status/lifecycle, configuration items, attributes/history, identifiers, aliases, relationship types/relationships/history, lifecycle history, dependency snapshots, reconciliation candidates, and health snapshots. UUID foreign keys, unique asset/discovery links, normalized identifier uniqueness, no-self relationship checks, confidence/health bounds, and property/time indexes preserve integrity. Upgrade seeds taxonomy only; downgrade removes only Epic 5 tables.
+
+# Epic 7 schema
+
+Migration `e2f3a4b5c6d7` adds asset taxonomy/registry/history, vendors and scorecards, budgets/requests/approvals/orders/receiving, contracts/renewals, warranties/claims, products/licenses/compliance, inventory balances/movements, asset costs, and relationships. Financial values use fixed-precision `NUMERIC(18,2)`.

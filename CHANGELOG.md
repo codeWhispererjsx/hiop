@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.0-dev — Epic 7 Enterprise Asset, Vendor & Procurement Lifecycle
+
+- Added the enterprise registry, audited lifecycle, location, assignment, transfer, disposal, CMDB linkage, and financial history.
+- Added vendor scorecards, procurement approvals and receiving, contracts, warranties, licensing, inventory, reports, exports, and scheduled reviews.
+
 ## 3.0.0-dev — Epic 6 Enterprise Problem Management
 
 - Added auditable Problem records and guarded ITIL lifecycle transitions.
