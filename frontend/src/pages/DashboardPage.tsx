@@ -1,6 +1,86 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import { useCallback, useState } from "react"; import { Link } from "react-router-dom"; import DashboardLayout from "../layouts/DashboardLayout"; import { StatCard } from "../components/StatCard"; import { Icon } from "../components/Icon"; import { Feedback } from "../components/Feedback"; import { endpoints } from "../lib/api"; import type { LiveEvent, Scan, Ticket } from "../lib/types"; import { useRequest } from "../hooks/useRequest";
-export default function DashboardPage(){const dashboard=useRequest(endpoints.dashboard,[]);const scans=useRequest(()=>endpoints.scanHistory(12),[]);const tickets=useRequest(endpoints.tickets,[]);const [notice,setNotice]=useState("");const refresh=useCallback(async()=>{await Promise.all([dashboard.reload(),scans.reload(),tickets.reload()])},[dashboard.reload,scans.reload,tickets.reload]);const live=useCallback((e:LiveEvent)=>{if(e.event==="device_status_changed"){setNotice(`${e.hostname??"A device"} changed to ${e.current_status}.`);void refresh()}},[refresh]);const d=dashboard.data;const availability=d?.devices.total?Math.round(d.devices.online/d.devices.total*100):0;return <DashboardLayout onLiveEvent={live}><PageTitle eyebrow="Operations centre" title="Infrastructure overview" copy="Live, backend-backed status across hotel IT operations." action={<button className="primary-action" onClick={()=>void refresh()}><Icon name="network"/>Refresh data</button>}/>{notice&&<div className="inline-notice">{notice}</div>}{dashboard.loading||dashboard.error||!d?<Feedback loading={dashboard.loading} error={dashboard.error} onRetry={dashboard.reload}/>:<><section className="stats-grid"><StatCard label="Total devices" value={d.devices.total} detail={`${d.devices.unknown} awaiting a confirmed state`} icon="devices" trend="Inventory"/><StatCard label="Online now" value={d.devices.online} detail={`${availability}% current availability`} icon="check" tone="success" trend="Live"/><StatCard label="Offline" value={d.devices.offline} detail="Assets requiring attention" icon="warning" tone="danger" trend="Action"/><StatCard label="Open tickets" value={d.tickets.open} detail={`${d.tickets.in_progress} assigned and active`} icon="tickets" tone="warning" trend="Helpdesk"/></section><section className="dashboard-grid"><article className="panel"><PanelHead title="Recent network checks" copy="Latest results recorded by the monitoring service"/><ScanList scans={scans.data??[]} loading={scans.loading} error={scans.error}/></article><article className="panel health-panel"><PanelHead title="Availability" copy="Current device distribution"/><div className="donut" style={{"--online":`${Math.max(1,availability)}%`} as React.CSSProperties}><div><strong>{availability}%</strong><span>available</span></div></div><div className="legend"><span><i className="online"/>Online <b>{d.devices.online}</b></span><span><i className="offline"/>Offline <b>{d.devices.offline}</b></span><span><i className="unknown"/>Unknown <b>{d.devices.unknown}</b></span></div></article><article className="panel"><PanelHead title="Active service tickets" copy="Open and in-progress issues"/><TicketList tickets={(tickets.data??[]).filter(t=>t.status!=="Closed").slice(0,5)} loading={tickets.loading} error={tickets.error}/></article><article className="panel scan-panel"><PanelHead title="Monitoring service" copy="Last successful database record"/><div className="scan-status"><span className="scan-orbit"><Icon name="wifi" size={26}/></span><div><strong>{d.network.last_scan?"Scan activity recorded":"Awaiting first scan"}</strong><span>{d.network.last_scan?new Date(d.network.last_scan).toLocaleString():"No network scan has been recorded"}</span></div></div></article></section></>}</DashboardLayout>}
-function ScanList({scans,loading,error}:{scans:Scan[];loading:boolean;error:string}){if(loading||error||!scans.length)return <Feedback loading={loading} error={error} empty="No scan history yet."/>;return <div className="compact-list">{scans.slice(0,6).map(s=><div key={s.id}><span className={`pulse ${s.status.toLowerCase()}`}/><strong>{s.ip_address}</strong><b className={`status-badge ${s.status.toLowerCase()}`}>{s.status}</b><span>{s.response_time==null?"No response":`${s.response_time} ms`}</span></div>)}</div>}
-function TicketList({tickets,loading,error}:{tickets:Ticket[];loading:boolean;error:string}){if(loading||error||!tickets.length)return <Feedback loading={loading} error={error} empty="No active service tickets."/>;return <div className="compact-list dashboard-ticket-list">{tickets.map(t=><Link to={`/tickets/${t.id}`} key={t.id}><Icon name="tickets"/><strong>{t.title}</strong><b className={`status-badge ${t.status.toLowerCase().replace(" ","-")}`}>{t.status}</b><span>{t.priority}</span></Link>)}</div>}
-export function PageTitle({eyebrow,title,copy,action}:{eyebrow:string;title:string;copy:string;action?:React.ReactNode}){return <div className="page-title"><div><p className="page-kicker">{eyebrow}</p><h1>{title}</h1><p>{copy}</p></div>{action}</div>};export function PanelHead({title,copy}:{title:string;copy:string}){return <header className="panel-head"><div><h2>{title}</h2><p>{copy}</p></div></header>}
+import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import DashboardLayout from "../layouts/DashboardLayout";
+import { Feedback } from "../components/Feedback";
+import { Icon } from "../components/Icon";
+import { useRequest } from "../hooks/useRequest";
+import { endpoints } from "../lib/api";
+import type { Device } from "../lib/types";
+
+export default function DashboardPage() {
+  const dashboard = useRequest(endpoints.dashboard, []);
+  const inventory = useRequest(endpoints.devices, []);
+  const [query, setQuery] = useState("");
+  const devices = useMemo(() => inventory.data ?? [], [inventory.data]);
+  const visible = useMemo(() => {
+    const value = query.trim().toLowerCase();
+    if (!value) return devices;
+    return devices.filter((device) =>
+      [device.hostname, device.ip_address, device.device_type, device.brand, device.location]
+        .some((field) => field?.toLowerCase().includes(value)),
+    );
+  }, [devices, query]);
+  const types = summarize(devices, (device) => device.device_type || "Unknown");
+  const locations = summarize(devices, (device) => device.location || "Unassigned");
+  const d = dashboard.data;
+
+  return <DashboardLayout>
+    <div className="asset-dashboard-title">
+      <div><p className="page-kicker">Infrastructure inventory</p><h1>Assets</h1><p>Discover, identify, and manage every device from one workspace.</p></div>
+      <div className="asset-dashboard-actions">
+        <Link className="secondary-action" to="/devices">View inventory</Link>
+        <Link className="primary-action" to="/discovery-intelligence"><Icon name="discovery"/>Discover devices</Link>
+      </div>
+    </div>
+
+    {dashboard.loading || inventory.loading || dashboard.error || inventory.error || !d
+      ? <Feedback loading={dashboard.loading || inventory.loading} error={dashboard.error || inventory.error} onRetry={() => { void dashboard.reload(); void inventory.reload(); }}/>
+      : <>
+        <section className="asset-summary-grid">
+          <article className="asset-metric-card"><span>Total assets</span><strong>{d.devices.total}</strong><small>Approved inventory records</small></article>
+          <article className="asset-metric-card"><span>Online now</span><strong>{d.devices.online}</strong><small>{d.devices.total ? `${Math.round(d.devices.online / d.devices.total * 100)}% available` : "Waiting for your first discovery"}</small></article>
+          <article className="asset-insight-card"><header><h2>Types of assets</h2><span>{types.length} types</span></header><Distribution rows={types}/></article>
+          <article className="asset-insight-card"><header><h2>Assets by location</h2><span>Top locations</span></header><Distribution rows={locations}/></article>
+        </section>
+
+        <section className="asset-inventory-panel">
+          <header className="asset-inventory-head">
+            <div><h2>Asset inventory</h2><p>{devices.length ? `${devices.length} managed devices` : "Your inventory is clean and ready."}</p></div>
+            <label className="asset-search"><Icon name="search"/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search assets" aria-label="Search assets"/></label>
+          </header>
+          {visible.length ? <AssetTable devices={visible}/> : <div className="asset-empty">
+            <span><Icon name="discovery" size={28}/></span>
+            <h3>{query ? "No matching assets" : "Discover your first device"}</h3>
+            <p>{query ? "Try another name, IP address, type, vendor, or location." : "Scan your network. HIOP will identify reachable devices and place the results here."}</p>
+            {!query && <Link className="primary-action" to="/discovery-intelligence">Start discovery</Link>}
+          </div>}
+        </section>
+      </>}
+  </DashboardLayout>;
+}
+
+function summarize(devices: Device[], key: (device: Device) => string) {
+  const counts = new Map<string, number>();
+  devices.forEach((device) => counts.set(key(device), (counts.get(key(device)) ?? 0) + 1));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+}
+
+function Distribution({ rows }: { rows: [string, number][] }) {
+  const maximum = Math.max(1, ...rows.map(([, count]) => count));
+  if (!rows.length) return <p className="asset-card-empty">No asset data yet</p>;
+  return <div className="asset-distribution">{rows.map(([label, count]) => <div key={label}><span>{label}</span><strong>{count}</strong><i><b style={{ width: `${Math.max(8, count / maximum * 100)}%` }}/></i></div>)}</div>;
+}
+
+function AssetTable({ devices }: { devices: Device[] }) {
+  return <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Asset name</th><th>Type</th><th>Vendor / model</th><th>Status</th><th>IP address</th><th>Location</th></tr></thead><tbody>{devices.slice(0, 50).map((device) => <tr key={device.id}>
+    <td><Link to={`/devices/${device.id}`}><span className="asset-device-icon"><Icon name="devices"/></span><strong>{device.hostname || device.asset_tag || "Unnamed device"}</strong></Link></td>
+    <td><span className="asset-tag">{device.device_type || "Unknown"}</span></td>
+    <td>{[device.brand, device.model].filter(Boolean).join(" · ") || "—"}</td>
+    <td><span className={`status-badge ${(device.network_status || "unknown").toLowerCase()}`}>{device.network_status || "Unknown"}</span></td>
+    <td className="asset-mono">{device.ip_address || "—"}</td><td>{device.location || "Unassigned"}</td>
+  </tr>)}</tbody></table></div>;
+}
+
+export function PageTitle({ eyebrow, title, copy, action }: { eyebrow: string; title: string; copy: string; action?: React.ReactNode }) {
+  return <div className="page-title"><div><p className="page-kicker">{eyebrow}</p><h1>{title}</h1><p>{copy}</p></div>{action}</div>;
+}
