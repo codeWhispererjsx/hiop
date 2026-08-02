@@ -73,3 +73,7 @@ The protected `/assets/*` workspace includes Asset Dashboard, Explorer, Timeline
 # Executive BI workspace
 
 The protected `/business-intelligence/*` workspace includes Executive, Property and Corporate Dashboards, Analytics Center, Report Builder, Saved/Scheduled Reports, KPI Manager, Capacity Planning, Trend Analysis, SLA Dashboard, and Hospitality Metrics. Blue & Gold line, bar, area, pie, heat-map, gauge, trend, and table views include accessible tabular data and responsive layouts.
+
+## Epic 9.5 Discovery Intelligence
+
+`/discovery-intelligence` provides Dashboard, Jobs, Results, Device Explorer/Details, Evidence, Fingerprints, Topology, Unknown Review, Policies, Credentials, and History. Shared tokens support light/dark themes; topology is keyboard focusable and graphs include textual empty states.

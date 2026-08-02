@@ -168,3 +168,7 @@ Migration `e2f3a4b5c6d7` adds asset taxonomy/registry/history, vendors and score
 # Epic 8 schema
 
 Migration `0b1c2d3e4f58` adds KPI definitions/instances/values/targets/thresholds/snapshots, executive dashboards/widgets/cache, report templates/reports/ordered sections/executions, scheduled reports, and recipients. Unique period, scope, widget-position, section-position, and recipient constraints preserve reproducibility.
+
+## Epic 9.5 discovery data
+
+Migration `2c3d4e5f6a70` adds policies, encrypted credential metadata, jobs, ordered stages, retryable tasks, results, normalized evidence, fingerprints, local OUI vendors, and change suggestions. Unique constraints prevent duplicate state.

@@ -64,3 +64,7 @@ HIOP shall maintain auditable multi-property asset, vendor, procurement, contrac
 # Epic 8 requirements
 
 HIOP shall expose governed property/corporate KPIs, executive audience dashboards, deterministic periods/averages/trends/growth/variance/baselines, historical-only capacity forecasts, configurable scheduled reports, SLA and hospitality metrics, accessible visualizations, and branded exports. Formulas shall not execute arbitrary code or produce autonomous recommendations.
+
+## Epic 9.5 requirements
+
+HIOP shall restrict discovery to approved private scopes; persist twenty retryable stages and evidence; classify deterministically; explain confidence; support review; read reviewed topology; deduplicate CMDB sync; encrypt opt-in credentials; throttle and audit work; and provide protected APIs and accessible pages. It shall not perform exploit scanning or autonomous changes.

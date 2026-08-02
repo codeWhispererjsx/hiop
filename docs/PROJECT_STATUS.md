@@ -11,3 +11,7 @@ Epic 7 Enterprise Asset, Vendor, Procurement & Contract Lifecycle Management is 
 Epic 8 Enterprise Reporting & Business Intelligence is implemented with migration `0b1c2d3e4f58`, governed KPI/report/dashboard models, deterministic calculation service, protected APIs, seven scheduled BI jobs, a Blue & Gold executive React workspace, accessible visualizations, exports, tests, and five dedicated guides.
 
 The authoritative project status is maintained in [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md). Epic 5 introduces the Enterprise CMDB and additive migration `c0d1e2f3a4b5`; implementation and limitations are documented in the Epic 5 section there.
+
+## Version 3 Epic 9.5 — complete
+
+Enterprise Discovery & Configuration Intelligence is implemented with migration `2c3d4e5f6a70`, twenty persisted stages, deterministic fingerprinting/confidence, OUI intelligence, reviewed topology, encrypted opt-in credentials, CMDB synchronization, eight scheduled jobs, UI, tests, and five guides. Credentialed collectors remain opt-in; intrusive scanning is excluded.

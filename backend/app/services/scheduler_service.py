@@ -30,6 +30,8 @@ from app.models.business_intelligence import DashboardCache, ExecutiveDashboard,
 from app.models.hierarchy import Property
 from app.models.multi_property import ExecutiveOperationsCache, GlobalNotification, GlobalSetting, InheritedSetting, PolicyAssignment, PolicyCompliance, PropertyHierarchyMembership, PropertySetting, RegionalSetting
 from app.services.multi_property_service import property_ids_for_scope
+from app.models.discovery_intelligence import DiscoveryEvidence,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult
+from app.services.discovery_intelligence_service import DiscoveryIntelligenceService,confidence,parse_json,review_status
 
 
 scheduler = BackgroundScheduler()
@@ -84,6 +86,7 @@ PROBLEM_JOB_INTERVALS={"review_reminders":1440,"capa_due_reminders":60,"known_er
 ASSET_JOB_INTERVALS={"warranty_reminders":1440,"contract_renewal_reminders":1440,"license_renewal_reminders":1440,"inventory_threshold_alerts":60,"asset_lifecycle_reviews":1440,"depreciation_recalculation":1440,"vendor_score_aggregation":1440}
 BI_JOB_INTERVALS={"kpi_recalculation":60,"snapshot_generation":1440,"report_scheduling":15,"email_distribution":15,"trend_aggregation":60,"capacity_recalculation":360,"dashboard_cache_refresh":15}
 MULTI_PROPERTY_JOB_INTERVALS={"organization_synchronization":1440,"policy_compliance_checks":360,"cross_property_kpi_aggregation":60,"dashboard_cache_refresh":15,"notification_routing":5,"executive_report_generation":43200}
+DISCOVERY_INTELLIGENCE_JOB_INTERVALS={"incremental_discovery":60,"full_discovery":10080,"topology_refresh":360,"vendor_database_updates":10080,"confidence_recalculation":360,"cmdb_synchronization":60,"device_aging":1440,"stale_device_detection":360}
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -1338,6 +1341,37 @@ def reconcile_multi_property_jobs():
     for job_type,minutes in MULTI_PROPERTY_JOB_INTERVALS.items():scheduler.add_job(scheduled_multi_property,"interval",minutes=minutes,id=f"multi_property_{job_type}",args=[job_type],replace_existing=True,max_instances=1,coalesce=True)
     return len(MULTI_PROPERTY_JOB_INTERVALS)
 
+def scheduled_discovery_intelligence(job_type:str):
+    """Safe orchestration: schedules bounded work and recalculates local evidence only."""
+    db=SessionLocal();now_at=datetime.now(timezone.utc)
+    try:
+        if job_type in ("incremental_discovery","full_discovery"):
+            for policy in db.query(DiscoveryPolicy).filter_by(enabled=True).all():
+                for network_range in parse_json(policy.authorized_ranges,[]):
+                    active=db.query(DiscoveryJob).filter_by(policy_id=policy.id,network_range=network_range).filter(DiscoveryJob.status.in_(("pending","running"))).first()
+                    if not active:DiscoveryIntelligenceService(db).create_job(policy,network_range,"full" if job_type=="full_discovery" else "incremental","scheduled")
+        elif job_type=="confidence_recalculation":
+            for row in db.query(DiscoveryResult).limit(10000):
+                score=confidence(x[0] for x in db.query(DiscoveryEvidence.evidence_type).filter_by(result_id=row.id).distinct());row.confidence_score=score["score"]
+                import json
+                row.confidence_explanation=json.dumps(score["contributions"]);row.review_status=review_status(row.confidence_score) if row.review_status not in ("manually_verified","ignored","false_positive","duplicate","retired") else row.review_status
+        elif job_type=="vendor_database_updates":
+            db.query(DiscoveryOUI).filter_by(source="bundled").update({DiscoveryOUI.version:now_at.strftime("%Y.%m")},synchronize_session=False)
+        elif job_type=="device_aging":
+            db.query(DiscoveryResult).filter(DiscoveryResult.last_seen_at<now_at-timedelta(days=90),~DiscoveryResult.review_status.in_(("retired","ignored","false_positive"))).update({DiscoveryResult.review_status:"retired"},synchronize_session=False)
+        elif job_type=="stale_device_detection":
+            db.query(DiscoveryResult).filter(DiscoveryResult.last_seen_at<now_at-timedelta(days=14),DiscoveryResult.review_status=="automatically_identified").update({DiscoveryResult.review_status:"needs_review"},synchronize_session=False)
+        # topology_refresh and cmdb_synchronization deliberately consume only reviewed
+        # records through their explicit APIs; schedulers never invent links or overwrite CIs.
+        db.commit()
+    except Exception:db.rollback();logger.exception("Discovery Intelligence scheduled job failed type=%s",job_type)
+    finally:db.close()
+
+def reconcile_discovery_intelligence_jobs():
+    if not settings.scheduler_enabled:return 0
+    for job_type,minutes in DISCOVERY_INTELLIGENCE_JOB_INTERVALS.items():scheduler.add_job(scheduled_discovery_intelligence,"interval",minutes=minutes,id=f"discovery_intelligence_{job_type}",args=[job_type],replace_existing=True,max_instances=1,coalesce=True)
+    return len(DISCOVERY_INTELLIGENCE_JOB_INTERVALS)
+
 
 def start_scheduler():
     if not settings.scheduler_enabled:
@@ -1382,6 +1416,7 @@ def start_scheduler():
         reconcile_asset_jobs()
         reconcile_bi_jobs()
         reconcile_multi_property_jobs()
+        reconcile_discovery_intelligence_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

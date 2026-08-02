@@ -72,6 +72,7 @@ from app.models.problem_management import *  # noqa: F401,F403 - register Epic 6
 from app.models.asset_management import *  # noqa: F401,F403 - register Epic 7 metadata
 from app.models.business_intelligence import *  # noqa: F401,F403 - register Epic 8 metadata
 from app.models.multi_property import *  # noqa: F401,F403 - register Epic 9 metadata
+from app.models.discovery_intelligence import *  # noqa: F401,F403 - register Epic 9.5 metadata
 from app.models.hospitality_operations import HospitalityTechnologyService
 
 # this is the Alembic Config object, which provides

@@ -9,7 +9,7 @@ const links: { label: string; to: string; icon: IconName }[] = [
   { label: "Devices", to: "/devices", icon: "devices" },
   { label: "Inventory Import", to: "/imports", icon: "import" },
   { label: "Network monitor", to: "/network", icon: "network" },
-  { label: "Discovery", to: "/discovery", icon: "discovery" },
+  { label: "Discovery Intelligence", to: "/discovery-intelligence", icon: "discovery" },
   { label: "SNMP Monitoring", to: "/snmp", icon: "network" },
   { label: "Network Topology", to: "/topology", icon: "hierarchy" },
   { label: "Organizations", to: "/organizations", icon: "users" },

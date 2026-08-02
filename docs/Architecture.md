@@ -145,3 +145,7 @@ The `change_management` bounded context separates RFC planning, CAB decisions, d
 # Epic 8 executive intelligence layer
 
 `business_intelligence` consumes existing analytics aggregates and operational records through governed source adapters. Pure arithmetic/trend functions are isolated in `business_intelligence_service`; definitions cannot contain executable expressions. KPI snapshots, dashboard caches, report executions, schedules, recipients, and exports form the executive delivery layer.
+
+# Epic 9.5 discovery intelligence architecture
+
+`discovery_intelligence` layers persisted policy, job, stage, task, result, evidence, fingerprint, OUI, and change-suggestion records over existing safe network, SNMP, AD, topology, and CMDB domains. Credentialed collection is opt-in and encrypted. Evidence-based identity and confidence remain deterministic; topology and CI writes require reviewed data.

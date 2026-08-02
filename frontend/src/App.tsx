@@ -42,6 +42,7 @@ const AnalyticsPage = lazy(() => import("./pages/AnalyticsPage"));
   const AssetManagementPage = lazy(() => import("./pages/AssetManagementPage"));
   const BusinessIntelligencePage = lazy(() => import("./pages/BusinessIntelligencePage"));
   const EnterpriseManagementPage = lazy(() => import("./pages/EnterpriseManagementPage"));
+  const DiscoveryIntelligencePage = lazy(() => import("./pages/DiscoveryIntelligencePage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -67,6 +68,7 @@ export default function App() {
     <Route path="/network" element={protectedPage(<NetworkPage />)} />
     <Route path="/discovery" element={protectedPage(<DiscoveryPage />)} />
     <Route path="/discovery/:id" element={protectedPage(<DiscoveryDetailsPage />)} />
+    <Route path="/discovery-intelligence/*" element={protectedPage(<DiscoveryIntelligencePage />)} />
     <Route path="/imports" element={protectedPage(<ImportsPage />)} />
     <Route path="/imports/new" element={protectedPage(<ImportWizardPage />)} />
     <Route path="/imports/:sessionId/*" element={protectedPage(<ImportWizardPage />)} />

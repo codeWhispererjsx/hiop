@@ -250,3 +250,7 @@ Protected `/api/v1/asset-management` endpoints provide assets, lifecycle/timelin
 # Epic 8 Enterprise BI API
 
 Protected `/api/v1/business-intelligence` endpoints provide paginated KPIs, definitions, targets, thresholds, recalculation, trends, analytics, audience dashboards, hospitality metrics, SLA, capacity, templates, reports, ordered sections, executions, schedules, operational coverage, and PDF/XLSX/CSV/print exports. Formulas accept only governed source keys and allow-listed operations.
+
+# Epic 9.5 Discovery Intelligence API
+
+Protected `/api/v1/discovery-intelligence` endpoints expose capabilities, dashboard statistics, policies, encrypted credential metadata, jobs/stages/tasks, results/evidence/fingerprints, explainable confidence, review actions, local OUI updates, reviewed topology, history, and deduplicated CMDB synchronization. Mutations require administrators and secrets are write-only.

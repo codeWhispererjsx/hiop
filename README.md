@@ -126,3 +126,7 @@ workflow versions can run from validated interval/calendar schedules or fixed
 HIOP events through a transactional outbox, bounded correlation, recovery
 cancellation, approval gates, and dead-letter review. No external webhook,
 arbitrary code, raw cron, or unreviewed destructive action is supported.
+
+## Version 3 Epic 9.5
+
+HIOP now includes policy-bounded enterprise discovery, deterministic fingerprinting and confidence, reviewed topology, encrypted opt-in credentials, and identifier-deduplicated CMDB synchronization. See [Discovery Engine](docs/DISCOVERY_ENGINE.md) and [Discovery Pipeline](docs/DISCOVERY_PIPELINE.md).

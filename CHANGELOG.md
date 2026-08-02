@@ -344,3 +344,9 @@ All notable HIOP changes are recorded here. The project follows semantic version
 - Added deterministic scheduled SNMP polling, reconciliation, jitter, locks, and stale-run recovery.
 - Added reviewed rules, deduplicated evidence, multi-sample recovery, maintenance suppression, and frontend views.
 - Added protected scheduled retention and aggregate production health data.
+
+## 3.0.0-dev — Epic 9.5 Enterprise Discovery & Configuration Intelligence
+
+- Added bounded policies, twenty-stage jobs, retries, fingerprints, OUI/service identification, snapshots, evidence, and explainable confidence.
+- Added review, reviewed topology, deduplicated CMDB sync, encrypted credentials, schedulers, protected APIs, React pages, tests, and documentation.
+- Excluded intrusive scanning, exploits, fabricated links, autonomous changes, and secret retrieval.
