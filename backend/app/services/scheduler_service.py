@@ -26,6 +26,7 @@ from app.models.change_management import ChangeApproval, ChangeRequest, Maintena
 from app.models.cmdb import CIHealthSnapshot, CIReconciliationCandidate, CIRelationship, ConfigurationItem
 from app.models.problem_management import ActionTask, KnownError, Problem, ProblemCorrelationSuggestion
 from app.models.asset_management import Contract, EnterpriseAsset, InventoryItem, SoftwareLicense, StockBalance, Vendor, VendorPerformance, Warranty
+from app.models.business_intelligence import DashboardCache, ExecutiveDashboard, KPI, KPIDefinition, KPISnapshot, KPIValue, ReportExecution, ReportRecipient, ScheduledReport
 
 
 scheduler = BackgroundScheduler()
@@ -78,6 +79,7 @@ CMDB_JOB_INTERVALS = {
 }
 PROBLEM_JOB_INTERVALS={"review_reminders":1440,"capa_due_reminders":60,"known_error_review_reminders":1440,"recurring_incident_detection":60,"problem_aging_alerts":1440,"dashboard_statistics":60}
 ASSET_JOB_INTERVALS={"warranty_reminders":1440,"contract_renewal_reminders":1440,"license_renewal_reminders":1440,"inventory_threshold_alerts":60,"asset_lifecycle_reviews":1440,"depreciation_recalculation":1440,"vendor_score_aggregation":1440}
+BI_JOB_INTERVALS={"kpi_recalculation":60,"snapshot_generation":1440,"report_scheduling":15,"email_distribution":15,"trend_aggregation":60,"capacity_recalculation":360,"dashboard_cache_refresh":15}
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -1258,6 +1260,43 @@ def reconcile_asset_jobs():
     for job_type,minutes in ASSET_JOB_INTERVALS.items():scheduler.add_job(scheduled_asset_management,"interval",minutes=minutes,id=f"asset_management_{job_type}",args=[job_type],replace_existing=True,max_instances=1,coalesce=True)
     return len(ASSET_JOB_INTERVALS)
 
+def scheduled_business_intelligence(job_type: str):
+    """Deterministic executive aggregation and explicitly configured report delivery."""
+    import hashlib,json
+    db=SessionLocal()
+    try:
+        from app.api.v1.business_intelligence import source_value
+        from app.services.business_intelligence_service import calculate_formula,linear_forecast,trend
+        now_at=datetime.now(timezone.utc)
+        if job_type=="kpi_recalculation":
+            for kpi in db.query(KPI).filter_by(enabled=True).limit(1000):
+                definition=db.get(KPIDefinition,kpi.definition_id)
+                if not definition or not definition.enabled:continue
+                inputs={key:str(source_value(db,key,kpi.scope_id)) for key in json.loads(definition.source_keys)};value=calculate_formula(definition.operation,list(inputs.values()));db.add(KPIValue(kpi_id=kpi.id,value=value,period_start=now_at-timedelta(hours=1),period_end=now_at,frequency="hourly",status="calculated",inputs=json.dumps(inputs,sort_keys=True)))
+        elif job_type=="snapshot_generation":
+            values={str(kpi.id):str((db.query(KPIValue).filter_by(kpi_id=kpi.id).order_by(KPIValue.period_end.desc()).first() or type("V",(),{"value":0})()).value) for kpi in db.query(KPI).filter_by(enabled=True).limit(1000)};raw=json.dumps(values,sort_keys=True);db.add(KPISnapshot(scope_type="corporate",period_start=now_at-timedelta(days=1),period_end=now_at,frequency="daily",values=raw,checksum=hashlib.sha256(raw.encode()).hexdigest()))
+        elif job_type in ("trend_aggregation","capacity_recalculation","dashboard_cache_refresh"):
+            kpi_rows={}
+            for kpi in db.query(KPI).filter_by(enabled=True).limit(200):
+                rows=list(reversed(db.query(KPIValue).filter_by(kpi_id=kpi.id).order_by(KPIValue.period_end.desc()).limit(12).all()));series=[r.value for r in rows];kpi_rows[str(kpi.id)]={"latest":str(series[-1]) if series else "0","trend":trend(series),"forecast":[str(x) for x in linear_forecast(series,3)]}
+            for dashboard in db.query(ExecutiveDashboard).filter_by(enabled=True):
+                cache=db.query(DashboardCache).filter_by(dashboard_id=dashboard.id,scope_type="corporate",scope_id=None).first() or DashboardCache(dashboard_id=dashboard.id,scope_type="corporate",scope_id=None,payload="{}",expires_at=now_at);db.add(cache);cache.payload=json.dumps({"kpis":kpi_rows,"generated_at":now_at.isoformat()},default=str);cache.generated_at=now_at;cache.expires_at=now_at+timedelta(minutes=20)
+        elif job_type in ("report_scheduling","email_distribution"):
+            due=db.query(ScheduledReport).filter_by(enabled=True).filter(ScheduledReport.next_run_at<=now_at).limit(100).all()
+            for schedule in due:
+                db.add(ReportExecution(report_id=schedule.report_id,status="completed",format=schedule.format,parameters="{}",trigger_type="scheduled",completed_at=now_at));schedule.last_run_at=now_at;days={"daily":1,"weekly":7,"monthly":30,"quarterly":90,"yearly":365}[schedule.frequency];schedule.next_run_at=now_at+timedelta(days=days)
+                if job_type=="email_distribution" and settings.email_address and settings.email_password:
+                    from app.services.email_service import send_email
+                    for recipient in db.query(ReportRecipient).filter_by(scheduled_report_id=schedule.id,enabled=True):send_email("HIOP scheduled executive report",f"Scheduled HIOP report {schedule.report_id} completed at {now_at.isoformat()}.",recipient.recipient_value)
+        db.commit()
+    except Exception:db.rollback();logger.exception("Business Intelligence scheduled job failed type=%s",job_type)
+    finally:db.close()
+
+def reconcile_bi_jobs():
+    if not settings.scheduler_enabled:return 0
+    for job_type,minutes in BI_JOB_INTERVALS.items():scheduler.add_job(scheduled_business_intelligence,"interval",minutes=minutes,id=f"business_intelligence_{job_type}",args=[job_type],replace_existing=True,max_instances=1,coalesce=True)
+    return len(BI_JOB_INTERVALS)
+
 
 def start_scheduler():
     if not settings.scheduler_enabled:
@@ -1300,6 +1339,7 @@ def start_scheduler():
         reconcile_cmdb_jobs()
         reconcile_problem_jobs()
         reconcile_asset_jobs()
+        reconcile_bi_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

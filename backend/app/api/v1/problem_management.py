@@ -1,6 +1,5 @@
 import csv, io, json
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from openpyxl import Workbook
@@ -13,6 +12,7 @@ from app.models.audit_log import AuditLog
 from app.models.incidents import OperationalIncident
 from app.models.problem_management import *
 from app.services.audit_service import create_audit_log
+from uuid import UUID
 
 router=APIRouter(prefix="/problems",tags=["Enterprise Problem Management"])
 reader=require_roles(["admin","superadmin","technician","viewer"]); contributor=require_roles(["admin","superadmin","technician"]); admin=require_roles(["admin","superadmin"])

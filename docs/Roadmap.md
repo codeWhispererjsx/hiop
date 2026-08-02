@@ -39,4 +39,5 @@ The Enterprise CMDB foundation is delivered with authoritative CIs, reviewed rel
 # Version 3 progression
 
 - [x] Epic 7 — Enterprise Asset, Vendor, Procurement & Contract Lifecycle Management
-- [ ] Epic 8 — Enterprise Reporting, Executive Dashboards & Business Intelligence
+- [x] Epic 8 — Enterprise Reporting, Executive Dashboards & Business Intelligence
+- [ ] Epic 9 — Multi-Property Operations & Corporate Management

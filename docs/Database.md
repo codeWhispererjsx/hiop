@@ -160,3 +160,7 @@ Migration `c0d1e2f3a4b5` adds CI classes/types/status/lifecycle, configuration i
 # Epic 7 schema
 
 Migration `e2f3a4b5c6d7` adds asset taxonomy/registry/history, vendors and scorecards, budgets/requests/approvals/orders/receiving, contracts/renewals, warranties/claims, products/licenses/compliance, inventory balances/movements, asset costs, and relationships. Financial values use fixed-precision `NUMERIC(18,2)`.
+
+# Epic 8 schema
+
+Migration `0b1c2d3e4f58` adds KPI definitions/instances/values/targets/thresholds/snapshots, executive dashboards/widgets/cache, report templates/reports/ordered sections/executions, scheduled reports, and recipients. Unique period, scope, widget-position, section-position, and recipient constraints preserve reproducibility.

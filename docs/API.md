@@ -242,3 +242,7 @@ The 28 protected `/api/v1/cmdb` paths cover dashboard, classes/types/status/life
 # Epic 7 Asset, Vendor and Procurement API
 
 Protected `/api/v1/asset-management` endpoints provide assets, lifecycle/timeline, depreciation/TCO, vendor approval, procurement decisions/orders/receiving, contracts/renewals, warranties/claims, licenses/compliance, inventory movements, relationships, dashboards, and bounded CSV/XLSX/PDF reports. OpenAPI exposes validation and roles; no endpoint performs autonomous purchasing.
+
+# Epic 8 Enterprise BI API
+
+Protected `/api/v1/business-intelligence` endpoints provide paginated KPIs, definitions, targets, thresholds, recalculation, trends, analytics, audience dashboards, hospitality metrics, SLA, capacity, templates, reports, ordered sections, executions, schedules, operational coverage, and PDF/XLSX/CSV/print exports. Formulas accept only governed source keys and allow-listed operations.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.0-dev — Epic 8 Enterprise Reporting & Business Intelligence
+
+- Added governed KPI definitions, values, targets, thresholds, snapshots, executive audiences, dashboards, widgets, and cache.
+- Added deterministic analytics, hospitality/SLA/capacity views, configurable reports, schedules, recipients, email distribution, and Blue & Gold PDF/XLSX/CSV/print exports.
+
 ## 3.0.0-dev — Epic 7 Enterprise Asset, Vendor & Procurement Lifecycle
 
 - Added the enterprise registry, audited lifecycle, location, assignment, transfer, disposal, CMDB linkage, and financial history.

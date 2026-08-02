@@ -137,3 +137,7 @@ The `change_management` bounded context separates RFC planning, CAB decisions, d
 # Epic 7 asset and commercial domain
 
 `asset_management` is a deterministic bounded context beside CMDB. Enterprise assets may link to legacy devices and CIs without replacing either. Procurement, vendor, contract, warranty, licensing, inventory, and finance records use shared authorization, audit, property, scheduler, and export infrastructure.
+
+# Epic 8 executive intelligence layer
+
+`business_intelligence` consumes existing analytics aggregates and operational records through governed source adapters. Pure arithmetic/trend functions are isolated in `business_intelligence_service`; definitions cannot contain executable expressions. KPI snapshots, dashboard caches, report executions, schedules, recipients, and exports form the executive delivery layer.

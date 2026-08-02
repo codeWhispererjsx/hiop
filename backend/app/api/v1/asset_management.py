@@ -2,7 +2,6 @@ import csv, io, json
 from calendar import monthrange
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from openpyxl import Workbook
@@ -13,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_db, require_roles
 from app.models.asset_management import *
 from app.services.audit_service import create_audit_log
+from uuid import UUID
 
 router=APIRouter(prefix="/asset-management",tags=["Enterprise Asset, Vendor & Procurement"])
 reader=require_roles(["admin","superadmin","technician","viewer"]); contributor=require_roles(["admin","superadmin","technician"]); admin=require_roles(["admin","superadmin"])

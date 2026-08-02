@@ -65,3 +65,7 @@ No Version 1.0.0 page exposes fake alerts, reports, health values, save controls
 # Asset, Vendor and Procurement workspace
 
 The protected `/assets/*` workspace includes Asset Dashboard, Explorer, Timeline, Vendor Directory/Details, Procurement Center, Purchase Orders, Contracts, Warranties, Software Licensing, Inventory, and Financial Reports. Shared tokens, responsive layouts, typed APIs, status text, and role-gated controls are retained.
+
+# Executive BI workspace
+
+The protected `/business-intelligence/*` workspace includes Executive, Property and Corporate Dashboards, Analytics Center, Report Builder, Saved/Scheduled Reports, KPI Manager, Capacity Planning, Trend Analysis, SLA Dashboard, and Hospitality Metrics. Blue & Gold line, bar, area, pie, heat-map, gauge, trend, and table views include accessible tabular data and responsive layouts.

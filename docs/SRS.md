@@ -56,3 +56,7 @@ HIOP shall maintain property-aware CIs, taxonomy, lifecycle, custom attributes, 
 # Epic 7 requirements
 
 HIOP shall maintain auditable multi-property asset, vendor, procurement, contract, warranty, license, inventory, and financial records. Procurement and renewals require human approval. Depreciation and compliance calculations shall be deterministic, fixed-precision, reproducible, and free of autonomous purchasing recommendations.
+
+# Epic 8 requirements
+
+HIOP shall expose governed property/corporate KPIs, executive audience dashboards, deterministic periods/averages/trends/growth/variance/baselines, historical-only capacity forecasts, configurable scheduled reports, SLA and hospitality metrics, accessible visualizations, and branded exports. Formulas shall not execute arbitrary code or produce autonomous recommendations.
