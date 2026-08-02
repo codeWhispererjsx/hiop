@@ -11,6 +11,7 @@ from app.models.discovery_intelligence import DiscoveryChangeSuggestion,Discover
 from app.models.topology import Topology,TopologyLink,TopologyNode
 from app.models.snmp import SNMPTarget
 from app.models.discovered_device import DiscoveredDevice,DiscoveryStatus
+from app.models.device import Device
 from app.services.audit_service import create_audit_log
 from app.services.discovery_intelligence_service import DEVICE_FAMILIES,PIPELINE,DiscoveryIntelligenceService,confidence,parse_json,review_status
 from app.services.discovery_collectors import ActiveDirectoryCorrelationCollector,CollectedObservation,CredentialedHostCollector,DHCPLeaseCorrelationCollector,DNSCorrelationCollector,NetBIOSNameCollector,SNMPDiscoveryCollector,ServiceFingerprintCollector,evidence
@@ -29,6 +30,11 @@ class JobWrite(BaseModel): policy_id:UUID;network_range:str;job_type:str=Field("
 class QuickScanWrite(BaseModel): network_range:str=Field(min_length=3,max_length=64)
 class Observation(BaseModel): ip_address:str;hostname:str|None=None;hostnames:list[str]=[];mac_address:str|None=None;vendor:str|None=None;operating_system:str|None=None;open_ports:list[int]=[];evidence:list[dict]=[];configuration:dict={}
 class ReviewWrite(BaseModel): status:str=Field(pattern="^("+"|".join(REVIEW)+")$");classification:str|None=None
+class ApproveWrite(BaseModel):
+    friendly_name:str|None=Field(default=None,max_length=253)
+    category:str|None=Field(default=None,max_length=80)
+    department:str=Field(default="Unassigned",max_length=120)
+    location:str=Field(default="Unassigned",max_length=160)
 class OUIWrite(BaseModel): prefix:str=Field(pattern=r"^[0-9A-Fa-f:-]{6,8}$");vendor:str=Field(min_length=2,max_length=180);version:str="manual"
 class DHCPLeaseWrite(BaseModel): ip_address:str;mac_address:str=Field(min_length=12,max_length=17);hostname:str|None=None;source:str=Field(min_length=2,max_length=120);lease_server:str|None=None;starts_at:datetime|None=None;expires_at:datetime|None=None
 def page(q,p,s):return {"items":q.offset((p-1)*s).limit(s).all(),"total":q.count(),"page":p,"page_size":s}
@@ -214,6 +220,30 @@ def review(id:UUID,body:ReviewWrite,db:Session=Depends(get_db),user=Depends(admi
         row.classification=body.classification;fp=db.query(DiscoveryFingerprint).filter_by(result_id=id).first()
         if fp:fp.editable_override=body.classification
     audit(db,user,"REVIEW","discovery_result",id,"Reviewed discovery identification");db.commit();return row
+@router.post("/results/{id}/approve",status_code=201)
+def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Depends(admin)):
+    row=get(db,DiscoveryResult,id,"Result")
+    discovered=db.get(DiscoveredDevice,row.discovered_device_id) if row.discovered_device_id else None
+    if discovered and discovered.approved_device_id:
+        return db.get(Device,discovered.approved_device_id)
+    normalized_mac=(row.mac_address or "").strip().upper().replace("-",":")
+    duplicate=None
+    if normalized_mac: duplicate=db.query(Device).filter(func.lower(Device.mac_address)==normalized_mac.lower()).first()
+    if not duplicate: duplicate=db.query(Device).filter(Device.ip_address==row.ip_address).first()
+    if duplicate:raise HTTPException(409,"This device is already present in managed inventory")
+    suffix=str(row.id).replace("-","")[:12].upper()
+    device=Device(
+        asset_tag=f"HIOP-{suffix[:8]}",hostname=(body.friendly_name or row.primary_hostname or f"Unknown-{row.ip_address}").strip(),
+        device_type=(body.category or row.classification or row.device_type or "Unknown").strip(),brand=(row.vendor or "Unknown").strip(),
+        model="Unknown",serial_number=f"UNKNOWN-{suffix}",department=body.department.strip() or "Unassigned",
+        location=body.location.strip() or "Unassigned",ip_address=row.ip_address,
+        mac_address=normalized_mac or None,
+        inventory_status="Active",network_status="Online",status="Active",
+    )
+    db.add(device);db.flush();row.review_status="manually_verified"
+    if discovered:
+        discovered.review_status="approved";discovered.approved_device_id=device.id;discovered.reviewed_by=user.id;discovered.reviewed_at=datetime.now(timezone.utc)
+    audit(db,user,"APPROVE","discovery_result",id,f"Approved {row.ip_address} into managed inventory");db.commit();db.refresh(device);return device
 @router.post("/confidence/recalculate")
 def recalculate(db:Session=Depends(get_db),user=Depends(admin)):
     changed=0

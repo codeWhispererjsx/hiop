@@ -25,6 +25,7 @@ export default function DiscoveryIntelligencePage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [detail, setDetail] = useState<Record<string, unknown>>();
+  const [approving, setApproving] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -51,6 +52,15 @@ export default function DiscoveryIntelligencePage() {
     try { setDetail(await endpoints.discoveryResult(device.result_id)); }
     catch (caught) { setError(caught instanceof Error ? caught.message : "Device evidence could not be loaded."); }
   };
+  const approve = async (device: ConsolidatedDiscoveryDevice) => {
+    setApproving(device.result_id); setError("");
+    try {
+      await endpoints.approveDiscoveryResult(device.result_id);
+      setDevices((current) => current.map((item) => item.result_id === device.result_id ? {...item, review_status: "manually_verified"} : item));
+      setMessage(`${device.primary_hostname || device.ip_address} was approved into managed inventory.`);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Device approval failed."); }
+    finally { setApproving(""); }
+  };
 
   return <DashboardLayout>
     <header className="page-title discovery-title"><div><span className="eyebrow">Discover</span><h1>Network discovery</h1><p>Scan a private network and build a clean inventory of real devices.</p></div></header>
@@ -60,7 +70,7 @@ export default function DiscoveryIntelligencePage() {
       <section className="quick-scan-hero"><div><span className="eyebrow">Simple network scan</span><h2>Find devices on your network</h2><p>Enter one private IP address or subnet. No credentials are required.</p></div><form onSubmit={scan}><label>Network address or range<input value={range} onChange={(event) => setRange(event.target.value)} placeholder="192.168.1.0/24" required/></label><button disabled={scanning}>{scanning ? "Scanning…" : "Scan network"}</button></form>{message && <p role="status" className="quick-scan-status">{message}</p>}</section>
       <section className="discovery-metrics"><Metric label="Devices found" value={devices.length} detail="One row per device"/><Metric label="Identified" value={devices.filter((device) => device.confidence_score >= 80).length} detail="Strong evidence"/><Metric label="Partially identified" value={devices.filter((device) => device.confidence_score >= 40 && device.confidence_score < 80).length} detail="Useful details found"/><Metric label="Needs review" value={devices.filter((device) => device.confidence_score < 40).length} detail="Name or type unknown"/></section>
     </>}
-    {(mode !== "scan" || devices.length > 0) && <section className="discovery-panel"><header><div><h2>{mode === "review" ? "Needs review" : "Devices"}</h2><p>{mode === "review" ? "Only devices that still need identification." : "Discovered devices from your network."}</p></div></header>{loading ? <Feedback loading/> : <DeviceTable rows={visible} inspect={inspect}/>}</section>}
+    {(mode !== "scan" || devices.length > 0) && <section className="discovery-panel"><header><div><h2>{mode === "review" ? "Needs review" : "Devices"}</h2><p>{mode === "review" ? "Only devices that still need identification." : "Discovered devices from your network."}</p></div></header>{loading ? <Feedback loading/> : <DeviceTable rows={visible} inspect={inspect} approve={approve} approving={approving}/>}</section>}
     {detail && <Evidence data={detail} close={() => setDetail(undefined)}/>}
   </DashboardLayout>;
 }
@@ -69,9 +79,9 @@ function Metric({ label, value, detail }: { label: string; value: number; detail
   return <article className="discovery-metric"><small>{label}</small><strong>{value}</strong><span>{detail}</span></article>;
 }
 
-function DeviceTable({ rows, inspect }: { rows: ConsolidatedDiscoveryDevice[]; inspect: (device: ConsolidatedDiscoveryDevice) => void }) {
+function DeviceTable({ rows, inspect, approve, approving }: { rows: ConsolidatedDiscoveryDevice[]; inspect: (device: ConsolidatedDiscoveryDevice) => void; approve: (device: ConsolidatedDiscoveryDevice) => void; approving: string }) {
   if (!rows.length) return <Feedback empty="No devices in this view."/>;
-  return <div className="table-wrap quick-device-table"><table><thead><tr><th>Device</th><th>IP address</th><th>Type</th><th>Vendor / OS</th><th>Confidence</th><th>Status</th><th>Last seen</th><th/></tr></thead><tbody>{rows.map((device) => <tr key={device.result_id}><td><strong>{device.primary_hostname || "Unnamed device"}</strong><small>{device.mac_address || "MAC unavailable"}</small></td><td><code>{device.ip_address}</code></td><td>{device.classification || device.device_type}</td><td>{device.vendor || "Unknown vendor"}<small>{device.operating_system || "OS unconfirmed"}</small></td><td><b>{device.confidence_score}%</b></td><td><StatusBadge status={device.review_status}/></td><td>{new Date(device.last_seen_at).toLocaleString()}</td><td><button onClick={() => inspect(device)}>View</button></td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap quick-device-table"><table><thead><tr><th>Device</th><th>IP address</th><th>Type</th><th>Vendor / OS</th><th>Confidence</th><th>Status</th><th>Last seen</th><th/></tr></thead><tbody>{rows.map((device) => <tr key={device.result_id}><td><strong>{device.primary_hostname || "Unknown"}</strong><small>{device.mac_address || "Unknown"}</small></td><td><code>{device.ip_address}</code></td><td>{device.classification || device.device_type || "Unknown"}</td><td>{device.vendor || "Unknown"}<small>{device.operating_system || "Unknown"}</small></td><td><b>{device.confidence_score}%</b></td><td><StatusBadge status={device.review_status}/></td><td>{new Date(device.last_seen_at).toLocaleString()}</td><td><div className="row-actions"><button onClick={() => inspect(device)}>View</button>{device.review_status !== "manually_verified" && <button disabled={approving === device.result_id} onClick={() => void approve(device)}>{approving === device.result_id ? "Approving..." : "Approve"}</button>}</div></td></tr>)}</tbody></table></div>;
 }
 
 function Evidence({ data, close }: { data: Record<string, unknown>; close: () => void }) {

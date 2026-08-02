@@ -135,7 +135,7 @@ export default function DevicesPage() {
                 </span>
                 <span>
                   <strong>{device.ip_address}</strong>
-                  <small>{device.mac_address}</small>
+                  <small>{device.mac_address || "Unknown"}</small>
                 </span>
                 <span>
                   <strong>{device.department}</strong>

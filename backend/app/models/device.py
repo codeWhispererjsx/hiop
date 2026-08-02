@@ -68,10 +68,10 @@ class Device(Base):
         nullable=False
     )
 
-    mac_address: Mapped[str] = mapped_column(
+    mac_address: Mapped[str | None] = mapped_column(
         String,
         unique=True,
-        nullable=False
+        nullable=True
     )
 
     status: Mapped[str] = mapped_column(

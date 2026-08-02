@@ -18,7 +18,7 @@ class DeviceCreate(BaseModel):
     department: str = Field(min_length=1, max_length=120)
     location: str = Field(min_length=1, max_length=160)
     ip_address: str = Field(min_length=3, max_length=45)
-    mac_address: str = Field(min_length=17, max_length=17)
+    mac_address: str | None = Field(default=None, min_length=17, max_length=17)
     inventory_status: str = Field(default="Active", pattern="^(Active|Inactive)$")
     status: str | None = Field(default=None, pattern="^(Active|Inactive)$")
     department_id: UUID | None = None
@@ -40,7 +40,9 @@ class DeviceCreate(BaseModel):
 
     @field_validator("mac_address")
     @classmethod
-    def valid_mac(cls, value: str) -> str:
+    def valid_mac(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         value = value.strip().upper().replace("-", ":")
         if not MAC_PATTERN.fullmatch(value):
             raise ValueError("Enter a valid MAC address")
@@ -101,7 +103,7 @@ class DeviceResponse(BaseModel):
     department: str
     location: str
     ip_address: str
-    mac_address: str
+    mac_address: str | None
     inventory_status: str
     network_status: str
     status: str

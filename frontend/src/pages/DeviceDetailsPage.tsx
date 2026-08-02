@@ -118,7 +118,7 @@ function DeviceOverview({ device, networkZone }: { device: Device; networkZone: 
       <Detail label="Location" value={device.location} />
       <Detail label="Network Zone" value={networkZone} />
       <Detail label="IP Address" value={device.ip_address} />
-      <Detail label="MAC Address" value={device.mac_address} />
+      <Detail label="MAC Address" value={device.mac_address || "Unknown"} />
       <Detail label="Inventory Status" value={device.inventory_status} />
       <Detail label="Network Status" value={device.network_status} />
     </dl>

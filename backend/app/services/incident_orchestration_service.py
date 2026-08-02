@@ -23,9 +23,9 @@ from app.websocket.connection_manager import manager
 
 TRANSITIONS = {
     "detected": {"declared", "cancelled", "duplicate"},
-    "declared": {"acknowledged", "cancelled", "duplicate", "merged"},
-    "acknowledged": {"investigating", "cancelled", "merged"},
-    "investigating": {"contained", "mitigating", "monitoring", "cancelled"},
+    "declared": {"acknowledged", "resolved", "cancelled", "duplicate", "merged"},
+    "acknowledged": {"investigating", "resolved", "cancelled", "merged"},
+    "investigating": {"contained", "mitigating", "monitoring", "resolved", "cancelled"},
     "contained": {"mitigating", "monitoring"},
     "mitigating": {"monitoring", "recovered"},
     "monitoring": {"recovered", "mitigating"},

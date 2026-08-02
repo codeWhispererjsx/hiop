@@ -12,13 +12,9 @@ test("automation route and navigation are protected and registered",()=>{
   assert.match(sidebar,/label: "Automate"/);
 });
 
-test("automation workspace uses typed APIs without executable input",()=>{
-  for(const method of ["automationWorkflows","automationVersions","automationSteps","automationPlan","automationRuns","automationApprovals","automationTriggers","validateAutomationTrigger","automationSchedules","runAutomationSchedule","automationEvents","automationEventCatalogue","automationSchedulerStatus","automationCorrelationGroups","automationDeadLetters","automationRetentionPreview","automationReportSummary"]) assert.match(api,new RegExp(method));
+test("version one automation exposes only operational schedules",()=>{
+  for(const method of ["settings","updateNetworkSettings","updateNotificationSettings"]) assert.match(api,new RegExp(method));
   assert.doesNotMatch(page,/eval\(|new Function|type=["']?script|name=["']?(shell|script)/i);
-  assert.match(page,/Approval-safe operations/);
-  assert.match(page,/New schedules and triggers are disabled or approval-gated by default/);
-  assert.match(page,/Internal event explorer/);
-  assert.match(page,/Run now/);
-  assert.match(page,/Schedule builder/);
-  assert.match(page,/Correlation and dead-letter review/);
+  for(const label of ["Scheduled network scans","Scheduled monitoring","Email notifications","Automatic offline incidents"]) assert.match(page,new RegExp(label));
+  for(const removed of ["workflow builder","dead-letter","correlation","approval queue"]) assert.doesNotMatch(page,new RegExp(removed,"i"));
 });

@@ -1,32 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-
-const page=readFileSync(new URL("../src/pages/IncidentsPage.tsx",import.meta.url),"utf8");
-const api=readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
-const app=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
-const sidebar=readFileSync(new URL("../src/components/Sidebar.tsx",import.meta.url),"utf8");
-
-test("incident command routes and navigation are registered",()=>{
-  assert.match(app,/\/incidents\/:id\/\*/);
-  assert.match(app,/\/incidents\/playbooks/);
-  assert.match(sidebar,/label: "Maintain"/);
-});
-
-test("incident workspace includes tasks evidence remediation recovery and timeline",()=>{
-  for(const label of ["Tasks and checklist","Evidence and communications","Playbook and reviewed remediation","Decisions and timeline","Verify recovery"]){
-    assert.match(page,new RegExp(label));
-  }
-});
-
-test("playbook builder is structured and does not expose a code editor",()=>{
-  assert.match(page,/Structured playbook builder/);
-  assert.match(page,/No code editor/);
-  assert.doesNotMatch(page,/contentEditable/);
-});
-
-test("typed API client covers incident operations",()=>{
-  for(const method of ["createIncident","incidentTransition","incidentTasks","incidentEvidence","incidentCommunications","incidentPlaybooks","startIncidentPlaybook","verifyIncidentRecovery"]){
-    assert.match(api,new RegExp(method));
-  }
-});
+const read=path=>readFileSync(new URL(`../${path}`,import.meta.url),"utf8");
+const app=read("src/App.tsx"),page=read("src/pages/IncidentsPage.tsx"),api=read("src/lib/api.ts");
+test("maintain routes are protected and registered",()=>{assert.match(app,/path="\/incidents"/);assert.match(app,/path="\/incidents\/new"/);assert.match(app,/path="\/incidents\/:id\/\*"/)});
+test("version one incident workflow stays simple",()=>{for(const value of ["Create incident","Related device","Resolve","Close","Assigned technician"])assert.match(page,new RegExp(value));for(const removed of ["playbook builder","command roles","evidence bundle","compensate"])assert.doesNotMatch(page,new RegExp(removed,"i"))});
+test("incident API supports the required lifecycle",()=>{for(const method of ["incidents","incident","createIncident","updateIncident","incidentTransition"])assert.match(api,new RegExp(method))});
