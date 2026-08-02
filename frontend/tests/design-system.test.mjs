@@ -75,12 +75,3 @@ test("theme switching remains instant, system-aware, and persisted", () => {
   assert.match(context, /document\.documentElement\.dataset\.theme = theme/);
   assert.match(bootstrap, /localStorage\.getItem\("hiop_theme"\)/);
 });
-
-test("charts consume semantic palette tokens and retain accessible summaries", () => {
-  const analytics = read("src/components/AnalyticsCharts.tsx");
-  const reports = read("src/components/ReportCharts.tsx");
-  assert.match(analytics, /var\(--color-primary\)/);
-  assert.match(reports, /var\(--color-success\)/);
-  assert.match(analytics, /chart-accessible-summary/);
-  assert.match(analytics, /role="img"/);
-});

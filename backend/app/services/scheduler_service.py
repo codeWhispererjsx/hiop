@@ -86,7 +86,7 @@ PROBLEM_JOB_INTERVALS={"review_reminders":1440,"capa_due_reminders":60,"known_er
 ASSET_JOB_INTERVALS={"warranty_reminders":1440,"contract_renewal_reminders":1440,"license_renewal_reminders":1440,"inventory_threshold_alerts":60,"asset_lifecycle_reviews":1440,"depreciation_recalculation":1440,"vendor_score_aggregation":1440}
 BI_JOB_INTERVALS={"kpi_recalculation":60,"snapshot_generation":1440,"report_scheduling":15,"email_distribution":15,"trend_aggregation":60,"capacity_recalculation":360,"dashboard_cache_refresh":15}
 MULTI_PROPERTY_JOB_INTERVALS={"organization_synchronization":1440,"policy_compliance_checks":360,"cross_property_kpi_aggregation":60,"dashboard_cache_refresh":15,"notification_routing":5,"executive_report_generation":43200}
-DISCOVERY_INTELLIGENCE_JOB_INTERVALS={"incremental_discovery":60,"full_discovery":10080,"topology_refresh":360,"vendor_database_updates":10080,"confidence_recalculation":360,"cmdb_synchronization":60,"device_aging":1440,"stale_device_detection":360}
+DISCOVERY_INTELLIGENCE_JOB_INTERVALS={"incremental_discovery":60,"full_discovery":10080,"vendor_database_updates":10080,"confidence_recalculation":360,"device_aging":1440,"stale_device_detection":360}
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -1386,36 +1386,12 @@ def start_scheduler():
         from app.models.system_setting import SystemSetting
         values = {row.key: row.value for row in db.query(SystemSetting).filter(SystemSetting.key.in_(["network.automatic_scanning", "network.scan_interval_minutes", "discovery.enabled", "discovery.interval_minutes"])).all()}
         configure_scheduler(values.get("network.automatic_scanning", "true") == "true", max(5, int(values.get("network.scan_interval_minutes", "5"))))
-        configure_discovery_scheduler(values.get("discovery.enabled", "false") == "true", max(15, int(values.get("discovery.interval_minutes", "60"))))
-        recover_stale_ad_runs(db)
-        reconcile_ad_sync_jobs(db)
-        recover_stale_snmp_runs(db)
-        reconcile_snmp_jobs(db)
-        if settings.snmp_enabled:
-            scheduler.add_job(scheduled_snmp_retention_cleanup, "cron", hour=settings.snmp_cleanup_hour_utc,
-                              id=SNMP_CLEANUP_JOB_ID, replace_existing=True, max_instances=1, coalesce=True)
-        recover_stale_topology_runs(db)
-        reconcile_topology_jobs(db)
-        scheduler.add_job(
-            scheduled_topology_retention_cleanup, "cron", hour=3,
-            id=TOPOLOGY_CLEANUP_JOB_ID, replace_existing=True,
-            max_instances=1, coalesce=True,
-        )
-        recover_stale_analytics_runs(db)
-        reconcile_analytics_jobs(db)
         recover_stale_automation_runs(db)
         reconcile_automation_jobs(db)
         scheduler.add_job(scheduled_automation_outbox,"interval",minutes=1,id=AUTOMATION_OUTBOX_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
         scheduler.add_job(scheduled_automation_retention,"cron",hour=4,id=AUTOMATION_RETENTION_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
         recover_stale_incident_runs(db)
         reconcile_incident_jobs()
-        reconcile_knowledge_jobs()
-        reconcile_change_jobs()
-        reconcile_cmdb_jobs()
-        reconcile_problem_jobs()
-        reconcile_asset_jobs()
-        reconcile_bi_jobs()
-        reconcile_multi_property_jobs()
         reconcile_discovery_intelligence_jobs()
     finally:
         db.close()

@@ -4,7 +4,6 @@ from unittest.mock import MagicMock, patch
 from app.main import app
 from app.schemas.settings import DiscoverySettings
 from app.services import scheduler_service
-from app.services.report_service import REPORTS
 
 
 class DiscoveryIntegrationTests(unittest.TestCase):
@@ -53,10 +52,9 @@ class DiscoveryIntegrationTests(unittest.TestCase):
             self.assertEqual(call.kwargs["max_instances"], 1)
             self.assertTrue(call.kwargs["coalesce"])
 
-    def test_discovery_report_is_exposed(self):
+    def test_legacy_report_api_is_not_exposed(self):
         paths = app.openapi()["paths"]
-        self.assertIn("/api/v1/reports/{report_name}", paths)
-        self.assertIn("discovery", REPORTS)
+        self.assertNotIn("/api/v1/reports/{report_name}", paths)
 
 
 if __name__ == "__main__":

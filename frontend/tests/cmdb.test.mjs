@@ -1,8 +1,0 @@
-import test from "node:test";import assert from "node:assert/strict";import fs from "node:fs";
-const app=fs.readFileSync("src/App.tsx","utf8"),sidebar=fs.readFileSync("src/components/Sidebar.tsx","utf8"),page=fs.readFileSync("src/pages/CMDBPage.tsx","utf8"),api=fs.readFileSync("src/lib/api.ts","utf8"),types=fs.readFileSync("src/lib/types.ts","utf8"),css=fs.readFileSync("src/styles/cmdb.css","utf8");
-test("CMDB protected route remains registered",()=>{assert.match(app,/\/cmdb\/\*/);assert.doesNotMatch(sidebar,/CMDB/)});
-test("CMDB workspace exposes all required operational views",()=>{for(const name of ["CI Explorer","Relationships","Dependency Graph","Impact","Reconciliation","Health","Attributes","Search","Reports"])assert.match(page,new RegExp(name))});
-test("CMDB uses reviewed deterministic relationships",()=>{assert.match(page,/No relationship is inferred/);assert.match(page,/never created automatically/);assert.doesNotMatch(page,/generateRelationship|inferRelationship/)});
-test("typed APIs cover items graph impact reconciliation health and reports",()=>{for(const name of ["configurationItems","cmdbDependencyGraph","ciImpact","runCMDBReconciliation","cmdbHealth","exportCMDB"])assert.match(api,new RegExp(name))});
-test("aligned CMDB types cover core records",()=>{for(const name of ["ConfigurationItem","CIRelationship","CIDependencyGraph","CIImpact","CIHealth"])assert.match(types,new RegExp(`type ${name}`))});
-test("CMDB workspace is responsive and provides graph text fallback",()=>{assert.match(css,/@media/);assert.match(page,/cmdb-edge-list/);assert.match(page,/aria-label="Dependency relationships"/)});

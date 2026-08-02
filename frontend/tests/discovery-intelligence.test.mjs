@@ -1,8 +1,28 @@
-import test from "node:test";import assert from "node:assert/strict";import fs from "node:fs";const read=p=>fs.readFileSync(new URL(`../${p}`,import.meta.url),"utf8"),app=read("src/App.tsx"),sidebar=read("src/components/Sidebar.tsx"),page=read("src/pages/DiscoveryIntelligencePage.tsx"),api=read("src/lib/api.ts"),css=read("src/styles/discovery-intelligence.css");
-test("discovery is a primary product pillar",()=>{assert.match(app,/DiscoveryIntelligencePage/);assert.match(app,/discovery-intelligence\/\*/);assert.match(sidebar,/label: "Discover"/)});
-test("simple discovery is primary and advanced workspaces remain available",()=>{for(const x of ["Quick Scan","Scan network","Devices","Needs Review","Jobs","Advanced","Policies","Credentials","History"])assert.match(page,new RegExp(x))});
-test("UI communicates deterministic safety and evidence",()=>{for(const x of ["Non-intrusive","deterministic stages","Evidence &amp; Fingerprint","Sync reviewed CI","Encrypted secret configured"])assert.match(page,new RegExp(x))});
-test("API covers policies jobs results confidence topology credentials history OUI and CMDB",()=>{for(const x of ["discoveryPolicies","discoveryJobs","discoveryResults","recalculateDiscoveryConfidence","discoveryTopology","discoveryCredentials","discoveryHistory","discoveryOUI","syncDiscoveryResult"])assert.match(api,new RegExp(x))});
-test("queued discovery is operational",()=>{assert.match(api,/executeDiscoveryJob/);assert.match(page,/Run discovery now/);assert.match(page,/Run now/)});
-test("quick scan needs no credentials and consolidates repeated observations",()=>{assert.match(api,/quickDiscoveryScan/);assert.match(api,/consolidatedDiscoveryDevices/);assert.match(page,/One row per device/);assert.match(page,/scans combined/);assert.match(page,/Optional next step/)});
-test("responsive topology uses shared design tokens",()=>{assert.match(page,/topology-canvas/);assert.match(css,/var\(--surface\)/);assert.match(css,/var\(--primary\)/);assert.match(css,/@media\(max-width:560px\)/)});
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const app = read("src/App.tsx");
+const sidebar = read("src/components/Sidebar.tsx");
+const page = read("src/pages/DiscoveryIntelligencePage.tsx");
+const api = read("src/lib/api.ts");
+
+test("discovery is a primary product pillar", () => {
+  assert.match(app, /DiscoveryIntelligencePage/);
+  assert.match(app, /discovery-intelligence\/\*/);
+  assert.match(sidebar, /label: "Discover"/);
+});
+
+test("discovery exposes a simple three-step experience", () => {
+  for (const label of ["Quick Scan", "Scan network", "Devices", "Needs Review"]) assert.match(page, new RegExp(label));
+  for (const removed of ["Advanced", "Policies", "Credentials", "Topology", "CMDB synchronization"]) assert.doesNotMatch(page, new RegExp(removed));
+});
+
+test("quick scan needs no credentials and consolidates observations", () => {
+  assert.match(api, /quickDiscoveryScan/);
+  assert.match(api, /consolidatedDiscoveryDevices/);
+  assert.match(page, /No credentials are required/);
+  assert.match(page, /One row per device/);
+  assert.match(page, /Why HIOP identified this device/);
+});

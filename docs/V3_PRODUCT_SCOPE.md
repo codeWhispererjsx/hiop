@@ -12,9 +12,9 @@ HIOP's everyday interface is organized around five outcomes:
 
 Administration is available to administrators for product configuration and access control.
 
-## Specialist capabilities
+## Removed specialist capabilities
 
-The following implementations remain in the codebase for future integration or direct, authorized use, but are intentionally absent from primary navigation because they are not standalone day-to-day destinations:
+The standalone pages and public APIs for the following specialist systems were removed from the active V3 product surface:
 
 - analytics, executive BI, and corporate dashboards;
 - asset procurement, vendor, contract, and financial lifecycle workspaces;
@@ -24,7 +24,7 @@ The following implementations remain in the codebase for future integration or d
 - organization hierarchy and multi-property policy administration;
 - reports, audit records, and knowledge administration.
 
-These capabilities should be surfaced contextually from the five pillars when a user needs them. They should not compete with the primary workflow.
+Schema migrations and database models remain for upgrade compatibility. A future capability should be surfaced contextually from one of the five pillars rather than restored as a competing top-level module.
 
 ## Fresh-start reset
 
