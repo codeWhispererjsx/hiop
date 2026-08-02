@@ -9,7 +9,9 @@ RUN groupadd --gid 10001 hiop \
 
 WORKDIR /app
 COPY requirements.txt ./
+COPY requirements-discovery.txt ./
 RUN pip install --no-cache-dir --requirement requirements.txt
+RUN pip install --no-cache-dir --requirement requirements-discovery.txt
 
 COPY alembic.ini ./
 COPY alembic ./alembic

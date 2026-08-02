@@ -616,6 +616,7 @@ export const endpoints = {
   createDiscoveryPolicy:(body:Record<string,unknown>)=>api<import("./types").DiscoveryPolicy>("/discovery-intelligence/policies",{method:"POST",body:JSON.stringify(body)}),
   discoveryJobs:()=>api<{items:import("./types").DiscoveryJob[];total:number}>("/discovery-intelligence/jobs"),
   createDiscoveryJob:(body:Record<string,unknown>)=>api<import("./types").DiscoveryJob>("/discovery-intelligence/jobs",{method:"POST",body:JSON.stringify(body)}),
+  executeDiscoveryJob:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/jobs/${id}/execute`,{method:"POST"}),
   discoveryResults:(filters:Record<string,string|number|undefined>={})=>api<{items:import("./types").DiscoveryResult[];total:number}>(`/discovery-intelligence/results${queryString(filters)}`),
   discoveryResult:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/results/${id}`),
   reviewDiscoveryResult:(id:string,body:Record<string,unknown>)=>api<import("./types").DiscoveryResult>(`/discovery-intelligence/results/${id}/review`,{method:"POST",body:JSON.stringify(body)}),

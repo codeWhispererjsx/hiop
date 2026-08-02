@@ -1,0 +1,50 @@
+.discovery-form .discovery-check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 300px;
+}
+
+.discovery-form .discovery-check input { min-height: auto; }
+.discovery-results-table table { min-width: 1120px; }
+.discovery-results-table td:first-child strong { color: var(--primary); font-size: 0.96rem; }
+.discovery-results-table code { white-space: nowrap; }
+
+.discovery-detail {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-muted);
+}
+
+.discovery-detail > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.discovery-detail > header h3 { margin: 0.2rem 0; }
+.discovery-detail > header > strong { color: var(--primary); font-size: 1.4rem; }
+.discovery-detail summary { cursor: pointer; color: var(--primary); font-weight: 700; }
+
+.evidence-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.6rem;
+  margin: 1rem 0;
+}
+
+.evidence-cards article {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.evidence-cards span { color: var(--success); font-weight: 800; }
+.evidence-cards strong { text-transform: capitalize; }
+.evidence-cards small { color: var(--text-muted); }

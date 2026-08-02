@@ -1,0 +1,4 @@
+# Optional credentialed Discovery Intelligence transports.
+# Runtime imports remain lazy so non-credentialed discovery does not require these packages.
+paramiko==3.5.1
+pywinrm==0.5.0

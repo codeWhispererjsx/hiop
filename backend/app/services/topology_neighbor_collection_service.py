@@ -29,9 +29,11 @@ from app.websocket.connection_manager import manager
 
 
 class TopologyNeighborCollectionService:
-    def __init__(self, db, collector=None):
+    def __init__(self, db, collector=None, authorized_networks=None, ignored_networks=None):
         self.db = db
         self.collector = collector
+        self.authorized_networks = authorized_networks
+        self.ignored_networks = ignored_networks
 
     def protocols(self, target, mode):
         profile = self.db.get(SNMPDeviceProfile, target.detected_profile_id) if target.detected_profile_id else None
@@ -58,6 +60,8 @@ class TopologyNeighborCollectionService:
             networks = [value.strip() for value in networks.split(",") if value.strip()]
         if isinstance(ignored, str):
             ignored = [value.strip() for value in ignored.split(",") if value.strip()]
+        networks = self.authorized_networks if self.authorized_networks is not None else networks
+        ignored = self.ignored_networks if self.ignored_networks is not None else ignored
         client = SecureSNMPClient(
             target, target.credential, authorized_networks=networks,
             ignored_networks=ignored,

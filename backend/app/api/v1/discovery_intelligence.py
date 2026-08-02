@@ -1,4 +1,4 @@
-import json,re
+import ipaddress,json,re
 from datetime import datetime,timezone
 from uuid import UUID
 from fastapi import APIRouter,Depends,HTTPException,Query
@@ -7,11 +7,16 @@ from sqlalchemy import func,or_
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.models.cmdb import CIClass,CIIdentifier,CIType,ConfigurationItem
-from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask
+from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask
 from app.models.topology import Topology,TopologyLink,TopologyNode
+from app.models.snmp import SNMPTarget
+from app.models.discovered_device import DiscoveredDevice,DiscoveryStatus
 from app.services.audit_service import create_audit_log
 from app.services.discovery_intelligence_service import DEVICE_FAMILIES,PIPELINE,DiscoveryIntelligenceService,confidence,parse_json,review_status
+from app.services.discovery_collectors import ActiveDirectoryCorrelationCollector,CollectedObservation,CredentialedHostCollector,DHCPLeaseCorrelationCollector,DNSCorrelationCollector,NetBIOSNameCollector,SNMPDiscoveryCollector,ServiceFingerprintCollector,evidence
+from app.services.discovery_service import DiscoveryService
 from app.services.secret_encryption_service import SecretEncryptionService
+from app.services.topology_neighbor_collection_service import TopologyNeighborCollectionService
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
 reader=require_roles(["admin","superadmin","technician","viewer"]);admin=require_roles(["admin","superadmin"])
@@ -24,6 +29,7 @@ class JobWrite(BaseModel): policy_id:UUID;network_range:str;job_type:str=Field("
 class Observation(BaseModel): ip_address:str;hostname:str|None=None;hostnames:list[str]=[];mac_address:str|None=None;vendor:str|None=None;operating_system:str|None=None;open_ports:list[int]=[];evidence:list[dict]=[];configuration:dict={}
 class ReviewWrite(BaseModel): status:str=Field(pattern="^("+"|".join(REVIEW)+")$");classification:str|None=None
 class OUIWrite(BaseModel): prefix:str=Field(pattern=r"^[0-9A-Fa-f:-]{6,8}$");vendor:str=Field(min_length=2,max_length=180);version:str="manual"
+class DHCPLeaseWrite(BaseModel): ip_address:str;mac_address:str=Field(min_length=12,max_length=17);hostname:str|None=None;source:str=Field(min_length=2,max_length=120);lease_server:str|None=None;starts_at:datetime|None=None;expires_at:datetime|None=None
 def page(q,p,s):return {"items":q.offset((p-1)*s).limit(s).all(),"total":q.count(),"page":p,"page_size":s}
 def get(db,model,id,label):
     row=db.get(model,id)
@@ -31,6 +37,54 @@ def get(db,model,id,label):
     return row
 def audit(db,user,action,entity,id,message):create_audit_log(db,user.username,action,entity,str(id),message)
 def credential_view(row):return {"id":row.id,"policy_id":row.policy_id,"name":row.name,"credential_type":row.credential_type,"username":row.username,"scope_cidr":row.scope_cidr,"least_privilege_notes":row.least_privilege_notes,"enabled":row.enabled,"last_used_at":row.last_used_at,"created_at":row.created_at,"secret_configured":True}
+def execute_safe_job(db,job,user):
+    policy=get(db,DiscoveryPolicy,job.policy_id,"Policy");job.status="running";job.started_at=datetime.now(timezone.utc);db.commit()
+    config={"enabled":True,"authorized_cidr_ranges":",".join(parse_json(policy.authorized_ranges,[])),"ignore_ranges":",".join(parse_json(policy.excluded_ranges,[])),"max_hosts_per_run":policy.max_hosts,"concurrency_limit":policy.concurrency,"ping_timeout_seconds":policy.timeout_seconds,"automatic_hostname_lookup":True,"automatic_vendor_lookup":True,"admin_notification_threshold":policy.max_hosts+1}
+    try:run=DiscoveryService(db,config=config).discover_range(job.network_range,trigger_type=job.trigger_type,triggered_by=user.id,audit_actor=user.username)
+    except Exception as exc:
+        job=db.get(DiscoveryJob,job.id);job.status="failed";job.tasks_failed+=1;job.completed_at=datetime.now(timezone.utc);db.commit();raise HTTPException(502,f"Safe discovery failed: {exc}") from exc
+    network=ipaddress.ip_network(job.network_range,strict=False);legacy=[x for x in db.query(DiscoveredDevice).all() if ipaddress.ip_address(x.ip_address) in network and x.last_seen_at>=run.started_at]
+    service=DiscoveryIntelligenceService(db);results=[];stage_errors=[]
+    enabled=set(parse_json(policy.enabled_stages,[]));stage_enabled=lambda key:not enabled or key in enabled
+    dns_collector=DNSCorrelationCollector();netbios_collector=NetBIOSNameCollector(timeout=min(float(policy.timeout_seconds),1.0));ad_collector=ActiveDirectoryCorrelationCollector(db);dhcp_collector=DHCPLeaseCorrelationCollector(db)
+    service_collector=ServiceFingerprintCollector(timeout=min(float(policy.timeout_seconds),3.0))
+    snmp_collector=SNMPDiscoveryCollector(db);host_collector=CredentialedHostCollector(db)
+    for device in legacy:
+        observed=CollectedObservation(device.ip_address,hostnames=[device.hostname] if device.hostname else [],mac_address=device.mac_address,vendor=device.vendor,operating_system=device.operating_system_guess)
+        if device.status==DiscoveryStatus.ONLINE:observed.evidence.append(evidence("ping_response","icmp","reachable",verified=True))
+        for key,value,source in (("mac_address",device.mac_address,"arp"),("vendor_match",device.vendor,"oui"),("hostname_match",device.hostname,"reverse_dns"),("operating_system",device.operating_system_guess,"fingerprint")):
+            if value:observed.evidence.append(evidence(key,source,value,verified=source in ("arp","reverse_dns")))
+        if stage_enabled("hostname_resolution"):observed.merge(dns_collector.collect(device.ip_address))
+        if stage_enabled("netbios_discovery"):observed.merge(netbios_collector.collect(device.ip_address))
+        if stage_enabled("dhcp_lease_correlation"):observed.merge(dhcp_collector.collect(device.ip_address))
+        if stage_enabled("service_fingerprinting") and parse_json(policy.allowed_ports,[]):
+            observed.merge(service_collector.collect(device.ip_address,parse_json(policy.allowed_ports,[])))
+        if stage_enabled("snmp_discovery") and policy.allow_credentialed:
+            snmp_observation=snmp_collector.collect(device.ip_address,parse_json(policy.authorized_ranges,[]));observed.merge(snmp_observation);stage_errors.extend(snmp_observation.warnings)
+        if policy.allow_credentialed and (stage_enabled("windows_wmi_discovery") or stage_enabled("linux_ssh_fingerprinting")):
+            host_observation=host_collector.collect(policy.id,device.ip_address,observed.open_ports,float(policy.timeout_seconds));observed.merge(host_observation);stage_errors.extend(host_observation.warnings)
+        if stage_enabled("active_directory_correlation"):
+            observed.merge(ad_collector.collect(device.ip_address,observed.hostnames))
+        result=service.ingest(job,observed.as_dict());result.discovered_device_id=device.id;results.append(result)
+    if policy.allow_credentialed and stage_enabled("lldp_cdp_topology"):
+        active_topology=db.query(Topology).filter_by(enabled=True).order_by(Topology.is_default.desc()).first()
+        if active_topology:
+            topology_collector=TopologyNeighborCollectionService(db,authorized_networks=parse_json(policy.authorized_ranges,[]),ignored_networks=parse_json(policy.excluded_ranges,[]))
+            for device in legacy:
+                target=db.query(SNMPTarget).filter_by(ip_address=device.ip_address,enabled=True).first()
+                if not target:continue
+                try:
+                    topology_run=topology_collector.collect(active_topology,target,"auto",False,user)
+                    if topology_run.status not in ("completed","partial"):stage_errors.append(f"Topology collection for {device.ip_address}: {topology_run.error_summary or topology_run.status}")
+                except HTTPException as exc:stage_errors.append(f"Topology collection for {device.ip_address}: {exc.detail}")
+    stages=db.query(DiscoveryStage).filter_by(job_id=job.id).order_by(DiscoveryStage.sequence).all();executed={"icmp_reachability","arp_resolution","reverse_dns","hostname_resolution","mac_collection","mac_vendor_identification","netbios_discovery","dhcp_lease_correlation","cmdb_correlation","confidence_calculation","configuration_item_update"}
+    if parse_json(policy.allowed_ports,[]):executed.update({"port_discovery","service_fingerprinting","http_https_fingerprinting","tls_certificate_inspection"})
+    if policy.allow_credentialed:executed.update({"snmp_discovery","windows_wmi_discovery","linux_ssh_fingerprinting","lldp_cdp_topology","active_directory_correlation"})
+    now_at=datetime.now(timezone.utc)
+    for stage in stages:
+        stage.status="completed" if stage.stage_key in executed else "skipped";stage.attempts+=int(stage.stage_key in executed);stage.started_at=stage.started_at or job.started_at;stage.completed_at=now_at
+        for device in legacy:db.add(DiscoveryTask(job_id=job.id,stage_id=stage.id,target=device.ip_address,status=stage.status,attempts=int(stage.stage_key in executed),started_at=job.started_at,completed_at=now_at))
+    job.status="completed" if run.status.value in ("completed","partial") else "failed";job.current_stage="configuration_item_update";job.hosts_completed=run.hosts_attempted;job.tasks_failed=run.error_count;job.completed_at=now_at;audit(db,user,"EXECUTE","discovery_job",job.id,"Executed bounded ICMP, ARP, DNS, service, SNMP, AD, confidence, and correlation stages");db.commit();db.refresh(job);return {"job":job,"legacy_run_id":run.id,"results":len(results),"hosts_responded":run.hosts_responded,"errors":run.error_count,"warnings":stage_errors[:100]}
 
 @router.get("/capabilities")
 def capabilities(_=Depends(reader)):return {"pipeline":PIPELINE,"device_families":DEVICE_FAMILIES,"review_statuses":REVIEW,"credentialed_stages_are_opt_in":True,"intrusive_scanning":False}
@@ -77,6 +131,12 @@ def create_job(body:JobWrite,db:Session=Depends(get_db),user=Depends(admin)):
 @router.get("/jobs/{id}")
 def job(id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
     row=get(db,DiscoveryJob,id,"Job");return {"job":row,"stages":db.query(DiscoveryStage).filter_by(job_id=id).order_by(DiscoveryStage.sequence).all(),"tasks":db.query(DiscoveryTask).filter_by(job_id=id).all()}
+@router.post("/jobs/{id}/execute")
+def execute_job(id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    job=get(db,DiscoveryJob,id,"Job")
+    if job.status=="running":raise HTTPException(409,"Discovery job is already running")
+    if job.status=="completed":raise HTTPException(409,"Discovery job is already complete")
+    return execute_safe_job(db,job,user)
 @router.post("/jobs/{id}/stages/{stage_key}/run")
 def run_stage(id:UUID,stage_key:str,observations:list[Observation]=[],db:Session=Depends(get_db),user=Depends(admin)):
     job=get(db,DiscoveryJob,id,"Job");stage=db.query(DiscoveryStage).filter_by(job_id=id,stage_key=stage_key).first()
@@ -122,6 +182,22 @@ def oui(q:str|None=None,db:Session=Depends(get_db),_=Depends(reader)):
 @router.post("/oui",status_code=201)
 def upsert_oui(body:OUIWrite,db:Session=Depends(get_db),user=Depends(admin)):
     prefix=re.sub(r"[^0-9A-F]","",body.prefix.upper());row=db.query(DiscoveryOUI).filter_by(prefix=prefix).first() or DiscoveryOUI(prefix=prefix);db.add(row);row.vendor=body.vendor;row.source="administrator";row.version=body.version;audit(db,user,"UPDATE","discovery_oui",prefix,"Updated local OUI database entry");db.commit();db.refresh(row);return row
+@router.get("/dhcp-leases")
+def dhcp_leases(page_number:int=Query(1,alias="page",ge=1),page_size:int=Query(100,ge=1,le=1000),db:Session=Depends(get_db),_=Depends(reader)):
+    return page(db.query(DiscoveryDHCPLease).order_by(DiscoveryDHCPLease.last_imported_at.desc()),page_number,page_size)
+@router.post("/dhcp-leases/import")
+def import_dhcp_leases(body:list[DHCPLeaseWrite],db:Session=Depends(get_db),user=Depends(admin)):
+    if len(body)>10000:raise HTTPException(422,"A DHCP lease import is limited to 10,000 rows")
+    imported=0
+    for item in body:
+        try:ipaddress.ip_address(item.ip_address)
+        except ValueError as exc:raise HTTPException(422,f"Invalid DHCP lease address: {item.ip_address}") from exc
+        mac=":".join(re.findall(r"[0-9a-fA-F]{2}",item.mac_address)).upper()
+        if len(mac)!=17:raise HTTPException(422,f"Invalid DHCP lease MAC address for {item.ip_address}")
+        row=db.query(DiscoveryDHCPLease).filter_by(source=item.source,ip_address=item.ip_address,mac_address=mac).first() or DiscoveryDHCPLease(source=item.source,ip_address=item.ip_address,mac_address=mac,created_by=user.id);db.add(row)
+        for key,value in item.model_dump(exclude={"mac_address","ip_address","source"}).items():setattr(row,key,value)
+        row.last_imported_at=datetime.now(timezone.utc);imported+=1
+    audit(db,user,"IMPORT","discovery_dhcp_lease","batch",f"Imported {imported} DHCP lease records for correlation");db.commit();return {"imported":imported}
 @router.get("/topology")
 def topology(topology_id:UUID|None=None,db:Session=Depends(get_db),_=Depends(reader)):
     topology=db.get(Topology,topology_id) if topology_id else db.query(Topology).filter_by(enabled=True).order_by(Topology.is_default.desc()).first()
