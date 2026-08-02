@@ -1,5 +1,9 @@
 # HIOP 1.0.0 software requirements specification
 
+## Epic 9 requirements
+
+HIOP shall support unlimited business-unit nesting and the Organization → Region → Country → Property Group → Property → Building → Floor → Room hierarchy. Cross-property operations shall resolve active administrative scopes, inherit granted permissions, apply explicit denials, validate property access, and audit every administrative, policy, settings, notification, and hierarchy mutation. Analytics and search shall never return records outside the resolved property set.
+
 ## Epic 6 requirements
 
 The system shall maintain auditable Problem, RCA, KEDB, workaround, CAPA, review, relationship, and correlation-suggestion records. It shall enforce sequential lifecycle gates, role permissions, bounded pagination, validation, exports, scheduled reminders, and human approval. It shall not generate root causes, create Problems autonomously, or execute workarounds.

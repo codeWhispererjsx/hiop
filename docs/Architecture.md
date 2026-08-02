@@ -1,5 +1,9 @@
 # HIOP 2.0.0-dev architecture
 
+## Epic 9 corporate control plane
+
+The corporate control plane extends the existing Organization and Property records with business units, regions, countries, property groups, clusters, and offices. `AdministrativeScope` is the authoritative access boundary: every cross-property data query resolves permitted property IDs before aggregation or search. Global configuration and policies inherit down the hierarchy with explicit, audited overrides; scheduled jobs only materialize caches, compliance placeholders, inherited settings, and notification state.
+
 ## Epic 6 Problem Management
 
 Problem Management is an additive domain module with models in `app/models/problem_management.py`, REST orchestration in `app/api/v1/problem_management.py`, scheduler integration in `scheduler_service.py`, and the React workspace under `/problems/*`. It consumes incidents for deterministic grouping and stores explicit identifiers for Change, CMDB, Knowledge, service, vendor, maintenance, and automation relationships. Approval and lifecycle rules remain server-side.

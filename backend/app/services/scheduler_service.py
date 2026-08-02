@@ -27,6 +27,9 @@ from app.models.cmdb import CIHealthSnapshot, CIReconciliationCandidate, CIRelat
 from app.models.problem_management import ActionTask, KnownError, Problem, ProblemCorrelationSuggestion
 from app.models.asset_management import Contract, EnterpriseAsset, InventoryItem, SoftwareLicense, StockBalance, Vendor, VendorPerformance, Warranty
 from app.models.business_intelligence import DashboardCache, ExecutiveDashboard, KPI, KPIDefinition, KPISnapshot, KPIValue, ReportExecution, ReportRecipient, ScheduledReport
+from app.models.hierarchy import Property
+from app.models.multi_property import ExecutiveOperationsCache, GlobalNotification, GlobalSetting, InheritedSetting, PolicyAssignment, PolicyCompliance, PropertyHierarchyMembership, PropertySetting, RegionalSetting
+from app.services.multi_property_service import property_ids_for_scope
 
 
 scheduler = BackgroundScheduler()
@@ -80,6 +83,7 @@ CMDB_JOB_INTERVALS = {
 PROBLEM_JOB_INTERVALS={"review_reminders":1440,"capa_due_reminders":60,"known_error_review_reminders":1440,"recurring_incident_detection":60,"problem_aging_alerts":1440,"dashboard_statistics":60}
 ASSET_JOB_INTERVALS={"warranty_reminders":1440,"contract_renewal_reminders":1440,"license_renewal_reminders":1440,"inventory_threshold_alerts":60,"asset_lifecycle_reviews":1440,"depreciation_recalculation":1440,"vendor_score_aggregation":1440}
 BI_JOB_INTERVALS={"kpi_recalculation":60,"snapshot_generation":1440,"report_scheduling":15,"email_distribution":15,"trend_aggregation":60,"capacity_recalculation":360,"dashboard_cache_refresh":15}
+MULTI_PROPERTY_JOB_INTERVALS={"organization_synchronization":1440,"policy_compliance_checks":360,"cross_property_kpi_aggregation":60,"dashboard_cache_refresh":15,"notification_routing":5,"executive_report_generation":43200}
 ANALYTICS_JOB_TYPES = ("aggregate", "availability", "health_score", "capacity", "SLA", "reliability", "data_quality", "baseline", "anomaly", "correlation", "insight", "anomaly_recovery", "retention_cleanup")
 SNMP_GROUPS = {
     "availability": ("availability_poll_enabled", "availability_interval_seconds", "availability"),
@@ -1298,6 +1302,43 @@ def reconcile_bi_jobs():
     return len(BI_JOB_INTERVALS)
 
 
+def scheduled_multi_property(job_type: str):
+    """Refresh governed enterprise state; never changes operational property data."""
+    import json,hashlib
+    db=SessionLocal();now_at=datetime.now(timezone.utc)
+    try:
+        if job_type=="organization_synchronization":
+            for prop in db.query(Property).filter(Property.is_active.is_(True)).limit(10000):
+                values={r.key:(r.value,"global",r.id,r.enforced) for r in db.query(GlobalSetting).filter_by(organization_id=prop.organization_id)};membership=db.query(PropertyHierarchyMembership).filter_by(property_id=prop.id).first();region_id=None
+                if membership:
+                    from app.models.multi_property import Country,PropertyGroup
+                    region_id=db.query(Country.region_id).join(PropertyGroup,PropertyGroup.country_id==Country.id).filter(PropertyGroup.id==membership.property_group_id).scalar()
+                for r in db.query(RegionalSetting).filter_by(region_id=region_id) if region_id else []:
+                    if not values.get(r.key,(None,None,None,False))[3]:values[r.key]=(r.value,"region",r.id,False)
+                for r in db.query(PropertySetting).filter_by(property_id=prop.id):
+                    if not values.get(r.key,(None,None,None,False))[3]:values[r.key]=(r.value,"property",r.id,False)
+                for key,(value,source,source_id,_) in values.items():
+                    checksum=hashlib.sha256(f"{source}:{source_id}:{value}".encode()).hexdigest();item=db.query(InheritedSetting).filter_by(property_id=prop.id,key=key).first() or InheritedSetting(property_id=prop.id,key=key,effective_value=value,source_type=source,source_id=source_id,checksum=checksum);db.add(item);item.effective_value=value;item.source_type=source;item.source_id=source_id;item.checksum=checksum;item.calculated_at=now_at
+        elif job_type=="policy_compliance_checks":
+            for assignment in db.query(PolicyAssignment).filter(PolicyAssignment.effective_from<=now_at.date()).limit(5000):
+                for property_id in property_ids_for_scope(db,assignment.scope_type,assignment.scope_id):
+                    item=db.query(PolicyCompliance).filter_by(assignment_id=assignment.id,property_id=property_id).first()
+                    if not item:db.add(PolicyCompliance(assignment_id=assignment.id,property_id=property_id,status="not_assessed",evidence="{}"))
+        elif job_type in ("cross_property_kpi_aggregation","dashboard_cache_refresh","executive_report_generation"):
+            property_count=db.query(Property).filter(Property.is_active.is_(True)).count();incident_count=db.query(OperationalIncident).filter(~OperationalIncident.status.in_(("resolved","closed"))).count();payload=json.dumps({"properties":property_count,"open_incidents":incident_count,"generated_at":now_at.isoformat()},sort_keys=True);item=db.query(ExecutiveOperationsCache).filter_by(scope_type="organization",scope_id=None).first() or ExecutiveOperationsCache(scope_type="organization",scope_id=None,payload=payload,checksum="",expires_at=now_at);db.add(item);item.payload=payload;item.checksum=hashlib.sha256(payload.encode()).hexdigest();item.generated_at=now_at;item.expires_at=now_at+timedelta(minutes=20)
+        elif job_type=="notification_routing":
+            db.query(GlobalNotification).filter(GlobalNotification.status=="draft",GlobalNotification.publish_at.isnot(None),GlobalNotification.publish_at<=now_at).update({GlobalNotification.status:"published"},synchronize_session=False);db.query(GlobalNotification).filter(GlobalNotification.status=="published",GlobalNotification.expires_at.isnot(None),GlobalNotification.expires_at<=now_at).update({GlobalNotification.status:"expired"},synchronize_session=False)
+        db.commit()
+    except Exception:db.rollback();logger.exception("Multi-property scheduled job failed type=%s",job_type)
+    finally:db.close()
+
+
+def reconcile_multi_property_jobs():
+    if not settings.scheduler_enabled:return 0
+    for job_type,minutes in MULTI_PROPERTY_JOB_INTERVALS.items():scheduler.add_job(scheduled_multi_property,"interval",minutes=minutes,id=f"multi_property_{job_type}",args=[job_type],replace_existing=True,max_instances=1,coalesce=True)
+    return len(MULTI_PROPERTY_JOB_INTERVALS)
+
+
 def start_scheduler():
     if not settings.scheduler_enabled:
         logger.info("HIOP scheduler disabled by configuration")
@@ -1340,6 +1381,7 @@ def start_scheduler():
         reconcile_problem_jobs()
         reconcile_asset_jobs()
         reconcile_bi_jobs()
+        reconcile_multi_property_jobs()
     finally:
         db.close()
     logger.info("HIOP scheduler started")

@@ -1,5 +1,9 @@
 # Documentation Project Status
 
+## Version 3 Epic 9 — complete
+
+Multi-property hierarchy, corporate governance, scoped RBAC, inherited settings, policy compliance, notifications, executive operations, cross-property analytics/search, corporate reporting, exports, scheduled jobs, frontend, tests, and documentation are implemented. Epic 10 remains the final Version 3 milestone.
+
 Epic 6 Enterprise Problem Management is implemented with migration `d1e2f3a4b5c6`, REST APIs, React workspace, scheduled jobs, contract tests, and dedicated Problem Management, KEDB, RCA, and CAPA documentation.
 
 Epic 7 Enterprise Asset, Vendor, Procurement & Contract Lifecycle Management is implemented with migration `e2f3a4b5c6d7`, protected APIs, scheduled lifecycle and financial jobs, typed React workspace, reports/exports, tests, and six dedicated guides.

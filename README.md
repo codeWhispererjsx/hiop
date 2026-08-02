@@ -4,6 +4,8 @@ HIOP Version 3 Epic 7 adds Enterprise Asset, Vendor, Procurement, Contract, Warr
 
 HIOP Version 3 Epic 8 adds Enterprise Reporting, governed KPIs, Executive Dashboards, deterministic BI, SLA analytics, capacity planning, scheduled reports, and branded exports. See [Business Intelligence](docs/BUSINESS_INTELLIGENCE.md), [KPI Engine](docs/KPI_ENGINE.md), [Reporting](docs/REPORTING.md), [Executive Dashboards](docs/EXECUTIVE_DASHBOARDS.md), and [SLA Analytics](docs/SLA_ANALYTICS.md).
 
+HIOP Version 3 Epic 9 adds multi-property hierarchy, corporate and delegated administration, inherited RBAC, policy governance, global configuration, enterprise notifications, cross-property operations, scoped analytics, and executive command. See [Multi-Property Operations](docs/MULTI_PROPERTY.md), [Organization Hierarchy](docs/ORGANIZATION_HIERARCHY.md), [Corporate Administration](docs/CORPORATE_ADMINISTRATION.md), [Policy Management](docs/POLICY_MANAGEMENT.md), and [Executive Operations Center](docs/EXECUTIVE_OPERATIONS_CENTER.md).
+
 HIOP Version 3 Epic 6 adds Enterprise Problem Management, structured RCA, the Known Error Database, reusable workarounds, CAPA, post-resolution reviews, deterministic incident-correlation suggestions, relationship graphs, dashboards, reports, exports, and scheduled reminders. See [Problem Management](docs/PROBLEM_MANAGEMENT.md), [KEDB](docs/KNOWN_ERROR_DATABASE.md), [RCA](docs/ROOT_CAUSE_ANALYSIS.md), and [CAPA](docs/CAPA.md).
 
 HIOP v2 analytics includes opt-in scheduled aggregation, bounded historical backfill, data-quality monitoring, and retention controls. See [docs/ANALYTICS.md](docs/ANALYTICS.md).

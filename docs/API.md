@@ -1,5 +1,9 @@
 # HIOP 1.0.0 API
 
+## Multi-property API
+
+`/api/v1/enterprise` provides paginated organizations, regions and property groups; hierarchy and membership management; administrative scopes and effective permissions; inherited settings; policy lifecycle, assignments, compliance and approved exceptions; executive dashboards; cross-property analytics/operations; tenant-isolated global search; notifications; corporate reports; and PDF/XLSX/CSV export. Mutations require corporate administration roles and are audited.
+
 ## Epic 6 Problem Management
 
 `/api/v1/problems` provides paginated/filterable Problems, detail, patch, and guarded transitions. Subresources cover `/rca`, `/rca/causes`, `/rca/five-whys`, `/rca/fishbone`, `/known-errors`, `/workarounds`, `/capa`, `/reviews`, `/relationships/graph`, `/correlations`, `/reports`, `/search`, and CSV/XLSX/PDF export. Readers can query; technicians contribute; administrators approve, publish, retire, verify, and initiate correlation evaluation.

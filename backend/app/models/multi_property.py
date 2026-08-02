@@ -1,0 +1,73 @@
+import uuid
+from datetime import date, datetime
+
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+
+from app.db.database import Base
+
+
+def uid(): return mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+def now(): return mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class BusinessUnit(Base):
+    __tablename__="business_units"; id:Mapped[uuid.UUID]=uid(); organization_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id",ondelete="CASCADE"),index=True); parent_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("business_units.id",ondelete="RESTRICT"),index=True); name:Mapped[str]=mapped_column(String(160)); code:Mapped[str]=mapped_column(String(40)); unit_type:Mapped[str]=mapped_column(String(40),default="business_unit"); depth:Mapped[int]=mapped_column(Integer,default=0); path:Mapped[str]=mapped_column(String(1000),default="/"); enabled:Mapped[bool]=mapped_column(Boolean,default=True); created_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("organization_id","code",name="uq_business_unit_org_code"),Index("ix_business_unit_org_path","organization_id","path"))
+class Region(Base):
+    __tablename__="enterprise_regions"; id:Mapped[uuid.UUID]=uid(); organization_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id",ondelete="CASCADE"),index=True); business_unit_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("business_units.id")); name:Mapped[str]=mapped_column(String(160)); code:Mapped[str]=mapped_column(String(40)); timezone:Mapped[str]=mapped_column(String(64),default="UTC"); enabled:Mapped[bool]=mapped_column(Boolean,default=True); __table_args__=(UniqueConstraint("organization_id","code",name="uq_region_org_code"),)
+class Country(Base):
+    __tablename__="enterprise_countries"; id:Mapped[uuid.UUID]=uid(); region_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_regions.id",ondelete="CASCADE"),index=True); name:Mapped[str]=mapped_column(String(160)); iso_code:Mapped[str]=mapped_column(String(3)); enabled:Mapped[bool]=mapped_column(Boolean,default=True); __table_args__=(UniqueConstraint("region_id","iso_code",name="uq_country_region_iso"),)
+class PropertyGroup(Base):
+    __tablename__="property_groups"; id:Mapped[uuid.UUID]=uid(); country_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_countries.id",ondelete="CASCADE"),index=True); parent_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("property_groups.id")); name:Mapped[str]=mapped_column(String(160)); code:Mapped[str]=mapped_column(String(40)); enabled:Mapped[bool]=mapped_column(Boolean,default=True); __table_args__=(UniqueConstraint("country_id","code",name="uq_property_group_country_code"),)
+class PropertyCluster(Base):
+    __tablename__="property_clusters"; id:Mapped[uuid.UUID]=uid(); property_group_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("property_groups.id",ondelete="CASCADE"),index=True); name:Mapped[str]=mapped_column(String(160)); code:Mapped[str]=mapped_column(String(40)); enabled:Mapped[bool]=mapped_column(Boolean,default=True); __table_args__=(UniqueConstraint("property_group_id","code",name="uq_property_cluster_group_code"),)
+class PropertyHierarchyMembership(Base):
+    __tablename__="property_hierarchy_memberships"; id:Mapped[uuid.UUID]=uid(); property_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id",ondelete="CASCADE"),unique=True,index=True); property_group_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("property_groups.id"),index=True); property_cluster_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("property_clusters.id")); effective_from:Mapped[date]=mapped_column(Date,server_default=func.current_date()); effective_to:Mapped[date|None]=mapped_column(Date); created_at:Mapped[datetime]=now()
+class CorporateOffice(Base):
+    __tablename__="corporate_offices"; id:Mapped[uuid.UUID]=uid(); organization_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id",ondelete="CASCADE"),index=True); name:Mapped[str]=mapped_column(String(160)); address:Mapped[str|None]=mapped_column(String(500)); timezone:Mapped[str]=mapped_column(String(64),default="UTC"); enabled:Mapped[bool]=mapped_column(Boolean,default=True)
+class RegionalOffice(Base):
+    __tablename__="regional_offices"; id:Mapped[uuid.UUID]=uid(); region_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_regions.id",ondelete="CASCADE"),index=True); name:Mapped[str]=mapped_column(String(160)); address:Mapped[str|None]=mapped_column(String(500)); timezone:Mapped[str]=mapped_column(String(64),default="UTC"); enabled:Mapped[bool]=mapped_column(Boolean,default=True)
+
+
+class AdministrativeScope(Base):
+    __tablename__="administrative_scopes"; id:Mapped[uuid.UUID]=uid(); user_id:Mapped[str]=mapped_column(String,ForeignKey("users.id",ondelete="CASCADE"),index=True); scope_type:Mapped[str]=mapped_column(String(30),index=True); scope_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),index=True); permission_set:Mapped[str]=mapped_column(Text,default="[]"); overrides:Mapped[str]=mapped_column(Text,default="{}"); inherited:Mapped[bool]=mapped_column(Boolean,default=True); starts_at:Mapped[datetime]=now(); expires_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True),index=True); enabled:Mapped[bool]=mapped_column(Boolean,default=True); delegated_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now(); __table_args__=(Index("ix_admin_scope_user_active","user_id","enabled","expires_at"),)
+class CorporateAdministrator(Base):
+    __tablename__="corporate_administrators"; id:Mapped[uuid.UUID]=uid(); scope_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("administrative_scopes.id",ondelete="CASCADE"),unique=True); title:Mapped[str|None]=mapped_column(String(120))
+class RegionalAdministrator(Base):
+    __tablename__="regional_administrators"; id:Mapped[uuid.UUID]=uid(); scope_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("administrative_scopes.id",ondelete="CASCADE"),unique=True); region_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_regions.id"))
+class PropertyAdministrator(Base):
+    __tablename__="property_administrators"; id:Mapped[uuid.UUID]=uid(); scope_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("administrative_scopes.id",ondelete="CASCADE"),unique=True); property_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id"))
+class DelegatedAdministrator(Base):
+    __tablename__="delegated_administrators"; id:Mapped[uuid.UUID]=uid(); scope_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("administrative_scopes.id",ondelete="CASCADE"),unique=True); reason:Mapped[str]=mapped_column(Text); approval_reference:Mapped[str]=mapped_column(String(160))
+
+
+class GlobalSetting(Base):
+    __tablename__="global_settings"; id:Mapped[uuid.UUID]=uid(); organization_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id"),index=True); key:Mapped[str]=mapped_column(String(160)); value:Mapped[str]=mapped_column(Text); enforced:Mapped[bool]=mapped_column(Boolean,default=False); updated_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); updated_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("organization_id","key",name="uq_global_setting"),)
+class RegionalSetting(Base):
+    __tablename__="regional_settings"; id:Mapped[uuid.UUID]=uid(); region_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_regions.id"),index=True); key:Mapped[str]=mapped_column(String(160)); value:Mapped[str]=mapped_column(Text); updated_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); updated_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("region_id","key",name="uq_regional_setting"),)
+class PropertySetting(Base):
+    __tablename__="property_settings"; id:Mapped[uuid.UUID]=uid(); property_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id"),index=True); key:Mapped[str]=mapped_column(String(160)); value:Mapped[str]=mapped_column(Text); updated_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); updated_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("property_id","key",name="uq_property_setting"),)
+class InheritedSetting(Base):
+    __tablename__="inherited_settings"; id:Mapped[uuid.UUID]=uid(); property_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id"),index=True); key:Mapped[str]=mapped_column(String(160)); effective_value:Mapped[str]=mapped_column(Text); source_type:Mapped[str]=mapped_column(String(30)); source_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True)); checksum:Mapped[str]=mapped_column(String(64)); calculated_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("property_id","key",name="uq_inherited_setting"),)
+class ConfigurationPolicy(Base):
+    __tablename__="configuration_policies"; id:Mapped[uuid.UUID]=uid(); organization_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id")); name:Mapped[str]=mapped_column(String(180)); key_pattern:Mapped[str]=mapped_column(String(200)); enforcement:Mapped[str]=mapped_column(String(30),default="advisory"); enabled:Mapped[bool]=mapped_column(Boolean,default=True); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now()
+
+
+class Policy(Base):
+    __tablename__="corporate_policies"; id:Mapped[uuid.UUID]=uid(); organization_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id"),index=True); code:Mapped[str]=mapped_column(String(50)); title:Mapped[str]=mapped_column(String(220)); category:Mapped[str]=mapped_column(String(40)); status:Mapped[str]=mapped_column(String(30),default="draft",index=True); owner_id:Mapped[str]=mapped_column(String,ForeignKey("users.id")); current_version:Mapped[int]=mapped_column(Integer,default=1); created_at:Mapped[datetime]=now(); updated_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("organization_id","code",name="uq_policy_org_code"),)
+class PolicyVersion(Base):
+    __tablename__="policy_versions"; id:Mapped[uuid.UUID]=uid(); policy_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("corporate_policies.id",ondelete="CASCADE"),index=True); version:Mapped[int]=mapped_column(Integer); content:Mapped[str]=mapped_column(Text); status:Mapped[str]=mapped_column(String(30),default="draft"); approved_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); approved_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); created_at:Mapped[datetime]=now(); __table_args__=(UniqueConstraint("policy_id","version",name="uq_policy_version"),)
+class PolicyAssignment(Base):
+    __tablename__="policy_assignments"; id:Mapped[uuid.UUID]=uid(); policy_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("corporate_policies.id"),index=True); scope_type:Mapped[str]=mapped_column(String(30)); scope_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),index=True); mandatory:Mapped[bool]=mapped_column(Boolean,default=True); effective_from:Mapped[date]=mapped_column(Date,server_default=func.current_date()); effective_to:Mapped[date|None]=mapped_column(Date); assigned_by:Mapped[str]=mapped_column(String,ForeignKey("users.id"))
+class PolicyCompliance(Base):
+    __tablename__="policy_compliance"; id:Mapped[uuid.UUID]=uid(); assignment_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("policy_assignments.id",ondelete="CASCADE"),index=True); property_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id"),index=True); status:Mapped[str]=mapped_column(String(30),default="not_assessed"); evidence:Mapped[str]=mapped_column(Text,default="{}"); assessed_at:Mapped[datetime]=now(); assessed_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); __table_args__=(UniqueConstraint("assignment_id","property_id",name="uq_policy_compliance_property"),)
+class PolicyException(Base):
+    __tablename__="policy_exceptions"; id:Mapped[uuid.UUID]=uid(); assignment_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("policy_assignments.id"),index=True); property_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id"),index=True); reason:Mapped[str]=mapped_column(Text); status:Mapped[str]=mapped_column(String(30),default="requested"); expires_at:Mapped[datetime]=mapped_column(DateTime(timezone=True)); requested_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); approved_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id")); decided_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); created_at:Mapped[datetime]=now()
+
+
+class GlobalNotification(Base):
+    __tablename__="global_notifications"; id:Mapped[uuid.UUID]=uid(); organization_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id"),index=True); scope_type:Mapped[str]=mapped_column(String(30)); scope_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True)); notification_type:Mapped[str]=mapped_column(String(30)); severity:Mapped[str]=mapped_column(String(20)); title:Mapped[str]=mapped_column(String(220)); message:Mapped[str]=mapped_column(Text); status:Mapped[str]=mapped_column(String(30),default="draft",index=True); escalation_chain:Mapped[str]=mapped_column(Text,default="[]"); publish_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); expires_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True)); created_by:Mapped[str]=mapped_column(String,ForeignKey("users.id")); created_at:Mapped[datetime]=now()
+class ExecutiveOperationsCache(Base):
+    __tablename__="executive_operations_cache"; id:Mapped[uuid.UUID]=uid(); scope_type:Mapped[str]=mapped_column(String(30)); scope_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True)); payload:Mapped[str]=mapped_column(Text); checksum:Mapped[str]=mapped_column(String(64)); generated_at:Mapped[datetime]=now(); expires_at:Mapped[datetime]=mapped_column(DateTime(timezone=True)); __table_args__=(UniqueConstraint("scope_type","scope_id",name="uq_executive_operations_cache_scope"),)

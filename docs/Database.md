@@ -1,5 +1,9 @@
 # HIOP 2.0.0-dev database
 
+## Epic 9 schema
+
+Migration `1c2d3e4f5a69` adds corporate hierarchy and membership tables, four administrator classifications, administrative scopes, three configuration layers and materialized inheritance, configuration policies, corporate policies/versions/assignments/compliance/exceptions, global notifications, and executive operations cache. Existing `organizations`, `properties`, buildings, floors, and rooms remain canonical.
+
 ## Epic 6 Problem Management
 
 Migration `d1e2f3a4b5c6` follows the Epic 5 CMDB head and creates lookup, problem, impact, revision, review, RCA, root-cause, contributing-factor, 5 Whys, Fishbone, KEDB, workaround, attachment, CAPA, verification, relationship, and correlation-suggestion tables. Foreign keys use cascade deletion only for owned child records; cross-domain links preserve explicit references.

@@ -43,6 +43,7 @@ from app.api.v1.cmdb import router as cmdb_router
 from app.api.v1.problem_management import router as problem_management_router
 from app.api.v1.asset_management import router as asset_management_router
 from app.api.v1.business_intelligence import router as business_intelligence_router
+from app.api.v1.multi_property import router as multi_property_router
 from app.discovery.routes import router as discovery_router
 from app.imports.routes import router as imports_router
 from app.users.routes import router as users_router
@@ -213,6 +214,7 @@ app.include_router(cmdb_router, prefix=settings.api_prefix)
 app.include_router(problem_management_router, prefix=settings.api_prefix)
 app.include_router(asset_management_router, prefix=settings.api_prefix)
 app.include_router(business_intelligence_router, prefix=settings.api_prefix)
+app.include_router(multi_property_router, prefix=settings.api_prefix)
 app.include_router(discovery_router, prefix=settings.api_prefix)
 app.include_router(imports_router, prefix=settings.api_prefix)
 

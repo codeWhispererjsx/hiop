@@ -22,6 +22,7 @@ const links: { label: string; to: string; icon: IconName }[] = [
     { label: "Problem Management", to: "/problems", icon: "search" },
     { label: "Asset & Procurement", to: "/assets", icon: "devices" },
     { label: "Executive BI", to: "/business-intelligence", icon: "dashboard" },
+    { label: "Corporate Management", to: "/enterprise", icon: "hierarchy" },
     { label: "Knowledge & Runbooks", to: "/knowledge", icon: "audit" },
     { label: "Change Management", to: "/changes", icon: "settings" },
     { label: "CMDB", to: "/cmdb", icon: "hierarchy" },

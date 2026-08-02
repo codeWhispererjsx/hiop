@@ -1,0 +1,3 @@
+# Corporate Administration
+
+`AdministrativeScope` supports organization, business-unit, region, country, group, cluster, property, and department boundaries. Corporate, regional, property, and delegated administrator records classify the grant. Assignments can be temporary, inherit permissions, and carry explicit boolean overrides; an explicit denial wins over inherited grants. Superadministrators retain platform recovery access. For upgrade compatibility, a legacy `admin` with no scope and no property grant retains the former corporate-wide visibility; creating any explicit grant activates strict scope resolution for that administrator.

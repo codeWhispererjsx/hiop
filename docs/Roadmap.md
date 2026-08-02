@@ -1,5 +1,8 @@
 # HIOP roadmap
 
+- ✅ Version 3 Epic 9 — Multi-Property Operations, Corporate Management & Global Administration
+- Next: Version 3 Epic 10 — production readiness, security hardening, performance, deployment tooling, and release candidate.
+
 ## Version 3 — Epic 6 complete
 
 Enterprise Problem Management and KEDB now connect the operational lifecycle: Incident → Problem → Change → Knowledge → CMDB. Future work may add external vendor/contract adapters without changing the human-approval boundary.

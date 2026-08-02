@@ -1,5 +1,9 @@
 # HIOP Enterprise + Hospitality interface contract
 
+## Corporate Management
+
+`/enterprise/*` contains Global Dashboard, Organization Explorer, Region Manager, Property Group Manager, Corporate Administration, Policy Center, Executive Operations Center, Cross-Property Analytics, Global Search, and Administration Console. All views use the Blue & Gold design tokens, responsive layouts, explicit empty/error/loading states, and scoped drill-down data.
+
 ## Problem Management workspace
 
 The protected `/problems/*` workspace includes Dashboard, Problem List/Details, RCA Workspace, 5 Whys, Fishbone, KEDB, Workarounds, CAPA, Reviews, Correlations, Relationships, and Reports. Responsive cards collapse from three/two columns to one, tabs scroll horizontally, and graph content has a textual accessible label.

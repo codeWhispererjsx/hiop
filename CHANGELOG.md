@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.0.0-dev — Epic 9 Multi-Property Operations & Corporate Management
+
+- Added corporate hierarchy, scoped and delegated administration, inherited permissions with explicit denial, global/regional/property configuration, policies, compliance, exceptions, and tenant-isolated queries.
+- Added the Executive Operations Center, cross-property analytics, global search, notifications, corporate reports and PDF/XLSX/CSV exports, plus six governed background jobs.
+
 ## 3.0.0-dev — Epic 8 Enterprise Reporting & Business Intelligence
 
 - Added governed KPI definitions, values, targets, thresholds, snapshots, executive audiences, dashboards, widgets, and cache.
