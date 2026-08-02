@@ -12,6 +12,7 @@ import random
 import socket
 import ssl
 import struct
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -189,19 +190,24 @@ class ServiceFingerprintCollector:
     def collect(self, ip: str, ports: list[int]):
         result = CollectedObservation(ip)
         banners, certificates, http_headers = {}, [], {}
-        for port in sorted(set(ports))[:32]:
-            if port not in SERVICE_PORTS:
-                continue
+        approved=[port for port in sorted(set(ports))[:32] if port in SERVICE_PORTS]
+        def probe(port):
             try:
                 with self.connector((ip, port), timeout=self.timeout) as connection:
                     connection.settimeout(self.timeout)
                     banner = b""
                     if port in {21, 22, 25, 110, 143, 6379}:
                         banner = connection.recv(self.max_banner)
-                    result.open_ports.append(port)
-                    banners[str(port)] = banner.decode("utf-8", "replace")[:self.max_banner]
+                    return port,banner.decode("utf-8", "replace")[:self.max_banner]
             except OSError:
-                continue
+                return None
+        with ThreadPoolExecutor(max_workers=min(16,max(1,len(approved)))) as pool:
+            for future in as_completed([pool.submit(probe,port) for port in approved]):
+                opened=future.result()
+                if not opened:continue
+                port,banner=opened;result.open_ports.append(port);banners[str(port)]=banner
+        result.open_ports.sort()
+        for port in result.open_ports:
             if port in {443, 636, 2376, 5986, 6443}:
                 try:
                     certificates.append({"port": port, **self._tls(ip, port)})

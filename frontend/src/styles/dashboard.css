@@ -14,6 +14,9 @@
 .nav-link { min-height: 45px; display: flex; align-items: center; gap: 13px; margin: 3px 0; padding: 0 13px; border-radius: 11px; color: var(--text-disabled); text-decoration: none; font-size: 13px; font-weight: 600; transition: .18s; }
 .nav-link:hover { color: var(--text-inverse); background: color-mix(in srgb,var(--color-white) 3.5%,transparent); }
 .nav-link.active { color: var(--text-inverse); background: linear-gradient(90deg, color-mix(in srgb,var(--color-primary) 18%,transparent), color-mix(in srgb,var(--color-primary) 5%,transparent)); box-shadow: inset 2px 0 var(--gold); }
+.sidebar-advanced { margin-top: 20px; padding-top: 10px; border-top: 1px solid color-mix(in srgb,var(--border) 55%,transparent); }
+.sidebar-advanced summary { cursor: pointer; margin: 0 12px 8px; color: var(--text-muted); font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.sidebar-advanced[open] summary { color: var(--text); }
 .nav-link b { min-width: 21px; margin-left: auto; padding: 3px 6px; border-radius: 999px; color:var(--text-muted); background: var(--gold); font-size: 10px; text-align: center; }
 .sidebar-health { padding: 15px; border: 1px solid var(--line); border-radius: 13px; background: color-mix(in srgb,var(--color-white) 2.5%,transparent); }
 .health-row { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; }

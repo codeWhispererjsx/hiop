@@ -19,13 +19,14 @@ from app.services.secret_encryption_service import SecretEncryptionService
 from app.services.topology_neighbor_collection_service import TopologyNeighborCollectionService
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
-reader=require_roles(["admin","superadmin","technician","viewer"]);admin=require_roles(["admin","superadmin"])
+reader=require_roles(["admin","superadmin","technician","viewer"]);operator=require_roles(["admin","superadmin","technician"]);admin=require_roles(["admin","superadmin"])
 REVIEW=("needs_review","automatically_identified","partially_identified","manually_verified","ignored","false_positive","duplicate","retired")
 class PolicyWrite(BaseModel):
     name:str=Field(min_length=2,max_length=180);property_id:UUID|None=None;authorized_ranges:list[str];excluded_ranges:list[str]=[];enabled_stages:list[str]=[];allowed_ports:list[int]=[];max_hosts:int=Field(1024,ge=1,le=65536);concurrency:int=Field(20,ge=1,le=128);timeout_seconds:int=Field(2,ge=1,le=30);rate_limit_per_second:int=Field(20,ge=1,le=500);allow_credentialed:bool=False;enabled:bool=True
 class CredentialWrite(BaseModel):
     policy_id:UUID;name:str;credential_type:str=Field(pattern=r"^(snmp|wmi|winrm|ssh|http|https)$");username:str|None=None;secret:str=Field(min_length=1,max_length=4096);scope_cidr:str|None=None;least_privilege_notes:str=Field(min_length=3,max_length=2000);enabled:bool=False
 class JobWrite(BaseModel): policy_id:UUID;network_range:str;job_type:str=Field("incremental",pattern=r"^(incremental|full)$")
+class QuickScanWrite(BaseModel): network_range:str=Field(min_length=3,max_length=64)
 class Observation(BaseModel): ip_address:str;hostname:str|None=None;hostnames:list[str]=[];mac_address:str|None=None;vendor:str|None=None;operating_system:str|None=None;open_ports:list[int]=[];evidence:list[dict]=[];configuration:dict={}
 class ReviewWrite(BaseModel): status:str=Field(pattern="^("+"|".join(REVIEW)+")$");classification:str|None=None
 class OUIWrite(BaseModel): prefix:str=Field(pattern=r"^[0-9A-Fa-f:-]{6,8}$");vendor:str=Field(min_length=2,max_length=180);version:str="manual"
@@ -37,6 +38,25 @@ def get(db,model,id,label):
     return row
 def audit(db,user,action,entity,id,message):create_audit_log(db,user.username,action,entity,str(id),message)
 def credential_view(row):return {"id":row.id,"policy_id":row.policy_id,"name":row.name,"credential_type":row.credential_type,"username":row.username,"scope_cidr":row.scope_cidr,"least_privilege_notes":row.least_privilege_notes,"enabled":row.enabled,"last_used_at":row.last_used_at,"created_at":row.created_at,"secret_configured":True}
+def consolidated_device_rows(db,limit=1000):
+    rows=db.query(DiscoveryResult).order_by(DiscoveryResult.confidence_score.desc(),DiscoveryResult.last_seen_at.desc()).limit(10000).all();devices={};mac_index={};name_index={};ip_index={}
+    for row in rows:
+        mac=re.sub(r"[^0-9a-f]","",(row.mac_address or "").lower());name=(row.primary_hostname or "").strip().rstrip(".").lower()
+        key=mac_index.get(mac) if len(mac)==12 else None
+        if not key and name:key=name_index.get(name)
+        if not key:key=ip_index.get(row.ip_address)
+        if not key:key=f"mac:{mac}" if len(mac)==12 else f"name:{name}" if name else f"ip:{row.ip_address}"
+        current=devices.get(key)
+        if not current:
+            devices[key]={"id":row.id,"result_id":row.id,"job_id":row.job_id,"ip_address":row.ip_address,"primary_hostname":row.primary_hostname,"mac_address":row.mac_address,"vendor":row.vendor,"device_type":row.device_type,"classification":row.classification,"operating_system":row.operating_system,"review_status":row.review_status,"confidence_score":row.confidence_score,"confidence_explanation":row.confidence_explanation,"ci_id":row.ci_id,"first_seen_at":row.first_seen_at,"last_seen_at":row.last_seen_at,"observations":1}
+        else:
+            current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)
+            for field in ("primary_hostname","mac_address","vendor","operating_system","ci_id"):
+                if not current[field] and getattr(row,field):current[field]=getattr(row,field)
+        if len(mac)==12:mac_index[mac]=key
+        if name:name_index[name]=key
+        ip_index[row.ip_address]=key
+    return sorted(devices.values(),key=lambda x:x["last_seen_at"],reverse=True)[:limit]
 def execute_safe_job(db,job,user):
     policy=get(db,DiscoveryPolicy,job.policy_id,"Policy");job.status="running";job.started_at=datetime.now(timezone.utc);db.commit()
     config={"enabled":True,"authorized_cidr_ranges":",".join(parse_json(policy.authorized_ranges,[])),"ignore_ranges":",".join(parse_json(policy.excluded_ranges,[])),"max_hosts_per_run":policy.max_hosts,"concurrency_limit":policy.concurrency,"ping_timeout_seconds":policy.timeout_seconds,"automatic_hostname_lookup":True,"automatic_vendor_lookup":True,"admin_notification_threshold":policy.max_hosts+1}
@@ -88,6 +108,25 @@ def execute_safe_job(db,job,user):
 
 @router.get("/capabilities")
 def capabilities(_=Depends(reader)):return {"pipeline":PIPELINE,"device_families":DEVICE_FAMILIES,"review_statuses":REVIEW,"credentialed_stages_are_opt_in":True,"intrusive_scanning":False}
+@router.post("/quick-scan")
+def quick_scan(body:QuickScanWrite,db:Session=Depends(get_db),user=Depends(operator)):
+    try:network=ipaddress.ip_network(body.network_range,strict=False)
+    except ValueError as exc:raise HTTPException(422,"Enter a valid private IP address or CIDR range") from exc
+    if not network.is_private:raise HTTPException(422,"Quick Scan is limited to private networks")
+    if network.num_addresses>1024:raise HTTPException(422,"Quick Scan is limited to 1,024 addresses; scan a smaller subnet")
+    scope=str(network);policy=db.query(DiscoveryPolicy).filter_by(name=f"Quick Scan · {scope}",created_by=user.id).first()
+    safe_stages=["icmp_reachability","arp_resolution","reverse_dns","hostname_resolution","mac_collection","mac_vendor_identification","port_discovery","service_fingerprinting","netbios_discovery","http_https_fingerprinting","tls_certificate_inspection","dhcp_lease_correlation","active_directory_correlation","cmdb_correlation","confidence_calculation","configuration_item_update"]
+    if not policy:
+        policy=DiscoveryPolicy(name=f"Quick Scan · {scope}",authorized_ranges=json.dumps([scope]),excluded_ranges="[]",enabled_stages=json.dumps(safe_stages),allowed_ports=json.dumps([22,53,80,135,139,161,443,445,3389,5985,5986]),max_hosts=1024,concurrency=32,timeout_seconds=1,rate_limit_per_second=50,allow_credentialed=False,enabled=True,created_by=user.id);db.add(policy);db.flush()
+    job=DiscoveryIntelligenceService(db).create_job(policy,scope,"full","quick_scan",user.id);audit(db,user,"CREATE","discovery_job",job.id,"Started credential-free Quick Network Scan");db.commit();db.refresh(job)
+    execution=execute_safe_job(db,job,user);devices=[item for item in consolidated_device_rows(db) if ipaddress.ip_address(item["ip_address"]) in network]
+    return {"job":execution["job"],"summary":{"found":len(devices),"identified":sum(x["confidence_score"]>=80 for x in devices),"partial":sum(40<=x["confidence_score"]<80 for x in devices),"needs_review":sum(x["confidence_score"]<40 for x in devices)},"devices":devices,"warnings":execution.get("warnings",[])}
+@router.get("/devices")
+def consolidated_devices(search:str|None=None,db:Session=Depends(get_db),_=Depends(reader)):
+    rows=consolidated_device_rows(db)
+    if search:
+        term=search.lower();rows=[x for x in rows if term in " ".join(str(x.get(k) or "") for k in ("primary_hostname","ip_address","mac_address","vendor","classification","operating_system")).lower()]
+    return {"items":rows,"total":len(rows)}
 @router.get("/dashboard")
 def dashboard(db:Session=Depends(get_db),_=Depends(reader)):
     total=db.query(DiscoveryResult).count();identified=db.query(DiscoveryResult).filter(DiscoveryResult.review_status.in_(("automatically_identified","manually_verified"))).count();unknown=db.query(DiscoveryResult).filter(DiscoveryResult.review_status=="needs_review").count();jobs=db.query(DiscoveryJob).count();failed=db.query(DiscoveryTask).filter_by(status="failed").count()
@@ -118,6 +157,11 @@ def create_credential(body:CredentialWrite,db:Session=Depends(get_db),user=Depen
 @router.post("/credentials/{id}/disable")
 def disable_credential(id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
     row=get(db,DiscoveryCredential,id,"Credential");row.enabled=False;audit(db,user,"DISABLE","discovery_credential",id,"Disabled discovery credential");db.commit();return credential_view(row)
+@router.post("/credentials/{id}/enable")
+def enable_credential(id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
+    row=get(db,DiscoveryCredential,id,"Credential");policy=get(db,DiscoveryPolicy,row.policy_id,"Policy")
+    if not policy.enabled or not policy.allow_credentialed:raise HTTPException(409,"Credentialed discovery must be enabled by the policy first")
+    row.enabled=True;audit(db,user,"ENABLE","discovery_credential",id,"Enabled scoped least-privilege discovery credential");db.commit();return credential_view(row)
 @router.get("/jobs")
 def jobs(status:str|None=None,page_number:int=Query(1,alias="page",ge=1),page_size:int=Query(25,ge=1,le=100),db:Session=Depends(get_db),_=Depends(reader)):
     q=db.query(DiscoveryJob).order_by(DiscoveryJob.created_at.desc());q=q.filter_by(status=status) if status else q;return page(q,page_number,page_size)

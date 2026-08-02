@@ -48,3 +48,35 @@
 .evidence-cards span { color: var(--success); font-weight: 800; }
 .evidence-cards strong { text-transform: capitalize; }
 .evidence-cards small { color: var(--text-muted); }
+
+.quick-scan-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
+  gap: 1.5rem;
+  align-items: end;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--surface), var(--surface-muted));
+  box-shadow: var(--shadow-sm);
+}
+
+.quick-scan-hero h2 { margin: 0.25rem 0 0.5rem; font-size: clamp(1.6rem, 3vw, 2.35rem); }
+.quick-scan-hero p { color: var(--text-muted); max-width: 64ch; }
+.quick-scan-hero form { display: grid; grid-template-columns: 1fr auto; gap: 0.65rem; align-items: end; }
+.quick-scan-hero label { display: grid; gap: 0.35rem; font-weight: 700; }
+.quick-scan-hero input { min-height: 46px; padding: 0.7rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); }
+.quick-scan-hero button { min-height: 46px; }
+.quick-scan-status { grid-column: 1 / -1; margin: 0; padding: 0.7rem; border-radius: 9px; background: var(--surface); }
+.quick-device-table table { min-width: 900px; }
+.enrichment-guide { margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-muted); }
+.enrichment-guide > div { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; }
+.enrichment-guide > div:first-child { display: block; }
+.enrichment-guide h3 { margin: 0.2rem 0; }
+.enrichment-guide details { margin-top: 0.8rem; }
+
+@media (max-width: 760px) {
+  .quick-scan-hero { grid-template-columns: 1fr; }
+  .quick-scan-hero form { grid-template-columns: 1fr; }
+}

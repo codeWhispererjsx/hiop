@@ -2,9 +2,16 @@ import { useLayoutEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 
-const links: { label: string; to: string; icon: IconName }[] = [
+const primaryLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Overview", to: "/dashboard", icon: "dashboard" },
+  { label: "Incidents", to: "/incidents", icon: "alerts" },
+  { label: "Devices & Network", to: "/discovery-intelligence", icon: "discovery" },
+  { label: "Operations", to: "/operations", icon: "settings" },
+  { label: "Knowledge", to: "/knowledge", icon: "audit" },
   { label: "Reports", to: "/reports", icon: "audit" },
+  { label: "Administration", to: "/settings", icon: "settings" },
+];
+const advancedLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Analytics", to: "/analytics", icon: "dashboard" },
   { label: "Devices", to: "/devices", icon: "devices" },
   { label: "Inventory Import", to: "/imports", icon: "import" },
@@ -18,7 +25,6 @@ const links: { label: string; to: string; icon: IconName }[] = [
     { label: "Property Operations", to: "/operations", icon: "dashboard" },
     { label: "Configuration Management", to: "/configuration-management", icon: "settings" },
     { label: "Automation", to: "/automation", icon: "settings" },
-    { label: "Incidents", to: "/incidents", icon: "alerts" },
     { label: "Problem Management", to: "/problems", icon: "search" },
     { label: "Asset & Procurement", to: "/assets", icon: "devices" },
     { label: "Executive BI", to: "/business-intelligence", icon: "dashboard" },
@@ -91,13 +97,8 @@ export default function Sidebar({
     }
     if (window.matchMedia("(max-width: 820px)").matches) onClose();
   };
-  const visibleLinks =
-    role === "admin"
-      ? links
-      : links.filter(
-          (link) =>
-            !["/reports", "/users", "/audit", "/active-directory", "/settings"].includes(link.to),
-        );
+  const isAdmin=["admin","superadmin"].includes(role??"");
+  const visiblePrimary=primaryLinks.filter(link=>isAdmin||!["/reports","/settings"].includes(link.to));
   return (
     <aside className={`sidebar ${open ? "is-open" : ""}`}>
       <div className="sidebar-brand">
@@ -116,9 +117,7 @@ export default function Sidebar({
       </div>
       <nav ref={navRef} className="sidebar-nav" aria-label="Primary navigation">
         <p className="nav-label">Workspace</p>
-        {visibleLinks
-          .filter((link) => links.indexOf(link) < 12)
-          .map((link) => (
+        {visiblePrimary.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
@@ -131,10 +130,7 @@ export default function Sidebar({
               <span>{link.label}</span>
             </NavLink>
           ))}
-        <p className="nav-label nav-label-spaced">Administration</p>
-        {visibleLinks
-          .filter((link) => links.indexOf(link) >= 12)
-          .map((link) => (
+        {isAdmin&&<details className="sidebar-advanced"><summary>Advanced modules</summary>{advancedLinks.map((link) => (
             <NavLink
               key={link.to}
               to={link.to}
@@ -146,7 +142,7 @@ export default function Sidebar({
               <Icon name={link.icon} />
               <span>{link.label}</span>
             </NavLink>
-          ))}
+          ))}</details>}
       </nav>
       <div className="sidebar-health">
         <div className="health-row">
