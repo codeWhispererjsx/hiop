@@ -80,10 +80,10 @@ function Distribution({ rows }: { rows: [string, number][] }) {
 
 function AssetTable({ devices }: { devices: Device[] }) {
   return <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Asset name</th><th>Type</th><th>Vendor / model</th><th>Status</th><th>IP address</th><th>Location</th></tr></thead><tbody>{devices.slice(0, 50).map((device) => <tr key={device.id}>
-    <td><Link to={`/devices/${device.id}`}><span className="asset-device-icon"><Icon name="devices"/></span><strong>{device.hostname || device.asset_tag || "Unnamed device"}</strong></Link></td>
-    <td><span className="asset-tag">{device.device_type || "Unknown"}</span></td>
+    <td data-label="Asset"><Link to={`/devices/${device.id}`}><span className="asset-device-icon"><Icon name="devices"/></span><strong>{device.hostname || device.asset_tag || "Unnamed device"}</strong></Link></td>
+    <td data-label="Type"><span className="asset-tag">{device.device_type || "Unknown"}</span></td>
     <td>{[device.brand, device.model].filter(Boolean).join(" · ") || "—"}</td>
-    <td><span className={`status-badge ${(device.network_status || "unknown").toLowerCase()}`}>{device.network_status || "Unknown"}</span></td>
+    <td data-label="Status"><span className={`status-badge ${(device.network_status || "unknown").toLowerCase()}`}>{device.network_status || "Unknown"}</span></td>
     <td className="asset-mono">{device.ip_address || "—"}</td><td>{device.location || "Unassigned"}</td>
   </tr>)}</tbody></table></div>;
 }

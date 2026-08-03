@@ -70,6 +70,7 @@
 .quick-scan-hero button { min-height: 46px; }
 .quick-scan-status { grid-column: 1 / -1; margin: 0; padding: 0.7rem; border-radius: 9px; background: var(--surface); }
 .quick-device-table table { min-width: 900px; }
+@media (max-width: 760px) { .quick-device-table table { min-width: 0; } }
 .enrichment-guide { margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-muted); }
 .enrichment-guide > div { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; }
 .enrichment-guide > div:first-child { display: block; }
