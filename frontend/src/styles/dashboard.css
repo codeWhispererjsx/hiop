@@ -408,3 +408,71 @@
 @media(max-width:1100px){.discovery-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.discovery-detail-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.discovery-stats{grid-template-columns:1fr 1fr}.bulk-action-bar{align-items:flex-start;flex-wrap:wrap}.bulk-action-bar>span{width:100%;order:2}.bulk-action-bar>div{width:100%;order:3}.bulk-action-bar button{flex:1}.discovery-detail-hero{align-items:flex-start;flex-direction:column}.detail-state{justify-content:flex-start}.approval-device-card{padding:12px}.discovery-approval-form{padding:15px}.discovery-approval-form footer{position:sticky;bottom:-15px;margin:0 -15px -15px;padding:12px 15px;background:var(--surface)}}
 @media(max-width:430px){.discovery-stats{grid-template-columns:1fr}.discovery-signal{align-items:flex-start}.signal-orbit{width:48px;height:48px;flex:0 0 auto}.discovery-signal strong{font-size:17px}.bulk-action-bar>div{flex-direction:column}.discovery-detail-grid .device-details dl{grid-template-columns:1fr}}
+.incident-create-panel {
+  max-width: 56rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+
+.incident-form {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.incident-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.125rem;
+}
+
+.incident-field {
+  display: grid;
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.incident-field > span {
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.incident-field input,
+.incident-field select,
+.incident-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
+.incident-field textarea {
+  resize: vertical;
+}
+
+.incident-field-wide {
+  grid-column: 1 / -1;
+}
+
+.incident-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .incident-create-panel {
+    padding: 1.125rem;
+  }
+
+  .incident-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .incident-field-wide {
+    grid-column: 1;
+  }
+
+  .incident-form-actions .primary-action {
+    width: 100%;
+  }
+}
