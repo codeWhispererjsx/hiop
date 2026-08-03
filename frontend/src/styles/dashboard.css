@@ -479,6 +479,12 @@
   }
 }
 
+@media (max-width: 800px) {
+  .automation-panel .settings-toggles {
+    grid-template-columns: 1fr;
+  }
+}
+
 .incident-list {
   display: grid;
   gap: 0.875rem;
@@ -669,6 +675,59 @@
   }
 
   .noc-table .row-actions button {
+    width: 100%;
+  }
+}
+.automation-panel {
+  max-width: 64rem;
+}
+
+.automation-controls {
+  display: grid;
+  grid-template-columns: minmax(15rem, 1fr) auto;
+  align-items: end;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
+.automation-controls label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.automation-controls label > span {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.automation-controls label > small {
+  color: var(--muted);
+}
+
+.automation-controls input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.625rem;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.automation-controls .primary-action {
+  min-width: 10rem;
+  justify-content: center;
+}
+
+@media (max-width: 640px) {
+  .automation-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-controls .primary-action {
     width: 100%;
   }
 }

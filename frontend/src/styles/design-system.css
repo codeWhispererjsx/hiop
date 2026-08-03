@@ -225,6 +225,7 @@ label, .field-label { color: var(--text); }
 .status-badge.offline, .status-badge.critical, .status-badge.open, .status-badge.failed, .status-badge.error, .status-badge.rejected { color: var(--status-danger-text); background: var(--danger-soft); }
 .status-badge.warning, .status-badge.high, .status-badge.in-progress, .status-badge.pending, .status-badge.degraded { color: var(--status-warning-text); background: var(--warning-soft); }
 .status-badge.info, .status-badge.running, .status-badge.review { color: var(--status-info-text); background: var(--info-soft); }
+.status-badge.online, .status-badge.success, .status-badge.active, .status-badge.completed { color: var(--status-success-text); background: var(--success-soft); }
 .status-badge.maintenance { color: var(--status-maintenance-text); background: color-mix(in srgb, var(--color-maintenance) 12%, transparent); }
 .status-badge.unknown, .status-badge.disabled, .status-badge.archived { color: var(--status-offline-text); background: var(--neutral-soft); }
 
