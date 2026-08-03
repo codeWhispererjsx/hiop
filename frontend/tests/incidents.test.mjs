@@ -4,5 +4,5 @@ import {readFileSync} from "node:fs";
 const read=path=>readFileSync(new URL(`../${path}`,import.meta.url),"utf8");
 const app=read("src/App.tsx"),page=read("src/pages/IncidentsPage.tsx"),api=read("src/lib/api.ts");
 test("maintain routes are protected and registered",()=>{assert.match(app,/path="\/incidents"/);assert.match(app,/path="\/incidents\/new"/);assert.match(app,/path="\/incidents\/:id\/\*"/)});
-test("version one incident workflow stays simple",()=>{for(const value of ["Create incident","Related device","Resolve","Close","Assigned technician"])assert.match(page,new RegExp(value));for(const removed of ["playbook builder","command roles","evidence bundle","compensate"])assert.doesNotMatch(page,new RegExp(removed,"i"))});
+test("version one incident workflow stays simple",()=>{for(const value of ["Create incident","Related device","Resolve","Close","Assigned technician","endpoints.hierarchy","hiop.active_property_id"])assert.match(page,new RegExp(value));for(const removed of ["playbook builder","command roles","evidence bundle","compensate"])assert.doesNotMatch(page,new RegExp(removed,"i"))});
 test("incident API supports the required lifecycle",()=>{for(const method of ["incidents","incident","createIncident","updateIncident","incidentTransition"])assert.match(api,new RegExp(method))});

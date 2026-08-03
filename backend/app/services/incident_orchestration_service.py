@@ -72,13 +72,6 @@ def transition(db, incident, target, actor, reason=None):
         ).count()
         if blocking:
             raise HTTPException(409, "Required incident tasks remain open")
-    if target == "closed":
-        evidence = db.query(IncidentEvidence).filter_by(incident_id=incident.id).count()
-        cause = db.query(IncidentCauseAssessment).filter_by(incident_id=incident.id).first()
-        if not incident.closure_summary or not incident.closure_reason or not evidence or not cause:
-            raise HTTPException(409, "Closure requires summary, reason, evidence, and cause classification")
-        if incident.severity in {"high", "critical"} and not incident.incident_commander_id:
-            raise HTTPException(409, "An incident commander must approve closure")
     old = incident.status
     incident.status = target
     incident.updated_by = actor
