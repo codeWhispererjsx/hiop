@@ -1,5 +1,12 @@
 # Changelog
 
+## HIOP V3A — Network topology
+
+- Added a read-only topology API and interactive topology workspace backed only by LLDP, CDP, SNMP MAC-table, and existing inventory evidence.
+- Added immediate neighbors to device details, evidence and confidence explanations, current/stale state, search, and navigation to the same inventory UUID.
+- Unknown, weak, conflicting, or IP-only evidence cannot create a topology relationship or inventory device.
+- Reused the existing topology migrations; no schema migration, V3B feature, infrastructure write, or inventory recreation was introduced.
+
 ## HIOP V2F — V1 to V2 reconciliation and data preservation
 
 - Added an administrator-protected, deterministic reconciliation report with before/after device comparisons, duplicate candidates, relationship integrity, enrichment state, and review-only ambiguous matches.

@@ -7,6 +7,7 @@ const primaryLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Overview", to: "/dashboard", icon: "dashboard" },
   { label: "Discover", to: "/discovery-intelligence", icon: "discovery" },
   { label: "Monitor", to: "/network", icon: "network" },
+  { label: "Topology", to: "/topology", icon: "hierarchy" },
   { label: "Manage", to: "/devices", icon: "devices" },
   { label: "Automate", to: "/automation", icon: "settings" },
   { label: "Maintain", to: "/incidents", icon: "alerts" },

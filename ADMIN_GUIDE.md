@@ -472,6 +472,23 @@ Epic 4B permits administrators to run an explicit saved-credential target test o
 
 Approve ranges, credentials, targets, profiles/OIDs, and schedules in order. Preview rules before enabling, use
 maintenance for planned work, monitor scheduler health, and preview retention before manual cleanup.
+
+## V3A network topology
+
+1. Enable SNMP securely and link each approved SNMP target to its existing HIOP
+   inventory device. V3A will not create a replacement device.
+2. Open **Topology** from the main navigation.
+3. Select **Refresh topology**. The action performs bounded read-only LLDP, CDP and
+   bridge MAC-table reads for linked targets only.
+4. Select a node to inspect immediate connections, then open the connected device to
+   verify the same inventory UUID is used.
+5. Select a relationship to inspect source evidence, confidence, first discovery and
+   last verification.
+
+If SNMP is disabled or no linked targets exist, HIOP reports **Topology data
+unavailable**. If sources are available but produce no sufficiently reliable
+relationship, HIOP reports **No connections found**. Unknown or ambiguous evidence
+remains unresolved; administrators cannot draw or configure network links in V3A.
 ## LLDP/CDP neighbor review
 
 Use neighbor collection only for approved SNMP targets. Start with dry run, inspect warnings and counts, then run persisted collection. Review candidates and provisional links before confirmation. Confirmed manual links remain authoritative. LLDP is the default; use CDP only for a supported Cisco profile.

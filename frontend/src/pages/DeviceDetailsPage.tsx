@@ -8,7 +8,7 @@ import { Toast } from "../components/Toast";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints } from "../lib/api";
-import type { Device, LiveEvent } from "../lib/types";
+import type { Device, LiveEvent, V3ATopologyNeighbors } from "../lib/types";
 import { PageTitle } from "./DashboardPage";
 
 type DetailsTab = "overview" | HistorySection;
@@ -26,9 +26,15 @@ export default function DeviceDetailsPage() {
   const successNotice = (location.state as { notice?: string } | null)?.notice;
   const { data: device, loading, error, reload } = useRequest(() => endpoints.device(id));
   const [discoveryIdentity, setDiscoveryIdentity] = useState<Record<string, unknown>>();
+  const [topologyNeighbors, setTopologyNeighbors] = useState<V3ATopologyNeighbors>();
   useEffect(() => {
     let active = true;
     endpoints.inventoryDiscoveryIdentity(id).then((value) => { if (active) setDiscoveryIdentity(value); }).catch(() => { if (active) setDiscoveryIdentity(undefined); });
+    return () => { active = false; };
+  }, [id]);
+  useEffect(() => {
+    let active = true;
+    endpoints.v3aDeviceNeighbors(id).then((value) => { if (active) setTopologyNeighbors(value); }).catch(() => { if (active) setTopologyNeighbors(undefined); });
     return () => { active = false; };
   }, [id]);
   const hierarchy = useRequest(endpoints.hierarchy, []);
@@ -89,7 +95,7 @@ export default function DeviceDetailsPage() {
             {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
           </nav>
 
-          {activeTab === "overview" ? <DeviceOverview device={device} discoveryIdentity={discoveryIdentity} networkZone={hierarchy.data?.network_zones.find((zone) => zone.id === device.network_zone_id)?.name ?? ""} /> : <DeviceHistory device={device} section={activeTab} />}
+          {activeTab === "overview" ? <DeviceOverview device={device} discoveryIdentity={discoveryIdentity} topologyNeighbors={topologyNeighbors} networkZone={hierarchy.data?.network_zones.find((zone) => zone.id === device.network_zone_id)?.name ?? ""} /> : <DeviceHistory device={device} section={activeTab} />}
         </>
       )}
 
@@ -109,7 +115,7 @@ export default function DeviceDetailsPage() {
   );
 }
 
-function DeviceOverview({ device, networkZone, discoveryIdentity }: { device: Device; networkZone: string; discoveryIdentity?: Record<string, unknown> }) {
+function DeviceOverview({ device, networkZone, discoveryIdentity, topologyNeighbors }: { device: Device; networkZone: string; discoveryIdentity?: Record<string, unknown>; topologyNeighbors?: V3ATopologyNeighbors }) {
   const identity=(discoveryIdentity?.result||{}) as Record<string,unknown>;
   const evidence=(discoveryIdentity?.evidence||[]) as Array<Record<string,unknown>>;
   const conflicts=(discoveryIdentity?.conflicts||[]) as Array<Record<string,unknown>>;
@@ -161,6 +167,9 @@ function DeviceOverview({ device, networkZone, discoveryIdentity }: { device: De
       <Detail label="Last Logon" value={device.ad_last_logon_at ? new Date(device.ad_last_logon_at).toLocaleString() : "Not available"} />
       <Detail label="Distinguished Name" value={device.ad_distinguished_name || "Not available"} />
     </dl>
+    <h2>Network connections</h2>
+    {!topologyNeighbors?<p>Topology data unavailable.</p>:topologyNeighbors.connections.length===0?<p>{topologyNeighbors.message || "No connections found for this device."}</p>:<div className="device-topology-connections">{topologyNeighbors.connections.map(connection=><article key={connection.id}><div><strong>{connection.neighbor.label}</strong><span>{connection.relationship_type.replaceAll("_"," ")} · {connection.confidence}% confidence</span><small>{connection.evidence_source.replaceAll("_"," ")} · last verified {new Date(connection.last_verified_at).toLocaleString()}</small></div><Link to={`/devices/${connection.neighbor.device_id}`}>Open connected device</Link></article>)}</div>}
+    <Link className="secondary-action" to="/topology">Open network topology</Link>
   </section>;
 }
 

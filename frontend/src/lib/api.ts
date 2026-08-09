@@ -635,4 +635,9 @@ export const endpoints = {
   discoveryHistory:()=>api<{jobs:import("./types").DiscoveryJob[];changes:Array<Record<string,unknown>>}>("/discovery-intelligence/history"),
   discoveryOUI:(q?:string)=>api<{items:Array<Record<string,unknown>>}>(`/discovery-intelligence/oui${queryString({q})}`),
   recalculateDiscoveryConfidence:()=>api<{updated:number}>("/discovery-intelligence/confidence/recalculate",{method:"POST"}),
+  v3aTopology:(search?:string)=>api<import("./types").V3ATopologyGraph>(`/topology${queryString({search})}`),
+  refreshV3ATopology:()=>api<import("./types").V3ATopologyRefresh>("/topology/refresh",{method:"POST"}),
+  v3aTopologyStats:()=>api<import("./types").V3ATopologyStats>("/topology/stats"),
+  v3aTopologyRelationship:(id:string)=>api<import("./types").V3ATopologyRelationship>(`/topology/relationships/${id}`),
+  v3aDeviceNeighbors:(id:string)=>api<import("./types").V3ATopologyNeighbors>(`/topology/devices/${id}/neighbors`),
 };

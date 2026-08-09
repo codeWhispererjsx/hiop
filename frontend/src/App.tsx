@@ -18,6 +18,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AutomationPage = lazy(() => import("./pages/AutomationPage"));
 const IncidentsPage = lazy(() => import("./pages/IncidentsPage"));
 const DiscoveryIntelligencePage = lazy(() => import("./pages/DiscoveryIntelligencePage"));
+const TopologyPage = lazy(() => import("./pages/TopologyPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -40,6 +41,7 @@ export default function App() {
     <Route path="/devices/:id/edit" element={protectedPage(<EditDevicePage />)} />
     <Route path="/devices/:id" element={protectedPage(<DeviceDetailsPage />)} />
     <Route path="/network" element={protectedPage(<NetworkPage />)} />
+    <Route path="/topology" element={protectedPage(<TopologyPage />)} />
     <Route path="/discovery-intelligence/*" element={protectedPage(<DiscoveryIntelligencePage />)} />
     <Route path="/automation/*" element={protectedPage(<AutomationPage />)} />
     <Route path="/incidents" element={protectedPage(<IncidentsPage />)} />

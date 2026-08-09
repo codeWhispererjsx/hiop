@@ -1,5 +1,18 @@
 # HIOP Project Status
 
+## HIOP V3A — network topology
+
+V3A is implemented on the active product surface. The `/topology` workspace and
+V3A API show evidence-backed relationships between the same existing Device UUIDs,
+with explainable confidence, immediate neighbors, device status, and stale-state
+handling. LLDP/CDP and bounded SNMP MAC-table reads are observation-only. Unknown,
+ambiguous, conflicting, weak, or IP-only evidence remains unresolved and does not
+create a device or graph edge. See `HIOP_V3A_TOPOLOGY_REPORT.md`.
+
+The existing topology foundation migrations are reused; no V3A migration was
+necessary. V3B and later topology scheduling, alerts, advanced port/VLAN features,
+impact analysis, and automated remediation remain outside the active V3A surface.
+
 ## HIOP V2F — data continuity checkpoint
 
 V2F is complete for the current V1/V2 product surface. Eight existing inventory

@@ -1,12 +1,15 @@
 # HIOP — Hospitality IT Operations Platform
 
-HIOP is currently focused on seven operational areas: Overview, Discover, Monitor,
+HIOP is currently focused on Overview, Discover, Monitor, Network Topology,
 Manage, Automate, Maintain, and Administration. See
 [V1/V2 focused product completion](docs/V1_V2_COMPLETION.md) for verified scope and limitations.
 The V1-to-V2 data continuity checkpoint is recorded in
 [HIOP V2F reconciliation report](HIOP_V2F_RECONCILIATION_REPORT.md).
+The scoped Version 3 topology implementation is documented in
+[HIOP V3A topology report](HIOP_V3A_TOPOLOGY_REPORT.md).
 
-Historical Version 3 design documents remain in `docs/` for reference but their specialist modules are not part of the active product surface.
+Historical later-Version-3 design documents remain in `docs/` for reference, but
+their specialist modules are not part of the active V3A product surface.
 
 HIOP Version 3 Epic 6 adds Enterprise Problem Management, structured RCA, the Known Error Database, reusable workarounds, CAPA, post-resolution reviews, deterministic incident-correlation suggestions, relationship graphs, dashboards, reports, exports, and scheduled reminders. See [Problem Management](docs/PROBLEM_MANAGEMENT.md), [KEDB](docs/KNOWN_ERROR_DATABASE.md), [RCA](docs/ROOT_CAUSE_ANALYSIS.md), and [CAPA](docs/CAPA.md).
 

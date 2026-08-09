@@ -7,7 +7,6 @@ from sqlalchemy import and_, or_, select
 
 from app.core.config import settings
 from app.models.device import Device
-from app.models.discovered_device import DiscoveredDevice
 from app.models.snmp import SNMPDeviceProfile, SNMPInterface, SNMPTarget
 from app.models.topology import (
     Topology, TopologyChange, TopologyLink, TopologyLinkEvidence, TopologyNode,
@@ -26,6 +25,17 @@ from app.services.topology_neighbor_parser import (
     tabular_walks,
 )
 from app.websocket.connection_manager import manager
+
+
+def _normalized_mac(value):
+    compact = "".join(character for character in str(value or "") if character.lower() in "0123456789abcdef")
+    if compact.startswith("0") and len(compact) == 13:
+        compact = compact[1:]
+    return compact.lower() if len(compact) == 12 else ""
+
+
+def _normalized_hostname(value):
+    return str(value or "").strip().rstrip(".").lower().split(".")[0]
 
 
 class TopologyNeighborCollectionService:
@@ -88,22 +98,32 @@ class TopologyNeighborCollectionService:
             client.close()
 
     def _source_node(self, topology, target, actor):
+        if not target.device_id:
+            raise HTTPException(409, "SNMP target is not linked to an existing inventory device.")
+        device = self.db.get(Device, target.device_id)
+        if not device:
+            raise HTTPException(409, "The SNMP target inventory device is unavailable.")
         node = self.db.scalar(select(TopologyNode).where(
             TopologyNode.topology_id == topology.id,
-            or_(TopologyNode.snmp_target_id == target.id, TopologyNode.device_id == target.device_id)
-            if target.device_id else TopologyNode.snmp_target_id == target.id,
+            TopologyNode.device_id == target.device_id,
         ))
         if not node:
             node = TopologyNode(
-                topology_id=topology.id, snmp_target_id=target.id,
-                label=target.name, management_ip=target.ip_address,
-                node_type="network_device", status="provisional",
-                source_type="SNMP", confidence_score=85, is_manual=False,
+                topology_id=topology.id, device_id=device.id, snmp_target_id=target.id,
+                label=device.hostname, management_ip=device.ip_address,
+                node_type=device.device_type or "unknown", status=device.network_status or "Unknown",
+                role="unknown", layer="unknown", vendor=device.brand, model=device.model,
+                source_type="SNMP", confidence_score=90, is_manual=False,
                 created_by=actor.id, updated_by=actor.id,
-                metadata_json={"provisional": True, "source_target_id": str(target.id)},
+                metadata_json={"source_target_id": str(target.id)},
             )
             self.db.add(node)
             self.db.flush()
+        else:
+            node.snmp_target_id = target.id
+            node.label = device.hostname
+            node.management_ip = device.ip_address
+            node.status = device.network_status or "Unknown"
         return node
 
     def _interface(self, target_id, neighbor):
@@ -118,30 +138,24 @@ class TopologyNeighborCollectionService:
         return matches[0] if len(matches) == 1 else None
 
     def _match(self, topology_id, neighbor):
-        target = None
-        if neighbor.remote_management_address:
-            target = self.db.scalar(select(SNMPTarget).where(
-                SNMPTarget.ip_address == neighbor.remote_management_address
-            ))
+        devices = self.db.scalars(select(Device)).all()
+        mac = _normalized_mac(neighbor.remote_chassis_id)
+        mac_matches = [row for row in devices if mac and _normalized_mac(row.mac_address) == mac]
+        hostname = _normalized_hostname(neighbor.remote_system_name)
+        hostname_matches = [row for row in devices if hostname and _normalized_hostname(row.hostname) == hostname]
+        device = mac_matches[0] if len(mac_matches) == 1 else hostname_matches[0] if len(hostname_matches) == 1 else None
+        if len(mac_matches) == 1 and len(hostname_matches) == 1 and mac_matches[0].id != hostname_matches[0].id:
+            device = None
+        target = self.db.scalar(select(SNMPTarget).where(SNMPTarget.device_id == device.id)) if device else None
         node = None
-        if target:
+        if device:
             node = self.db.scalar(select(TopologyNode).where(
                 TopologyNode.topology_id == topology_id,
-                or_(TopologyNode.snmp_target_id == target.id, TopologyNode.device_id == target.device_id)
-                if target.device_id else TopologyNode.snmp_target_id == target.id,
+                TopologyNode.device_id == device.id,
             ))
-        if not node and neighbor.remote_management_address:
-            node = self.db.scalar(select(TopologyNode).where(
-                TopologyNode.topology_id == topology_id,
-                TopologyNode.management_ip == neighbor.remote_management_address,
-            ))
-        device = self.db.scalar(select(Device).where(Device.ip_address == neighbor.remote_management_address)) if neighbor.remote_management_address else None
-        discovered = self.db.scalar(select(DiscoveredDevice).where(
-            DiscoveredDevice.ip_address == neighbor.remote_management_address
-        )) if neighbor.remote_management_address else None
-        return node, target, device, discovered
+        return node, target, device, None
 
-    def _score(self, neighbor, local_interface, matched_target, bidirectional=False, conflicts=None):
+    def _score(self, neighbor, local_interface, matched_target, matched_device=None, bidirectional=False, conflicts=None):
         parts = {}
         if neighbor.remote_chassis_id:
             parts["chassis_id"] = 35
@@ -155,11 +169,15 @@ class TopologyNeighborCollectionService:
             parts["local_interface"] = 10
         if matched_target:
             parts["existing_target"] = 10
+        if matched_device:
+            parts["existing_inventory_identity"] = 25
         if bidirectional:
             parts["bidirectional"] = 20
         if conflicts:
             parts["conflict_penalty"] = -min(30, 10 * len(conflicts))
-        return max(0, min(100, sum(parts.values()))), parts
+        positive = min(100, sum(value for value in parts.values() if value > 0))
+        penalties = sum(value for value in parts.values() if value < 0)
+        return max(0, positive + penalties), parts
 
     def _device_type(self, capabilities):
         values = set(capabilities)
@@ -201,7 +219,7 @@ class TopologyNeighborCollectionService:
             TopologyNeighborObservation.remote_management_address == target.ip_address,
             TopologyNeighborObservation.observation_status == "current",
         )))
-        score, breakdown = self._score(neighbor, local_interface, matched_target, reverse, conflicts)
+        score, breakdown = self._score(neighbor, local_interface, matched_target, device, reverse, conflicts)
         observation = self.db.scalar(select(TopologyNeighborObservation).where(
             TopologyNeighborObservation.topology_id == topology.id,
             TopologyNeighborObservation.source_target_id == target.id,
@@ -267,22 +285,23 @@ class TopologyNeighborCollectionService:
         candidate.score_breakdown = breakdown
         candidate.evidence = {"protocol": neighbor.protocol, "bidirectional": reverse}
         candidate.conflict_flags = conflicts
-        candidate.review_status = "conflict" if conflicts else "matched" if matched_node else "unresolved"
+        candidate.review_status = "conflict" if conflicts else "matched" if device and score >= 60 else "unresolved"
 
         target_node = matched_node
+        if not device or score < 60 or conflicts:
+            return
         if not target_node:
             target_node = TopologyNode(
                 topology_id=topology.id,
-                device_id=getattr(device, "id", None) if not matched_target else None,
-                discovered_device_id=getattr(discovered, "id", None) if not device and not matched_target else None,
-                snmp_target_id=getattr(matched_target, "id", None),
-                label=neighbor.remote_system_name or neighbor.remote_management_address or "Unresolved neighbor",
+                device_id=device.id, snmp_target_id=getattr(matched_target, "id", None),
+                label=device.hostname,
                 description=neighbor.remote_system_description,
-                management_ip=neighbor.remote_management_address,
-                node_type=candidate.device_type_guess, status="provisional",
+                management_ip=device.ip_address,
+                node_type=device.device_type or candidate.device_type_guess, status=device.network_status or "Unknown",
+                role="unknown", layer="unknown", vendor=device.brand, model=device.model,
                 source_type=neighbor.protocol.upper(), confidence_score=score,
                 is_manual=False, created_by=actor.id, updated_by=actor.id,
-                metadata_json={"provisional": True, "remote_identity_key": neighbor.identity_key},
+                metadata_json={"remote_identity_key": neighbor.identity_key},
             )
             self.db.add(target_node)
             self.db.flush()
@@ -307,12 +326,12 @@ class TopologyNeighborCollectionService:
             link = TopologyLink(
                 topology_id=topology.id, source_node_id=source_node.id,
                 target_node_id=target_node.id, source_interface_id=getattr(local_interface, "id", None),
-                link_type="physical", direction="bidirectional" if reverse else "unknown",
-                status="unknown" if conflicts else "active",
+                link_type="neighbor_of", direction="bidirectional" if reverse else "unknown",
+                status="active",
                 source_type=neighbor.protocol.upper(), discovery_method=neighbor.protocol.upper(),
                 confidence_score=score, is_manual=False, is_confirmed=False,
                 created_by=actor.id, updated_by=actor.id,
-                metadata_json={"provisional": True, "conflicts": conflicts},
+                metadata_json={"confidence_breakdown": breakdown, "conflicts": conflicts},
             )
             self.db.add(link)
             self.db.flush()
@@ -321,6 +340,8 @@ class TopologyNeighborCollectionService:
             manager.broadcast_from_thread({"type": "topology_candidate_link_created", "topology_id": str(topology.id), "link_id": str(link.id), "protocol": neighbor.protocol})
         else:
             link.last_seen_at = datetime.now(timezone.utc)
+            link.status = "active"
+            link.missing_since = None
             link.confidence_score = max(link.confidence_score, score)
             run.candidate_links_updated += 1
             manager.broadcast_from_thread({"type": "topology_candidate_link_updated", "topology_id": str(topology.id), "link_id": str(link.id), "protocol": neighbor.protocol})
