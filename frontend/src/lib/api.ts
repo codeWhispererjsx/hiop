@@ -622,6 +622,7 @@ export const endpoints = {
   discoveryResults:(filters:Record<string,string|number|undefined>={})=>api<{items:import("./types").DiscoveryResult[];total:number}>(`/discovery-intelligence/results${queryString(filters)}`),
   discoveryResult:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/results/${id}`),
   reviewDiscoveryResult:(id:string,body:Record<string,unknown>)=>api<import("./types").DiscoveryResult>(`/discovery-intelligence/results/${id}/review`,{method:"POST",body:JSON.stringify(body)}),
+  confirmDiscoveryIdentity:(id:string,body:{friendly_name?:string;department?:string;device_type?:string})=>api<import("./types").DiscoveryResult>(`/discovery-intelligence/results/${id}/confirm-identity`,{method:"POST",body:JSON.stringify(body)}),
   approveDiscoveryResult:(id:string)=>api<import("./types").Device>(`/discovery-intelligence/results/${id}/approve`,{method:"POST",body:JSON.stringify({})}),
   enrichDiscoveryResult:(id:string)=>api<{status:string;provider:string;device:import("./types").DiscoveryResult;found:string[];warnings:string[];evidence_added:number;confidence_score:number}>(`/discovery-intelligence/results/${id}/enrich`,{method:"POST"}),
   enrichDiscoveryResultFromAD:(id:string)=>api<{status:string;provider:string;device:import("./types").DiscoveryResult;found:string[];warnings:string[];evidence_added:number;confidence_score:number}>(`/discovery-intelligence/results/${id}/enrich-active-directory`,{method:"POST"}),

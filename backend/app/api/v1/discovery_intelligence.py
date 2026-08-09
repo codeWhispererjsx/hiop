@@ -7,7 +7,7 @@ from sqlalchemy import func,or_
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.models.cmdb import CIClass,CIIdentifier,CIType,ConfigurationItem
-from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask
+from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryIdentityConflict,DiscoveryIdentityHistory,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask
 from app.models.topology import Topology,TopologyLink,TopologyNode
 from app.models.snmp import SNMPCredential,SNMPTarget
 from app.models.discovered_device import DiscoveredDevice,DiscoveryStatus
@@ -23,6 +23,7 @@ from app.services.device_enrichment_service import DeviceEnrichmentService
 from app.services.active_directory_enrichment_service import ActiveDirectoryDeviceEnrichmentService
 from app.services.snmp_credential_service import SNMPCredentialService
 from app.services.snmp_target_service import SNMPTargetService
+from app.services.device_correlation_service import DeviceCorrelationService
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
 reader=require_roles(["admin","superadmin","technician","viewer"]);operator=require_roles(["admin","superadmin","technician"]);admin=require_roles(["admin","superadmin"])
@@ -40,6 +41,10 @@ class ApproveWrite(BaseModel):
     category:str|None=Field(default=None,max_length=80)
     department:str=Field(default="Unassigned",max_length=120)
     location:str=Field(default="Unassigned",max_length=160)
+class ConfirmIdentityWrite(BaseModel):
+    friendly_name:str|None=Field(default=None,max_length=253)
+    department:str|None=Field(default=None,max_length=120)
+    device_type:str|None=Field(default=None,max_length=80)
 class OUIWrite(BaseModel): prefix:str=Field(pattern=r"^[0-9A-Fa-f:-]{6,8}$");vendor:str=Field(min_length=2,max_length=180);version:str="manual"
 class DHCPLeaseWrite(BaseModel): ip_address:str;mac_address:str=Field(min_length=12,max_length=17);hostname:str|None=None;source:str=Field(min_length=2,max_length=120);lease_server:str|None=None;starts_at:datetime|None=None;expires_at:datetime|None=None;is_reservation:bool=False;reservation_name:str|None=None;description:str|None=Field(default=None,max_length=2000)
 def page(q,p,s):return {"items":q.offset((p-1)*s).limit(s).all(),"total":q.count(),"page":p,"page_size":s}
@@ -51,15 +56,19 @@ def audit(db,user,action,entity,id,message):create_audit_log(db,user.username,ac
 def credential_view(row):return {"id":row.id,"policy_id":row.policy_id,"name":row.name,"credential_type":row.credential_type,"username":row.username,"scope_cidr":row.scope_cidr,"least_privilege_notes":row.least_privilege_notes,"enabled":row.enabled,"last_used_at":row.last_used_at,"created_at":row.created_at,"secret_configured":True}
 def consolidated_device_rows(db,limit=1000):
     rows=db.query(DiscoveryResult).order_by(DiscoveryResult.confidence_score.desc(),DiscoveryResult.last_seen_at.desc()).limit(10000).all();devices={};mac_index={};name_index={};ip_index={}
+    by_id={row.id:row for row in rows};canonical_ids={row.canonical_result_id for row in rows if row.canonical_result_id}
     for row in rows:
+        canonical=by_id.get(row.canonical_result_id) if row.canonical_result_id else row
         mac=re.sub(r"[^0-9a-f]","",(row.mac_address or "").lower());name=(row.primary_hostname or "").strip().rstrip(".").lower()
-        key=mac_index.get(mac) if len(mac)==12 else None
+        key=f"canonical:{canonical.id}" if row.canonical_result_id or row.id in canonical_ids else None
+        if not key:key=mac_index.get(mac) if len(mac)==12 else None
         if not key and name:key=name_index.get(name)
         if not key:key=ip_index.get(row.ip_address)
         if not key:key=f"mac:{mac}" if len(mac)==12 else f"name:{name}" if name else f"ip:{row.ip_address}"
         current=devices.get(key)
         if not current:
-            devices[key]={"id":row.id,"result_id":row.id,"job_id":row.job_id,"ip_address":row.ip_address,"primary_hostname":row.primary_hostname,"fqdn":row.fqdn,"dns_status":row.dns_status,"friendly_name":row.friendly_name,"department":row.department,"suggested_department":row.suggested_department,"device_number":row.device_number,"description":row.description,"description_source":row.description_source,"location":row.location,"mac_address":row.mac_address,"vendor":row.vendor,"device_type":row.device_type,"classification":row.classification,"operating_system":row.operating_system,"model":row.model,"serial_number":row.serial_number,"firmware":row.firmware,"uptime_seconds":row.uptime_seconds,"interface_count":row.interface_count,"snmp_enrichment_status":row.snmp_enrichment_status,"last_enriched_at":row.last_enriched_at,"ad_computer_name":row.ad_computer_name,"ad_domain":row.ad_domain,"ad_organizational_unit":row.ad_organizational_unit,"ad_operating_system":row.ad_operating_system,"ad_enabled":row.ad_enabled,"ad_enrichment_status":row.ad_enrichment_status,"ad_last_enriched_at":row.ad_last_enriched_at,"review_status":row.review_status,"confidence_score":row.confidence_score,"confidence_explanation":row.confidence_explanation,"ci_id":row.ci_id,"first_seen_at":row.first_seen_at,"last_seen_at":row.last_seen_at,"observations":1}
+            source=canonical
+            devices[key]={"id":source.id,"result_id":source.id,"job_id":source.job_id,"ip_address":source.ip_address,"primary_hostname":source.primary_hostname,"fqdn":source.fqdn,"dns_status":source.dns_status,"friendly_name":source.friendly_name,"department":source.department,"suggested_department":source.suggested_department,"device_number":source.device_number,"description":source.description,"description_source":source.description_source,"location":source.location,"mac_address":source.mac_address,"vendor":source.vendor,"device_type":source.device_type,"classification":source.classification,"operating_system":source.operating_system,"model":source.model,"serial_number":source.serial_number,"firmware":source.firmware,"uptime_seconds":source.uptime_seconds,"interface_count":source.interface_count,"snmp_enrichment_status":source.snmp_enrichment_status,"last_enriched_at":source.last_enriched_at,"ad_computer_name":source.ad_computer_name,"ad_domain":source.ad_domain,"ad_organizational_unit":source.ad_organizational_unit,"ad_operating_system":source.ad_operating_system,"ad_enabled":source.ad_enabled,"ad_enrichment_status":source.ad_enrichment_status,"ad_last_enriched_at":source.ad_last_enriched_at,"identity_confirmed":source.identity_confirmed,"confidence_level":source.confidence_level,"confidence_reason":source.confidence_reason,"conflict_status":source.conflict_status,"review_status":source.review_status,"confidence_score":source.confidence_score,"confidence_explanation":source.confidence_explanation,"ci_id":source.ci_id,"first_seen_at":source.first_seen_at,"last_seen_at":source.last_seen_at,"observations":1}
         else:
             current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)
             for field in ("primary_hostname","fqdn","friendly_name","department","suggested_department","device_number","description","description_source","location","mac_address","vendor","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ad_computer_name","ad_domain","ad_organizational_unit","ad_operating_system","ad_last_enriched_at","ci_id"):
@@ -217,7 +226,7 @@ def results(search:str|None=None,status:str|None=None,page_number:int=Query(1,al
     return page(q,page_number,page_size)
 @router.get("/results/{id}")
 def result(id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
-    row=get(db,DiscoveryResult,id,"Result");return {"result":row,"evidence":db.query(DiscoveryEvidence).filter_by(result_id=id).order_by(DiscoveryEvidence.observed_at.desc()).all(),"fingerprint":db.query(DiscoveryFingerprint).filter_by(result_id=id).first(),"change_suggestions":db.query(DiscoveryChangeSuggestion).filter_by(result_id=id).all()}
+    row=get(db,DiscoveryResult,id,"Result");correlation=DeviceCorrelationService(db);root=correlation.root(row);return {"result":root,"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(correlation.group_ids(root)),"fingerprint":db.query(DiscoveryFingerprint).filter_by(result_id=root.id).first(),"change_suggestions":db.query(DiscoveryChangeSuggestion).filter_by(result_id=root.id).all()}
 @router.post("/results/{id}/enrich")
 def enrich_result(id:UUID,db:Session=Depends(get_db),user=Depends(operator)):
     return DeviceEnrichmentService(db).enrich(get(db,DiscoveryResult,id,"Result"),user)
@@ -247,15 +256,24 @@ def review(id:UUID,body:ReviewWrite,db:Session=Depends(get_db),user=Depends(admi
         row.classification=body.classification;fp=db.query(DiscoveryFingerprint).filter_by(result_id=id).first()
         if fp:fp.editable_override=body.classification
     audit(db,user,"REVIEW","discovery_result",id,"Reviewed discovery identification");db.commit();return row
+@router.post("/results/{id}/confirm-identity")
+def confirm_identity(id:UUID,body:ConfirmIdentityWrite,db:Session=Depends(get_db),user=Depends(operator)):
+    row=DeviceCorrelationService(db).confirm(get(db,DiscoveryResult,id,"Result"),user,body.model_dump());audit(db,user,"CONFIRM_IDENTITY","discovery_result",row.id,"Manually confirmed the correlated device identity");db.commit();db.refresh(row);return row
 @router.post("/results/{id}/approve",status_code=201)
 def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Depends(admin)):
-    row=get(db,DiscoveryResult,id,"Result")
+    correlation=DeviceCorrelationService(db);row=correlation.root(get(db,DiscoveryResult,id,"Result"))
     discovered=db.get(DiscoveredDevice,row.discovered_device_id) if row.discovered_device_id else None
     if discovered and discovered.approved_device_id:
         return db.get(Device,discovered.approved_device_id)
+    for result_id in correlation.group_ids(row):
+        linked=db.query(DiscoveredDevice).join(DiscoveryResult,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveryResult.id==result_id,DiscoveredDevice.approved_device_id.is_not(None)).first()
+        if linked:return db.get(Device,linked.approved_device_id)
     normalized_mac=(row.mac_address or "").strip().upper().replace("-",":")
     duplicate=None
     if normalized_mac: duplicate=db.query(Device).filter(func.lower(Device.mac_address)==normalized_mac.lower()).first()
+    if not duplicate:
+        names={name.strip().lower() for name in (row.primary_hostname,row.ad_computer_name,row.friendly_name) if name}
+        if names:duplicate=db.query(Device).filter(func.lower(Device.hostname).in_(names)).first()
     if not duplicate: duplicate=db.query(Device).filter(Device.ip_address==row.ip_address).first()
     if duplicate:raise HTTPException(409,"This device is already present in managed inventory")
     suffix=str(row.id).replace("-","")[:12].upper()
@@ -277,8 +295,8 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
 @router.post("/confidence/recalculate")
 def recalculate(db:Session=Depends(get_db),user=Depends(admin)):
     changed=0
-    for row in db.query(DiscoveryResult).all():
-        score=confidence(x[0] for x in db.query(DiscoveryEvidence.evidence_type).filter_by(result_id=row.id).distinct());row.confidence_score=score["score"];row.confidence_explanation=json.dumps(score["contributions"]);row.review_status=review_status(row.confidence_score) if row.review_status!="manually_verified" else row.review_status;changed+=1
+    correlation=DeviceCorrelationService(db)
+    for row in db.query(DiscoveryResult).filter(DiscoveryResult.canonical_result_id.is_(None)).all():correlation.refresh(row);changed+=1
     audit(db,user,"RECALCULATE","discovery_confidence","all","Recalculated explainable discovery confidence");db.commit();return {"updated":changed}
 @router.get("/oui")
 def oui(q:str|None=None,db:Session=Depends(get_db),_=Depends(reader)):

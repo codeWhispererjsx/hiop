@@ -89,6 +89,9 @@ class DiscoveryRepository:
         )
         return self.db.scalar(statement)
 
+    def find_by_hostname(self, hostname: str) -> DiscoveredDevice | None:
+        return self.db.scalar(select(DiscoveredDevice).where(func.lower(DiscoveredDevice.hostname)==hostname.lower()).order_by(DiscoveredDevice.last_seen_at.desc()).limit(1))
+
     def find_by_ip(self, ip_address: str) -> DiscoveredDevice | None:
         statement = (
             select(DiscoveredDevice)
@@ -107,6 +110,9 @@ class DiscoveryRepository:
             func.lower(Device.hostname) == hostname.lower(),
         )
         return self.db.scalar(statement)
+
+    def find_inventory_by_hostname(self, hostname: str) -> Device | None:
+        return self.db.scalar(select(Device).where(func.lower(Device.hostname)==hostname.lower()).limit(1))
 
     def find_inventory_by_ip(self, ip_address: str) -> Device | None:
         return self.db.scalar(select(Device).where(Device.ip_address == ip_address).limit(1))

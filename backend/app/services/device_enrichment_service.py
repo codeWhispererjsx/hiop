@@ -88,7 +88,7 @@ class SNMPEnrichmentProvider:
             except SNMPClientError as error:attrs["interfaces"]=[];attrs["interface_count"]=None;warnings.append(error.safe_message)
             found=[key for key,value in attrs.items() if value not in (None,"",[],{})]
             evidence=[{"evidence_type":"snmp","source":"snmp_read_only","value":attrs.get("sys_object_id") or target.id,"verified":True}]
-            for key in ("vendor","model","serial_number","firmware","uptime_seconds","interface_count","sys_name","sys_description","sys_object_id"):
+            for key in ("vendor","model","serial_number","firmware","uptime_seconds","interface_count","sys_name","sys_description","sys_object_id","device_type"):
                 if attrs.get(key) not in (None,""):evidence.append({"evidence_type":key if key!="vendor" else "vendor_match","source":"snmp", "value":attrs[key],"verified":True})
             if attrs.get("sys_name") and getattr(device,"primary_hostname",None):
                 snmp_name=str(attrs["sys_name"]).strip().lower().split(".",1)[0]
@@ -121,6 +121,9 @@ class DeviceEnrichmentService:
             if not exists:self.db.add(DiscoveryEvidence(result_id=result.id,evidence_type=raw["evidence_type"],source=raw["source"],value=json.dumps(raw["value"],default=str),normalized_value=norm,weight=WEIGHTS.get(raw["evidence_type"],0),verified=raw.get("verified",False)))
         self.db.flush();types=[row[0] for row in self.db.execute(select(DiscoveryEvidence.evidence_type).where(DiscoveryEvidence.result_id==result.id).distinct()).all()];score=confidence(types);result.confidence_score=score["score"];result.confidence_explanation=json.dumps(score["contributions"])
         if result.review_status!="manually_verified":result.review_status=review_status(result.confidence_score)
+        if hasattr(result,"canonical_result_id"):
+            from app.services.device_correlation_service import DeviceCorrelationService
+            result=DeviceCorrelationService(self.db).correlate(result,"snmp_enrichment")
         create_audit_log(self.db,actor.username,"ENRICH_DISCOVERY","DiscoveryResult",str(result.id),f"Read-only {self.provider.name} enrichment completed with status {outcome.status}.")
         self.db.commit();self.db.refresh(result)
         return {"status":outcome.status,"provider":self.provider.name,"device":result,"found":sorted(key for key,value in attrs.items() if value not in (None,"",[],{})),"warnings":outcome.warnings,"evidence_added":len(outcome.evidence),"confidence_score":result.confidence_score}

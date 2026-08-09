@@ -19,6 +19,13 @@
 }
 .enrichment-status { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-muted); background: var(--surface-soft); text-transform: capitalize; }
 .enrichment-statuses { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.identity-confidence,.identity-conflicts,.identity-confirmation,.identity-history { margin-top: var(--space-5); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-soft); }
+.identity-confidence strong { display: block; font-size: 1.2rem; text-transform: capitalize; }
+.identity-conflicts article { padding: var(--space-3) 0; border-top: 1px solid var(--border); }
+.identity-confirmation { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: var(--space-3); }
+.identity-confirmation h4 { grid-column: 1/-1; }
+.identity-confirmation label { display: grid; gap: var(--space-2); }
+.identity-confirmation button { align-self: end; }
 
 .discovery-detail > header {
   display: flex;
@@ -82,4 +89,5 @@
 @media (max-width: 760px) {
   .quick-scan-hero { grid-template-columns: 1fr; }
   .quick-scan-hero form { grid-template-columns: 1fr; }
+  .identity-confirmation { grid-template-columns: 1fr; }
 }

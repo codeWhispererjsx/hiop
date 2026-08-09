@@ -102,5 +102,8 @@ class ActiveDirectoryDeviceEnrichmentService:
             if not exists:self.db.add(DiscoveryEvidence(result_id=result.id,evidence_type=raw["evidence_type"],source=raw["source"],value=json.dumps(raw["value"],default=str),normalized_value=norm,weight=WEIGHTS.get(raw["evidence_type"],0),verified=raw.get("verified",False)))
         self.db.flush();types=[row[0] for row in self.db.execute(select(DiscoveryEvidence.evidence_type).where(DiscoveryEvidence.result_id==result.id).distinct()).all()];score=confidence(types);result.confidence_score=score["score"];result.confidence_explanation=json.dumps(score["contributions"])
         if result.review_status!="manually_verified":result.review_status=review_status(result.confidence_score)
+        if hasattr(result,"canonical_result_id"):
+            from app.services.device_correlation_service import DeviceCorrelationService
+            result=DeviceCorrelationService(self.db).correlate(result,"active_directory_enrichment")
         create_audit_log(self.db,actor.username,"ENRICH_DISCOVERY_AD","DiscoveryResult",str(result.id),f"Read-only Active Directory enrichment completed with status {outcome.status}.");self.db.commit();self.db.refresh(result)
         return {"status":outcome.status,"provider":self.provider.name,"device":result,"found":sorted(key for key,value in attrs.items() if value not in (None,"",[],{})),"warnings":outcome.warnings,"evidence_added":len(outcome.evidence),"confidence_score":result.confidence_score}

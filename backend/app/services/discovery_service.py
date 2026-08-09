@@ -171,10 +171,10 @@ class DiscoveryService:
         hostname = observation.get("hostname")
         ip_address = observation["ip_address"]
         if hostname:
-            device = self.devices.find_inventory_by_ip_hostname(ip_address, hostname)
+            device = self.devices.find_inventory_by_hostname(hostname)
             if device:
                 return device
-        return self.devices.find_inventory_by_ip(ip_address)
+        return self.devices.find_inventory_by_ip(ip_address) if not mac and not hostname else None
 
     def match_observation(self, observation: Observation) -> DiscoveredDevice | None:
         mac = normalize_mac(observation.get("mac_address"))
@@ -194,10 +194,10 @@ class DiscoveryService:
         hostname = observation.get("hostname")
         ip_address = observation["ip_address"]
         if hostname:
-            matched = self.devices.find_by_ip_hostname(ip_address, hostname)
+            matched = self.devices.find_by_hostname(hostname)
             if matched:
                 return matched
-        return self.devices.find_by_ip(ip_address)
+        return self.devices.find_by_ip(ip_address) if not mac and not hostname else None
 
     def _record_observation(self, observation: Observation) -> tuple[DiscoveredDevice, bool, bool]:
         now = datetime.now(timezone.utc)

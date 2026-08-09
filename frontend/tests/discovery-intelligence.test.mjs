@@ -44,3 +44,11 @@ test("V2C exposes read-only Active Directory configuration and device enrichment
     assert.match(page, new RegExp(label));
   assert.doesNotMatch(page, /create users|move computers|group membership/i);
 });
+
+test("V2D exposes correlation confidence conflicts history and manual confirmation", () => {
+  assert.match(api, /confirmDiscoveryIdentity/);
+  for (const label of ["Confidence", "Confirm Identification", "Identity history", "Conflicts", "correlated observation", "Review"])
+    assert.match(page, new RegExp(label, "i"));
+  assert.match(page, /conflict_status/);
+  assert.match(page, /confidence_level/);
+});

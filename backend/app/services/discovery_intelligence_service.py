@@ -7,7 +7,7 @@ from app.discovery.network import ensure_authorized
 from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryOUI,DiscoveryResult,DiscoveryStage
 
 PIPELINE=("icmp_reachability","arp_resolution","reverse_dns","hostname_resolution","mac_collection","mac_vendor_identification","port_discovery","service_fingerprinting","snmp_discovery","netbios_discovery","windows_wmi_discovery","linux_ssh_fingerprinting","http_https_fingerprinting","tls_certificate_inspection","lldp_cdp_topology","dhcp_lease_correlation","active_directory_correlation","cmdb_correlation","confidence_calculation","configuration_item_update")
-WEIGHTS={"ping_response":15,"mac_address":15,"vendor_match":10,"hostname_match":15,"dns_resolution":5,"description":10,"snmp":20,"ad_match":10,"ad_description_agreement":10,"ad_department_agreement":5,"ad_domain_match":5,"cmdb_match":10,"lldp":5,"service_fingerprint":5,"operating_system":10,"hostname_rule":5}
+WEIGHTS={"ping_response":15,"mac_address":15,"vendor_match":10,"hostname_match":15,"dns_resolution":5,"description":10,"snmp":20,"ad_match":10,"ad_description_agreement":10,"ad_department_agreement":5,"ad_domain_match":5,"cmdb_match":10,"lldp":5,"service_fingerprint":5,"operating_system":10,"hostname_rule":5,"manual_confirmation":15}
 SERVICE_PORTS={21:"FTP",22:"SSH/SFTP",53:"DNS",67:"DHCP",80:"HTTP",123:"NTP",135:"WMI",139:"NetBIOS",161:"SNMP",389:"LDAP",443:"HTTPS",445:"SMB",636:"LDAPS",1433:"SQL Server",1521:"Oracle",2375:"Docker",2376:"Docker TLS",3306:"MySQL",3389:"RDP",5432:"PostgreSQL",5985:"WinRM",5986:"WinRM TLS",6379:"Redis",6443:"Kubernetes API",9200:"Elasticsearch",27017:"MongoDB"}
 DEVICE_FAMILIES=("Server","Windows","Linux","VMware ESXi","Hyper-V","Docker Host","Kubernetes Node","Switch","Router","Firewall","Wireless Controller","Access Point","Printer","Scanner","UPS","IP Phone","VoIP Gateway","POS Terminal","PMS Server","IPTV System","Door Lock Controller","CCTV Camera","Biometric Device","IoT Device","Storage Array","Virtual Machine","Unknown Device")
 
@@ -70,7 +70,7 @@ class DiscoveryIntelligenceService:
         names=merge_hostnames(observation.get("hostnames",[])+[observation.get("hostname")]);identified=identify(observation)
         item.primary_hostname=names["primary"] or item.primary_hostname;item.fqdn=observation.get("fqdn") or item.fqdn;item.dns_status=observation.get("dns_status") or item.dns_status;item.mac_address=observation.get("mac_address") or item.mac_address;item.vendor=observation.get("vendor") or item.vendor;item.device_type=identified["device_family"] if identified["device_family"]!="Unknown Device" else item.device_type;item.classification=identified["classification"] if identified["classification"]!="Unknown Device" else item.classification;item.operating_system=observation.get("operating_system") or item.operating_system
         suggestion=interpret_hostname(item.primary_hostname)
-        if suggestion:
+        if suggestion and not item.identity_confirmed:
             item.friendly_name=suggestion["friendly_name"] or item.friendly_name;item.department=suggestion["department"] or item.department;item.device_number=suggestion["device_number"] or item.device_number
             if suggestion["device_type"]:item.device_type=suggestion["device_type"];item.classification=suggestion["device_type"]
             observation.setdefault("evidence",[]).append({"evidence_type":"hostname_rule","source":"hostname_rule","value":suggestion,"normalized_value":item.primary_hostname,"verified":False})
@@ -91,7 +91,9 @@ class DiscoveryIntelligenceService:
         self.db.flush();all_evidence=[x[0] for x in self.db.query(DiscoveryEvidence.evidence_type).filter_by(result_id=item.id).distinct().all()];score=confidence(all_evidence);item.confidence_score=score["score"];item.confidence_explanation=json.dumps(score["contributions"]);item.review_status=review_status(item.confidence_score)
         fingerprint=self.db.query(DiscoveryFingerprint).filter_by(result_id=item.id).first() or DiscoveryFingerprint(result_id=item.id)
         self.db.add(fingerprint);fingerprint.device_family=item.device_type;fingerprint.classification=item.classification;fingerprint.operating_system=item.operating_system;fingerprint.service_fingerprints=json.dumps(identified["services"]);fingerprint.hostname_candidates=json.dumps([names["primary"]]+names["aliases"] if names["primary"] else names["aliases"]);fingerprint.hardware=json.dumps({k:snapshot[k] for k in ("cpu","memory","disk","manufacturer","model","serial_number","asset_tag") if k in snapshot});fingerprint.software=json.dumps({k:snapshot[k] for k in ("operating_system","version","kernel","installed_services","installed_roles","running_processes") if k in snapshot});fingerprint.network=json.dumps({k:snapshot[k] for k in ("nics","dns_servers","gateway","open_ports") if k in snapshot});fingerprint.certificate_summary=json.dumps(snapshot.get("certificates",[]));fingerprint.confidence_score=item.confidence_score;fingerprint.rules_matched=json.dumps([item.classification] if item.classification!="Unknown Device" else [])
-        self.db.flush();return item
+        self.db.flush()
+        from app.services.device_correlation_service import DeviceCorrelationService
+        return DeviceCorrelationService(self.db).correlate(item,"discovery_ingest")
     def oui_lookup(self,mac):
         prefix=re.sub(r"[^0-9A-F]","",(mac or "").upper())[:6]
         row=self.db.query(DiscoveryOUI).filter_by(prefix=prefix).first();return row.vendor if row else "Unknown"
