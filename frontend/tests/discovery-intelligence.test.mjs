@@ -63,3 +63,10 @@ test("V2E presents a technician-friendly final discovery experience", () => {
   assert.match(page, /inventory_device_id/);
   assert.doesNotMatch(page, /\+\{String\(item\.weight/);
 });
+
+test("production acceptance keeps confidence bands and device roles consistent", () => {
+  assert.match(page, /confidence_score >= 60/);
+  assert.match(page, /device\.device_type \|\| device\.classification/);
+  assert.match(page, /DNS information available/);
+  assert.match(api, /inventoryDiscoveryIdentity/);
+});

@@ -58,6 +58,23 @@ def test_manual_classification_survives_future_discovery_while_dynamic_ip_update
     assert merged.classification=="Administrator confirmed POS" and merged.ip_address=="10.50.21.60"
 
 
+def test_hostname_rule_role_is_applied_without_erasing_technical_classification():
+    root=result(device_type="Windows Server",classification="Windows Server",friendly_name=None,department=None)
+    rows=[evidence("hostname_rule","hostname_rule",{"device_type":"Point of Sale","department":"Banquet","friendly_name":"POS Terminal 01"})]
+    service=ConfidenceHarness(root,rows)
+    service.apply_hostname_identity(root)
+    assert root.device_type=="Point of Sale"
+    assert root.classification=="Windows Server"
+    assert root.department=="Banquet" and root.friendly_name=="POS Terminal 01"
+
+
+def test_hostname_rule_does_not_overwrite_manually_confirmed_identity():
+    root=result(identity_confirmed=True,device_type="Workstation",department="Front Office")
+    service=ConfidenceHarness(root,[evidence("hostname_rule","hostname_rule",{"device_type":"Point of Sale","department":"Banquet"})])
+    service.apply_hostname_identity(root)
+    assert root.device_type=="Workstation" and root.department=="Front Office"
+
+
 def evidence(kind,source,value,weight=0):return SimpleNamespace(evidence_type=kind,source=source,value=json.dumps(value),weight=weight,verified=False,observed_at=datetime.now(timezone.utc))
 
 

@@ -99,6 +99,24 @@ class DeviceCorrelationService:
         for left,left_source in hostname_types:
             for right,right_source in snmp_types:self._conflict(root,"device_type",left,left_source,right,right_source)
         self.db.flush();open_rows=self.conflicts(root,open_only=True);root.conflict_status="open" if open_rows else "resolved" if self.conflicts(root) else "none";return open_rows
+    def apply_hostname_identity(self,result):
+        """Apply naming-rule role suggestions without replacing a confirmed identity.
+
+        ``classification`` may describe the technical platform (for example Windows
+        Server), while ``device_type`` is the operational role suggested by the
+        administrator's hostname rules (for example Point of Sale).
+        """
+        root=self.root(result)
+        if root.identity_confirmed:return root
+        for row in self.evidence(root):
+            if row.evidence_type!="hostname_rule":continue
+            value=self._evidence_value(row)
+            if not isinstance(value,dict):continue
+            for field in ("friendly_name","department","device_type"):
+                suggested=value.get(field)
+                if suggested not in (None,""):setattr(root,field,suggested)
+            break
+        return root
     def calculate_confidence(self,result):
         root=self.root(result);rows=self.evidence(root);types={row.evidence_type for row in rows};base=confidence(types)["score"]
         groups={"mac":{},"hostname":{},"description":{},"device_type":{}}
@@ -120,7 +138,7 @@ class DeviceCorrelationService:
         if root.review_status!="manually_verified":root.review_status=review_status(score)
         return {"score":score,"level":root.confidence_level,"reason":root.confidence_reason,"base":base,"agreement_bonus":bonus,"conflict_penalty":penalty}
     def refresh(self,result):
-        root=self.root(result);self.detect_conflicts(root);self.calculate_confidence(root);return root
+        root=self.root(result);self.apply_hostname_identity(root);self.detect_conflicts(root);self.calculate_confidence(root);return root
     def correlate(self,result,source="discovery"):
         if result.canonical_result_id:return self.refresh(result)
         decision=self.find_match(result)

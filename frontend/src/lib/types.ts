@@ -168,6 +168,7 @@ export type OperationalIncident = {
   life_safety_impact_level:string;incident_commander_id:string|null;playbook_id:string|null;
   recovery_verified:boolean;detected_at:string;acknowledged_at:string|null;
   recovered_at:string|null;closed_at:string|null;created_at:string;
+  source_type:string|null;source_reference_type:string|null;source_reference_id:string|null;
 };
 export type IncidentTask = {id:string;incident_id:string;title:string;description:string|null;task_type:string;status:string;priority:string;assigned_user_id:string|null;assigned_role:string|null;due_at:string|null;verification_required:boolean;verified_at:string|null;blocked_reason:string|null};
 export type IncidentParticipant = {id:string;incident_id:string;user_id:string;participant_role:string;responsibility:string|null;active:boolean;joined_at:string};

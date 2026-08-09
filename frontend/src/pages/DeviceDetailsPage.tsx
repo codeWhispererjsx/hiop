@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { ConfirmationModal } from "../components/ConfirmationModal";
 import { DeviceHistory, type HistorySection } from "../components/DeviceHistory";
@@ -25,6 +25,12 @@ export default function DeviceDetailsPage() {
   const location = useLocation();
   const successNotice = (location.state as { notice?: string } | null)?.notice;
   const { data: device, loading, error, reload } = useRequest(() => endpoints.device(id));
+  const [discoveryIdentity, setDiscoveryIdentity] = useState<Record<string, unknown>>();
+  useEffect(() => {
+    let active = true;
+    endpoints.inventoryDiscoveryIdentity(id).then((value) => { if (active) setDiscoveryIdentity(value); }).catch(() => { if (active) setDiscoveryIdentity(undefined); });
+    return () => { active = false; };
+  }, [id]);
   const hierarchy = useRequest(endpoints.hierarchy, []);
   const currentUser = useRequest(endpoints.me, []);
   const [activeTab, setActiveTab] = useState<DetailsTab>("overview");
@@ -83,7 +89,7 @@ export default function DeviceDetailsPage() {
             {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
           </nav>
 
-          {activeTab === "overview" ? <DeviceOverview device={device} networkZone={hierarchy.data?.network_zones.find((zone) => zone.id === device.network_zone_id)?.name ?? ""} /> : <DeviceHistory device={device} section={activeTab} />}
+          {activeTab === "overview" ? <DeviceOverview device={device} discoveryIdentity={discoveryIdentity} networkZone={hierarchy.data?.network_zones.find((zone) => zone.id === device.network_zone_id)?.name ?? ""} /> : <DeviceHistory device={device} section={activeTab} />}
         </>
       )}
 
@@ -103,7 +109,11 @@ export default function DeviceDetailsPage() {
   );
 }
 
-function DeviceOverview({ device, networkZone }: { device: Device; networkZone: string }) {
+function DeviceOverview({ device, networkZone, discoveryIdentity }: { device: Device; networkZone: string; discoveryIdentity?: Record<string, unknown> }) {
+  const identity=(discoveryIdentity?.result||{}) as Record<string,unknown>;
+  const evidence=(discoveryIdentity?.evidence||[]) as Array<Record<string,unknown>>;
+  const conflicts=(discoveryIdentity?.conflicts||[]) as Array<Record<string,unknown>>;
+  const history=(discoveryIdentity?.identity_history||[]) as Array<Record<string,unknown>>;
   return <section className="device-details" aria-label={`Details for ${device.hostname}`}>
     <header><div className="overview-statuses"><span>Inventory</span><StatusBadge status={device.inventory_status} /><span>Network</span><StatusBadge status={device.network_status} /></div></header>
     <dl>
@@ -122,6 +132,23 @@ function DeviceOverview({ device, networkZone }: { device: Device; networkZone: 
       <Detail label="Inventory Status" value={device.inventory_status} />
       <Detail label="Network Status" value={device.network_status} />
     </dl>
+    {discoveryIdentity && <>
+      <h2>Discovery identity</h2>
+      <dl>
+        <Detail label="Friendly Name" value={String(identity.friendly_name||"Unknown")} />
+        <Detail label="Original Hostname" value={String(identity.primary_hostname||"Not available")} />
+        <Detail label="FQDN" value={String(identity.fqdn||"Not available")} />
+        <Detail label="Device Role" value={String(identity.device_type||identity.classification||"Unknown")} />
+        <Detail label="Technical Classification" value={String(identity.classification||"Not available")} />
+        <Detail label="Department" value={String(identity.department||"Not available")} />
+        <Detail label="Vendor / Model" value={`${String(identity.vendor||"Unknown")} / ${String(identity.model||"Not available")}`} />
+        <Detail label="Confidence" value={`${String(identity.confidence_score||0)}% · ${String(identity.confidence_level||"low").replaceAll("_"," ")}`} />
+        <Detail label="Confidence reason" value={String(identity.confidence_reason||"Insufficient identifying evidence.")} />
+        <Detail label="Evidence sources" value={[...new Set(evidence.map(item=>String(item.source||"Discovery")))].join(", ")||"Not available"} />
+        <Detail label="Conflicts" value={conflicts.filter(item=>item.status==="open").length?`${conflicts.filter(item=>item.status==="open").length} conflict(s) require review`:"None detected"} />
+        <Detail label="Identity history" value={history.length?`${history.length} recorded change(s)`:"No identity changes recorded"} />
+      </dl>
+    </>}
     <h2>Windows / Active Directory</h2>
     <dl>
       <Detail label="Domain" value={device.ad_domain || "Not available"} />

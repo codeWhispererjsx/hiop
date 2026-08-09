@@ -621,6 +621,7 @@ export const endpoints = {
   executeDiscoveryJob:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/jobs/${id}/execute`,{method:"POST"}),
   discoveryResults:(filters:Record<string,string|number|undefined>={})=>api<{items:import("./types").DiscoveryResult[];total:number}>(`/discovery-intelligence/results${queryString(filters)}`),
   discoveryResult:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/results/${id}`),
+  inventoryDiscoveryIdentity:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/inventory/${id}`),
   reviewDiscoveryResult:(id:string,body:Record<string,unknown>)=>api<import("./types").DiscoveryResult>(`/discovery-intelligence/results/${id}/review`,{method:"POST",body:JSON.stringify(body)}),
   confirmDiscoveryIdentity:(id:string,body:{friendly_name?:string;department?:string;device_type?:string})=>api<import("./types").DiscoveryResult>(`/discovery-intelligence/results/${id}/confirm-identity`,{method:"POST",body:JSON.stringify(body)}),
   approveDiscoveryResult:(id:string)=>api<import("./types").Device>(`/discovery-intelligence/results/${id}/approve`,{method:"POST",body:JSON.stringify({})}),

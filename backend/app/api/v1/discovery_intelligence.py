@@ -231,6 +231,12 @@ def result(id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
     row=get(db,DiscoveryResult,id,"Result");correlation=DeviceCorrelationService(db);root=correlation.root(row);group_ids=correlation.group_ids(root)
     inventory_device_id=db.query(DiscoveredDevice.approved_device_id).join(DiscoveryResult,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveryResult.id.in_(group_ids),DiscoveredDevice.approved_device_id.is_not(None)).scalar()
     return {"result":root,"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(group_ids),"inventory_device_id":inventory_device_id,"fingerprint":db.query(DiscoveryFingerprint).filter_by(result_id=root.id).first(),"change_suggestions":db.query(DiscoveryChangeSuggestion).filter_by(result_id=root.id).all()}
+@router.get("/inventory/{device_id}")
+def inventory_identity(device_id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
+    row=db.query(DiscoveryResult).join(DiscoveredDevice,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveredDevice.approved_device_id==device_id).order_by(DiscoveryResult.last_seen_at.desc()).first()
+    if not row:raise HTTPException(404,"No discovery identity is linked to this inventory device")
+    correlation=DeviceCorrelationService(db);root=correlation.root(row);group_ids=correlation.group_ids(root)
+    return {"result":root,"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(group_ids),"inventory_device_id":device_id}
 @router.post("/results/{id}/enrich")
 def enrich_result(id:UUID,db:Session=Depends(get_db),user=Depends(operator)):
     return DeviceEnrichmentService(db).enrich(get(db,DiscoveryResult,id,"Result"),user)
@@ -283,7 +289,7 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
     suffix=str(row.id).replace("-","")[:12].upper()
     device=Device(
         asset_tag=f"HIOP-{suffix[:8]}",hostname=(body.friendly_name or row.friendly_name or row.primary_hostname or "Unknown").strip(),
-        device_type=(body.category or row.classification or row.device_type or "Unknown").strip(),brand=(row.vendor or "Unknown").strip(),
+        device_type=(body.category or row.device_type or row.classification or "Unknown").strip(),brand=(row.vendor or "Unknown").strip(),
         model=(row.model or "Unknown").strip(),serial_number=(row.serial_number or f"UNRESOLVED-{suffix}").strip(),department=((row.department or "Unassigned") if body.department.strip()=="Unassigned" else body.department.strip()),
         location=((row.location or "Unassigned") if body.location.strip()=="Unassigned" else body.location.strip()),ip_address=row.ip_address,
         mac_address=normalized_mac or None,description=row.description,description_source=row.description_source,
