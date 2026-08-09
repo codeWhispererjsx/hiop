@@ -7,7 +7,7 @@ from app.discovery.network import ensure_authorized
 from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryOUI,DiscoveryResult,DiscoveryStage
 
 PIPELINE=("icmp_reachability","arp_resolution","reverse_dns","hostname_resolution","mac_collection","mac_vendor_identification","port_discovery","service_fingerprinting","snmp_discovery","netbios_discovery","windows_wmi_discovery","linux_ssh_fingerprinting","http_https_fingerprinting","tls_certificate_inspection","lldp_cdp_topology","dhcp_lease_correlation","active_directory_correlation","cmdb_correlation","confidence_calculation","configuration_item_update")
-WEIGHTS={"ping_response":15,"mac_address":15,"vendor_match":10,"hostname_match":10,"snmp":20,"ad_match":10,"cmdb_match":10,"lldp":5,"service_fingerprint":5,"operating_system":10}
+WEIGHTS={"ping_response":15,"mac_address":15,"vendor_match":10,"hostname_match":15,"dns_resolution":5,"description":10,"snmp":20,"ad_match":10,"cmdb_match":10,"lldp":5,"service_fingerprint":5,"operating_system":10,"hostname_rule":5}
 SERVICE_PORTS={21:"FTP",22:"SSH/SFTP",53:"DNS",67:"DHCP",80:"HTTP",123:"NTP",135:"WMI",139:"NetBIOS",161:"SNMP",389:"LDAP",443:"HTTPS",445:"SMB",636:"LDAPS",1433:"SQL Server",1521:"Oracle",2375:"Docker",2376:"Docker TLS",3306:"MySQL",3389:"RDP",5432:"PostgreSQL",5985:"WinRM",5986:"WinRM TLS",6379:"Redis",6443:"Kubernetes API",9200:"Elasticsearch",27017:"MongoDB"}
 DEVICE_FAMILIES=("Server","Windows","Linux","VMware ESXi","Hyper-V","Docker Host","Kubernetes Node","Switch","Router","Firewall","Wireless Controller","Access Point","Printer","Scanner","UPS","IP Phone","VoIP Gateway","POS Terminal","PMS Server","IPTV System","Door Lock Controller","CCTV Camera","Biometric Device","IoT Device","Storage Array","Virtual Machine","Unknown Device")
 
@@ -18,6 +18,22 @@ def merge_hostnames(values):
     normalized=sorted({x for x in (normalize_hostname(v) for v in values) if x},key=lambda x:(x.count("."),len(x),x),reverse=True);return {"primary":normalized[0] if normalized else None,"aliases":normalized[1:]}
 def confidence(evidence_types):
     seen=set(evidence_types);parts=[{"evidence":key,"weight":weight} for key,weight in WEIGHTS.items() if key in seen];return {"score":min(100,sum(x["weight"] for x in parts)),"contributions":parts,"maximum":100}
+TYPE_RULES={"POS":"Point of Sale","PRN":"Printer","AP":"Access Point","SW":"Switch","SRV":"Server"}
+DEPARTMENT_RULES={"BQT":"Banquet","FO":"Front Office","HK":"Housekeeping","HR":"Human Resources","ACC":"Accounts","IT":"Information Technology"}
+def interpret_hostname(hostname, type_rules=None, department_rules=None):
+    original=normalize_hostname(hostname)
+    if not original:return None
+    compact=re.sub(r"[^a-z0-9]","",original.split(".")[0]).upper();types=type_rules or TYPE_RULES;departments=department_rules or DEPARTMENT_RULES
+    type_match=next(((code,label) for code,label in sorted(types.items(),key=lambda item:-len(item[0])) if code in compact),None)
+    dept_match=next(((code,label) for code,label in sorted(departments.items(),key=lambda item:-len(item[0])) if code in compact),None)
+    number=re.search(r"(\d+)$",compact)
+    if not type_match and not dept_match:return None
+    device_number=number.group(1) if number else None;friendly=None
+    if type_match:friendly=f"{'POS Terminal' if type_match[0]=='POS' else type_match[1]}{f' {device_number}' if device_number else ''}"
+    return {"original_hostname":original,"device_type":type_match[1] if type_match else None,"department":dept_match[1] if dept_match else None,"device_number":device_number,"friendly_name":friendly}
+def discovered_description(current, current_source, discovered, discovered_source="Discovery"):
+    if current_source in ("Manual","Inventory") or not discovered:return current,current_source
+    return discovered,discovered_source
 def services_from_ports(ports):return [{"port":int(port),"service":SERVICE_PORTS.get(int(port),"Unknown")} for port in sorted({int(x) for x in ports})]
 def identify(observation):
     text=" ".join(str(observation.get(x,"")) for x in ("hostname","vendor","snmp_description","http_server","ssh_banner","operating_system")).lower();ports={int(x) for x in observation.get("open_ports",[])}
@@ -52,7 +68,13 @@ class DiscoveryIntelligenceService:
         ip=str(observation["ip_address"]);item=self.db.query(DiscoveryResult).filter_by(job_id=job.id,ip_address=ip).first()
         if not item:item=DiscoveryResult(job_id=job.id,property_id=job.property_id,ip_address=ip);self.db.add(item);self.db.flush()
         names=merge_hostnames(observation.get("hostnames",[])+[observation.get("hostname")]);identified=identify(observation)
-        item.primary_hostname=names["primary"] or item.primary_hostname;item.mac_address=observation.get("mac_address") or item.mac_address;item.vendor=observation.get("vendor") or item.vendor;item.device_type=identified["device_family"] if identified["device_family"]!="Unknown Device" else item.device_type;item.classification=identified["classification"] if identified["classification"]!="Unknown Device" else item.classification;item.operating_system=observation.get("operating_system") or item.operating_system
+        item.primary_hostname=names["primary"] or item.primary_hostname;item.fqdn=observation.get("fqdn") or item.fqdn;item.dns_status=observation.get("dns_status") or item.dns_status;item.mac_address=observation.get("mac_address") or item.mac_address;item.vendor=observation.get("vendor") or item.vendor;item.device_type=identified["device_family"] if identified["device_family"]!="Unknown Device" else item.device_type;item.classification=identified["classification"] if identified["classification"]!="Unknown Device" else item.classification;item.operating_system=observation.get("operating_system") or item.operating_system
+        suggestion=interpret_hostname(item.primary_hostname)
+        if suggestion:
+            item.friendly_name=suggestion["friendly_name"] or item.friendly_name;item.department=suggestion["department"] or item.department;item.device_number=suggestion["device_number"] or item.device_number
+            if suggestion["device_type"]:item.device_type=suggestion["device_type"];item.classification=suggestion["device_type"]
+            observation.setdefault("evidence",[]).append({"evidence_type":"hostname_rule","source":"hostname_rule","value":suggestion,"normalized_value":item.primary_hostname,"verified":False})
+        item.description,item.description_source=discovered_description(item.description,item.description_source,observation.get("description"),observation.get("description_source") or "Discovery")
         snapshot={key:observation.get(key) for key in ("operating_system","version","kernel","firmware","bios","cpu","memory","disk","nics","installed_services","installed_roles","virtualization","certificates","dns_servers","gateway","open_ports","running_processes","uptime","boot_time","last_user","manufacturer","model","serial_number","asset_tag") if observation.get(key) is not None}
         checksum=configuration_checksum(snapshot);previous_checksum=item.configuration_checksum;previous_snapshot=item.configuration_snapshot
         if previous_checksum and previous_checksum!=checksum:

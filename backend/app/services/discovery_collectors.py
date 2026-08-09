@@ -75,18 +75,21 @@ class DNSCorrelationCollector:
         try:
             primary, aliases, _addresses = self.reverse(ip)
             candidates = [primary, *aliases]
-            for name in candidates:
-                normalized = normalize_hostname(name)
-                if not normalized:
-                    continue
+            valid = [name for name in (normalize_hostname(value) for value in candidates) if name]
+            result.data["dns_status"] = "ptr_found"
+            result.data["fqdn"] = next((name for name in valid if "." in name), valid[0] if valid else None)
+            result.evidence.append(evidence("dns_resolution", "reverse_dns", primary, verified=True))
+            for normalized in valid:
                 forward_addresses = {row[4][0] for row in self.forward(normalized, None)}
                 if ip in forward_addresses:
                     result.hostnames.append(normalized)
+                    result.data["dns_status"] = "forward_confirmed"
                     result.evidence.append(evidence("hostname_match", "forward_confirmed_dns", normalized, verified=True))
                 else:
                     result.warnings.append(f"PTR hostname {normalized} did not resolve back to {ip}.")
         except (OSError, socket.error):
-            pass
+            result.data["dns_status"] = "unresolved"
+            result.evidence.append(evidence("dns_resolution", "reverse_dns", "unresolved", verified=True))
         return result
 
 
@@ -164,7 +167,8 @@ class DHCPLeaseCorrelationCollector:
         name=normalize_hostname(row.hostname)
         if name:result.hostnames.append(name);result.evidence.append(evidence("hostname_match","dhcp_lease",name,verified=True))
         if row.mac_address:result.mac_address=row.mac_address;result.evidence.append(evidence("mac_address","dhcp_lease",row.mac_address,verified=True))
-        result.data["dhcp_lease"]={"source":row.source,"lease_server":row.lease_server,"expires_at":row.expires_at}
+        if row.description:result.data["description"]=row.description;result.data["description_source"]="DHCP";result.evidence.append(evidence("description","dhcp",row.description,verified=True))
+        result.data["dhcp_lease"]={"source":row.source,"lease_server":row.lease_server,"starts_at":row.starts_at,"expires_at":row.expires_at,"is_reservation":row.is_reservation,"reservation_name":row.reservation_name,"description":row.description}
         return result
 
 

@@ -14,8 +14,13 @@ def test_dns_requires_forward_confirmation():
     )
     result = collector.collect("10.50.21.60")
     assert result.hostnames == ["core-sw-01.example.test"]
-    assert result.evidence[0]["source"] == "forward_confirmed_dns"
-    assert result.evidence[0]["verified"] is True
+    assert result.data == {"dns_status": "forward_confirmed", "fqdn": "core-sw-01.example.test"}
+    assert any(item["source"] == "forward_confirmed_dns" and item["verified"] for item in result.evidence)
+
+def test_dns_failure_remains_unresolved_without_inventing_a_name():
+    result = DNSCorrelationCollector(reverse=lambda _ip: (_ for _ in ()).throw(OSError("missing"))).collect("10.0.0.9")
+    assert result.hostnames == []
+    assert result.data["dns_status"] == "unresolved"
 
 
 def test_collected_observations_merge_without_erasing_identity():
@@ -29,7 +34,7 @@ def test_collected_observations_merge_without_erasing_identity():
 
 def test_confidence_accumulates_multiple_evidence_sources():
     score = confidence(["ping_response", "hostname_match", "snmp", "vendor_match", "operating_system"])
-    assert score["score"] == 65
+    assert score["score"] == 70
     assert {item["evidence"] for item in score["contributions"]} == {
         "ping_response", "hostname_match", "snmp", "vendor_match", "operating_system"
     }

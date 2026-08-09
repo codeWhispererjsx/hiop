@@ -16,6 +16,8 @@ def create_device(
     commit: bool = True,
 ):
     values = resolve_device_hierarchy(db, device.model_dump(exclude={"status"}))
+    if values.get("description"):
+        values["description_source"] = "Manual"
     if device.status in {"Active", "Inactive"}:
         values["inventory_status"] = device.status
     new_device = Device(**values, status=values["inventory_status"], network_status="Unknown")
@@ -64,6 +66,8 @@ def update_device(
     if legacy_status in {"Active", "Inactive"} and "inventory_status" not in update_data:
         update_data["inventory_status"] = legacy_status
     update_data = resolve_device_hierarchy(db, update_data)
+    if "description" in update_data:
+        update_data["description_source"] = "Manual" if update_data["description"] else None
 
     for key, value in update_data.items():
         setattr(device, key, value)

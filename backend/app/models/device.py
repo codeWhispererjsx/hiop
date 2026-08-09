@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import String, DateTime, ForeignKey, Index
+from sqlalchemy import String, DateTime, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -78,6 +78,8 @@ class Device(Base):
         String,
         default="Active"
     )
+    description: Mapped[str | None] = mapped_column(Text)
+    description_source: Mapped[str | None] = mapped_column(String(40))
 
     property_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("properties.id", ondelete="SET NULL"), nullable=True, index=True

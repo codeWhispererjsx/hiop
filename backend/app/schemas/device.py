@@ -19,6 +19,7 @@ class DeviceCreate(BaseModel):
     location: str = Field(min_length=1, max_length=160)
     ip_address: str = Field(min_length=3, max_length=45)
     mac_address: str | None = Field(default=None, min_length=17, max_length=17)
+    description: str | None = Field(default=None, max_length=2000)
     inventory_status: str = Field(default="Active", pattern="^(Active|Inactive)$")
     status: str | None = Field(default=None, pattern="^(Active|Inactive)$")
     department_id: UUID | None = None
@@ -60,6 +61,7 @@ class DeviceUpdate(BaseModel):
     location: str | None = Field(default=None, min_length=1, max_length=160)
     ip_address: str | None = Field(default=None, min_length=3, max_length=45)
     mac_address: str | None = Field(default=None, min_length=17, max_length=17)
+    description: str | None = Field(default=None, max_length=2000)
     inventory_status: str | None = Field(default=None, pattern="^(Active|Inactive)$")
     status: str | None = Field(default=None, pattern="^(Active|Inactive)$")
     department_id: UUID | None = None
@@ -104,6 +106,8 @@ class DeviceResponse(BaseModel):
     location: str
     ip_address: str
     mac_address: str | None
+    description: str | None = None
+    description_source: str | None = None
     inventory_status: str
     network_status: str
     status: str

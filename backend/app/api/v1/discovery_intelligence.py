@@ -36,7 +36,7 @@ class ApproveWrite(BaseModel):
     department:str=Field(default="Unassigned",max_length=120)
     location:str=Field(default="Unassigned",max_length=160)
 class OUIWrite(BaseModel): prefix:str=Field(pattern=r"^[0-9A-Fa-f:-]{6,8}$");vendor:str=Field(min_length=2,max_length=180);version:str="manual"
-class DHCPLeaseWrite(BaseModel): ip_address:str;mac_address:str=Field(min_length=12,max_length=17);hostname:str|None=None;source:str=Field(min_length=2,max_length=120);lease_server:str|None=None;starts_at:datetime|None=None;expires_at:datetime|None=None
+class DHCPLeaseWrite(BaseModel): ip_address:str;mac_address:str=Field(min_length=12,max_length=17);hostname:str|None=None;source:str=Field(min_length=2,max_length=120);lease_server:str|None=None;starts_at:datetime|None=None;expires_at:datetime|None=None;is_reservation:bool=False;reservation_name:str|None=None;description:str|None=Field(default=None,max_length=2000)
 def page(q,p,s):return {"items":q.offset((p-1)*s).limit(s).all(),"total":q.count(),"page":p,"page_size":s}
 def get(db,model,id,label):
     row=db.get(model,id)
@@ -54,10 +54,10 @@ def consolidated_device_rows(db,limit=1000):
         if not key:key=f"mac:{mac}" if len(mac)==12 else f"name:{name}" if name else f"ip:{row.ip_address}"
         current=devices.get(key)
         if not current:
-            devices[key]={"id":row.id,"result_id":row.id,"job_id":row.job_id,"ip_address":row.ip_address,"primary_hostname":row.primary_hostname,"mac_address":row.mac_address,"vendor":row.vendor,"device_type":row.device_type,"classification":row.classification,"operating_system":row.operating_system,"review_status":row.review_status,"confidence_score":row.confidence_score,"confidence_explanation":row.confidence_explanation,"ci_id":row.ci_id,"first_seen_at":row.first_seen_at,"last_seen_at":row.last_seen_at,"observations":1}
+            devices[key]={"id":row.id,"result_id":row.id,"job_id":row.job_id,"ip_address":row.ip_address,"primary_hostname":row.primary_hostname,"fqdn":row.fqdn,"dns_status":row.dns_status,"friendly_name":row.friendly_name,"department":row.department,"device_number":row.device_number,"description":row.description,"description_source":row.description_source,"location":row.location,"mac_address":row.mac_address,"vendor":row.vendor,"device_type":row.device_type,"classification":row.classification,"operating_system":row.operating_system,"review_status":row.review_status,"confidence_score":row.confidence_score,"confidence_explanation":row.confidence_explanation,"ci_id":row.ci_id,"first_seen_at":row.first_seen_at,"last_seen_at":row.last_seen_at,"observations":1}
         else:
             current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)
-            for field in ("primary_hostname","mac_address","vendor","operating_system","ci_id"):
+            for field in ("primary_hostname","fqdn","friendly_name","department","device_number","description","description_source","location","mac_address","vendor","operating_system","ci_id"):
                 if not current[field] and getattr(row,field):current[field]=getattr(row,field)
         if len(mac)==12:mac_index[mac]=key
         if name:name_index[name]=key
@@ -233,11 +233,11 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
     if duplicate:raise HTTPException(409,"This device is already present in managed inventory")
     suffix=str(row.id).replace("-","")[:12].upper()
     device=Device(
-        asset_tag=f"HIOP-{suffix[:8]}",hostname=(body.friendly_name or row.primary_hostname or f"Unknown-{row.ip_address}").strip(),
+        asset_tag=f"HIOP-{suffix[:8]}",hostname=(body.friendly_name or row.friendly_name or row.primary_hostname or f"Unknown-{row.ip_address}").strip(),
         device_type=(body.category or row.classification or row.device_type or "Unknown").strip(),brand=(row.vendor or "Unknown").strip(),
         model="Unknown",serial_number=f"UNKNOWN-{suffix}",department=body.department.strip() or "Unassigned",
         location=body.location.strip() or "Unassigned",ip_address=row.ip_address,
-        mac_address=normalized_mac or None,
+        mac_address=normalized_mac or None,description=row.description,description_source=row.description_source,
         inventory_status="Active",network_status="Online",status="Active",
     )
     db.add(device);db.flush();row.review_status="manually_verified"
