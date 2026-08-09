@@ -375,6 +375,15 @@ chore: update dependencies
 
 ## Troubleshooting
 
+### V1-to-V2 reconciliation contracts
+
+Use `GET /api/v1/discovery-intelligence/reconciliation/report` for a read-only
+continuity audit. `POST /api/v1/discovery-intelligence/reconciliation/run` is
+administrator-only and may only link an unlinked discovery to one unambiguous
+existing Device. Never copy automatic discovery values over Device inventory fields
+inside reconciliation. MAC and hostname are strong match inputs; IP alone must remain
+review-only. Keep the operation idempotent and preserve Device UUIDs and relationships.
+
 ### Common Issues
 
 **Backend won't start:**

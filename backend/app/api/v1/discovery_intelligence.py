@@ -24,6 +24,7 @@ from app.services.active_directory_enrichment_service import ActiveDirectoryDevi
 from app.services.snmp_credential_service import SNMPCredentialService
 from app.services.snmp_target_service import SNMPTargetService
 from app.services.device_correlation_service import DeviceCorrelationService
+from app.services.v1_v2_reconciliation_service import V1V2ReconciliationService
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
 reader=require_roles(["admin","superadmin","technician","viewer"]);operator=require_roles(["admin","superadmin","technician"]);admin=require_roles(["admin","superadmin"])
@@ -156,6 +157,16 @@ def dashboard(db:Session=Depends(get_db),_=Depends(reader)):
     vendors=[{"label":v or "Unknown","value":c} for v,c in db.query(DiscoveryResult.vendor,func.count()).group_by(DiscoveryResult.vendor).order_by(func.count().desc()).limit(8)]
     types=[{"label":v,"value":c} for v,c in db.query(DiscoveryResult.classification,func.count()).group_by(DiscoveryResult.classification).order_by(func.count().desc()).limit(8)]
     return {"results":total,"success_rate":round(identified*100/total,1) if total else 0,"unknown_devices":unknown,"jobs":jobs,"errors":failed,"confidence":bands,"vendors":vendors,"device_types":types,"recent":db.query(DiscoveryResult).order_by(DiscoveryResult.last_seen_at.desc()).limit(8).all()}
+@router.get("/reconciliation/report")
+def reconciliation_report(db:Session=Depends(get_db),_=Depends(admin)):
+    return V1V2ReconciliationService(db).report()
+@router.post("/reconciliation/run")
+def run_reconciliation(db:Session=Depends(get_db),user=Depends(admin)):
+    service=V1V2ReconciliationService(db)
+    try:
+        report=service.reconcile(user);audit(db,user,"RECONCILE","v1_v2_devices","all",f"Preserved {report['preserved']} V1 devices and linked {report['linked_existing_devices']} clear V2 observations");db.commit();return report
+    except Exception:
+        db.rollback();raise
 @router.get("/policies")
 def policies(db:Session=Depends(get_db),_=Depends(reader)):return {"items":db.query(DiscoveryPolicy).order_by(DiscoveryPolicy.name).all()}
 @router.post("/policies",status_code=201)

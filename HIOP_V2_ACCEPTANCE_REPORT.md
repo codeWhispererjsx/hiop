@@ -1,5 +1,20 @@
 # HIOP v2 Production Acceptance Report
 
+## V2F focused continuity addendum — 2026-08-09
+
+The active V1/V2 product surface passed the V2F data-preservation checkpoint. Eight
+existing inventory devices, their UUIDs, and their approval states were preserved.
+All eight are connected to V2 discovery evidence; none was recreated. The database
+contained 667 monitoring observations, one device-linked incident, and zero orphan
+references. Duplicate scanning found zero MAC, hostname, or IP duplicate groups and
+zero ambiguous candidates. V2F introduced no schema migration and no data loss.
+
+The detailed point-in-time evidence is in `HIOP_V2F_RECONCILIATION_REPORT.md`.
+Live SNMP/AD handshakes, backup/restore, containers, and deployment-specific pilot
+work remain separate environment acceptance items. Historical acceptance material
+below is retained for audit context; its old test counts and migration revision are
+not the current focused V1/V2 checkpoint.
+
 ## Decision
 
 **Pilot required before final release. Release blocked.** The repository is at `2.0.0-rc1` with one migration head and passing automated regression suites, but production acceptance cannot be claimed because backup/restore, application rollback, container startup, browser acceptance, and controlled pilot execution were not verified in this environment. The final `2.0.0` version and tag must not be created yet.

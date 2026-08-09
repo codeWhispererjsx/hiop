@@ -1,5 +1,16 @@
 # HIOP Project Status
 
+## HIOP V2F — data continuity checkpoint
+
+V2F is complete for the current V1/V2 product surface. Eight existing inventory
+devices remain the authoritative records used by V2 enrichment; all UUIDs and
+approval states were preserved. The reconciliation report found eight partially
+enriched devices, zero duplicate candidates, zero ambiguous matches, zero monitoring
+or incident orphans, and zero errors. See `HIOP_V2F_RECONCILIATION_REPORT.md`.
+
+No schema migration, device recreation, automatic merge, or Version 3 feature was
+introduced. Live SNMP and Active Directory validation remains environment-dependent.
+
 ## Enterprise + Hospitality UI theme
 
 The frontend now uses centralized semantic tokens and a shared component layer across all existing HIOP pages. Light, dark, and system modes use the official Royal Blue, Navy, Emerald, and restrained Premium Gold palette. This was a presentation-only refactor: APIs, routes, RBAC, application state, and backend behavior remain unchanged.

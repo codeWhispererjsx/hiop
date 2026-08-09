@@ -23,13 +23,15 @@ collectors. Credentialed stages remain opt-in and no vulnerability scanning is p
 
 ## Verification
 
-- Alembic upgraded through `4e5f6a7b8c92`.
-- Backend: 93 tests passed.
-- Frontend: 17 tests passed; lint and production build passed.
-- Browser: login rendered at `http://localhost:5173/login` with no console errors.
+- V2F preserved all 8 existing inventory UUIDs and approval states.
+- All 8 inventory devices are linked to V2 discovery intelligence without creating a replacement Device.
+- 667 monitoring observations and the existing device-linked incident have zero orphan references.
+- Duplicate scan: zero MAC, hostname, or IP duplicate groups; zero ambiguous matches.
+- Alembic remains at the single merge head `9f1a2b3c4d70`; V2F requires no migration.
+- Full automated and authenticated browser results are recorded in `HIOP_V2F_RECONCILIATION_REPORT.md`.
 
 ## Known limitations
 
-- A signed-in browser acceptance pass requires a valid administrator account supplied by the deployment.
 - CPU, memory, disk, and interface metrics require reachable devices with configured SNMP or host credentials.
 - LLDP/CDP relationships depend on supported equipment and read-only SNMP access.
+- Historical V1 Device columns do not all have field-level provenance. V2F preserves populated inventory values and reports conflicts instead of guessing their source.

@@ -1,5 +1,14 @@
 # HIOP v2 Release Candidate
 
+## V2F reconciliation checkpoint
+
+The focused V1/V2 inventory continuity gate passed on 2026-08-09: 8/8 Device UUIDs
+and approval states were preserved, all existing Devices retained V2 discovery
+linkage, 667 monitoring observations and linked incidents had zero orphans, and no
+duplicate candidates were found. V2F required no migration and performed no merge,
+delete, recreation, or automatic inventory-field overwrite. See
+`HIOP_V2F_RECONCILIATION_REPORT.md`.
+
 ## Scope
 
 Version `2.0.0-rc1` packages the completed HIOP v2 operations platform: Discovery, reviewed Import, Active Directory, SNMP monitoring, topology collection/inference, analytics aggregation, forecasting, deterministic anomaly detection, correlation, insights, and executive analytics views.

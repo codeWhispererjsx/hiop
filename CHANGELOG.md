@@ -1,5 +1,12 @@
 # Changelog
 
+## HIOP V2F — V1 to V2 reconciliation and data preservation
+
+- Added an administrator-protected, deterministic reconciliation report with before/after device comparisons, duplicate candidates, relationship integrity, enrichment state, and review-only ambiguous matches.
+- Existing Device rows are never recreated or overwritten. Safe reconciliation links only one unambiguous MAC/hostname match, treats IP as supporting evidence, preserves approval/manual fields, and is idempotent.
+- Verified 8/8 existing device UUIDs, 667 monitoring observations, linked incidents, audit history, and foreign-key integrity with zero duplicate candidates, zero orphans, and zero data loss.
+- No database migration or Version 3 functionality was introduced.
+
 ## 3.0.0-dev — Epic 9 Multi-Property Operations & Corporate Management
 
 - Added corporate hierarchy, scoped and delegated administration, inherited permissions with explicit denial, global/regional/property configuration, policies, compliance, exceptions, and tenant-isolated queries.

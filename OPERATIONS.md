@@ -107,6 +107,15 @@ Track p50/p95/p99 API latency, error rate, PostgreSQL query latency and pool sat
 
 For every production incident record timestamps, symptoms, affected modules, health output, safe log references, actions, recovery, and follow-up. Never place credentials, JWTs, database URLs, raw user exports, or private guest/hotel information in incident notes.
 
+## V1-to-V2 continuity check
+
+Before and after a V2 deployment, capture the administrator reconciliation report and
+compare Device UUIDs, approval state, monitoring orphan count, incident orphan count,
+duplicate candidates, and errors. Run reconciliation only after reviewing the report.
+The operation is safe to repeat and never merges Device rows or updates their manual
+fields. Any IP-only or ambiguous candidate must remain in review. Retain the report
+with the deployment evidence and confirm the audit event was written.
+
 ## Active Directory connection operations
 
 Start with a dry run and inspect its summary/projections. Full-sync missing detection occurs only after complete paging; partial, failed, cancelled, incremental, and dry runs do not mark missing. Tune batch size, overlap, grace period, and page/object caps conservatively. Persistent run state is authoritative; WebSocket progress is advisory.

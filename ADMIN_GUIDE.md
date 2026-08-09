@@ -1,5 +1,17 @@
 # HIOP Administrator Guide
 
+## V1-to-V2 data reconciliation
+
+Administrators can request `GET /api/v1/discovery-intelligence/reconciliation/report`
+to inspect preserved inventory, enrichment state, duplicate candidates, relationship
+health, and per-device before/after comparisons. Review this output before calling
+`POST /api/v1/discovery-intelligence/reconciliation/run`.
+
+The run only links one unambiguous discovery observation to an existing Device. It
+does not recreate or merge Devices and never overwrites hostname, department,
+location, device type, asset information, approval state, or UUID. IP-only and
+ambiguous candidates remain review items. Every run is audited and safe to repeat.
+
 Analytics schedules are disabled by default. Administrators can configure, pause, resume, inspect, backfill, retry, and clean up analytics through authenticated `/api/v1/analytics` operations. Preview backfill and retention impact before live execution.
 
 ## Network topology

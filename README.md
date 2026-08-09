@@ -3,6 +3,8 @@
 HIOP is currently focused on seven operational areas: Overview, Discover, Monitor,
 Manage, Automate, Maintain, and Administration. See
 [V1/V2 focused product completion](docs/V1_V2_COMPLETION.md) for verified scope and limitations.
+The V1-to-V2 data continuity checkpoint is recorded in
+[HIOP V2F reconciliation report](HIOP_V2F_RECONCILIATION_REPORT.md).
 
 Historical Version 3 design documents remain in `docs/` for reference but their specialist modules are not part of the active product surface.
 
