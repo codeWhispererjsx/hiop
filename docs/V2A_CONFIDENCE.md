@@ -19,3 +19,7 @@ Confidence is an explainable sum of distinct evidence types, capped at 100. Repe
 | LLDP/CDP evidence | 5 |
 
 Hostname-rule evidence is deliberately low-weight because it is a suggestion, not an independently verified identity. A failed DNS lookup records the attempt/status for auditability but does not create a hostname.
+
+## V2B SNMP enrichment
+
+A successful, read-only SNMP identity response contributes 20 points once, regardless of the number of returned OIDs. Independently agreeing vendor evidence may contribute the existing 10-point vendor weight and an SNMP hostname can contribute the existing hostname weight. Model, serial, firmware, uptime, and interface evidence remain individually traceable but add no standalone points. Therefore an SNMP response cannot produce 100% confidence by itself.

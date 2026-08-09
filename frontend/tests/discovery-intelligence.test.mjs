@@ -26,3 +26,9 @@ test("quick scan needs no credentials and consolidates observations", () => {
   assert.match(page, /One row per device/);
   assert.match(page, /Why HIOP identified this device/);
 });
+
+test("device details expose manual SNMP enrichment without cluttering the table", () => {
+  assert.match(api, /enrichDiscoveryResult/);
+  for (const label of ["Enrich Device", "SNMP:", "Serial Number", "Firmware", "Uptime", "Interfaces"])
+    assert.match(page, new RegExp(label));
+});

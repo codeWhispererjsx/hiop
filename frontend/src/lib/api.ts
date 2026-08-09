@@ -623,6 +623,7 @@ export const endpoints = {
   discoveryResult:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/results/${id}`),
   reviewDiscoveryResult:(id:string,body:Record<string,unknown>)=>api<import("./types").DiscoveryResult>(`/discovery-intelligence/results/${id}/review`,{method:"POST",body:JSON.stringify(body)}),
   approveDiscoveryResult:(id:string)=>api<import("./types").Device>(`/discovery-intelligence/results/${id}/approve`,{method:"POST",body:JSON.stringify({})}),
+  enrichDiscoveryResult:(id:string)=>api<{status:string;provider:string;device:import("./types").DiscoveryResult;found:string[];warnings:string[];evidence_added:number;confidence_score:number}>(`/discovery-intelligence/results/${id}/enrich`,{method:"POST"}),
   syncDiscoveryResult:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/results/${id}/cmdb-sync`,{method:"POST"}),
   discoveryTopology:()=>api<{topology:Record<string,unknown>|null;nodes:Array<Record<string,unknown>>;links:Array<Record<string,unknown>>;message?:string}>("/discovery-intelligence/topology"),
   discoveryCredentials:()=>api<{items:Array<Record<string,unknown>>}>("/discovery-intelligence/credentials"),

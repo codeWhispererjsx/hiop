@@ -9,7 +9,7 @@ from app.core.security import get_db,require_roles
 from app.models.cmdb import CIClass,CIIdentifier,CIType,ConfigurationItem
 from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask
 from app.models.topology import Topology,TopologyLink,TopologyNode
-from app.models.snmp import SNMPTarget
+from app.models.snmp import SNMPCredential,SNMPTarget
 from app.models.discovered_device import DiscoveredDevice,DiscoveryStatus
 from app.models.device import Device
 from app.services.audit_service import create_audit_log
@@ -18,6 +18,10 @@ from app.services.discovery_collectors import ActiveDirectoryCorrelationCollecto
 from app.services.discovery_service import DiscoveryService
 from app.services.secret_encryption_service import SecretEncryptionService
 from app.services.topology_neighbor_collection_service import TopologyNeighborCollectionService
+from app.schemas.snmp import SNMPCredentialCreate,SNMPTargetCreate
+from app.services.device_enrichment_service import DeviceEnrichmentService
+from app.services.snmp_credential_service import SNMPCredentialService
+from app.services.snmp_target_service import SNMPTargetService
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
 reader=require_roles(["admin","superadmin","technician","viewer"]);operator=require_roles(["admin","superadmin","technician"]);admin=require_roles(["admin","superadmin"])
@@ -54,10 +58,10 @@ def consolidated_device_rows(db,limit=1000):
         if not key:key=f"mac:{mac}" if len(mac)==12 else f"name:{name}" if name else f"ip:{row.ip_address}"
         current=devices.get(key)
         if not current:
-            devices[key]={"id":row.id,"result_id":row.id,"job_id":row.job_id,"ip_address":row.ip_address,"primary_hostname":row.primary_hostname,"fqdn":row.fqdn,"dns_status":row.dns_status,"friendly_name":row.friendly_name,"department":row.department,"device_number":row.device_number,"description":row.description,"description_source":row.description_source,"location":row.location,"mac_address":row.mac_address,"vendor":row.vendor,"device_type":row.device_type,"classification":row.classification,"operating_system":row.operating_system,"review_status":row.review_status,"confidence_score":row.confidence_score,"confidence_explanation":row.confidence_explanation,"ci_id":row.ci_id,"first_seen_at":row.first_seen_at,"last_seen_at":row.last_seen_at,"observations":1}
+            devices[key]={"id":row.id,"result_id":row.id,"job_id":row.job_id,"ip_address":row.ip_address,"primary_hostname":row.primary_hostname,"fqdn":row.fqdn,"dns_status":row.dns_status,"friendly_name":row.friendly_name,"department":row.department,"device_number":row.device_number,"description":row.description,"description_source":row.description_source,"location":row.location,"mac_address":row.mac_address,"vendor":row.vendor,"device_type":row.device_type,"classification":row.classification,"operating_system":row.operating_system,"model":row.model,"serial_number":row.serial_number,"firmware":row.firmware,"uptime_seconds":row.uptime_seconds,"interface_count":row.interface_count,"snmp_enrichment_status":row.snmp_enrichment_status,"last_enriched_at":row.last_enriched_at,"review_status":row.review_status,"confidence_score":row.confidence_score,"confidence_explanation":row.confidence_explanation,"ci_id":row.ci_id,"first_seen_at":row.first_seen_at,"last_seen_at":row.last_seen_at,"observations":1}
         else:
             current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)
-            for field in ("primary_hostname","fqdn","friendly_name","department","device_number","description","description_source","location","mac_address","vendor","operating_system","ci_id"):
+            for field in ("primary_hostname","fqdn","friendly_name","department","device_number","description","description_source","location","mac_address","vendor","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ci_id"):
                 if not current[field] and getattr(row,field):current[field]=getattr(row,field)
         if len(mac)==12:mac_index[mac]=key
         if name:name_index[name]=key
@@ -213,6 +217,25 @@ def results(search:str|None=None,status:str|None=None,page_number:int=Query(1,al
 @router.get("/results/{id}")
 def result(id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
     row=get(db,DiscoveryResult,id,"Result");return {"result":row,"evidence":db.query(DiscoveryEvidence).filter_by(result_id=id).order_by(DiscoveryEvidence.observed_at.desc()).all(),"fingerprint":db.query(DiscoveryFingerprint).filter_by(result_id=id).first(),"change_suggestions":db.query(DiscoveryChangeSuggestion).filter_by(result_id=id).all()}
+@router.post("/results/{id}/enrich")
+def enrich_result(id:UUID,db:Session=Depends(get_db),user=Depends(operator)):
+    return DeviceEnrichmentService(db).enrich(get(db,DiscoveryResult,id,"Result"),user)
+def safe_snmp_credential(row):
+    return {"id":row.id,"name":row.name,"version":row.version,"username":row.username,"authentication_protocol":row.authentication_protocol,"privacy_protocol":row.privacy_protocol,"security_level":row.security_level,"context_name":row.context_name,"enabled":row.enabled,"description":row.description,"has_community":bool(row.community_encrypted),"has_authentication_secret":bool(row.authentication_secret_encrypted),"has_privacy_secret":bool(row.privacy_secret_encrypted),"created_at":row.created_at,"updated_at":row.updated_at}
+def safe_snmp_target(row):
+    return {"id":row.id,"name":row.name,"device_id":row.device_id,"discovered_device_id":row.discovered_device_id,"credential_id":row.credential_id,"hostname":row.hostname,"ip_address":row.ip_address,"port":row.port,"version":row.version,"enabled":row.enabled,"polling_enabled":row.polling_enabled,"timeout_seconds":row.timeout_seconds,"retries":row.retries,"transport":row.transport,"context_name":row.context_name,"last_tested_at":row.last_tested_at,"last_test_status":row.last_test_status,"last_test_message":row.last_test_message,"detected_sys_object_id":row.detected_sys_object_id,"created_at":row.created_at,"updated_at":row.updated_at}
+@router.get("/snmp/credentials")
+def snmp_credentials(db:Session=Depends(get_db),_=Depends(admin)):
+    return {"items":[safe_snmp_credential(row) for row in db.query(SNMPCredential).order_by(SNMPCredential.name).all()]}
+@router.post("/snmp/credentials",status_code=201)
+def create_snmp_credential(body:SNMPCredentialCreate,db:Session=Depends(get_db),user=Depends(admin)):
+    return safe_snmp_credential(SNMPCredentialService(db).create_credential(body,user))
+@router.get("/snmp/targets")
+def snmp_targets(db:Session=Depends(get_db),_=Depends(admin)):
+    return {"items":[safe_snmp_target(row) for row in db.query(SNMPTarget).order_by(SNMPTarget.name).all()]}
+@router.post("/snmp/targets",status_code=201)
+def create_snmp_target(body:SNMPTargetCreate,db:Session=Depends(get_db),user=Depends(admin)):
+    return safe_snmp_target(SNMPTargetService(db).create_target(body,user))
 @router.post("/results/{id}/review")
 def review(id:UUID,body:ReviewWrite,db:Session=Depends(get_db),user=Depends(admin)):
     row=get(db,DiscoveryResult,id,"Result");row.review_status=body.status
