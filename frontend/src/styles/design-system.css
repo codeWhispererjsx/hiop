@@ -12,6 +12,13 @@ body { transition: color 160ms ease, background-color 160ms ease; }
   box-shadow: var(--shadow-md);
 }
 .sidebar-brand { min-height: 60px; gap: var(--space-3); padding: 0 var(--space-2) var(--space-5); }
+.brand-logo { display: block; overflow: hidden; }
+.brand-logo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.brand-logo .brand-logo-dark { display: none; }
+:root[data-theme="dark"] .brand-logo .brand-logo-light { display: none; }
+:root[data-theme="dark"] .brand-logo .brand-logo-dark { display: block; }
+.sidebar-brand .brand-logo--compact { width: 182px; aspect-ratio: 310 / 145; flex: 0 0 auto; }
+.sidebar-brand .brand-logo--compact img { object-fit: contain; }
 .sidebar-brand .brand-mark {
   width: 42px;
   height: 42px;

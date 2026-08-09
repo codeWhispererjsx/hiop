@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
+import BrandLogo from "./BrandLogo";
 
 const primaryLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Overview", to: "/dashboard", icon: "dashboard" },
@@ -73,11 +74,7 @@ export default function Sidebar({
   return (
     <aside className={`sidebar ${open ? "is-open" : ""}`}>
       <div className="sidebar-brand">
-        <span className="brand-mark">HI</span>
-        <div>
-          <strong>HIOP</strong>
-          <small>Hospitality IT operations</small>
-        </div>
+        <BrandLogo compact />
         <button
           className="icon-button sidebar-close"
           onClick={onClose}

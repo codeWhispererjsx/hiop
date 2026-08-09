@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
+import BrandLogo from "../components/BrandLogo";
 import ThemeToggle from "../components/ThemeToggle";
 import { endpoints } from "../lib/api";
 import { setAuthToken } from "../lib/auth";
@@ -32,20 +33,20 @@ export default function LoginPage() {
   return <main className="login-page">
     <ThemeToggle className="login-theme-toggle" />
     <section className="login-story">
-      <div className="brand-lockup"><span className="brand-mark">HI</span><div><strong>HIOP</strong><span>Hospitality IT Operations Platform</span></div></div>
-      <div className="login-copy"><p className="login-kicker">One property. Complete visibility.</p><h1>Quiet technology. Exceptional hospitality.</h1><p>Monitor critical hotel systems, resolve service interruptions and keep guest-facing operations running from one secure command centre.</p></div>
+      <BrandLogo className="login-logo" />
+      <div className="login-copy"><p className="login-kicker">Hospitality operations, beautifully connected</p><h1>Technology that stays behind the scenes.</h1><p>See every critical hotel system, respond before service is disrupted, and keep every guest-facing team moving from one secure workspace.</p><div className="login-proof"><span><Icon name="check" size={16}/>Live infrastructure visibility</span><span><Icon name="check" size={16}/>Incident-ready operations</span></div></div>
       <div className="login-stats"><div className="login-stat"><strong><i className="status-dot" />Operational</strong><span>Platform status</span></div><div className="login-stat"><strong>24 / 7</strong><span>Infrastructure watch</span></div><div className="login-stat"><strong>Secure</strong><span>Role-based access</span></div></div>
     </section>
     <section className="login-panel">
       <div className="login-card">
-        <div className="login-card-head"><p className="login-kicker">Authorised personnel</p><h2>Welcome back</h2><p>Sign in to enter the operations workspace.</p></div>
+        <div className="login-card-head"><span className="login-access-mark"><Icon name="lock" size={18}/></span><p className="login-kicker">Secure operations access</p><h2>Welcome back</h2><p>Sign in to your Hospitality IT Ops workspace.</p></div>
         <form className="login-form" onSubmit={submit}>
           <label className="field-label">Work email<div className="field-wrap"><Icon name="mail" className="field-icon" /><input type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="username" required /></div></label>
           <label className="field-label">Password<div className="field-wrap"><Icon name="lock" className="field-icon" /><input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" required /></div></label>
-          <button className="submit-button" disabled={busy}>{busy ? "Verifying access…" : "Enter operations portal"}</button>
+          <button className="submit-button" disabled={busy}>{busy ? "Verifying access…" : <><span>Enter operations portal</span><Icon name="arrow" size={18}/></>}</button>
         </form>
         <p className="login-message" role="alert">{message && <><Icon name="warning" size={16} />{message}</>}</p>
-        <p className="login-security">Protected access. Activity inside HIOP is recorded in the hospitality IT audit trail.</p>
+        <p className="login-security"><Icon name="lock" size={15}/>Protected access. Activity is recorded in the hospitality IT audit trail.</p>
       </div>
     </section>
   </main>;
