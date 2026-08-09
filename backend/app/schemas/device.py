@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime
 
 from ipaddress import ip_address
 import re
@@ -114,5 +115,14 @@ class DeviceResponse(BaseModel):
     department_id: UUID | None = None
     room_id: UUID | None = None
     network_zone_id: UUID | None = None
+    ad_computer_name: str | None = None
+    ad_distinguished_name: str | None = None
+    ad_domain: str | None = None
+    ad_organizational_unit: str | None = None
+    ad_description: str | None = None
+    ad_operating_system: str | None = None
+    ad_operating_system_version: str | None = None
+    ad_enabled: bool | None = None
+    ad_last_logon_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)

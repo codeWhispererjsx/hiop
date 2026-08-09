@@ -20,6 +20,7 @@ from app.services.secret_encryption_service import SecretEncryptionService
 from app.services.topology_neighbor_collection_service import TopologyNeighborCollectionService
 from app.schemas.snmp import SNMPCredentialCreate,SNMPTargetCreate
 from app.services.device_enrichment_service import DeviceEnrichmentService
+from app.services.active_directory_enrichment_service import ActiveDirectoryDeviceEnrichmentService
 from app.services.snmp_credential_service import SNMPCredentialService
 from app.services.snmp_target_service import SNMPTargetService
 
@@ -58,10 +59,10 @@ def consolidated_device_rows(db,limit=1000):
         if not key:key=f"mac:{mac}" if len(mac)==12 else f"name:{name}" if name else f"ip:{row.ip_address}"
         current=devices.get(key)
         if not current:
-            devices[key]={"id":row.id,"result_id":row.id,"job_id":row.job_id,"ip_address":row.ip_address,"primary_hostname":row.primary_hostname,"fqdn":row.fqdn,"dns_status":row.dns_status,"friendly_name":row.friendly_name,"department":row.department,"device_number":row.device_number,"description":row.description,"description_source":row.description_source,"location":row.location,"mac_address":row.mac_address,"vendor":row.vendor,"device_type":row.device_type,"classification":row.classification,"operating_system":row.operating_system,"model":row.model,"serial_number":row.serial_number,"firmware":row.firmware,"uptime_seconds":row.uptime_seconds,"interface_count":row.interface_count,"snmp_enrichment_status":row.snmp_enrichment_status,"last_enriched_at":row.last_enriched_at,"review_status":row.review_status,"confidence_score":row.confidence_score,"confidence_explanation":row.confidence_explanation,"ci_id":row.ci_id,"first_seen_at":row.first_seen_at,"last_seen_at":row.last_seen_at,"observations":1}
+            devices[key]={"id":row.id,"result_id":row.id,"job_id":row.job_id,"ip_address":row.ip_address,"primary_hostname":row.primary_hostname,"fqdn":row.fqdn,"dns_status":row.dns_status,"friendly_name":row.friendly_name,"department":row.department,"suggested_department":row.suggested_department,"device_number":row.device_number,"description":row.description,"description_source":row.description_source,"location":row.location,"mac_address":row.mac_address,"vendor":row.vendor,"device_type":row.device_type,"classification":row.classification,"operating_system":row.operating_system,"model":row.model,"serial_number":row.serial_number,"firmware":row.firmware,"uptime_seconds":row.uptime_seconds,"interface_count":row.interface_count,"snmp_enrichment_status":row.snmp_enrichment_status,"last_enriched_at":row.last_enriched_at,"ad_computer_name":row.ad_computer_name,"ad_domain":row.ad_domain,"ad_organizational_unit":row.ad_organizational_unit,"ad_operating_system":row.ad_operating_system,"ad_enabled":row.ad_enabled,"ad_enrichment_status":row.ad_enrichment_status,"ad_last_enriched_at":row.ad_last_enriched_at,"review_status":row.review_status,"confidence_score":row.confidence_score,"confidence_explanation":row.confidence_explanation,"ci_id":row.ci_id,"first_seen_at":row.first_seen_at,"last_seen_at":row.last_seen_at,"observations":1}
         else:
             current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)
-            for field in ("primary_hostname","fqdn","friendly_name","department","device_number","description","description_source","location","mac_address","vendor","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ci_id"):
+            for field in ("primary_hostname","fqdn","friendly_name","department","suggested_department","device_number","description","description_source","location","mac_address","vendor","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ad_computer_name","ad_domain","ad_organizational_unit","ad_operating_system","ad_last_enriched_at","ci_id"):
                 if not current[field] and getattr(row,field):current[field]=getattr(row,field)
         if len(mac)==12:mac_index[mac]=key
         if name:name_index[name]=key
@@ -220,6 +221,9 @@ def result(id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
 @router.post("/results/{id}/enrich")
 def enrich_result(id:UUID,db:Session=Depends(get_db),user=Depends(operator)):
     return DeviceEnrichmentService(db).enrich(get(db,DiscoveryResult,id,"Result"),user)
+@router.post("/results/{id}/enrich-active-directory")
+def enrich_result_from_active_directory(id:UUID,db:Session=Depends(get_db),user=Depends(operator)):
+    return ActiveDirectoryDeviceEnrichmentService(db).enrich(get(db,DiscoveryResult,id,"Result"),user)
 def safe_snmp_credential(row):
     return {"id":row.id,"name":row.name,"version":row.version,"username":row.username,"authentication_protocol":row.authentication_protocol,"privacy_protocol":row.privacy_protocol,"security_level":row.security_level,"context_name":row.context_name,"enabled":row.enabled,"description":row.description,"has_community":bool(row.community_encrypted),"has_authentication_secret":bool(row.authentication_secret_encrypted),"has_privacy_secret":bool(row.privacy_secret_encrypted),"created_at":row.created_at,"updated_at":row.updated_at}
 def safe_snmp_target(row):
@@ -261,6 +265,9 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
         model="Unknown",serial_number=f"UNKNOWN-{suffix}",department=body.department.strip() or "Unassigned",
         location=body.location.strip() or "Unassigned",ip_address=row.ip_address,
         mac_address=normalized_mac or None,description=row.description,description_source=row.description_source,
+        ad_computer_name=row.ad_computer_name,ad_distinguished_name=row.ad_distinguished_name,ad_domain=row.ad_domain,
+        ad_organizational_unit=row.ad_organizational_unit,ad_description=row.ad_description,ad_operating_system=row.ad_operating_system,
+        ad_operating_system_version=row.ad_operating_system_version,ad_enabled=row.ad_enabled,ad_last_logon_at=row.ad_last_logon_at,
         inventory_status="Active",network_status="Online",status="Active",
     )
     db.add(device);db.flush();row.review_status="manually_verified"

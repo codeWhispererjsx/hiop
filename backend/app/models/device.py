@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import String, DateTime, ForeignKey, Index, Text
+from sqlalchemy import Boolean, String, DateTime, ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -80,6 +80,15 @@ class Device(Base):
     )
     description: Mapped[str | None] = mapped_column(Text)
     description_source: Mapped[str | None] = mapped_column(String(40))
+    ad_computer_name: Mapped[str | None] = mapped_column(String(255))
+    ad_distinguished_name: Mapped[str | None] = mapped_column(String(512))
+    ad_domain: Mapped[str | None] = mapped_column(String(255))
+    ad_organizational_unit: Mapped[str | None] = mapped_column(String(255))
+    ad_description: Mapped[str | None] = mapped_column(Text)
+    ad_operating_system: Mapped[str | None] = mapped_column(String(255))
+    ad_operating_system_version: Mapped[str | None] = mapped_column(String(255))
+    ad_enabled: Mapped[bool | None] = mapped_column(Boolean)
+    ad_last_logon_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
     property_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("properties.id", ondelete="SET NULL"), nullable=True, index=True

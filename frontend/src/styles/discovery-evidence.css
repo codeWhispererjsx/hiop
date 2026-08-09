@@ -18,6 +18,7 @@
   background: var(--surface-muted);
 }
 .enrichment-status { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-muted); background: var(--surface-soft); text-transform: capitalize; }
+.enrichment-statuses { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 
 .discovery-detail > header {
   display: flex;

@@ -26,6 +26,7 @@ from app.api.v1.automation import router as automation_router
 from app.api.v1.automation_triggers import router as automation_triggers_router
 from app.api.v1.incidents import router as incidents_router
 from app.api.v1.discovery_intelligence import router as discovery_intelligence_router
+from app.api.v1.active_directory_v2c import router as active_directory_v2c_router
 from app.users.routes import router as users_router
 from app.services.scheduler_service import scheduler
 from app.websocket.connection_manager import manager
@@ -138,3 +139,4 @@ app.include_router(automation_router, prefix=settings.api_prefix)
 app.include_router(automation_triggers_router, prefix=settings.api_prefix)
 app.include_router(incidents_router, prefix=settings.api_prefix)
 app.include_router(discovery_intelligence_router, prefix=settings.api_prefix)
+app.include_router(active_directory_v2c_router, prefix=settings.api_prefix)

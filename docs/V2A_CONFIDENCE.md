@@ -23,3 +23,9 @@ Hostname-rule evidence is deliberately low-weight because it is a suggestion, no
 ## V2B SNMP enrichment
 
 A successful, read-only SNMP identity response contributes 20 points once, regardless of the number of returned OIDs. Independently agreeing vendor evidence may contribute the existing 10-point vendor weight and an SNMP hostname can contribute the existing hostname weight. Model, serial, firmware, uptime, and interface evidence remain individually traceable but add no standalone points. Therefore an SNMP response cannot produce 100% confidence by itself.
+
+## V2C Active Directory enrichment
+
+An exact AD computer-object match contributes 10 points after normalizing the short hostname, FQDN, and trailing computer-account `$`. Independent agreement contributes 10 points when the AD description exactly matches an existing description, 5 when the AD department suggestion matches the existing department, and 5 when the discovered FQDN agrees with the configured AD domain. AD operating-system and description evidence use the existing 10-point categories and are counted only once when another source already supplied that category.
+
+OU, distinguished name, enabled state, last logon, and other returned attributes remain traceable evidence but add no standalone score. A successful bind or merely responsive directory contributes no confidence, and an AD response never assigns 100% by itself.

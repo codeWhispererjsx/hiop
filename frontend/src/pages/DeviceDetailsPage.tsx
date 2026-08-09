@@ -122,6 +122,18 @@ function DeviceOverview({ device, networkZone }: { device: Device; networkZone: 
       <Detail label="Inventory Status" value={device.inventory_status} />
       <Detail label="Network Status" value={device.network_status} />
     </dl>
+    <h2>Windows / Active Directory</h2>
+    <dl>
+      <Detail label="Domain" value={device.ad_domain || "Not available"} />
+      <Detail label="Computer" value={device.ad_computer_name || "Not available"} />
+      <Detail label="Operating System" value={device.ad_operating_system || "Not available"} />
+      <Detail label="OS Version" value={device.ad_operating_system_version || "Not available"} />
+      <Detail label="Organizational Unit" value={device.ad_organizational_unit || "Not available"} />
+      <Detail label="AD Description" value={device.ad_description || "Not available"} />
+      <Detail label="AD Status" value={device.ad_enabled === true ? "Enabled" : device.ad_enabled === false ? "Disabled" : "Not available"} />
+      <Detail label="Last Logon" value={device.ad_last_logon_at ? new Date(device.ad_last_logon_at).toLocaleString() : "Not available"} />
+      <Detail label="Distinguished Name" value={device.ad_distinguished_name || "Not available"} />
+    </dl>
   </section>;
 }
 

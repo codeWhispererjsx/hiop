@@ -7,6 +7,8 @@ const app = read("src/App.tsx");
 const sidebar = read("src/components/Sidebar.tsx");
 const page = read("src/pages/DiscoveryIntelligencePage.tsx");
 const api = read("src/lib/api.ts");
+const settings = read("src/pages/SettingsPage.tsx");
+const activeDirectorySettings = read("src/components/ActiveDirectorySettings.tsx");
 
 test("discovery is a primary product pillar", () => {
   assert.match(app, /DiscoveryIntelligencePage/);
@@ -31,4 +33,14 @@ test("device details expose manual SNMP enrichment without cluttering the table"
   assert.match(api, /enrichDiscoveryResult/);
   for (const label of ["Enrich Device", "SNMP:", "Serial Number", "Firmware", "Uptime", "Interfaces"])
     assert.match(page, new RegExp(label));
+});
+
+test("V2C exposes read-only Active Directory configuration and device enrichment", () => {
+  assert.match(settings, /Active Directory/);
+  for (const label of ["LDAPS server", "Bind password", "Test connection", "only reads computer attributes"])
+    assert.match(activeDirectorySettings, new RegExp(label, "i"));
+  assert.match(api, /enrichDiscoveryResultFromAD/);
+  for (const label of ["Enrich from Active Directory", "Windows \/ Active Directory", "Distinguished Name", "Suggested Department"])
+    assert.match(page, new RegExp(label));
+  assert.doesNotMatch(page, /create users|move computers|group membership/i);
 });
