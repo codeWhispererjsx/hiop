@@ -91,3 +91,15 @@
   .quick-scan-hero form { grid-template-columns: 1fr; }
   .identity-confirmation { grid-template-columns: 1fr; }
 }
+
+.discovery-filters { display: grid; grid-template-columns: minmax(240px,2fr) repeat(3,minmax(150px,1fr)); gap: .75rem; margin-bottom: 1rem; }
+.discovery-filters label { display: grid; gap: .35rem; color: var(--text-muted); font-size: .78rem; font-weight: 700; }
+.discovery-filters input,.discovery-filters select { min-height: 40px; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 9px; color: var(--text); background: var(--surface); }
+.identity-confidence ul { display: grid; gap: .4rem; margin: .8rem 0; padding: 0; list-style: none; }
+.identity-confidence li { color: var(--text); }
+.identity-evidence { margin-top: var(--space-5); }
+.evidence-cards article p { margin: .35rem 0; overflow-wrap: anywhere; }
+.identity-review-actions { display: flex; align-items: center; gap: .75rem; margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--border); }
+.identity-review-actions span { color: var(--text-muted); }
+@media(max-width:900px){.discovery-filters{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.discovery-filters{grid-template-columns:1fr}}

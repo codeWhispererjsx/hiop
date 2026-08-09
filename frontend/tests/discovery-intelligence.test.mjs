@@ -52,3 +52,14 @@ test("V2D exposes correlation confidence conflicts history and manual confirmati
   assert.match(page, /conflict_status/);
   assert.match(page, /confidence_level/);
 });
+
+test("V2E presents a technician-friendly final discovery experience", () => {
+  for (const label of ["Friendly Name", "Original Hostname", "Identification confidence", "Technical", "Identity history", "Approve Device"])
+    assert.match(page, new RegExp(label, "i"));
+  for (const searchable of ["departmentFilter", "typeFilter", "vendorFilter", "mac_address"])
+    assert.match(page, new RegExp(searchable));
+  for (const state of ["No devices discovered yet", "Enrichment has not been performed", "SNMP unavailable", "Active Directory unavailable", "DNS information unavailable"])
+    assert.match(page, new RegExp(state));
+  assert.match(page, /inventory_device_id/);
+  assert.doesNotMatch(page, /\+\{String\(item\.weight/);
+});

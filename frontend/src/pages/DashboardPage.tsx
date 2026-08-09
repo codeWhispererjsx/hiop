@@ -43,7 +43,7 @@ export default function DashboardPage() {
           <article className="asset-metric-card"><span>Total assets</span><strong>{d.devices.total}</strong><small>Approved inventory records</small></article>
           <article className="asset-metric-card"><span>Online now</span><strong>{d.devices.online}</strong><small>{d.devices.total ? `${Math.round(d.devices.online / d.devices.total * 100)}% available` : "Waiting for your first discovery"}</small></article>
           <article className="asset-metric-card"><span>Offline devices</span><strong>{d.devices.offline}</strong><small>Require technician attention</small></article>
-          <article className="asset-metric-card"><span>Awaiting approval</span><strong>{(discoveries.data?.items??[]).filter(item=>item.review_status!=="manually_verified").length}</strong><small>Review in Discover</small></article>
+          <article className="asset-metric-card"><span>Awaiting approval</span><strong>{(discoveries.data?.items??[]).filter(item=>!item.inventory_device_id).length}</strong><small>Review in Discover</small></article>
           <article className="asset-metric-card"><span>Active incidents</span><strong>{(incidents.data?.items??[]).filter(item=>!["resolved","closed","cancelled"].includes(item.status)).length}</strong><small>Open maintenance records</small></article>
           <article className="asset-metric-card"><span>Recent alerts</span><strong>{(alerts.data??[]).filter(item=>!item.acknowledged).length}</strong><small>Unacknowledged events</small></article>
           <article className="asset-insight-card"><header><h2>Types of assets</h2><span>{types.length} types</span></header><Distribution rows={types}/></article>
