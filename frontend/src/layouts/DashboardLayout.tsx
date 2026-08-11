@@ -5,7 +5,7 @@ import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import { endpoints } from "../lib/api";
 import type { LiveEvent, PublicSettings, User } from "../lib/types";
-import { clearAuthToken, getAuthToken } from "../lib/auth";
+import { clearAuthToken, getAuthToken, getOrganizationContext, setOrganizationContext } from "../lib/auth";
 import "../styles/dashboard.css";
 export default function DashboardLayout({
   children,
@@ -108,6 +108,7 @@ export default function DashboardLayout({
           user={user}
           propertyName={branding?.property_name}
         />
+        {user?.role==="platformadmin"&&getOrganizationContext()&&<div className="platform-context-bar"><strong>Viewing organization: {branding?.property_name??"Selected organization"}</strong><button onClick={()=>{setOrganizationContext(null);navigate("/platform")}}>Return to Platform Control Center</button></div>}
         <main className="page-content">{children}</main>
       </div>
     </div>

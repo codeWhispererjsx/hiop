@@ -36,6 +36,7 @@ INTERFACE_OIDS = {
     "interface.name": "1.3.6.1.2.1.31.1.1.1.1",
     "interface.high_speed": "1.3.6.1.2.1.31.1.1.1.15",
     "interface.alias": "1.3.6.1.2.1.31.1.1.1.18",
+    "interface.duplex": "1.3.6.1.2.1.10.7.2.1.19",
 }
 
 

@@ -27,7 +27,7 @@ from app.services.device_correlation_service import DeviceCorrelationService
 from app.services.v1_v2_reconciliation_service import V1V2ReconciliationService
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
-reader=require_roles(["admin","superadmin","technician","viewer"]);operator=require_roles(["admin","superadmin","technician"]);admin=require_roles(["admin","superadmin"])
+reader=require_roles(["platformadmin","admin","technician","viewer"]);operator=require_roles(["admin","technician"]);admin=require_roles(["admin"])
 REVIEW=("needs_review","automatically_identified","partially_identified","manually_verified","ignored","false_positive","duplicate","retired")
 class PolicyWrite(BaseModel):
     name:str=Field(min_length=2,max_length=180);property_id:UUID|None=None;authorized_ranges:list[str];excluded_ranges:list[str]=[];enabled_stages:list[str]=[];allowed_ports:list[int]=[];max_hosts:int=Field(1024,ge=1,le=65536);concurrency:int=Field(20,ge=1,le=128);timeout_seconds:int=Field(2,ge=1,le=30);rate_limit_per_second:int=Field(20,ge=1,le=500);allow_credentialed:bool=False;enabled:bool=True

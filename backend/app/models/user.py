@@ -1,6 +1,7 @@
 import uuid
 
-from sqlalchemy import String, DateTime
+from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from sqlalchemy import Boolean
@@ -35,7 +36,7 @@ class User(Base):
 
     role: Mapped[str] = mapped_column(
         String(30),
-        default="staff"
+        default="viewer"
     )
 
     created_at: Mapped[DateTime] = mapped_column(
@@ -48,6 +49,9 @@ class User(Base):
         server_default=func.now(),
         onupdate=func.now()
     )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True)
+
+    last_login_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
     is_active: Mapped[bool] = mapped_column(
     Boolean,

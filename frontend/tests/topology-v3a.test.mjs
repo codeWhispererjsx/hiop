@@ -11,7 +11,8 @@ const sidebar=readFileSync(new URL("../src/components/Sidebar.tsx",import.meta.u
 test("V3A topology is a protected, navigable workspace",()=>{
   assert.match(app,/lazy\(\(\) => import\("\.\/pages\/TopologyPage"\)\)/);
   assert.match(app,/path="\/topology"/);
-  assert.match(sidebar,/label: "Topology"/);
+  assert.match(sidebar,/label: ?"Topology"/);
+  assert.match(sidebar,/nav-sublink/);
 });
 
 test("topology uses the real API graph and never embeds sample devices",()=>{
@@ -34,7 +35,7 @@ test("users can inspect neighbors and open the same inventory device",()=>{
 });
 
 test("refresh is administrator controlled and topology remains observation-only",()=>{
-  assert.match(page,/\["admin","superadmin"\]/);
+  assert.match(page,/user\?\.role==="admin"/);
   assert.match(page,/Topology is observation-only/);
   assert.doesNotMatch(page,/change VLAN|restart device|configure port|manual link/i);
 });

@@ -25,6 +25,9 @@ def create_device(
     db.add(new_device)
     db.flush()
 
+    from app.services.asset_intelligence_service import ensure_asset_for_device
+    ensure_asset_for_device(db, new_device, current_user)
+
     create_audit_log(
         db=db,
         actor=current_user.username,

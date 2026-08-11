@@ -1,4 +1,4 @@
-import { clearAuthToken, getAuthToken } from "./auth";
+import { clearAuthToken, getAuthToken, getOrganizationContext } from "./auth";
 
 // Same-origin by default; Vite and nginx proxy this path to FastAPI.
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
@@ -37,6 +37,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 async function performRequest<T>(path: string, init: RequestInit, token: string | null): Promise<T> {
   const headers = new Headers(init.headers);
   const activeProperty = window.localStorage.getItem("hiop.active_property_id");
+  const activeOrganization=getOrganizationContext();
+  if(activeOrganization&&!headers.has("X-Organization-ID"))headers.set("X-Organization-ID",activeOrganization);
   if (activeProperty && !headers.has("X-HIOP-Property-ID")) headers.set("X-HIOP-Property-ID", activeProperty);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -77,6 +79,17 @@ async function download(path: string) {
 }
 
 export const endpoints = {
+  platformSummary:()=>api<import("./types").PlatformSummary>("/platform/summary"),
+  platformOrganizations:()=>api<import("./types").PlatformOrganization[]>("/platform/organizations"),
+  createPlatformOrganization:(body:Record<string,unknown>)=>api<import("./types").PlatformOrganization>("/platform/organizations",{method:"POST",body:JSON.stringify(body)}),
+  suspendPlatformOrganization:(id:string)=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}/suspend`,{method:"POST"}),
+  activatePlatformOrganization:(id:string)=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}/activate`,{method:"POST"}),
+  provisionOrganizationAdmin:(id:string,body:Record<string,unknown>)=>api<Record<string,unknown>>(`/platform/organizations/${id}/administrator`,{method:"POST",body:JSON.stringify(body)}),
+  platformUsers:()=>api<import("./types").PlatformUser[]>("/platform/users"),
+  createPlatformUser:(body:Record<string,unknown>)=>api<import("./types").PlatformUser>("/platform/users",{method:"POST",body:JSON.stringify(body)}),
+  setPlatformUserStatus:(id:string,active:boolean)=>api<import("./types").PlatformUser>(`/platform/users/${id}/status?active=${active}`,{method:"POST"}),
+  platformHealth:()=>api<Record<string,string>>("/platform/health"),
+  platformAudit:()=>api<import("./types").PlatformAuditEvent[]>("/platform/audit"),
   login: (email: string, password: string) => api<{access_token:string}>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => api<import("./types").User>("/auth/me"),
   context: () => api<unknown>("/context"),
@@ -94,6 +107,22 @@ export const endpoints = {
   archiveProperty: (id:string) => api<void>(`/properties/${id}`, {method:"DELETE"}),
   dashboard: () => api<import("./types").DashboardData>("/dashboard/"),
   devices: () => api<import("./types").Device[]>("/devices/"),
+  assets: (filters:Record<string,string|undefined>={}) => api<import("./types").ManagedAsset[]>(`/assets${queryString(filters)}`),
+  asset: (id:string) => api<import("./types").ManagedAsset>(`/assets/${id}`),
+  deviceAsset: (deviceId:string) => api<import("./types").ManagedAsset>(`/assets/device/${deviceId}`),
+  createAsset: (body:import("./types").ManagedAssetInput) => api<import("./types").ManagedAsset>("/assets",{method:"POST",body:JSON.stringify(body)}),
+  updateAsset: (id:string,body:Partial<import("./types").ManagedAssetInput>) => api<import("./types").ManagedAsset>(`/assets/${id}`,{method:"PUT",body:JSON.stringify(body)}),
+  transitionAsset: (id:string,body:{status:import("./types").LifecycleStatus;reason?:string;notes?:string}) => api<import("./types").ManagedAsset>(`/assets/${id}/lifecycle`,{method:"POST",body:JSON.stringify(body)}),
+  procurement: (filters:Record<string,string|undefined>={})=>api<import("./types").ProcurementRecord[]>(`/procurement${queryString(filters)}`),
+  procurementSummary: ()=>api<import("./types").ProcurementSummary>("/procurement/summary"),
+  procurementRecord: (id:string)=>api<import("./types").ProcurementRecord>(`/procurement/${id}`),
+  createProcurement: (body:Record<string,unknown>)=>api<import("./types").ProcurementRecord>("/procurement",{method:"POST",body:JSON.stringify(body)}),
+  requestProcurement: (id:string)=>api<import("./types").ProcurementRecord>(`/procurement/${id}/request`,{method:"POST",body:"{}"}),
+  approveProcurement: (id:string)=>api<import("./types").ProcurementRecord>(`/procurement/${id}/approve`,{method:"POST",body:"{}"}),
+  orderProcurement: (id:string,body:Record<string,unknown>)=>api<import("./types").ProcurementRecord>(`/procurement/${id}/order`,{method:"POST",body:JSON.stringify(body)}),
+  receiveProcurement: (id:string,body:Record<string,unknown>)=>api<import("./types").ProcurementRecord>(`/procurement/${id}/receive`,{method:"POST",body:JSON.stringify(body)}),
+  cancelProcurement: (id:string,notes:string)=>api<import("./types").ProcurementRecord>(`/procurement/${id}/cancel`,{method:"POST",body:JSON.stringify({notes})}),
+  linkProcurementAsset: (id:string,body:Record<string,unknown>)=>api<import("./types").ProcurementRecord>(`/procurement/${id}/assets`,{method:"POST",body:JSON.stringify(body)}),
   device: (id: string) => api<import("./types").Device>(`/devices/${id}`),
   createDevice: (body: import("./types").DeviceInput) => api<import("./types").Device>("/devices/", { method: "POST", body: JSON.stringify(body) }),
   updateDevice: (id: string, body: Partial<import("./types").DeviceInput>) => api<import("./types").Device>(`/devices/${id}`, { method: "PUT", body: JSON.stringify(body) }),
@@ -106,6 +135,8 @@ export const endpoints = {
   scanAll: () => api<{total_devices:number;online:number;offline:number;results:import("./types").Scan[]}>("/network/scan-all", { method: "POST" }),
   scanRange: (network: string) => api<Array<{ip_address:string;status:string;response_time:number|null}>>("/network/scan-range", { method: "POST", body: JSON.stringify({ network }) }),
   scanHistory: (limit = 100) => api<import("./types").Scan[]>(`/network/history?limit=${limit}`),
+  monitoringSummary:(window="24h")=>api<import("./types").MonitoringSummary>(`/monitoring/summary?window=${encodeURIComponent(window)}`),
+  deviceHealth:(id:string,window="24h")=>api<import("./types").DeviceHealth>(`/monitoring/devices/${id}?window=${encodeURIComponent(window)}`),
   tickets: () => api<import("./types").Ticket[]>("/tickets/"),
   ticket: (id: string) => api<import("./types").Ticket>(`/tickets/${id}`),
   createTicket: (body: import("./types").TicketInput) => api<import("./types").Ticket>("/tickets/", { method: "POST", body: JSON.stringify(body) }),
@@ -115,6 +146,14 @@ export const endpoints = {
   deleteTicket: (id: string) => api<{message:string}>(`/tickets/${id}`, { method: "DELETE" }),
   alerts: () => api<import("./types").Alert[]>("/alerts"),
   acknowledgeAlert: (id: string) => api<{id:string;acknowledged:boolean}>(`/alerts/${id}/acknowledge`, { method: "PATCH" }),
+  v3eAlerts:(filters:Record<string,string|undefined>={})=>api<{items:import("./types").V3EAlert[];summary:Record<string,number>}>(`/alert-center/alerts${queryString(filters)}`),
+  v3eAlert:(id:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}`),
+  acknowledgeV3EAlert:(id:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}/acknowledge`,{method:"POST"}),
+  resolveV3EAlert:(id:string,reason:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}/resolve`,{method:"POST",body:JSON.stringify({reason})}),
+  v3eEvents:()=>api<Array<Record<string,unknown>>>("/alert-center/events"),
+  v3eRules:()=>api<import("./types").V3EAlertRule[]>("/alert-center/rules"),
+  updateV3ERule:(id:string,body:Omit<import("./types").V3EAlertRule,"id"|"rule_type"|"name"|"description">)=>api<import("./types").V3EAlertRule>(`/alert-center/rules/${id}`,{method:"PUT",body:JSON.stringify(body)}),
+  v3eNotifications:()=>api<Array<Record<string,unknown>>>("/alert-center/notifications"),
   auditLogs: (filters: import("./types").AuditFilters = {}, signal?: AbortSignal) => api<import("./types").AuditLogPage>(`/audit-logs${queryString(filters)}`, { signal }),
   auditLog: (id: string) => api<import("./types").AuditLog>(`/audit-logs/${id}`),
   exportAuditLogs: (filters: import("./types").AuditFilters = {}) => download(`/audit-logs/export${queryString(filters)}`),
@@ -125,6 +164,8 @@ export const endpoints = {
   user: (id: string) => api<import("./types").User>(`/users/${id}`),
   userAudit: (id: string) => api<import("./types").AuditLog[]>(`/users/${id}/audit`),
   userRoles: () => api<string[]>("/users/roles"),
+  roleDefinitions:()=>api<import("./types").RoleDefinition[]>("/users/role-definitions"),
+  administrationAudit:()=>api<import("./types").AuditLog[]>("/users/administration-audit"),
   eligibleAssignees: () => api<import("./types").User[]>("/users/eligible-assignees"),
   createUser: (body: import("./types").UserInput) => api<import("./types").User>("/users", { method: "POST", body: JSON.stringify(body) }),
   updateUser: (id: string, body: Pick<import("./types").UserInput, "username" | "email">) => api<import("./types").User>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
@@ -266,6 +307,7 @@ export const endpoints = {
   incidentEvidence: (id:string) => api<{items:import("./types").IncidentEvidence[];total:number}>(`/incidents/${id}/evidence`),
   addIncidentEvidence: (id:string,body:Record<string,unknown>) => api<import("./types").IncidentEvidence>(`/incidents/${id}/evidence`,{method:"POST",body:JSON.stringify(body)}),
   incidentCommunications: (id:string) => api<{items:import("./types").IncidentCommunication[]}>(`/incidents/${id}/communications`),
+  sendIncidentEmail: (id:string,summary:string) => api<{status:string;message:string}>(`/incidents/${id}/notify-email`,{method:"POST",body:JSON.stringify({summary:summary||null})}),
   previewIncidentCommunication: (id:string,body:Record<string,unknown>) => api<{subject:string;message:string;external_delivery_configured:boolean}>(`/incidents/${id}/communications/preview`,{method:"POST",body:JSON.stringify(body)}),
   sendIncidentCommunication: (id:string,body:Record<string,unknown>) => api<import("./types").IncidentCommunication>(`/incidents/${id}/communications/send`,{method:"POST",body:JSON.stringify(body)}),
   incidentChecklists: (id:string) => api<{items:import("./types").IncidentChecklistItem[]}>(`/incidents/${id}/checklists`),
@@ -640,4 +682,13 @@ export const endpoints = {
   v3aTopologyStats:()=>api<import("./types").V3ATopologyStats>("/topology/stats"),
   v3aTopologyRelationship:(id:string)=>api<import("./types").V3ATopologyRelationship>(`/topology/relationships/${id}`),
   v3aDeviceNeighbors:(id:string)=>api<import("./types").V3ATopologyNeighbors>(`/topology/devices/${id}/neighbors`),
+  v3bDeviceConnection:(id:string)=>api<import("./types").V3BDeviceConnection>(`/port-intelligence/devices/${id}/connection`),
+  v3bSwitchInterfaces:(id:string,filters:Record<string,string|undefined>={})=>api<import("./types").V3BSwitchInterfaces>(`/port-intelligence/switches/${id}/interfaces${queryString(filters)}`),
+  v3bInterface:(id:string)=>api<import("./types").V3BInterface>(`/port-intelligence/interfaces/${id}`),
+  refreshV3BSwitch:(id:string)=>api<import("./types").V3BRefresh>(`/port-intelligence/switches/${id}/refresh`,{method:"POST"}),
+  v3cVlans:(filters:Record<string,string|number|undefined>={})=>api<{items:import("./types").V3CVlan[];total:number;data_state:string;message:string|null}>(`/segmentation/vlans${queryString(filters)}`),
+  v3cVlan:(id:string)=>api<import("./types").V3CVlanDetails>(`/segmentation/vlans/${id}`),
+  v3cDeviceVlan:(id:string)=>api<import("./types").V3CDeviceVlan>(`/segmentation/devices/${id}`),
+  v3cStats:()=>api<import("./types").V3CStats>("/segmentation/stats"),
+  refreshV3CSwitch:(id:string)=>api<{status:string;message:string;vlans:number;memberships:number;devices:number;trunks:number}>(`/segmentation/switches/${id}/refresh`,{method:"POST"}),
 };

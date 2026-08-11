@@ -186,6 +186,7 @@ class SNMPPollingService:
                 "speed_bps": speed,
                 "admin_status": str(getattr(fields.get("interface.admin_status"), "value_numeric", "") or "") or None,
                 "operational_status": str(getattr(fields.get("interface.oper_status"), "value_numeric", "") or "") or None,
+                "duplex": {2: "half", 3: "full"}.get(getattr(fields.get("interface.duplex"), "value_numeric", None), "unknown" if fields.get("interface.duplex") else None),
                 "last_change": getattr(fields.get("interface.last_change"), "value_numeric", None),
             })
         complete = all(not result.truncated for result in previews.values())

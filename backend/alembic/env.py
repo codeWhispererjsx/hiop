@@ -74,6 +74,9 @@ from app.models.business_intelligence import *  # noqa: F401,F403 - register Epi
 from app.models.multi_property import *  # noqa: F401,F403 - register Epic 9 metadata
 from app.models.discovery_intelligence import *  # noqa: F401,F403 - register Epic 9.5 metadata
 from app.models.hospitality_operations import HospitalityTechnologyService
+from app.models.segmentation import VLANMembershipObservation
+from app.models.asset_intelligence import AssetLifecycleEvent, ManagedAsset
+from app.models.procurement import AssetProcurement, ProcurementAssetLink, ProcurementEvent, ProcurementLineItem
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

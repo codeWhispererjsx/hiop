@@ -7,6 +7,7 @@ The V1-to-V2 data continuity checkpoint is recorded in
 [HIOP V2F reconciliation report](HIOP_V2F_RECONCILIATION_REPORT.md).
 The scoped Version 3 topology implementation is documented in
 [HIOP V3A topology report](HIOP_V3A_TOPOLOGY_REPORT.md).
+V3B adds cached, read-only switch interface and exact-port intelligence on the same V3A graph and V2 device identities; see [HIOP V3B port intelligence report](HIOP_V3B_PORT_INTELLIGENCE_REPORT.md).
 
 Historical later-Version-3 design documents remain in `docs/` for reference, but
 their specialist modules are not part of the active V3A product surface.

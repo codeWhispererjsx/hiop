@@ -511,6 +511,8 @@ class DiscoveryService:
         )
         self.db.add(device)
         self.db.flush()
+        from app.services.asset_intelligence_service import ensure_asset_for_device
+        ensure_asset_for_device(self.db, device, reviewer)
         now = datetime.now(timezone.utc)
         discovered.approved_device_id = device.id
         discovered.review_status = ReviewStatus.APPROVED

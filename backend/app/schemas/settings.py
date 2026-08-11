@@ -26,7 +26,7 @@ class OrganizationSettings(BaseModel):
 
 
 class NetworkSettings(BaseModel):
-    approved_network: str = Field(min_length=3, max_length=64)
+    approved_network: str = Field(min_length=3, max_length=1000)
     automatic_scanning: bool
     scan_interval_minutes: int = Field(ge=5, le=1440)
     ping_timeout_seconds: int = Field(ge=1, le=30)
@@ -39,14 +39,9 @@ class NetworkSettings(BaseModel):
     @field_validator("approved_network")
     @classmethod
     def validate_private_network(cls, value: str) -> str:
-        from ipaddress import ip_network
-        try:
-            network = ip_network(value, strict=False)
-        except ValueError as exc:
-            raise ValueError("Enter a valid CIDR network") from exc
-        if not network.is_private:
-            raise ValueError("Only a private approved network may be configured")
-        return str(network)
+        from app.discovery.network import parse_networks
+        networks = parse_networks(value)
+        return ",".join(str(network) for network in networks)
 
 
 class NotificationSettings(BaseModel):
@@ -57,6 +52,8 @@ class NotificationSettings(BaseModel):
     critical_alerts: bool
     sender_display_name: str = Field(min_length=2, max_length=80)
     recipient_email: EmailStr | None = None
+    daily_audit_email: bool = False
+    daily_audit_time: str = Field(default="23:55", pattern="^([01]\\d|2[0-3]):[0-5]\\d$")
 
 
 class DiscoverySettings(BaseModel):

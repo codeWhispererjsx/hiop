@@ -10,7 +10,7 @@ from app.services.active_directory_secret_service import ActiveDirectorySecretEr
 from app.services.active_directory_service import ActiveDirectoryConnectionService
 from app.services.ldap_client import LdapError
 
-router=APIRouter(prefix="/discovery-intelligence/active-directory",tags=["Active Directory computer intelligence"]);admin=require_roles(["admin","superadmin"])
+router=APIRouter(prefix="/discovery-intelligence/active-directory",tags=["Active Directory computer intelligence"]);admin=require_roles(["admin"])
 
 def get_connection(db,id):
     row=db.get(ActiveDirectoryConnection,id)

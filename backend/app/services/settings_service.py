@@ -24,6 +24,7 @@ DEFAULTS = {
     "notifications.email_notifications": "false", "notifications.device_offline": "true", "notifications.device_restored": "true",
     "notifications.ticket_assignment": "true", "notifications.critical_alerts": "true",
     "notifications.sender_display_name": "HIOP Operations", "notifications.recipient_email": "",
+    "notifications.daily_audit_email": "false", "notifications.daily_audit_time": "23:55",
     "discovery.enabled": "false", "discovery.authorized_cidr_ranges": "10.50.20.0/24", "discovery.ignore_ranges": "",
     "discovery.interval_minutes": "60", "discovery.ping_timeout_seconds": "2", "discovery.concurrency_limit": "10",
     "discovery.max_hosts_per_run": "256", "discovery.automatic_vendor_lookup": "true", "discovery.automatic_hostname_lookup": "true",
@@ -79,7 +80,7 @@ def _bool(value: str | bool) -> bool:
 
 def _group(values: dict[str, str], prefix: str) -> dict[str, Any]:
     result = {key.removeprefix(prefix + "."): value for key, value in values.items() if key.startswith(prefix + ".")}
-    for key in ("automatic_scanning", "exclude_retired_devices", "automatic_alerts", "automatic_offline_tickets", "email_notifications", "device_offline", "device_restored", "ticket_assignment", "critical_alerts", "enabled", "automatic_vendor_lookup", "automatic_hostname_lookup"):
+    for key in ("automatic_scanning", "exclude_retired_devices", "automatic_alerts", "automatic_offline_tickets", "email_notifications", "device_offline", "device_restored", "ticket_assignment", "critical_alerts", "daily_audit_email", "enabled", "automatic_vendor_lookup", "automatic_hostname_lookup"):
         if key in result: result[key] = _bool(result[key])
     for key in ("default_page_size", "scan_interval_minutes", "ping_timeout_seconds", "max_concurrent_workers", "offline_threshold"):
         if key in result: result[key] = int(result[key])

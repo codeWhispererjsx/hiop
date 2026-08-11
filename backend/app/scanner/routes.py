@@ -12,6 +12,7 @@ from typing import List
 from ipaddress import ip_address, ip_network
 from app.services.network_service import scan_all_devices, scan_single_device
 from app.services.settings_service import read_network
+from app.discovery.network import parse_networks
 
 
 router = APIRouter(
@@ -38,8 +39,8 @@ def scan_device(
             detail="Device not found"
         )
 
-    approved = ip_network(read_network(db)["approved_network"], strict=False)
-    if ip_address(device.ip_address) not in approved:
+    approved = parse_networks(read_network(db)["approved_network"])
+    if not any(ip_address(device.ip_address) in network for network in approved):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Device IP address is outside the approved private network",
@@ -55,10 +56,10 @@ def scan_network(
         require_roles(["admin", "technician"])
     )
 ):
-    approved = ip_network(read_network(db)["approved_network"], strict=False)
+    approved = parse_networks(read_network(db)["approved_network"])
     requested = ip_network(scan.network, strict=False)
-    if not requested.subnet_of(approved):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Scan range must be inside the approved private network")
+    if not any(requested.subnet_of(network) for network in approved):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Scan range must be inside an approved private network")
     return scan_range(scan.network)
 
 

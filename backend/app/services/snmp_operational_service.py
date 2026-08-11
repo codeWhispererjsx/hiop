@@ -249,7 +249,7 @@ class SNMPOperationalService:
                 row = SNMPInterface(target_id=target.id, interface_index=index)
                 self.db.add(row); self.db.flush()
             fields = ("name", "description", "alias", "interface_type", "mac_address", "admin_status",
-                      "operational_status", "speed_bps", "mtu", "last_change", "connector_present")
+                      "operational_status", "speed_bps", "duplex", "mtu", "last_change", "connector_present")
             before, after, changed = {}, {}, []
             if row.is_missing:
                 before["is_missing"], after["is_missing"] = True, False; changed.append("is_missing")

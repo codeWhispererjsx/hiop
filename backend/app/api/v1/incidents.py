@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
+from app.core.tenant import organization_context
 from app.models.incidents import (
     IncidentCauseAssessment, IncidentChecklistItem, IncidentCommunication,
     IncidentCommunicationTemplate, IncidentDecision, IncidentEscalation,
@@ -40,9 +41,9 @@ from app.services.incident_playbook_validation_service import validate_playbook,
 from app.services.incident_recommendation_service import generate_recommendations
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
-reader = require_roles(["admin", "superadmin", "technician", "viewer"])
-operator = require_roles(["admin", "superadmin", "technician"])
-admin = require_roles(["admin", "superadmin"])
+reader = require_roles(["platformadmin", "admin", "technician", "viewer"])
+operator = require_roles(["admin", "technician"])
+admin = require_roles(["admin"])
 
 INCIDENT_TYPES = {
     "network_outage", "service_degradation", "device_failure", "security_system_failure",
@@ -116,6 +117,10 @@ class IncidentPatch(BaseModel):
 
 class ReasonWrite(BaseModel):
     reason: str | None = Field(None, max_length=2000)
+
+
+class IncidentEmailWrite(BaseModel):
+    summary: str | None = Field(None, max_length=5000)
 
 
 class ChangeWrite(BaseModel):
@@ -326,7 +331,7 @@ class StepCompleteWrite(BaseModel):
 
 
 def _authorized_ids(db, user):
-    if user.role in {"admin", "superadmin"}:
+    if user.role in {"admin"}:
         return None
     return [row.property_id for row in db.query(UserPropertyAccess).filter_by(user_id=user.id, enabled=True).all()]
 
@@ -736,8 +741,8 @@ def complete_run_step(run_id: UUID, step_run_id: UUID, payload: StepCompleteWrit
 
 
 @router.get("/reports/summary")
-def report_summary(property_id: UUID | None = None, db: Session = Depends(get_db), user=Depends(reader)):
-    query = _scope(db.query(OperationalIncident), OperationalIncident.property_id, db, user)
+def report_summary(property_id: UUID | None = None, db: Session = Depends(get_db), user=Depends(reader),organization_id=Depends(organization_context)):
+    query = _scope(db.query(OperationalIncident), OperationalIncident.property_id, db, user).filter(OperationalIncident.organization_id==organization_id)
     if property_id:
         _property_access(db, user, property_id)
         query = query.filter_by(property_id=property_id)
@@ -761,9 +766,9 @@ def list_incidents(
     search: str | None = None, property_id: UUID | None = None, status: str | None = None,
     severity: str | None = None, incident_type: str | None = None,
     page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100),
-    db: Session = Depends(get_db), user=Depends(reader),
+    db: Session = Depends(get_db), user=Depends(reader),organization_id=Depends(organization_context),
 ):
-    query = _scope(db.query(OperationalIncident), OperationalIncident.property_id, db, user)
+    query = _scope(db.query(OperationalIncident), OperationalIncident.property_id, db, user).filter(OperationalIncident.organization_id==organization_id)
     if property_id:
         _property_access(db, user, property_id)
         query = query.filter_by(property_id=property_id)
@@ -785,14 +790,15 @@ def similar_incidents(payload: IncidentWrite, db: Session = Depends(get_db), use
 
 
 @router.post("", status_code=201)
-def create_incident(payload: IncidentWrite, db: Session = Depends(get_db), user=Depends(operator)):
+def create_incident(payload: IncidentWrite, db: Session = Depends(get_db), user=Depends(operator),organization_id=Depends(organization_context)):
     _property_access(db, user, payload.property_id)
+    if not isinstance(organization_id,UUID):organization_id=db.query(Property.organization_id).filter(Property.id==payload.property_id).scalar()
     similar = _similar(db, payload)
     if payload.correlation_key and any(row.correlation_key == payload.correlation_key for row in similar):
         raise HTTPException(409, {"message": "A correlated open incident already exists", "incident_id": str(similar[0].id)})
     row = OperationalIncident(
         **payload.model_dump(), incident_number=f"INC-{datetime.now(timezone.utc):%Y%m%d}-{secrets.token_hex(3).upper()}",
-        status="declared", declared_at=datetime.now(timezone.utc), created_by=user.username,
+        status="declared", declared_at=datetime.now(timezone.utc), created_by=user.username,organization_id=organization_id,
     )
     db.add(row)
     db.flush()
@@ -847,8 +853,10 @@ def incident_from_service(service_id: UUID, payload: IncidentWrite, db: Session 
 
 
 @router.get("/{incident_id}")
-def get_incident(incident_id: UUID, db: Session = Depends(get_db), user=Depends(reader)):
-    return _incident(db, user, incident_id)
+def get_incident(incident_id: UUID, db: Session = Depends(get_db), user=Depends(reader),organization_id=Depends(organization_context)):
+    row=_incident(db,user,incident_id)
+    if row.organization_id!=organization_id:raise HTTPException(404,"Incident not found")
+    return row
 
 
 @router.patch("/{incident_id}")
@@ -1123,7 +1131,7 @@ def checklist_action(incident_id: UUID, item_id: UUID, action: str, payload: Che
         raise HTTPException(404, "Checklist item or action not found")
     if action in {"skip", "fail"} and not payload.reason:
         raise HTTPException(422, "A reason is required")
-    if action == "skip" and row.required and user.role not in {"admin", "superadmin"}:
+    if action == "skip" and row.required and user.role not in {"admin"}:
         raise HTTPException(403, "Only administrators may skip a required checklist item")
     if action == "complete" and row.evidence_required and not payload.evidence_reference:
         raise HTTPException(409, "Evidence is required for this checklist item")
@@ -1192,7 +1200,7 @@ def get_evidence(incident_id: UUID, evidence_id: UUID, db: Session = Depends(get
     row = db.query(IncidentEvidence).filter_by(id=evidence_id, incident_id=incident.id).first()
     if not row:
         raise HTTPException(404, "Evidence not found")
-    if row.sensitivity in {"restricted", "highly_restricted"} and user.role not in {"admin", "superadmin", "technician"}:
+    if row.sensitivity in {"restricted", "highly_restricted"} and user.role not in {"admin", "technician"}:
         raise HTTPException(403, "Evidence sensitivity requires elevated access")
     return row
 
@@ -1221,7 +1229,7 @@ def decide(incident_id: UUID, decision_id: UUID, payload: DecideWrite, db: Sessi
         raise HTTPException(409, "Decision is unavailable or already resolved")
     if payload.decision not in json.loads(row.options):
         raise HTTPException(422, "Decision is not one of the approved options")
-    if row.approval_required and user.role not in {"admin", "superadmin"}:
+    if row.approval_required and user.role not in {"admin"}:
         raise HTTPException(403, "This decision requires administrator approval")
     row.decision, row.rationale, row.decided_by, row.decided_at = payload.decision, payload.rationale, user.username, datetime.now(timezone.utc)
     add_timeline(db, incident, "decision_made", f"Decision: {row.title}", user.username, payload.rationale, source_id=row.id)
@@ -1232,6 +1240,20 @@ def decide(incident_id: UUID, decision_id: UUID, payload: DecideWrite, db: Sessi
 def communications(incident_id: UUID, db: Session = Depends(get_db), user=Depends(reader)):
     incident = _incident(db, user, incident_id)
     return {"items": db.query(IncidentCommunication).filter_by(incident_id=incident.id).order_by(IncidentCommunication.created_at.desc()).all()}
+
+
+@router.post("/{incident_id}/notify-email")
+def notify_incident_email(incident_id: UUID, payload: IncidentEmailWrite, db: Session = Depends(get_db), user=Depends(operator)):
+    """Send an operator-requested status update to the configured notification recipient."""
+    incident = _incident(db, user, incident_id)
+    from app.services.incident_notification_service import notify_incident
+    summary = payload.summary or "An operator requested an incident status update."
+    if not notify_incident(db, incident, "status update", summary):
+        raise HTTPException(503, "Email notifications are disabled, incomplete, or temporarily unavailable")
+    add_timeline(db, incident, "communication_sent", "Incident email notification sent", user.username, summary)
+    create_audit_log(db, user.username, "INCIDENT_EMAIL_SENT", "OperationalIncident", str(incident.id), f"Sent configured-recipient update for {incident.incident_number}")
+    db.commit()
+    return {"status": "sent", "message": "Email notification sent to the configured recipient."}
 
 
 def _communication_preview(db, user, incident_id, payload):
@@ -1320,7 +1342,7 @@ def recommendation_action(incident_id: UUID, recommendation_id: UUID, action: st
     row = db.query(IncidentRemediationRecommendation).filter_by(id=recommendation_id, incident_id=incident.id).first()
     if not row or row.status != "proposed" or action not in {"approve", "reject", "expire"}:
         raise HTTPException(409, "Recommendation is unavailable for this action")
-    if action == "approve" and (row.risk_level in {"high", "critical"} or row.approval_required) and user.role not in {"admin", "superadmin"}:
+    if action == "approve" and (row.risk_level in {"high", "critical"} or row.approval_required) and user.role not in {"admin"}:
         raise HTTPException(403, "High-risk remediation approval requires an administrator")
     if action in {"reject", "expire"} and not payload.reason:
         raise HTTPException(422, "A reason is required")
@@ -1341,7 +1363,7 @@ def verify_recovery(incident_id: UUID, payload: ReasonWrite, db: Session = Depen
     status = recovery_readiness(db, incident)
     if not status["ready"]:
         raise HTTPException(409, {"message": "Recovery criteria are incomplete", **status})
-    if incident.severity in {"high", "critical"} and user.role not in {"admin", "superadmin"} and str(user.id) != incident.incident_commander_id:
+    if incident.severity in {"high", "critical"} and user.role not in {"admin"} and str(user.id) != incident.incident_commander_id:
         raise HTTPException(403, "Recovery for high/critical incidents requires commander or administrator confirmation")
     incident.recovery_verified = True
     add_timeline(db, incident, "verification_completed", "Recovery verification completed", user.username, payload.reason)
@@ -1480,7 +1502,7 @@ def evidence_bundle(incident_id: UUID, db: Session = Depends(get_db), user=Depen
         "incident": incident, "sources": rows(OperationalIncidentSource),
         "participants": rows(IncidentParticipant), "tasks": rows(IncidentTask),
         "checklist": rows(IncidentChecklistItem), "timeline": rows(IncidentTimelineEntry),
-        "evidence": [item for item in rows(IncidentEvidence) if item.sensitivity != "highly_restricted" or user.role in {"admin", "superadmin"}],
+        "evidence": [item for item in rows(IncidentEvidence) if item.sensitivity != "highly_restricted" or user.role in {"admin"}],
         "decisions": rows(IncidentDecision), "communications": rows(IncidentCommunication),
         "recommendations": rows(IncidentRemediationRecommendation),
         "cause_assessment": db.query(IncidentCauseAssessment).filter_by(incident_id=incident.id).first(),

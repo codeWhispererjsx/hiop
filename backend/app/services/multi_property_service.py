@@ -28,7 +28,7 @@ def property_ids_for_scope(db,scope_type:str,scope_id:UUID|None):
 
 
 def allowed_property_ids(db,user):
-    if user.role=="superadmin": return {r[0] for r in db.query(Property.id)}
+    if user.role=="platformadmin": return {r[0] for r in db.query(Property.id)}
     allowed={r[0] for r in db.query(UserPropertyAccess.property_id).filter(UserPropertyAccess.user_id==str(user.id),UserPropertyAccess.enabled.is_(True),or_(UserPropertyAccess.expires_at.is_(None),UserPropertyAccess.expires_at>datetime.now(timezone.utc)))};scopes=active_scopes(db,user)
     for scope in scopes: allowed.update(property_ids_for_scope(db,scope.scope_type,scope.scope_id))
     if user.role=="admin" and not allowed and not scopes:return {r[0] for r in db.query(Property.id)}
@@ -41,7 +41,7 @@ def require_property(db,user,property_id):
 
 
 def require_scope(db,user,scope_type,scope_id):
-    if user.role=="superadmin":return
+    if user.role=="platformadmin":return
     scopes=active_scopes(db,user);grant_count=db.query(UserPropertyAccess.id).filter(UserPropertyAccess.user_id==str(user.id),UserPropertyAccess.enabled.is_(True)).count()
     if user.role=="admin" and not scopes and not grant_count:return
     if any(scope.scope_type==scope_type and scope.scope_id==scope_id for scope in scopes):return

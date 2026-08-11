@@ -3,15 +3,26 @@ import { NavLink } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 import BrandLogo from "./BrandLogo";
 
-const primaryLinks: { label: string; to: string; icon: IconName }[] = [
+const primaryLinks: { label: string; to: string; icon: IconName; adminOnly?:boolean }[] = [
   { label: "Overview", to: "/dashboard", icon: "dashboard" },
   { label: "Discover", to: "/discovery-intelligence", icon: "discovery" },
   { label: "Monitor", to: "/network", icon: "network" },
-  { label: "Topology", to: "/topology", icon: "hierarchy" },
   { label: "Manage", to: "/devices", icon: "devices" },
   { label: "Automate", to: "/automation", icon: "settings" },
   { label: "Maintain", to: "/incidents", icon: "alerts" },
-  { label: "Administration", to: "/settings", icon: "settings" },
+  { label: "Administration", to: "/administration", icon: "settings", adminOnly:true },
+];
+const monitorLinks: { label:string;to:string;icon:IconName }[]=[
+  {label:"Alerts",to:"/alerts",icon:"alerts"},
+  {label:"Topology",to:"/topology",icon:"hierarchy"},
+  {label:"Segments",to:"/segmentation",icon:"network"},
+];
+const manageLinks: {label:string;to:string;icon:IconName}[]=[{label:"Procurement",to:"/procurement",icon:"devices"}];
+const administrationLinks: { label:string;to:string;icon:IconName }[]=[
+  {label:"Users",to:"/users",icon:"users"},
+  {label:"Roles & access",to:"/administration/roles",icon:"lock"},
+  {label:"Audit log",to:"/administration/audit",icon:"audit"},
+  {label:"Settings",to:"/settings",icon:"server"},
 ];
 const SIDEBAR_SCROLL_KEY = "hiop.sidebar.scroll";
 let lastSidebarScroll = 0;
@@ -30,24 +41,13 @@ export default function Sidebar({
   const navRef = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const nav = navRef.current;
-    if (!nav) return;
+    // Wait until the authenticated role is known. Restoring while role-gated
+    // links are still absent clamps a saved lower position back to zero.
+    if (!nav || role === undefined) return;
     const stored = Number(sessionStorage.getItem(SIDEBAR_SCROLL_KEY) ?? lastSidebarScroll);
     nav.scrollTop = stored;
     const frame = requestAnimationFrame(() => {
       nav.scrollTop = stored;
-      const active = nav.querySelector<HTMLElement>(".nav-link.active");
-      if (active) {
-        const navBounds = nav.getBoundingClientRect();
-        const activeBounds = active.getBoundingClientRect();
-        const hiddenAbove = activeBounds.top < navBounds.top;
-        const hiddenBelow = activeBounds.bottom > navBounds.bottom;
-        if (hiddenAbove || hiddenBelow) {
-          nav.scrollTop = Math.max(
-            0,
-            active.offsetTop - (nav.clientHeight - active.clientHeight) / 2,
-          );
-        }
-      }
       lastSidebarScroll = nav.scrollTop;
       sessionStorage.setItem(SIDEBAR_SCROLL_KEY, String(lastSidebarScroll));
     });
@@ -70,8 +70,8 @@ export default function Sidebar({
     }
     if (window.matchMedia("(max-width: 820px)").matches) onClose();
   };
-  const isAdmin=["admin","superadmin"].includes(role??"");
-  const visiblePrimary=primaryLinks.filter(link=>isAdmin||link.to!=="/settings");
+  const isAdmin=role==="admin";
+  const visiblePrimary=primaryLinks.filter(link=>!link.adminOnly||isAdmin);
   return (
     <aside className={`sidebar ${open ? "is-open" : ""}`}>
       <div className="sidebar-brand">
@@ -99,6 +99,11 @@ export default function Sidebar({
               <span>{link.label}</span>
             </NavLink>
           ))}
+        <p className="nav-label nav-label-spaced">Manage intelligence</p>
+        {manageLinks.map(link=><NavLink key={link.to} to={link.to} onClick={handleNavigation} className={({isActive})=>`nav-link nav-sublink ${isActive?"active":""}`}><Icon name={link.icon}/><span>{link.label}</span></NavLink>)}
+        <p className="nav-label nav-label-spaced">Monitor intelligence</p>
+        {monitorLinks.map(link=><NavLink key={link.to} to={link.to} onClick={handleNavigation} className={({isActive})=>`nav-link nav-sublink ${isActive?"active":""}`}><Icon name={link.icon}/><span>{link.label}</span></NavLink>)}
+        {isAdmin&&<><p className="nav-label nav-label-spaced">Administration tools</p>{administrationLinks.map(link=><NavLink key={link.to} to={link.to} onClick={handleNavigation} className={({isActive})=>`nav-link nav-sublink ${isActive?"active":""}`}><Icon name={link.icon}/><span>{link.label}</span></NavLink>)}</>}
       </nav>
       <div className="sidebar-health">
         <div className="health-row">

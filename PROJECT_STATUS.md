@@ -1,5 +1,9 @@
 # HIOP Project Status
 
+## HIOP V3B — switch and port intelligence
+
+V3B extends the existing V3A graph with cached SNMP interface inventory, bounded bridge MAC-table correlation, V2 identity matching, LLDP/CDP uplink recognition, exact-port evidence/confidence, and preserved current/stale association history. Device details, switch interface tables, and V3A relationship labels expose port information when supported; unsupported data remains explicitly unknown. Network infrastructure access is read-only. See `HIOP_V3B_PORT_INTELLIGENCE_REPORT.md`.
+
 ## HIOP V3A — network topology
 
 V3A is implemented on the active product surface. The `/topology` workspace and

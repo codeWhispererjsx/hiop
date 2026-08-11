@@ -10,7 +10,7 @@ from sqlalchemy import or_, select
 
 from app.core.config import settings
 from app.models.device import Device
-from app.models.snmp import SNMPTarget
+from app.models.snmp import SNMPInterface, SNMPTarget
 from app.models.topology import Topology, TopologyLink, TopologyLinkEvidence, TopologyNode
 from app.models.topology_neighbor import TopologyNeighborCandidate
 from app.services.audit_service import create_audit_log
@@ -75,8 +75,8 @@ class SNMPMACTableProvider:
 
 
 class V3ATopologyService:
-    def __init__(self, db, neighbor_factory=TopologyNeighborCollectionService, mac_provider=None):
-        self.db = db
+    def __init__(self, db, neighbor_factory=TopologyNeighborCollectionService, mac_provider=None, organization_id=None):
+        self.db = db; self.organization_id=organization_id
         self.neighbor_factory = neighbor_factory
         self.mac_provider = mac_provider or SNMPMACTableProvider(db)
 
@@ -255,7 +255,12 @@ class V3ATopologyService:
             return {"topology": None, "nodes": [], "relationships": [], "data_state": "unavailable", "message": "Topology data unavailable. Refresh topology after configuring linked SNMP targets."}
         query = select(TopologyNode).where(TopologyNode.topology_id == topology.id, TopologyNode.device_id.is_not(None), TopologyNode.is_hidden.is_(False))
         nodes = list(self.db.scalars(query).all())
-        devices = {row.id: row for row in self.db.scalars(select(Device).where(Device.id.in_([node.device_id for node in nodes]))).all()} if nodes else {}
+        device_query=select(Device).where(Device.id.in_([node.device_id for node in nodes]))
+        if self.organization_id:
+            from app.models.hierarchy import Property
+            device_query=device_query.join(Property,Device.property_id==Property.id).where(Property.organization_id==self.organization_id)
+        devices = {row.id: row for row in self.db.scalars(device_query).all()} if nodes else {}
+        nodes=[node for node in nodes if node.device_id in devices]
         if search:
             value = search.lower()
             nodes = [node for node in nodes if value in " ".join(filter(None, [node.label, node.management_ip, node.vendor, node.node_type])).lower()]
@@ -282,11 +287,15 @@ class V3ATopologyService:
         link = self.db.get(TopologyLink, relationship_id)
         if not link:
             raise HTTPException(404, "Topology relationship was not found.")
+        if self.organization_id and str(link.id) not in {x["id"] for x in self.graph()["relationships"]}: raise HTTPException(404,"Topology relationship was not found.")
         return self._link_payload(link, include_evidence=True)
 
     def device_neighbors(self, device_id) -> dict:
         topology = self.default_topology()
         device = self.db.get(Device, device_id)
+        if device and self.organization_id:
+            from app.models.hierarchy import Property
+            if not self.db.scalar(select(Property.id).where(Property.id==device.property_id,Property.organization_id==self.organization_id)):device=None
         if not device:
             raise HTTPException(404, "Device was not found.")
         if not topology:
@@ -339,6 +348,10 @@ class V3ATopologyService:
             "confidence_explanation": f"{confidence_level(link.confidence_score).title()} confidence from {source} evidence matched to existing inventory identities.",
             "first_discovered_at": link.first_seen_at, "last_verified_at": link.last_seen_at,
             "state": state, "active": state == "current",
+            "source_port": self._port_payload(link.source_interface_id),
+            "destination_port": self._port_payload(link.target_interface_id),
+            "vlan_id": link.vlan_id,
+            "vlan_name": (link.metadata_json or {}).get("vlan_name"),
         }
         if include_evidence:
             payload["evidence"] = [
@@ -346,3 +359,17 @@ class V3ATopologyService:
                 for row in self.db.scalars(select(TopologyLinkEvidence).where(TopologyLinkEvidence.topology_link_id == link.id).order_by(TopologyLinkEvidence.observed_at.desc())).all()
             ]
         return payload
+
+    def _port_payload(self, interface_id):
+        interface = self.db.get(SNMPInterface, interface_id) if interface_id else None
+        if not interface:
+            return None
+        status = {"1": "up", "2": "down", "3": "testing"}
+        return {
+            "id": str(interface.id), "name": interface.name,
+            "description": interface.description,
+            "admin_status": status.get(str(interface.admin_status), str(interface.admin_status or "unknown").lower()),
+            "operational_status": status.get(str(interface.operational_status), str(interface.operational_status or "unknown").lower()),
+            "speed_bps": interface.speed_bps, "duplex": interface.duplex,
+            "last_observed_at": interface.last_seen_at,
+        }

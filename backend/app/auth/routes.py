@@ -9,6 +9,8 @@ from app.core.security import authenticate_user, create_access_token
 from app.core.security import get_current_user
 from app.api.dependencies import get_db
 from app.core.rate_limit import login_limiter
+from app.services.audit_service import create_audit_log
+from datetime import datetime, timezone
 
 router = APIRouter(
     prefix="/auth",
@@ -39,6 +41,9 @@ def login(
         )
 
     login_limiter.success(client)
+    user.last_login_at = datetime.now(timezone.utc)
+    create_audit_log(db, user.username, "LOGIN_SUCCESS", "User", user.id, "Authenticated successfully")
+    db.commit()
     security_logger.info("authentication_succeeded client=%s user_id=%s", client, user.id)
     access_token = create_access_token(
         data={

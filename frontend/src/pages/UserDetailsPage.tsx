@@ -93,7 +93,7 @@ export default function UserDetailsPage() {
             <div><strong>Administrative actions</strong><span>Changes are enforced by backend authorization.</span></div>
             <div className="user-action-buttons">
               <Link className="secondary-action" to={`/users/${account.id}/edit`}><Icon name="audit" size={14} />Edit</Link>
-              <button className="secondary-action" onClick={() => { setRole(account.role); setDialog("role"); }}><Icon name="settings" size={14} />Change role</button>
+              {!isOwnAccount&&<button className="secondary-action" onClick={() => { setRole(account.role); setDialog("role"); }}><Icon name="settings" size={14} />Change role</button>}
               <button className={account.is_active ? "danger-action" : "secondary-action"} disabled={isOwnAccount && account.is_active} onClick={() => setDialog("status")}><Icon name={account.is_active ? "lock" : "check"} size={14} />{account.is_active ? "Deactivate" : "Activate"}</button>
               <button className="secondary-action" onClick={() => setDialog("password")}><Icon name="lock" size={14} />Reset password</button>
             </div>

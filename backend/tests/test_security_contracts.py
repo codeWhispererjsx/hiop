@@ -112,6 +112,15 @@ class SecurityContractTests(unittest.TestCase):
                 scan_device(NetworkScanCreate(device_id=device_id), db=db, current_user=SimpleNamespace())
         self.assertEqual(error.exception.status_code, 422)
 
+    def test_single_device_scan_accepts_any_approved_private_network(self):
+        device_id = uuid4()
+        device = SimpleNamespace(id=device_id, ip_address="192.168.10.25")
+        db = MagicMock()
+        db.query.return_value.filter.return_value.first.return_value = device
+        with patch("app.scanner.routes.read_network", return_value={"approved_network": "10.50.20.0/24,192.168.10.0/24"}), patch("app.scanner.routes.scan_single_device", return_value={"status": "ok"}):
+            result = scan_device(NetworkScanCreate(device_id=device_id), db=db, current_user=SimpleNamespace())
+        self.assertEqual(result, {"status": "ok"})
+
 
 
 if __name__ == "__main__":

@@ -2,7 +2,6 @@ from sqlalchemy.orm import Session
 from app.models.device import Device
 from app.models.network_scan import NetworkScan
 from app.network.utils import ping_host
-from app.models.alert import Alert
 from app.models.ticket import Ticket
 from app.models.user import User
 from app.websocket.connection_manager import manager
@@ -32,6 +31,9 @@ def scan_single_device(
 
     db.add(new_scan)
     device.network_status = new_scan.status
+    db.flush()
+    from app.services.alert_event_service import evaluate_scan
+    alert_result = evaluate_scan(db, device, new_scan)
 
     status_changed = (
         previous_scan is not None
@@ -40,20 +42,9 @@ def scan_single_device(
 
     live_event = None
 
-    if status_changed and runtime["automatic_alerts"]:
-        alert = Alert(
-            device_id=device.id,
-            previous_status=previous_scan.status,
-            current_status=new_scan.status,
-            message=(
-                f"{device.hostname} changed from "
-                f"{previous_scan.status} to {new_scan.status}"
-            )
-        )
-
-        db.add(alert)
-        db.flush()
-        publish_internal_event(db,event_type="alert_created",property_id=device.property_id,source_entity_type="alert",source_entity_id=alert.id,safe_payload={},severity="critical" if new_scan.status=="Offline" else "informational",status="open",correlation_key=f"device:{device.id}:network")
+    if status_changed:
+        if alert_result["opened"]:
+            publish_internal_event(db,event_type="alert_created",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"opened":alert_result["opened"]},severity="critical" if new_scan.status=="Offline" else "informational",status="open",correlation_key=f"device:{device.id}:network")
         publish_internal_event(db,event_type="device_offline" if new_scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={},severity="critical" if new_scan.status=="Offline" else "informational",status=new_scan.status.lower(),correlation_key=f"device:{device.id}:network")
 
         live_event = {

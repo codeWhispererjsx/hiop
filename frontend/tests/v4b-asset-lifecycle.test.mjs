@@ -1,0 +1,6 @@
+import test from "node:test";import assert from "node:assert/strict";import{readFileSync}from"node:fs";
+const details=readFileSync(new URL("../src/pages/AssetDetailsPage.tsx",import.meta.url),"utf8"),manage=readFileSync(new URL("../src/pages/DevicesPage.tsx",import.meta.url),"utf8"),form=readFileSync(new URL("../src/pages/AssetFormPage.tsx",import.meta.url),"utf8"),api=readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
+test("V4B lifecycle remains inside Manage",()=>{for(const text of ["Lifecycle history","Place in Maintenance","Retire Asset","Reactivate Asset","Warranty","Asset age"])assert.ok(details.includes(text),text)});
+test("asset form records lifecycle facts without network identity",()=>{for(const text of ["Acquisition date","Received date","Deployment date","Warranty start","Warranty end","Expected replacement","Condition"])assert.ok(form.includes(text),text);assert.doesNotMatch(form,/ip_address|mac_address/)});
+test("manage filters lifecycle condition and warranty",()=>{for(const text of ["lifecycle","condition","warranty","warranty_status"])assert.ok(manage.includes(text),text)});
+test("lifecycle mutations use dedicated API",()=>{assert.match(api,/transitionAsset/);assert.match(api,/\/lifecycle/)});

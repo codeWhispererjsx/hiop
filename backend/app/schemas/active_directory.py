@@ -335,7 +335,7 @@ class ActiveDirectoryResolveRequest(BaseModel):
     candidate_id: str | None = None
     approved_fields: list[str] = Field(default_factory=list, max_length=20)
     device: dict[str, Any] | None = None
-    role: Literal["admin", "technician", "staff"] | None = None
+    role: Literal["admin", "technician", "viewer"] | None = None
     active: bool | None = None
     confirm: bool = False
     confirm_privileged_role: bool = False
@@ -369,7 +369,7 @@ class ActiveDirectoryOUMappingWrite(BaseModel):
 
 class ActiveDirectoryGroupRoleMappingWrite(BaseModel):
     source_group: str = Field(min_length=1, max_length=255)
-    target_role: Literal["admin", "technician", "staff"]
+    target_role: Literal["admin", "technician", "viewer"]
     priority: int = Field(default=100, ge=0, le=10000)
     enabled: bool = True
     requires_confirmation: bool = True

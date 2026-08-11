@@ -23,7 +23,7 @@ class DependencyWrite(BaseModel): upstream_step_id:UUID; downstream_step_id:UUID
 class ApprovalDecision(BaseModel): decision:str; reason:str|None=None
 def _publish(event,**safe): manager.broadcast_from_thread({"type":event,**{key:str(value) if isinstance(value,UUID) else value for key,value in safe.items()}})
 def _authorized_property_ids(db,user):
-    if user.role in {"admin","superadmin"}: return None
+    if user.role in {"admin"}: return None
     return [row.property_id for row in db.query(UserPropertyAccess).filter_by(user_id=user.id,enabled=True).all()]
 def _assert_workflow_access(db,user,workflow):
     allowed=_authorized_property_ids(db,user)

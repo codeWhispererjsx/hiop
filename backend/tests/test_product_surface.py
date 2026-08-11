@@ -6,7 +6,6 @@ def test_removed_specialist_apis_are_not_exposed():
     removed_prefixes = (
         "/api/v1/active-directory",
         "/api/v1/analytics",
-        "/api/v1/assets",
         "/api/v1/business-intelligence",
         "/api/v1/changes",
         "/api/v1/cmdb",

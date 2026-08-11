@@ -1,4 +1,5 @@
 const TOKEN_KEY = "hiop_token";
+const ORGANIZATION_KEY = "hiop.organization_context";
 
 export function getAuthToken(): string | null {
   const current = sessionStorage.getItem(TOKEN_KEY);
@@ -19,7 +20,11 @@ export function setAuthToken(token: string): void {
 export function clearAuthToken(): void {
   localStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(ORGANIZATION_KEY);
 }
+
+export const getOrganizationContext=()=>sessionStorage.getItem(ORGANIZATION_KEY);
+export const setOrganizationContext=(id:string|null)=>id?sessionStorage.setItem(ORGANIZATION_KEY,id):sessionStorage.removeItem(ORGANIZATION_KEY);
 
 export function hasUsableToken(): boolean {
   const token = getAuthToken();

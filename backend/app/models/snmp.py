@@ -394,6 +394,7 @@ class SNMPInterface(Base):
     admin_status: Mapped[str | None] = mapped_column(String(20))
     operational_status: Mapped[str | None] = mapped_column(String(20))
     speed_bps: Mapped[int | None] = mapped_column(BigInteger)
+    duplex: Mapped[str | None] = mapped_column(String(20))
     mtu: Mapped[int | None] = mapped_column(Integer)
     last_change: Mapped[int | None] = mapped_column(BigInteger)
     connector_present: Mapped[bool | None] = mapped_column(Boolean)

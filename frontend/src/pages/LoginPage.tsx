@@ -21,8 +21,9 @@ export default function LoginPage() {
     try {
       const data = await endpoints.login(email, password);
       setAuthToken(data.access_token);
+      const user=await endpoints.me();
       setPassword("");
-      navigate("/dashboard");
+      navigate(user.role==="platformadmin"?"/platform":"/dashboard");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to sign in");
     } finally {

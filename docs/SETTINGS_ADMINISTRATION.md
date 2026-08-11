@@ -28,7 +28,7 @@ Departments, properties, buildings, floors, rooms, and network zones use the nor
 
 The automatic scan interval is reloaded into the existing APScheduler job without creating duplicate jobs. Intervals below five minutes are rejected. Manual range scans must be a subnet of the saved approved private CIDR. Ping timeout and automatic alert/offline-ticket choices are read from the database during scans. Retired devices remain excluded by the existing inventory rule.
 
-The approved network remains a runtime guard; firewall rules and deployment network boundaries remain infrastructure responsibilities.
+Approved private networks are stored as a normalized comma-separated CIDR list. A device or requested range must fall inside at least one approved CIDR. These ranges remain a runtime guard; firewall rules and deployment network boundaries remain infrastructure responsibilities.
 
 ## Email configuration
 

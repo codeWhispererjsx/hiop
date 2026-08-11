@@ -33,7 +33,7 @@ export default function UsersPage() {
     { label: "Total users", value: all.length, icon: "users", tone: "gold" },
     { label: "Active", value: all.filter((user) => user.is_active).length, icon: "check", tone: "success" },
     { label: "Inactive", value: all.filter((user) => !user.is_active).length, icon: "lock", tone: "muted" },
-    { label: "Administrators", value: all.filter((user) => user.role === "admin").length, icon: "settings", tone: "gold" },
+    { label: "Administrators", value: all.filter((user) => user.role==="admin").length, icon: "settings", tone: "gold" },
     { label: "Technicians", value: all.filter((user) => user.role === "technician").length, icon: "devices", tone: "success" },
   ];
   const resetPage = () => setPage(1);
@@ -41,7 +41,7 @@ export default function UsersPage() {
   return <DashboardLayout>
     <div className="page-title-row users-title-row">
       <PageTitle eyebrow="Administration" title="Team & access" copy="Manage accounts, access levels, and sign-in availability across HIOP." />
-      {me.data?.role === "admin" && <Link className="primary-action" to="/users/new"><Icon name="users" size={16} />Add user</Link>}
+      {me.data?.role==="admin" && <Link className="primary-action" to="/users/new"><Icon name="users" size={16} />Add user</Link>}
     </div>
 
     <section className="users-summary" aria-label="User account summary">
@@ -68,7 +68,7 @@ export default function UsersPage() {
           <td data-label="Email"><a className="users-email" href={`mailto:${user.email}`}>{user.email}</a></td>
           <td data-label="Role"><span className={`role-badge role-${user.role}`}>{user.role}</span></td>
           <td data-label="Status"><span className={`status-badge ${user.is_active ? "online" : "offline"}`}><i />{user.is_active ? "Active" : "Inactive"}</span></td>
-          <td data-label="Created"><time>{user.created_at ? new Date(user.created_at).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }) : "Not tracked"}</time></td>
+          <td data-label="Created"><time>{user.created_at ? new Date(user.created_at).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" }) : "Not tracked"}<small>{user.last_login_at?`Last active ${new Date(user.last_login_at).toLocaleDateString()}`:"No recorded sign-in"}</small></time></td>
           <td className="users-actions"><Link className="users-view" to={`/users/${user.id}`}>View <Icon name="arrow" size={14} /></Link></td>
         </tr>)}</tbody></table></div>}
 

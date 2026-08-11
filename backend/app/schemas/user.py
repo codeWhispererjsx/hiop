@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
@@ -6,7 +7,8 @@ class UserCreate(BaseModel):
     username: str = Field(min_length=3, max_length=50)
     email: EmailStr
     password: str = Field(min_length=10, max_length=128)
-    role: str = "staff"
+    role: str = Field(default="viewer", pattern="^(admin|technician|viewer)$")
+    organization_id: UUID | None = None
     is_active: bool = True
 
     @field_validator("username")
@@ -35,7 +37,7 @@ class UserStatusUpdate(BaseModel):
 
 
 class UserRoleUpdate(BaseModel):
-    role: str = Field(pattern="^(admin|technician|staff)$")
+    role: str = Field(pattern="^(admin|technician|viewer)$")
 
 
 class PasswordReset(BaseModel):
@@ -59,9 +61,11 @@ class UserResponse(BaseModel):
     username: str
     email: EmailStr
     role: str
+    organization_id: UUID | None = None
     is_active: bool
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    last_login_at: datetime | None = None
 
     class Config:
         from_attributes = True

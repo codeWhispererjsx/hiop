@@ -47,6 +47,7 @@ AUTOMATION_JOB_PREFIX = "automation_workflow_"
 AUTOMATION_DELAY_JOB_PREFIX = "automation_delayed_"
 AUTOMATION_OUTBOX_JOB_ID = "automation_event_outbox"
 AUTOMATION_RETENTION_JOB_ID = "automation_retention_cleanup"
+DAILY_AUDIT_EMAIL_JOB_ID = "daily_audit_email"
 INCIDENT_JOB_PREFIX = "incident_"
 INCIDENT_JOB_INTERVALS = {
     "sla_evaluation": 5,
@@ -208,6 +209,15 @@ def scheduled_automation_retention():
         from app.services.automation_event_outbox_service import cleanup_retention
         cleanup_retention(db,30,500)
     except Exception:db.rollback();logger.exception("Automation retention cleanup failed")
+    finally:db.close()
+
+def scheduled_daily_audit_email():
+    db=SessionLocal()
+    try:
+        from app.services.audit_digest_service import send_daily_audit_digest
+        send_daily_audit_digest(db)
+    except Exception:
+        db.rollback();logger.exception("Daily audit email failed")
     finally:db.close()
 
 
@@ -1390,6 +1400,7 @@ def start_scheduler():
         reconcile_automation_jobs(db)
         scheduler.add_job(scheduled_automation_outbox,"interval",minutes=1,id=AUTOMATION_OUTBOX_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
         scheduler.add_job(scheduled_automation_retention,"cron",hour=4,id=AUTOMATION_RETENTION_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
+        scheduler.add_job(scheduled_daily_audit_email,"interval",minutes=5,id=DAILY_AUDIT_EMAIL_JOB_ID,replace_existing=True,max_instances=1,coalesce=True,misfire_grace_time=300)
         recover_stale_incident_runs(db)
         reconcile_incident_jobs()
         reconcile_discovery_intelligence_jobs()

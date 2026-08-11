@@ -28,6 +28,13 @@ from app.api.v1.incidents import router as incidents_router
 from app.api.v1.discovery_intelligence import router as discovery_intelligence_router
 from app.api.v1.active_directory_v2c import router as active_directory_v2c_router
 from app.api.v1.topology_v3a import router as topology_v3a_router
+from app.api.v1.port_intelligence import router as port_intelligence_router
+from app.api.v1.segmentation import router as segmentation_router
+from app.api.v1.monitoring_health import router as monitoring_health_router
+from app.api.v1.alerts_events import router as alerts_events_router
+from app.api.v1.assets import router as assets_router
+from app.api.v1.platform import router as platform_router
+from app.api.v1.procurement import router as procurement_router
 from app.users.routes import router as users_router
 from app.services.scheduler_service import scheduler
 from app.websocket.connection_manager import manager
@@ -54,7 +61,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "X-Organization-ID"],
 )
 
 
@@ -142,3 +149,10 @@ app.include_router(incidents_router, prefix=settings.api_prefix)
 app.include_router(discovery_intelligence_router, prefix=settings.api_prefix)
 app.include_router(active_directory_v2c_router, prefix=settings.api_prefix)
 app.include_router(topology_v3a_router, prefix=settings.api_prefix)
+app.include_router(port_intelligence_router, prefix=settings.api_prefix)
+app.include_router(segmentation_router, prefix=settings.api_prefix)
+app.include_router(monitoring_health_router, prefix=settings.api_prefix)
+app.include_router(alerts_events_router, prefix=settings.api_prefix)
+app.include_router(assets_router, prefix=settings.api_prefix)
+app.include_router(platform_router, prefix=settings.api_prefix)
+app.include_router(procurement_router, prefix=settings.api_prefix)

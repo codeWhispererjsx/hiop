@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
 import { Icon } from "../components/Icon";
@@ -8,7 +8,7 @@ import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { endpoints } from "../lib/api";
 import { useRequest } from "../hooks/useRequest";
-import type { Alert, Device, LiveEvent, Scan } from "../lib/types";
+import type { Alert, Device, LiveEvent, MonitoringSummary, Scan } from "../lib/types";
 
 type ScanState = "idle" | "running" | "completed" | "failed";
 
@@ -20,17 +20,20 @@ export default function NetworkPage() {
   const devices = useRequest(endpoints.devices, []);
   const scans = useRequest(() => endpoints.scanHistory(100), []);
   const alerts = useRequest(endpoints.alerts, []);
+  const [window,setWindow]=useState("24h");
+  const health=useRequest(()=>endpoints.monitoringSummary(window),[window]);
   const reloadDevices = devices.reload;
   const reloadScans = scans.reload;
   const reloadAlerts = alerts.reload;
+  const reloadHealth=health.reload;
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [scanningDevice, setScanningDevice] = useState("");
   const [message, setMessage] = useState("");
   const [socketConnected, setSocketConnected] = useState<boolean | null>(null);
 
   const refresh = useCallback(async () => {
-    await Promise.all([reloadDevices(), reloadScans(), reloadAlerts()]);
-  }, [reloadDevices, reloadScans, reloadAlerts]);
+    await Promise.all([reloadDevices(), reloadScans(), reloadAlerts(),reloadHealth()]);
+  }, [reloadDevices, reloadScans, reloadAlerts,reloadHealth]);
 
   const live = useCallback((event: LiveEvent) => {
     if (event.event === "device_status_changed") {
@@ -74,25 +77,29 @@ export default function NetworkPage() {
   const lastScan = scans.data?.[0]?.scanned_at ?? null;
   const activeAlerts = (alerts.data ?? []).filter(alert => !alert.acknowledged);
   const running = scanState === "running";
-  const initialLoading = devices.loading || scans.loading || alerts.loading;
-  const initialError = devices.error || scans.error || alerts.error;
+  const initialLoading = devices.loading || scans.loading || alerts.loading || health.loading;
+  const initialError = devices.error || scans.error || alerts.error || health.error;
 
   return <DashboardLayout onLiveEvent={live} onLiveStateChange={setSocketConnected}>
-    <PageTitle eyebrow="Network operations centre" title="Live network command" copy="Monitor reachability, run authenticated checks and respond to infrastructure changes in real time." action={<div className="noc-actions"><button className="secondary-action" disabled={running} onClick={() => void refresh()}><Icon name="network"/>Refresh status</button><button className="primary-action" disabled={running || !activeDevices.length} onClick={() => void runScan()}><Icon name="wifi"/>{running && scanningDevice === "all" ? "Scanning…" : "Scan all devices"}</button></div>}/>
+    <nav className="page-actions" aria-label="Monitoring workspaces"><Link className="secondary-action" to="/alerts">Alerts</Link><Link className="secondary-action" to="/topology">Topology</Link><Link className="secondary-action" to="/segmentation">Segments</Link></nav>
+    <PageTitle eyebrow="Advanced monitoring" title="Device health intelligence" copy="Historical, explainable health from persisted ICMP and supported SNMP evidence." action={<div className="noc-actions"><select aria-label="Monitoring time window" value={window} onChange={event=>setWindow(event.target.value)}><option value="1h">Last hour</option><option value="24h">Last 24 hours</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select><button className="secondary-action" disabled={running} onClick={() => void refresh()}><Icon name="network"/>Refresh view</button><button className="primary-action" disabled={running || !activeDevices.length} onClick={() => void runScan()}><Icon name="wifi"/>{running && scanningDevice === "all" ? "Monitoring…" : "Refresh monitoring"}</button></div>}/>
     {socketConnected === false && <div className="noc-connection-error" role="alert"><Icon name="warning"/><div><strong>Live connection interrupted</strong><span>Status changes may be delayed. HIOP is reconnecting automatically.</span></div></div>}
     {message && <div className={`inline-notice ${scanState === "failed" ? "notice-error" : ""}`} role={scanState === "failed" ? "alert" : "status"}>{message}</div>}
     {scanState !== "idle" && <ScanProgress state={scanState}/>}
 
     {initialLoading || initialError ? <Feedback loading={initialLoading} error={initialError} onRetry={refresh}/> : <>
       <section className="noc-summary">
-        <StatCard label="Total devices" value={devices.data?.length ?? 0} detail="Registered inventory, including retired" icon="devices" trend="Inventory"/>
-        <StatCard label="Online devices" value={activeDevices.filter(d => d.network_status === "Online").length} detail="Responding to the latest check" icon="check" tone="success" trend="Live"/>
-        <StatCard label="Offline devices" value={activeDevices.filter(d => d.network_status === "Offline").length} detail="Currently unreachable" icon="warning" tone="danger" trend="Action"/>
-        <StatCard label="Unknown devices" value={activeDevices.filter(d => !["Online", "Offline"].includes(d.network_status)).length} detail="Awaiting a confirmed result" icon="wifi" tone="warning" trend="Pending"/>
+        <StatCard label="Monitored devices" value={health.data?.monitored??0} detail="Devices with observations in this window" icon="devices" trend={window}/>
+        <StatCard label="Online" value={health.data?.online??0} detail="Latest reachability succeeded" icon="check" tone="success" trend="Current"/>
+        <StatCard label="Offline" value={health.data?.offline??0} detail="Latest reachability failed" icon="warning" tone="danger" trend="Current"/>
+        <StatCard label="Degraded" value={health.data?.degraded??0} detail="Latency or failed-check evidence" icon="network" tone="warning" trend="Health"/>
+        <StatCard label="Unknown" value={health.data?.unknown??0} detail="Insufficient monitoring evidence" icon="wifi" tone="warning" trend="Evidence"/>
         <StatCard label="Last scan time" value={lastScan ? new Date(lastScan).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "Never"} detail={formatDate(lastScan)} icon="clock" trend="Latest"/>
         <StatCard label="Average response" value={averageResponse == null ? "—" : latency(averageResponse)} detail="Latest responsive device checks" icon="network" trend="Latency"/>
         <StatCard label="Active alerts" value={activeAlerts.length} detail="Unacknowledged network events" icon="alerts" tone={activeAlerts.length ? "danger" : "success"} trend="Attention"/>
       </section>
+
+      <HealthEvidence summary={health.data} devices={devices.data??[]} onOpen={id=>navigate(`/devices/${id}`)}/>
 
       <section className="panel noc-device-panel">
         <header className="section-head"><div><h2>Network devices</h2><p>Current inventory state joined with each device's latest persisted scan.</p></div><span className={`live-pill ${socketConnected ? "connected" : ""}`}>{socketConnected ? "Live updates" : "Reconnecting"}</span></header>
@@ -111,6 +118,11 @@ export default function NetworkPage() {
       </section>
     </>}
   </DashboardLayout>;
+}
+
+function HealthEvidence({summary,devices,onOpen}:{summary:MonitoringSummary|null;devices:Device[];onOpen:(id:string)=>void}){
+  const names=new Map(devices.map(device=>[device.id,device.hostname]));
+  return <section className="panel"><header className="section-head"><div><h2>Explainable device health</h2><p>Availability, latency and failed-check rate are calculated only from stored observations.</p></div></header>{!summary?.devices.length?<Feedback empty="No monitoring evidence exists for this time window."/>:<div className="noc-history-list">{summary.devices.map(item=><button key={item.device_id} onClick={()=>onOpen(item.device_id)}><span className={`pulse ${item.status.toLowerCase()}`}/><span><strong>{names.get(item.device_id)??"Known device"}</strong><small>{item.reasons.join(" · ")}</small></span><StatusBadge status={item.health}/><span>{item.availability_percent==null?"Availability unknown":`${item.availability_percent}% available`}</span><span>{item.packet_loss_percent==null?"Packet loss needs more data":`${item.packet_loss_percent}% failed checks`}</span></button>)}</div>}</section>;
 }
 
 function ScanProgress({state}: {state: ScanState}) {

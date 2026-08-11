@@ -6,8 +6,8 @@ from app.core.security import hash_password
 from app.models.user import User
 from app.schemas.user import PasswordReset, UserCreate, UserRoleUpdate, UserStatusUpdate, UserUpdate
 from app.services.audit_service import create_audit_log
+from app.core.access_control import OPERATIONAL_ROLES, SUPPORTED_ROLES
 
-SUPPORTED_ROLES = ("admin", "technician", "staff")
 
 
 def _get(db: Session, user_id: str) -> User:
@@ -30,17 +30,24 @@ def _ensure_role(role: str):
         raise HTTPException(422, "Unsupported role")
 
 
-def _ensure_not_last_admin(db: Session, user: User):
-    if user.role == "admin" and user.is_active:
-        count = db.query(User).filter(User.role == "admin", User.is_active.is_(True)).count()
-        if count <= 1:
-            raise HTTPException(409, "The last active administrator cannot be changed")
+def _ensure_actor_can_manage(actor: User, target: User | None = None, requested_role: str | None = None):
+    if actor.role != "admin":
+        raise HTTPException(403, "User administration is not permitted")
+    if target and target.organization_id != actor.organization_id:
+        raise HTTPException(404, "User not found")
+    if target and target.id == actor.id and requested_role is not None:
+        raise HTTPException(403, "You cannot change your own role")
+    if target and target.role == "platformadmin":
+        raise HTTPException(403, "Platform accounts are managed in Platform Control Center")
+    if requested_role and requested_role not in OPERATIONAL_ROLES:
+        raise HTTPException(403, "Organization Administrators may assign organization roles only")
 
 
 def create_user(db: Session, payload: UserCreate, actor: User):
     _ensure_role(payload.role)
+    _ensure_actor_can_manage(actor, requested_role=payload.role)
     _ensure_unique(db, payload.username.strip(), str(payload.email).lower())
-    user = User(username=payload.username.strip(), email=str(payload.email).lower(), hashed_password=hash_password(payload.password), role=payload.role, is_active=payload.is_active)
+    user = User(username=payload.username.strip(), email=str(payload.email).lower(), hashed_password=hash_password(payload.password), role=payload.role, is_active=payload.is_active, organization_id=actor.organization_id)
     try:
         db.add(user); db.flush()
         create_audit_log(db, actor.username, "USER_CREATED", "User", user.id, f"Created account {user.username}")
@@ -51,6 +58,7 @@ def create_user(db: Session, payload: UserCreate, actor: User):
 
 def update_user(db: Session, user_id: str, payload: UserUpdate, actor: User):
     user = _get(db, user_id)
+    _ensure_actor_can_manage(actor, user)
     username = payload.username.strip() if payload.username is not None else user.username
     email = str(payload.email).lower() if payload.email is not None else user.email
     _ensure_unique(db, username, email, user.id)
@@ -64,10 +72,9 @@ def update_user(db: Session, user_id: str, payload: UserUpdate, actor: User):
 
 def set_status(db: Session, user_id: str, payload: UserStatusUpdate, actor: User):
     user = _get(db, user_id)
+    _ensure_actor_can_manage(actor, user)
     if user.id == actor.id and not payload.is_active:
         raise HTTPException(400, "You cannot deactivate your own account")
-    if not payload.is_active:
-        _ensure_not_last_admin(db, user)
     user.is_active = payload.is_active
     action = "USER_ACTIVATED" if payload.is_active else "USER_DEACTIVATED"
     try:
@@ -80,8 +87,7 @@ def set_status(db: Session, user_id: str, payload: UserStatusUpdate, actor: User
 def set_role(db: Session, user_id: str, payload: UserRoleUpdate, actor: User):
     _ensure_role(payload.role)
     user = _get(db, user_id)
-    if user.role == "admin" and payload.role != "admin":
-        _ensure_not_last_admin(db, user)
+    _ensure_actor_can_manage(actor, user, payload.role)
     previous = user.role; user.role = payload.role
     try:
         create_audit_log(db, actor.username, "USER_ROLE_CHANGED", "User", user.id, f"Changed {user.username} role from {previous} to {payload.role}")
@@ -91,7 +97,7 @@ def set_role(db: Session, user_id: str, payload: UserRoleUpdate, actor: User):
 
 
 def reset_password(db: Session, user_id: str, payload: PasswordReset, actor: User):
-    user = _get(db, user_id); user.hashed_password = hash_password(payload.password)
+    user = _get(db, user_id); _ensure_actor_can_manage(actor, user); user.hashed_password = hash_password(payload.password)
     try:
         create_audit_log(db, actor.username, "USER_PASSWORD_RESET", "User", user.id, f"Administrator reset the password for {user.username}")
         db.commit(); return {"message": "Temporary password set successfully"}
