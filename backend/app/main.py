@@ -35,6 +35,13 @@ from app.api.v1.alerts_events import router as alerts_events_router
 from app.api.v1.assets import router as assets_router
 from app.api.v1.platform import router as platform_router
 from app.api.v1.procurement import router as procurement_router
+from app.api.v1.vendors import router as vendors_router
+from app.api.v1.service_management import router as service_management_router
+from app.api.v1.organization_structure import router as organization_structure_router
+from app.api.v1.problems import router as problems_router
+from app.api.v1.changes import router as changes_router
+from app.api.v1.knowledge_base import router as knowledge_base_router
+from app.api.v1.reporting import router as reporting_router
 from app.users.routes import router as users_router
 from app.services.scheduler_service import scheduler
 from app.websocket.connection_manager import manager
@@ -156,3 +163,10 @@ app.include_router(alerts_events_router, prefix=settings.api_prefix)
 app.include_router(assets_router, prefix=settings.api_prefix)
 app.include_router(platform_router, prefix=settings.api_prefix)
 app.include_router(procurement_router, prefix=settings.api_prefix)
+app.include_router(vendors_router, prefix=settings.api_prefix)
+app.include_router(service_management_router, prefix=settings.api_prefix)
+app.include_router(organization_structure_router, prefix=settings.api_prefix)
+app.include_router(problems_router, prefix=settings.api_prefix)
+app.include_router(changes_router, prefix=settings.api_prefix)
+app.include_router(knowledge_base_router, prefix=settings.api_prefix)
+app.include_router(reporting_router, prefix=settings.api_prefix)

@@ -17,8 +17,9 @@ const monitorLinks: { label:string;to:string;icon:IconName }[]=[
   {label:"Topology",to:"/topology",icon:"hierarchy"},
   {label:"Segments",to:"/segmentation",icon:"network"},
 ];
-const manageLinks: {label:string;to:string;icon:IconName}[]=[{label:"Procurement",to:"/procurement",icon:"devices"}];
+const manageLinks: {label:string;to:string;icon:IconName}[]=[{label:"Reports",to:"/reports",icon:"audit"},{label:"Procurement",to:"/procurement",icon:"devices"},{label:"Vendors",to:"/vendors",icon:"users"}];
 const administrationLinks: { label:string;to:string;icon:IconName }[]=[
+  {label:"Organization",to:"/administration/organization",icon:"hierarchy"},
   {label:"Users",to:"/users",icon:"users"},
   {label:"Roles & access",to:"/administration/roles",icon:"lock"},
   {label:"Audit log",to:"/administration/audit",icon:"audit"},

@@ -5,6 +5,7 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.models.asset_intelligence import AssetLifecycleEvent, ManagedAsset
+from app.models.asset_management import Vendor
 from app.models.alert import Alert
 from app.models.device import Device
 from app.models.incidents import OperationalIncidentSource
@@ -50,11 +51,12 @@ def present(db, asset, include_relationships=False):
     age_months=None
     if asset.acquisition_date:age_months=max(0,(today.year-asset.acquisition_date.year)*12+today.month-asset.acquisition_date.month-(today.day<asset.acquisition_date.day))
     acquisition=db.execute(select(AssetProcurement).join(ProcurementAssetLink,ProcurementAssetLink.procurement_id==AssetProcurement.id).where(ProcurementAssetLink.asset_id==asset.id)).scalar_one_or_none()
+    supplier=db.get(Vendor,asset.vendor_id) if asset.vendor_id else None
     return {
         "id": asset.id, "asset_number": asset.asset_number, "device_id": asset.device_id,
         "name": asset.name, "asset_tag": asset.asset_tag, "device_type": device.device_type if device else asset.device_type,
         "status": asset.status, "ci_category": asset.ci_category,
-        "vendor": device.brand if device else asset.vendor, "model": device.model if device else asset.model,
+        "vendor": device.brand if device else asset.vendor, "supplier":{"id":supplier.id,"vendor_id":supplier.vendor_number,"name":supplier.legal_name,"status":supplier.status,"primary_email":supplier.primary_email,"primary_phone":supplier.primary_phone} if supplier else None, "model": device.model if device else asset.model,
         "serial_number": device.serial_number if device else asset.serial_number,
         "hostname": device.hostname if device else None, "ip_address": device.ip_address if device else None,
         "mac_address": device.mac_address if device else None,

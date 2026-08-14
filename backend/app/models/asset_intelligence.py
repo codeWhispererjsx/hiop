@@ -32,6 +32,7 @@ class ManagedAsset(Base):
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="active", server_default="active")
     ci_category: Mapped[str] = mapped_column(String(24), nullable=False, default="device", server_default="device")
     vendor: Mapped[str | None] = mapped_column(String(120))
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("vendors.id", ondelete="SET NULL"), index=True)
     model: Mapped[str | None] = mapped_column(String(160))
     serial_number: Mapped[str | None] = mapped_column(String(180), index=True)
     department_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), index=True)

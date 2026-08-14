@@ -27,6 +27,12 @@ const AssetFormPage = lazy(() => import("./pages/AssetFormPage"));
 const AssetDetailsPage = lazy(() => import("./pages/AssetDetailsPage"));
 const PlatformControlCenterPage = lazy(() => import("./pages/PlatformControlCenterPage"));
 const ProcurementPage = lazy(() => import("./pages/ProcurementPage"));
+const VendorsPage = lazy(() => import("./pages/VendorsPage"));
+const OrganizationStructurePage = lazy(() => import("./pages/OrganizationStructurePage"));
+const ProblemsPage = lazy(() => import("./pages/ProblemsPage"));
+const ChangesPage = lazy(() => import("./pages/ChangesPage"));
+const KnowledgePage = lazy(() => import("./pages/KnowledgePage"));
+const ReportingPage = lazy(() => import("./pages/ReportingPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -61,6 +67,8 @@ export default function App() {
     <Route path="/devices" element={protectedPage(<DevicesPage />)} />
     <Route path="/procurement" element={protectedPage(<ProcurementPage />)} />
     <Route path="/procurement/:id" element={protectedPage(<ProcurementPage />)} />
+    <Route path="/vendors" element={protectedPage(<VendorsPage />)} />
+    <Route path="/vendors/:id" element={protectedPage(<VendorsPage />)} />
     <Route path="/devices/new" element={<Navigate to="/assets/new" replace />} />
     <Route path="/assets/new" element={roleProtectedPage(<AssetFormPage />, ["admin"])} />
     <Route path="/assets/:id/edit" element={roleProtectedPage(<AssetFormPage />, ["admin"])} />
@@ -75,8 +83,20 @@ export default function App() {
     <Route path="/automation/*" element={protectedPage(<AutomationPage />)} />
     <Route path="/incidents" element={protectedPage(<IncidentsPage />)} />
     <Route path="/incidents/new" element={protectedPage(<IncidentsPage />)} />
+    <Route path="/incidents/services" element={protectedPage(<IncidentsPage />)} />
+    <Route path="/incidents/services/:serviceId" element={protectedPage(<IncidentsPage />)} />
     <Route path="/incidents/playbooks/*" element={protectedPage(<IncidentsPage />)} />
     <Route path="/incidents/:id/*" element={protectedPage(<IncidentsPage />)} />
+    <Route path="/problems" element={protectedPage(<ProblemsPage />)} />
+    <Route path="/problems/new" element={roleProtectedPage(<ProblemsPage />, ["admin"])} />
+    <Route path="/problems/:id" element={protectedPage(<ProblemsPage />)} />
+    <Route path="/changes" element={protectedPage(<ChangesPage />)} />
+    <Route path="/changes/new" element={roleProtectedPage(<ChangesPage />, ["admin"])} />
+    <Route path="/changes/:id" element={protectedPage(<ChangesPage />)} />
+    <Route path="/knowledge" element={protectedPage(<KnowledgePage />)} />
+    <Route path="/knowledge/new" element={roleProtectedPage(<KnowledgePage />, ["admin", "technician"])} />
+    <Route path="/knowledge/:id" element={protectedPage(<KnowledgePage />)} />
+    <Route path="/reports" element={protectedPage(<ReportingPage />)} />
     <Route path="/hierarchy" element={protectedPage(<HierarchyPage />)} />
     <Route path="/users" element={roleProtectedPage(<UsersPage />, ["admin"])} />
     <Route path="/users/new" element={roleProtectedPage(<UserFormPage mode="create" />, ["admin"])} />
@@ -86,6 +106,7 @@ export default function App() {
     <Route path="/administration" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/roles" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/audit" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
+    <Route path="/administration/organization" element={roleProtectedPage(<OrganizationStructurePage />, ["admin"])} />
     <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />
     <Route path="/" element={<Navigate to="/dashboard" replace />} />
     <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -50,6 +50,9 @@ class User(Base):
         onupdate=func.now()
     )
     organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=True, index=True)
+    department_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True)
+    primary_location_type: Mapped[str | None] = mapped_column(String(30))
+    primary_location_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
 
     last_login_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 

@@ -1,0 +1,11 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const page=fs.readFileSync(new URL("../src/pages/ProblemsPage.tsx",import.meta.url),"utf8");
+const app=fs.readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
+const incidents=fs.readFileSync(new URL("../src/pages/IncidentsPage.tsx",import.meta.url),"utf8");
+const api=fs.readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
+test("problem management is inside Maintain",()=>{assert.match(app,/path="\/problems"/);assert.match(incidents,/to="\/problems"/);assert.doesNotMatch(app,/path="\/multi-property/)});
+test("V4F exposes practical problem lifecycle and known-error view",()=>{for(const value of ["open","investigating","known_error","resolved","closed","Problem statement","Root cause","Workaround","Corrective resolution"])assert.ok(page.toLowerCase().includes(value.toLowerCase()))});
+test("problems link incidents and assets and reuse incident impact",()=>{const source=(page+api).toLowerCase();for(const value of ["related incidents","related assets","existing incident impact","potential impact"])assert.ok(source.includes(value))});
+test("problem APIs are explicit and no automatic root cause UI exists",()=>{for(const route of ["/problems/summary","/problems/${id}/transition","/problems/${id}/relationships","/problems/incident-links/"])assert.ok(api.includes(route));assert.doesNotMatch(page,/AI root/i)});

@@ -1,0 +1,11 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const page=fs.readFileSync(new URL("../src/pages/ChangesPage.tsx",import.meta.url),"utf8");
+const app=fs.readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
+const incidents=fs.readFileSync(new URL("../src/pages/IncidentsPage.tsx",import.meta.url),"utf8");
+const api=fs.readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
+test("change management is inside Maintain",()=>{assert.match(app,/path="\/changes"/);assert.match(incidents,/to="\/changes"/);assert.match(page,/Maintain · changes/)});
+test("V4G exposes the practical lifecycle",()=>{for(const value of ["draft","submitted","under_review","approved","scheduled","in_progress","completed","failed","rolled_back","cancelled","closed"])assert.ok(page.includes(value))});
+test("plans, risk, conflicts and existing impact are visible",()=>{for(const value of ["Risk explanation","Implementation plan","Validation plan","Rollback plan","Potential scheduling conflict","existing impact evidence"])assert.ok(page.toLowerCase().includes(value.toLowerCase()))});
+test("change API surface is focused and read-only toward infrastructure",()=>{for(const route of ["/changes/summary","/changes/${id}/actions/${action}","/changes/${id}/notes","/changes/calendar"])assert.ok(api.includes(route));assert.doesNotMatch(page,/execute command|apply configuration|firmware/i)});

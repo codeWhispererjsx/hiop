@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.core.tenant import organization_context
 from app.models.procurement import AssetProcurement,ProcurementAssetLink
+from app.models.asset_management import Vendor
 from app.schemas.procurement import ProcurementAction,ProcurementAssetLinkCreate,ProcurementCreate,ProcurementOrder,ProcurementReceipt,ProcurementUpdate
 from app.services import procurement_service as service
 router=APIRouter(prefix="/procurement",tags=["V4C Procurement"]);reader=require_roles(["platformadmin","admin","technician","viewer"]);manager=require_roles(["admin"])
@@ -35,6 +36,7 @@ def get_record(record_id:UUID,db:Session=Depends(get_db),_=Depends(reader),org=D
 def update_record(record_id:UUID,payload:ProcurementUpdate,db:Session=Depends(get_db),actor=Depends(manager),org=Depends(organization_context)):
     row=record(db,record_id,org)
     if row.status!="draft":raise HTTPException(422,"Only draft procurement can be edited")
+    if payload.vendor_id and not db.query(Vendor).filter(Vendor.id==payload.vendor_id,Vendor.organization_id==org,Vendor.status=="active").first():raise HTTPException(422,"Select an active vendor from this organization")
     for key,value in payload.model_dump(exclude_unset=True).items():setattr(row,key,value)
     service._event(db,row,actor,"updated",row.status);db.commit();return service.present(db,row,True)
 @router.post("/{record_id}/request")

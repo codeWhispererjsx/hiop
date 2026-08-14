@@ -66,6 +66,14 @@ class KnowledgeArticle(Base):
     created_at: Mapped[datetime] = now()
     updated_at: Mapped[datetime] = now()
     __table_args__ = (Index("ix_knowledge_article_property_status_updated", "property_id", "status", "updated_at"),)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), index=True)
+    article_number: Mapped[str | None] = mapped_column(String(30), unique=True, index=True)
+    article_type: Mapped[str] = mapped_column(String(40), default="reference", server_default="reference")
+    category: Mapped[str] = mapped_column(String(40), default="other", server_default="other")
+    tags_text: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    steps_text: Mapped[str] = mapped_column(Text, default="[]", server_default="[]")
+    warnings: Mapped[str | None] = mapped_column(Text)
+    last_viewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class KnowledgeArticleTag(Base):
@@ -590,6 +598,7 @@ class KnowledgeRelationship(Base):
     created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"))
     created_at: Mapped[datetime] = now()
     __table_args__ = (UniqueConstraint("source_type", "source_id", "target_type", "target_id", "relationship_type", name="uq_knowledge_relationship"),)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), index=True)
 
 
 class KnowledgeSearchStat(Base):

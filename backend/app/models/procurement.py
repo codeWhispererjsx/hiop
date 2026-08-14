@@ -22,6 +22,7 @@ class AssetProcurement(Base):
     expected_delivery_date:Mapped[date|None]=mapped_column(Date)
     received_date:Mapped[date|None]=mapped_column(Date)
     department_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("departments.id",ondelete="SET NULL"),index=True)
+    vendor_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("vendors.id",ondelete="SET NULL"),index=True)
     requested_by:Mapped[str]=mapped_column(String,ForeignKey("users.id",ondelete="RESTRICT"),nullable=False,index=True)
     approved_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id",ondelete="SET NULL"))
     currency:Mapped[str]=mapped_column(String(3),nullable=False,default="NGN",server_default="NGN")

@@ -141,6 +141,7 @@ class AssetResponse(BaseModel):
     status: str
     ci_category: str
     vendor: str | None
+    supplier: dict | None = None
     model: str | None
     serial_number: str | None
     hostname: str | None = None

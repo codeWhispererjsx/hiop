@@ -54,6 +54,22 @@ class ChangeRequest(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True)); implemented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True)); closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True)); created_at: Mapped[datetime] = now(); updated_at: Mapped[datetime] = now()
     __table_args__ = (Index("ix_change_requests_property_status", "property_id", "status"),)
 
+    # V4G operational governance fields. Technical execution remains external.
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), index=True)
+    change_type: Mapped[str] = mapped_column(String(20), default="normal", server_default="normal")
+    risk_explanation: Mapped[str | None] = mapped_column(Text)
+    approver_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    actual_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    actual_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    outcome: Mapped[str | None] = mapped_column(String(30))
+    closure_notes: Mapped[str | None] = mapped_column(Text)
+    closed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"))
+    rollback_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    rollback_owner_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"))
+    rollback_reason: Mapped[str | None] = mapped_column(Text)
+    rollback_notes: Mapped[str | None] = mapped_column(Text)
+
 
 class ChangeApproval(Base):
     __tablename__ = "change_approvals"
@@ -214,3 +230,15 @@ class ChangeCommunication(Base):
 class ChangeRelationship(Base):
     __tablename__ = "change_relationships"
     id: Mapped[uuid.UUID] = uid(); change_request_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("change_requests.id", ondelete="CASCADE"), index=True); target_type: Mapped[str] = mapped_column(String(40), index=True); target_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True); relationship_type: Mapped[str] = mapped_column(String(40), default="related"); notes: Mapped[str | None] = mapped_column(Text); created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id")); created_at: Mapped[datetime] = now(); __table_args__ = (UniqueConstraint("change_request_id", "target_type", "target_id", "relationship_type", name="uq_change_relationship"),)
+
+
+class ChangeTimelineEvent(Base):
+    __tablename__ = "change_timeline_events"
+    id: Mapped[uuid.UUID] = uid()
+    change_request_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("change_requests.id", ondelete="CASCADE"), index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(40), index=True)
+    summary: Mapped[str] = mapped_column(Text)
+    actor_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id"))
+    actor_name: Mapped[str] = mapped_column(String(160))
+    created_at: Mapped[datetime] = now()

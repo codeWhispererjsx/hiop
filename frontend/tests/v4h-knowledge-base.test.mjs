@@ -1,0 +1,11 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+const page=fs.readFileSync(new URL("../src/pages/KnowledgePage.tsx",import.meta.url),"utf8");
+const app=fs.readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
+const incidents=fs.readFileSync(new URL("../src/pages/IncidentsPage.tsx",import.meta.url),"utf8");
+const api=fs.readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
+test("knowledge lives within Maintain",()=>{assert.match(app,/path="\/knowledge"/);assert.match(incidents,/to="\/knowledge"/);assert.doesNotMatch(app,/path="\/multi-property/)});
+test("knowledge search, filters, procedures and safe empty state exist",()=>{for(const value of ["Search Knowledge","All categories","All article types","Procedure steps","Warnings / notes","No knowledge articles yet."])assert.ok(page.includes(value))});
+test("knowledge lifecycle, versions, feedback and relationships are visible",()=>{for(const value of ["Submit for Review","Publish","Archive","Restore to Draft","Version history","Was this article helpful?","Related HIOP records"])assert.ok(page.includes(value))});
+test("knowledge API is focused and has no AI or executable runbook calls",()=>{for(const route of ["/knowledge-base/summary","/knowledge-base/articles/${id}","/knowledge-base/articles/${id}/feedback","/knowledge-base/links/"])assert.ok(api.includes(route));assert.doesNotMatch(page,/AI-generated|execute runbook|arbitrary script/i)});
