@@ -30,6 +30,7 @@ router = APIRouter(
     prefix="/devices",
     tags=["Devices"]
 )
+from app.services.billing_service import enforce_limit
 
 
 def require_device(db: Session, device_id: str, organization_id) -> Device:
@@ -46,6 +47,7 @@ def create_device(
     current_user: User = Depends(require_roles(["admin"])),
     organization_id=Depends(organization_context),
 ):
+    enforce_limit(db,organization_id,"devices")
     if device.property_id and not db.query(Property).filter(Property.id==device.property_id,Property.organization_id==organization_id).first(): raise HTTPException(403,"Property is outside your organization")
     return create_device_service(
         db=db,

@@ -12,6 +12,7 @@ from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.schemas.user import UserCreate, UserRoleUpdate, UserStatusUpdate, UserUpdate
 from app.services import user_service
+from app.users.routes import role_catalog
 
 
 def actor(role, ident="actor"):
@@ -42,6 +43,11 @@ def test_four_minimal_roles_have_clear_permissions():
     assert "users.manage_operational" in ROLE_DEFINITIONS["admin"]["permissions"]
     assert "incidents.operate_assigned" in ROLE_DEFINITIONS["technician"]["permissions"]
     assert all(permission.endswith(".view") or permission == "data.view_all" for permission in ROLE_DEFINITIONS["viewer"]["permissions"])
+
+
+def test_organization_role_catalog_excludes_platform_authority():
+    catalog = role_catalog(actor("admin"))
+    assert {role["key"] for role in catalog} == {"admin", "technician", "viewer"}
 
 
 def test_active_user_authenticates_and_inactive_user_is_rejected(monkeypatch):

@@ -33,6 +33,7 @@ Required backend settings:
 - `LOG_LEVEL`
 - `DATABASE_POOL_SIZE`, `DATABASE_MAX_OVERFLOW`, `DATABASE_POOL_RECYCLE_SECONDS`
 - `SCHEDULER_ENABLED`
+- Dedicated credential encryption keys: `HIOP_AD_SECRET_KEY`, `HIOP_SNMP_SECRET_KEY`, and `HIOP_DISCOVERY_CREDENTIAL_KEY` (32+ random characters each)
 - Optional `EMAIL_ADDRESS`, `EMAIL_PASSWORD`, and `EMAIL_RECIPIENT`
 
 Generate secrets outside the repository, for example with a managed secrets service or `openssl rand -hex 32`. Do not paste generated values into tickets, logs, or documentation.
@@ -48,6 +49,9 @@ POSTGRES_USER=hiop
 POSTGRES_PASSWORD=<secret>
 DATABASE_URL=postgresql+psycopg2://hiop:<URL-encoded-secret>@db:5432/hiop
 SECRET_KEY=<64-character-random-secret>
+HIOP_AD_SECRET_KEY=<64-character-random-secret>
+HIOP_SNMP_SECRET_KEY=<64-character-random-secret>
+HIOP_DISCOVERY_CREDENTIAL_KEY=<64-character-random-secret>
 ```
 
 URL-encode reserved characters in the database password when constructing `DATABASE_URL`. Keep `POSTGRES_PASSWORD` as the original unencoded value for PostgreSQL initialization.
@@ -64,6 +68,32 @@ docker compose ps
 Compose waits for PostgreSQL, runs `alembic upgrade head` as a one-shot migration service, starts one backend worker, then exposes frontend Nginx on port `8080` by default. PostgreSQL data persists in `hiop_postgres_data`. The database is not published to the host network.
 
 Do not run schema downgrades in production. Apply upgrades in a maintenance window after a verified backup. Review new migrations before deployment and keep application rollback images available; schema rollback requires an explicit recovery plan.
+
+## Clean installation and first administrator
+
+The supported clean-install sequence is deterministic and requires no source edits:
+
+1. Configure all required environment variables and secrets.
+2. Run `docker compose config`; placeholder or missing production values must fail here or during application settings validation.
+3. Run `docker compose build --pull` and `docker compose up -d db`.
+4. Run `docker compose run --rm migrate`. It must complete `alembic upgrade head` before the API starts.
+5. Create the one-time first platform administrator interactively:
+
+   ```bash
+   docker compose run --rm -it backend python scripts/bootstrap_platform_admin.py --username platform-owner --email owner@example.com
+   ```
+
+   The password is entered twice without terminal echo. The command refuses to run if any platform administrator already exists, never overwrites an account, and writes an audit event.
+6. Run `docker compose up -d backend frontend`, verify `/health`, `/healthz`, and the frontend `/healthz`, then sign in at `/login`.
+7. Create the customer organization, initial property, and organization administrator through the Platform Control Center. A new organization must show zero operational records.
+
+The migration service may be rerun safely when already at head; it does not bootstrap users or reset data. Never use `backend/scripts/reset_operational_data.py` in a production installation.
+
+## Supported upgrade baseline
+
+The supported baseline is any database whose Alembic revision is present in this repository's single migration chain. Before upgrading, record `alembic current`, create and verify a PostgreSQL custom-format backup, review all revisions between current and head, and rehearse the upgrade on an isolated restore. Databases with missing, manually stamped, or unknown revisions require investigation; do not force-stamp them.
+
+Upgrade sequence: stop writes, back up, run the one-shot migration job, deploy one backend replica, deploy the frontend, and run module-level read checks. Rebuilding or recreating application containers does not remove PostgreSQL data. `docker compose down -v`, removing `hiop_postgres_data`, or running a clean restore is destructive.
 
 ## Manual backend deployment
 
@@ -107,7 +137,9 @@ HIOP uses Authorization-header bearer tokens rather than cookies; secure-cookie 
 
 ## Health and monitoring
 
-`GET /health` is unauthenticated and intentionally contains no secrets. It reports API, PostgreSQL, application version, environment, UTC timestamp, scheduler state, WebSocket availability/active count, scanner availability, and last scan. It returns `503` when required components are degraded. Frontend Nginx exposes `/healthz`.
+`GET /health` is unauthenticated and intentionally contains no secrets. It reports API, PostgreSQL, application version, environment, UTC timestamp, scheduler state, WebSocket process state, scanner configuration, and last scan. It returns `503` when required components are degraded. Frontend Nginx exposes `/healthz`.
+
+Backend `GET /healthz` is the readiness baseline and checks API process, database connectivity, and scheduler state. Discovery is reported only as configured; this endpoint does not claim that a hotel network or integration is reachable.
 
 Monitor:
 
@@ -128,6 +160,16 @@ Back up PostgreSQL outside the source tree and container volume. `scripts/backup
 Test restoration quarterly in an isolated database. `scripts/restore-postgres.sh` requires an explicit `CONFIRM_RESTORE=RESTORE_HIOP`, verifies the checksum when present, and performs a destructive clean restore. Take a rollback backup and stop application writes first. After restore, run `alembic upgrade head`, start HIOP, verify `/health`, authenticate, open each module, and confirm scan/audit continuity before reopening traffic.
 
 There are no uploaded assets in HIOP v1.0. Back up deployment manifests, encrypted environment/secrets through their owning platform, TLS certificates according to CA policy, and operational runbooks. Never include secrets or dumps in Git.
+
+RPO and RTO are **not yet contractually defined**. RPO is determined by the operator's verified backup schedule and off-host replication. RTO is determined by PostgreSQL restore time, migration time, image availability, and validation procedure. Measure both during each recovery rehearsal before setting service commitments.
+
+## Persistence and restart proof
+
+PostgreSQL is the only required persistent application volume: `hiop_postgres_data`. Backend and frontend containers are disposable. For a rehearsal, create uniquely named test organization/property/device records, capture their IDs, restart backend and frontend, restart PostgreSQL in an approved isolated environment, and verify the same IDs through authenticated APIs. Confirm the scheduler job inventory does not duplicate. The supported topology remains exactly one backend process because APScheduler is embedded.
+
+## Local files, imports, and attachments
+
+Current imports are processed through bounded request/temporary data paths; no production attachment/document store is provided. Containers use ephemeral `/tmp`. Do not treat container filesystems as durable storage. If future deployment-specific import staging is enabled, mount a separate permission-restricted volume, define size/retention/cleanup, and include it explicitly in backup scope. PostgreSQL remains authoritative for current product records.
 
 ## Release procedure
 

@@ -77,6 +77,7 @@ from app.models.hospitality_operations import HospitalityTechnologyService
 from app.models.segmentation import VLANMembershipObservation
 from app.models.asset_intelligence import AssetLifecycleEvent, ManagedAsset
 from app.models.procurement import AssetProcurement, ProcurementAssetLink, ProcurementEvent, ProcurementLineItem
+from app.models.billing import BillingDocumentReference, BillingEvent, CommercialPlan, OrganizationSubscription
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

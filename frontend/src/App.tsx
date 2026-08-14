@@ -6,6 +6,11 @@ import { endpoints } from "./lib/api";
 import type { User } from "./lib/types";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
+const PublicHomePage = lazy(() => import("./pages/PublicHomePage"));
+const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
+const PricingPage = lazy(() => import("./pages/PricingPage"));
+const GetStartedPage = lazy(() => import("./pages/GetStartedPage"));
+const OnboardingEntryPage = lazy(() => import("./pages/OnboardingEntryPage"));
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const DevicesPage = lazy(() => import("./pages/DevicesPage"));
 const DeviceDetailsPage = lazy(() => import("./pages/DeviceDetailsPage"));
@@ -34,6 +39,7 @@ const ChangesPage = lazy(() => import("./pages/ChangesPage"));
 const KnowledgePage = lazy(() => import("./pages/KnowledgePage"));
 const ReportingPage = lazy(() => import("./pages/ReportingPage"));
 const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
+const BillingPage = lazy(() => import("./pages/BillingPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -63,7 +69,12 @@ export default function App() {
   const roleProtectedPage = (page: ReactNode, roles: User["role"][]) =>
     <Protected><RoleProtected roles={roles}>{page}</RoleProtected></Protected>;
   return <Suspense fallback={<Feedback loading />}><Routes>
+    <Route path="/" element={<PublicHomePage />} />
+    <Route path="/features" element={<FeaturesPage />} />
+    <Route path="/pricing" element={<PricingPage />} />
+    <Route path="/get-started" element={<GetStartedPage />} />
     <Route path="/login" element={<LoginPage />} />
+    <Route path="/app" element={protectedPage(<OnboardingEntryPage />)} />
     <Route path="/dashboard" element={protectedPage(<DashboardPage />)} />
     <Route path="/devices" element={protectedPage(<DevicesPage />)} />
     <Route path="/procurement" element={protectedPage(<ProcurementPage />)} />
@@ -109,8 +120,8 @@ export default function App() {
     <Route path="/administration/audit" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/organization" element={roleProtectedPage(<OrganizationStructurePage />, ["admin"])} />
     <Route path="/administration/properties" element={roleProtectedPage(<PropertiesPage />, ["admin"])} />
+    <Route path="/administration/billing" element={roleProtectedPage(<BillingPage />, ["admin"])} />
     <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />
-    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-    <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></Suspense>;
 }

@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import BrandLogo from "../components/BrandLogo";
 import ThemeToggle from "../components/ThemeToggle";
@@ -49,6 +49,7 @@ export default function LoginPage() {
         </form>
         <p className="login-message" role="alert">{message && <><Icon name="warning" size={16} />{message}</>}</p>
         <p className="login-security"><Icon name="lock" size={15}/>Protected access. Activity is recorded in the hospitality IT audit trail.</p>
+        <p className="login-public-links"><Link to="/">Back to HIOP</Link><Link to="/get-started">Create an organization</Link></p>
       </div>
     </section>
   </main>;

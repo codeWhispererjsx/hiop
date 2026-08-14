@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=20, ge=0, le=100)
     database_pool_recycle_seconds: int = Field(default=1800, ge=300, le=86400)
     scheduler_enabled: bool = True
+    hiop_ad_secret_key: str = ""
+    hiop_snmp_secret_key: str = ""
+    hiop_discovery_credential_key: str = ""
 
     # Active Directory integration is opt-in and disabled by default.
     active_directory_enabled: bool = False
@@ -149,6 +152,17 @@ class Settings(BaseSettings):
             raise ValueError("Production SECRET_KEY still contains a placeholder value")
         if self.environment == "production" and any(marker in self.database_url.lower() for marker in ("replace", "change-me")):
             raise ValueError("Production DATABASE_URL still contains a placeholder value")
+        if self.environment == "production" and not self.database_url.startswith(("postgresql://", "postgresql+psycopg2://")):
+            raise ValueError("Production DATABASE_URL must use PostgreSQL")
+        if self.environment == "production":
+            encryption_keys = {
+                "HIOP_AD_SECRET_KEY": self.hiop_ad_secret_key,
+                "HIOP_SNMP_SECRET_KEY": self.hiop_snmp_secret_key,
+                "HIOP_DISCOVERY_CREDENTIAL_KEY": self.hiop_discovery_credential_key,
+            }
+            missing = [name for name, value in encryption_keys.items() if len(value) < 32]
+            if missing:
+                raise ValueError(f"Production credential encryption keys must contain at least 32 characters: {', '.join(missing)}")
         if self.ad_default_page_size > self.ad_maximum_page_size:
             raise ValueError("AD_DEFAULT_PAGE_SIZE cannot exceed AD_MAXIMUM_PAGE_SIZE")
         if self.ad_minimum_sync_interval_minutes > self.ad_maximum_sync_interval_minutes:

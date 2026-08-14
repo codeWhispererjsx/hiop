@@ -43,6 +43,8 @@ from app.api.v1.changes import router as changes_router
 from app.api.v1.knowledge_base import router as knowledge_base_router
 from app.api.v1.reporting import router as reporting_router
 from app.api.v1.property_management import router as property_management_router
+from app.api.v1.public_onboarding import router as public_onboarding_router
+from app.api.v1.billing import router as billing_router
 from app.users.routes import router as users_router
 from app.services.scheduler_service import scheduler
 from app.websocket.connection_manager import manager
@@ -69,7 +71,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Organization-ID"],
+    allow_headers=["Authorization", "Content-Type", "X-Organization-ID", "X-HIOP-Organization-ID", "X-HIOP-Property-ID"],
 )
 
 
@@ -127,10 +129,26 @@ def health():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "scheduler": scheduler_state,
         "websocket": {"status": "available", "active_connections": manager.connection_count},
-        "network_scanner": "available",
+        "network_scanner": "configured",
         "last_scan": last_scan,
     }
     return JSONResponse(payload, status_code=200 if healthy else 503)
+
+
+@app.get("/healthz", tags=["Operations"])
+def healthz():
+    """Baseline readiness: API process, database connectivity, and scheduler state."""
+    database = "available"
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        database = "unavailable"
+    finally:
+        db.close()
+    scheduler_state = "disabled" if not settings.scheduler_enabled else "running" if scheduler.running else "stopped"
+    healthy = database == "available" and scheduler_state in {"running", "disabled"}
+    return JSONResponse({"status": "healthy" if healthy else "degraded", "api": "available", "database": database, "scheduler": scheduler_state}, status_code=200 if healthy else 503)
 
 app.include_router(
     device_router,
@@ -172,3 +190,5 @@ app.include_router(changes_router, prefix=settings.api_prefix)
 app.include_router(knowledge_base_router, prefix=settings.api_prefix)
 app.include_router(reporting_router, prefix=settings.api_prefix)
 app.include_router(property_management_router, prefix=settings.api_prefix)
+app.include_router(public_onboarding_router, prefix=settings.api_prefix)
+app.include_router(billing_router, prefix=settings.api_prefix)

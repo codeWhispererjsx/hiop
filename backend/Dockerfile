@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir --requirement requirements-discovery.txt
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
+COPY scripts ./scripts
 
 USER hiop
 EXPOSE 8000

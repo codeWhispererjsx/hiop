@@ -36,6 +36,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 async function performRequest<T>(path: string, init: RequestInit, token: string | null): Promise<T> {
   const headers = new Headers(init.headers);
+  const method = (init.method ?? "GET").toUpperCase();
   const activeProperty = window.localStorage.getItem("hiop.active_property_id");
   const activeOrganization=getOrganizationContext();
   if(activeOrganization&&!headers.has("X-Organization-ID"))headers.set("X-Organization-ID",activeOrganization);
@@ -45,6 +46,19 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
   let response: Response;
   try { response = await fetch(`${API_URL}${path}`, { ...init, headers }); }
   catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
+  if (response.status === 403 && activeProperty && ["GET", "HEAD"].includes(method)) {
+    let detail: string | undefined;
+    try {
+      const body: unknown = await response.clone().json();
+      if (typeof body === "object" && body !== null && "detail" in body) detail = errorDetailMessage(body.detail);
+    } catch { /* non-JSON response */ }
+    if (detail === "Property is outside your permitted scope") {
+      window.localStorage.removeItem("hiop.active_property_id");
+      headers.delete("X-HIOP-Property-ID");
+      try { response = await fetch(`${API_URL}${path}`, { ...init, headers }); }
+      catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
+    }
+  }
   if (response.status === 401) { clearAuthToken(); window.dispatchEvent(new Event("hiop:unauthorized")); }
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
@@ -83,6 +97,15 @@ async function download(path: string) {
 
 export const endpoints = {
   propertyContext:()=>api<import("./types").PropertyContext>("/property-management/context"),
+  billingPlans:()=>api<import("./types").BillingPlan[]>("/billing/public/plans"),
+  currentBilling:()=>api<{subscription:import("./types").OrganizationSubscription|null;usage?:Record<string,number>}>("/billing/current"),
+  billingDocuments:()=>api<Array<{id:string;type:string;hosted_url:string|null;amount:string|null;currency:string|null;status:string|null;issued_at:string|null}>>("/billing/documents"),
+  startBillingTrial:(plan_code:string)=>api<import("./types").OrganizationSubscription>("/billing/trial",{method:"POST",body:JSON.stringify({plan_code})}),
+  changeBillingPlan:(plan_code:string,billing_interval:string)=>api<import("./types").OrganizationSubscription>("/billing/change-plan",{method:"POST",body:JSON.stringify({plan_code,billing_interval})}),
+  createBillingCheckout:(plan_code:string,billing_interval:string)=>api<{url?:string}>("/billing/checkout",{method:"POST",body:JSON.stringify({plan_code,billing_interval})}),
+  cancelBilling:(at_period_end=true)=>api<import("./types").OrganizationSubscription>("/billing/cancel",{method:"POST",body:JSON.stringify({at_period_end})}),
+  platformBillingOverview:()=>api<import("./types").PlatformBillingOverview>("/billing/platform/overview"),
+  platformBillingPlans:()=>api<import("./types").BillingPlan[]>("/billing/platform/plans"),
   managedProperties:()=>api<import("./types").ManagedProperty[]>("/property-management"),
   propertyComparison:()=>api<{organization_id:string;properties:import("./types").ManagedProperty[]}>("/property-management/comparison"),
   createManagedProperty:(body:Record<string,unknown>)=>api<import("./types").ManagedProperty>("/property-management",{method:"POST",body:JSON.stringify(body)}),

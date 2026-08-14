@@ -8,6 +8,7 @@ from app.models.audit_log import AuditLog
 from app.schemas.user import PasswordReset, UserCreate, UserResponse, UserRoleUpdate, UserStatusUpdate, UserUpdate
 from app.services import user_service
 from app.core.access_control import OPERATIONAL_ROLES, role_definitions
+from app.services.billing_service import enforce_limit
 
 router = APIRouter(prefix="/users", tags=["Users"])
 admin = require_roles(["admin"])
@@ -20,7 +21,7 @@ def roles(actor: User = Depends(admin)):
 
 @router.get("/role-definitions")
 def role_catalog(_: User = Depends(admin)):
-    return role_definitions()
+    return [role for role in role_definitions() if role["key"] in OPERATIONAL_ROLES]
 
 
 @router.get("/administration-audit")
@@ -56,6 +57,7 @@ def get_user(user_id: str, db: Session = Depends(get_db), actor: User = Depends(
 
 @router.post("", response_model=UserResponse, status_code=201)
 def create(payload: UserCreate, db: Session = Depends(get_db), actor: User = Depends(admin)):
+    enforce_limit(db,actor.organization_id,"users")
     return user_service.create_user(db, payload, actor)
 
 

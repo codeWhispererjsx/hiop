@@ -19,6 +19,7 @@ from app.models.problem_management import Problem
 from app.models.property_access import UserPropertyAccess
 from app.models.user import User
 from app.services.audit_service import create_audit_log
+from app.services.billing_service import enforce_limit
 
 router=APIRouter(prefix="/property-management",tags=["V4J Multi-Property"])
 reader=require_roles(["platformadmin","admin","technician","viewer"]);manager=require_roles(["platformadmin","admin"])
@@ -51,6 +52,7 @@ def list_properties(db:Session=Depends(get_db),user:User=Depends(reader),org=Dep
     allowed=allowed_property_ids(db,user,org);return [present(db,x,True) for x in db.query(Property).filter(Property.organization_id==org,Property.id.in_(allowed)).order_by(Property.name)]
 @router.post("",status_code=201)
 def create_property(payload:PropertyWrite,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    enforce_limit(db,org,"properties")
     if db.query(Property).filter(Property.organization_id==org,Property.code==payload.code).first():raise HTTPException(409,"Property code already exists")
     row=Property(name=payload.name.strip(),code=payload.code,address=payload.address,city=payload.city,state=payload.state,country=payload.country,timezone=payload.timezone,email=str(payload.contact_email) if payload.contact_email else None,phone=payload.contact_phone,description=payload.description,organization_id=org,is_active=True,operational_status="active");db.add(row);db.flush();create_audit_log(db,actor.username,"PROPERTY_CREATED","Property",str(row.id),f"Created property {row.name}");db.commit();db.refresh(row);return present(db,row,True)
 @router.get("/context")

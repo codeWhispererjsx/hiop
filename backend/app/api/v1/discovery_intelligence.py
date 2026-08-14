@@ -6,6 +6,8 @@ from pydantic import BaseModel,Field
 from sqlalchemy import func,or_
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
+from app.core.tenant import organization_context,property_context
+from app.models.hierarchy import Property
 from app.models.cmdb import CIClass,CIIdentifier,CIType,ConfigurationItem
 from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryIdentityConflict,DiscoveryIdentityHistory,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask
 from app.models.topology import Topology,TopologyLink,TopologyNode
@@ -55,10 +57,12 @@ def get(db,model,id,label):
     return row
 def audit(db,user,action,entity,id,message):create_audit_log(db,user.username,action,entity,str(id),message)
 def credential_view(row):return {"id":row.id,"policy_id":row.policy_id,"name":row.name,"credential_type":row.credential_type,"username":row.username,"scope_cidr":row.scope_cidr,"least_privilege_notes":row.least_privilege_notes,"enabled":row.enabled,"last_used_at":row.last_used_at,"created_at":row.created_at,"secret_configured":True}
-def consolidated_device_rows(db,limit=1000):
-    rows=db.query(DiscoveryResult).order_by(DiscoveryResult.confidence_score.desc(),DiscoveryResult.last_seen_at.desc()).limit(10000).all();devices={};mac_index={};name_index={};ip_index={}
+def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
+    scoped=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(Property.organization_id==organization_id)
+    if property_id is not None:scoped=scoped.filter(DiscoveryResult.property_id==property_id)
+    rows=scoped.order_by(DiscoveryResult.confidence_score.desc(),DiscoveryResult.last_seen_at.desc()).limit(10000).all();devices={};mac_index={};name_index={};ip_index={}
     by_id={row.id:row for row in rows};canonical_ids={row.canonical_result_id for row in rows if row.canonical_result_id}
-    approved_by_result=dict(db.query(DiscoveryResult.id,DiscoveredDevice.approved_device_id).join(DiscoveredDevice,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveredDevice.approved_device_id.is_not(None)).all())
+    approved_by_result=dict(scoped.with_entities(DiscoveryResult.id,DiscoveredDevice.approved_device_id).join(DiscoveredDevice,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveredDevice.approved_device_id.is_not(None)).all())
     for row in rows:
         canonical=by_id.get(row.canonical_result_id) if row.canonical_result_id else row
         mac=re.sub(r"[^0-9a-f]","",(row.mac_address or "").lower());name=(row.primary_hostname or "").strip().rstrip(".").lower()
@@ -132,31 +136,34 @@ def execute_safe_job(db,job,user):
 @router.get("/capabilities")
 def capabilities(_=Depends(reader)):return {"pipeline":PIPELINE,"device_families":DEVICE_FAMILIES,"review_statuses":REVIEW,"credentialed_stages_are_opt_in":True,"intrusive_scanning":False}
 @router.post("/quick-scan")
-def quick_scan(body:QuickScanWrite,db:Session=Depends(get_db),user=Depends(operator)):
+def quick_scan(body:QuickScanWrite,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    if property_id is None:raise HTTPException(400,"Select a property before starting discovery")
     try:network=ipaddress.ip_network(body.network_range,strict=False)
     except ValueError as exc:raise HTTPException(422,"Enter a valid private IP address or CIDR range") from exc
     if not network.is_private:raise HTTPException(422,"Quick Scan is limited to private networks")
     if network.num_addresses>1024:raise HTTPException(422,"Quick Scan is limited to 1,024 addresses; scan a smaller subnet")
-    scope=str(network);policy=db.query(DiscoveryPolicy).filter_by(name=f"Quick Scan · {scope}",created_by=user.id).first()
+    scope=str(network);policy=db.query(DiscoveryPolicy).filter_by(name=f"Quick Scan · {scope}",created_by=user.id,property_id=property_id).first()
     safe_stages=["icmp_reachability","arp_resolution","reverse_dns","hostname_resolution","mac_collection","mac_vendor_identification","port_discovery","service_fingerprinting","netbios_discovery","http_https_fingerprinting","tls_certificate_inspection","dhcp_lease_correlation","active_directory_correlation","cmdb_correlation","confidence_calculation","configuration_item_update"]
     if not policy:
-        policy=DiscoveryPolicy(name=f"Quick Scan · {scope}",authorized_ranges=json.dumps([scope]),excluded_ranges="[]",enabled_stages=json.dumps(safe_stages),allowed_ports=json.dumps([22,53,80,135,139,161,443,445,3389,5985,5986]),max_hosts=1024,concurrency=32,timeout_seconds=1,rate_limit_per_second=50,allow_credentialed=False,enabled=True,created_by=user.id);db.add(policy);db.flush()
+        policy=DiscoveryPolicy(name=f"Quick Scan · {scope}",property_id=property_id,authorized_ranges=json.dumps([scope]),excluded_ranges="[]",enabled_stages=json.dumps(safe_stages),allowed_ports=json.dumps([22,53,80,135,139,161,443,445,3389,5985,5986]),max_hosts=1024,concurrency=32,timeout_seconds=1,rate_limit_per_second=50,allow_credentialed=False,enabled=True,created_by=user.id);db.add(policy);db.flush()
     job=DiscoveryIntelligenceService(db).create_job(policy,scope,"full","quick_scan",user.id);audit(db,user,"CREATE","discovery_job",job.id,"Started credential-free Quick Network Scan");db.commit();db.refresh(job)
-    execution=execute_safe_job(db,job,user);devices=[item for item in consolidated_device_rows(db) if ipaddress.ip_address(item["ip_address"]) in network]
+    execution=execute_safe_job(db,job,user);devices=[item for item in consolidated_device_rows(db,organization_id,property_id) if ipaddress.ip_address(item["ip_address"]) in network]
     return {"job":execution["job"],"summary":{"found":len(devices),"identified":sum(x["confidence_score"]>=80 for x in devices),"partial":sum(40<=x["confidence_score"]<80 for x in devices),"needs_review":sum(x["confidence_score"]<40 for x in devices)},"devices":devices,"warnings":execution.get("warnings",[])}
 @router.get("/devices")
-def consolidated_devices(search:str|None=None,db:Session=Depends(get_db),_=Depends(reader)):
-    rows=consolidated_device_rows(db)
+def consolidated_devices(search:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    rows=consolidated_device_rows(db,organization_id,property_id)
     if search:
         term=search.lower();rows=[x for x in rows if term in " ".join(str(x.get(k) or "") for k in ("primary_hostname","ip_address","mac_address","vendor","classification","operating_system")).lower()]
     return {"items":rows,"total":len(rows)}
 @router.get("/dashboard")
-def dashboard(db:Session=Depends(get_db),_=Depends(reader)):
-    total=db.query(DiscoveryResult).count();identified=db.query(DiscoveryResult).filter(DiscoveryResult.review_status.in_(("automatically_identified","manually_verified"))).count();unknown=db.query(DiscoveryResult).filter(DiscoveryResult.review_status=="needs_review").count();jobs=db.query(DiscoveryJob).count();failed=db.query(DiscoveryTask).filter_by(status="failed").count()
-    bands={label:db.query(DiscoveryResult).filter(DiscoveryResult.confidence_score.between(lo,hi)).count() for label,lo,hi in (("low",0,39),("partial",40,79),("high",80,100))}
-    vendors=[{"label":v or "Unknown","value":c} for v,c in db.query(DiscoveryResult.vendor,func.count()).group_by(DiscoveryResult.vendor).order_by(func.count().desc()).limit(8)]
-    types=[{"label":v,"value":c} for v,c in db.query(DiscoveryResult.classification,func.count()).group_by(DiscoveryResult.classification).order_by(func.count().desc()).limit(8)]
-    return {"results":total,"success_rate":round(identified*100/total,1) if total else 0,"unknown_devices":unknown,"jobs":jobs,"errors":failed,"confidence":bands,"vendors":vendors,"device_types":types,"recent":db.query(DiscoveryResult).order_by(DiscoveryResult.last_seen_at.desc()).limit(8).all()}
+def dashboard(db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    results=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(Property.organization_id==organization_id);jobs_query=db.query(DiscoveryJob).join(Property,DiscoveryJob.property_id==Property.id).filter(Property.organization_id==organization_id)
+    if property_id is not None:results=results.filter(DiscoveryResult.property_id==property_id);jobs_query=jobs_query.filter(DiscoveryJob.property_id==property_id)
+    total=results.count();identified=results.filter(DiscoveryResult.review_status.in_(("automatically_identified","manually_verified"))).count();unknown=results.filter(DiscoveryResult.review_status=="needs_review").count();jobs=jobs_query.count();job_ids=jobs_query.with_entities(DiscoveryJob.id).subquery();failed=db.query(DiscoveryTask).filter(DiscoveryTask.job_id.in_(job_ids),DiscoveryTask.status=="failed").count()
+    bands={label:results.filter(DiscoveryResult.confidence_score.between(lo,hi)).count() for label,lo,hi in (("low",0,39),("partial",40,79),("high",80,100))}
+    vendors=[{"label":v or "Unknown","value":c} for v,c in results.with_entities(DiscoveryResult.vendor,func.count()).group_by(DiscoveryResult.vendor).order_by(func.count().desc()).limit(8)]
+    types=[{"label":v,"value":c} for v,c in results.with_entities(DiscoveryResult.classification,func.count()).group_by(DiscoveryResult.classification).order_by(func.count().desc()).limit(8)]
+    return {"results":total,"success_rate":round(identified*100/total,1) if total else 0,"unknown_devices":unknown,"jobs":jobs,"errors":failed,"confidence":bands,"vendors":vendors,"device_types":types,"recent":results.order_by(DiscoveryResult.last_seen_at.desc()).limit(8).all()}
 @router.get("/reconciliation/report")
 def reconciliation_report(db:Session=Depends(get_db),_=Depends(admin)):
     return V1V2ReconciliationService(db).report()

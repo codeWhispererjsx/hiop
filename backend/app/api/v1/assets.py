@@ -8,6 +8,7 @@ from app.core.tenant import organization_context, property_context
 from app.models.asset_intelligence import ManagedAsset
 from app.schemas.asset_intelligence import AssetCreate, AssetResponse, AssetUpdate, LifecycleEventResponse, LifecycleTransition
 from app.services.asset_intelligence_service import create_asset, list_assets, present, transition_asset, update_asset
+from app.services.billing_service import enforce_limit
 
 router=APIRouter(prefix="/assets",tags=["V4A Asset Intelligence"])
 reader=require_roles(["platformadmin","admin","technician","viewer"])
@@ -28,6 +29,7 @@ def assets(search:str|None=Query(None,max_length=180),status:str|None=None,devic
 
 @router.post("",response_model=AssetResponse,status_code=201)
 def add_asset(payload:AssetCreate,db:Session=Depends(get_db),actor=Depends(writer),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    enforce_limit(db,organization_id,"assets")
     return present(db,create_asset(db,payload,actor,organization_id,property_id),True)
 
 

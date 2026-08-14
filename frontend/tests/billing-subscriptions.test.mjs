@@ -1,0 +1,5 @@
+import test from "node:test";import assert from "node:assert/strict";import{readFileSync}from"node:fs";
+const read=path=>readFileSync(new URL(`../${path}`,import.meta.url),"utf8");const app=read("src/App.tsx"),page=read("src/pages/BillingPage.tsx"),platform=read("src/pages/PlatformControlCenterPage.tsx"),api=read("src/lib/api.ts"),publicApi=read("src/lib/publicApi.ts");
+test("organization billing is admin-only and exposes plan usage and safe actions",()=>{assert.match(app,/administration\/billing/);for(const text of ["Current plan","Usage and limits","Change plan","Cancel at period end","No invoices or receipts"])assert.ok(page.includes(text))});
+test("platform billing remains in the control center",()=>{for(const text of ["platformBillingOverview","mode:\"billing\"","PlatformBilling"])assert.ok(platform.includes(text))});
+test("public pricing and onboarding use centralized billing APIs",()=>{assert.match(publicApi,/billing\/public\/plans/);assert.match(publicApi,/plan_code/);for(const endpoint of ["/billing/current","/billing/trial","/billing/change-plan","/billing/cancel","/billing/platform/overview"])assert.ok(api.includes(endpoint))});

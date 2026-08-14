@@ -24,6 +24,7 @@ const administrationLinks: { label:string;to:string;icon:IconName }[]=[
   {label:"Users",to:"/users",icon:"users"},
   {label:"Roles & access",to:"/administration/roles",icon:"lock"},
   {label:"Audit log",to:"/administration/audit",icon:"audit"},
+  {label:"Billing",to:"/administration/billing",icon:"devices"},
   {label:"Settings",to:"/settings",icon:"server"},
 ];
 const SIDEBAR_SCROLL_KEY = "hiop.sidebar.scroll";

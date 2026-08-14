@@ -26,7 +26,8 @@ class SecurityContractTests(unittest.TestCase):
             "app_name": "HIOP", "app_version": "1.0.0", "environment": "production",
             "database_url": "postgresql+psycopg2://user:strong-password@db/hiop", "secret_key": "x" * 32,
             "cors_origins": ["https://hiop.example.com"], "email_address": "", "email_password": "",
-            "email_recipient": "",
+            "email_recipient": "", "hiop_ad_secret_key": "a" * 32,
+            "hiop_snmp_secret_key": "b" * 32, "hiop_discovery_credential_key": "c" * 32,
         }
         production = Settings(debug=False, **values)
         self.assertEqual(production.environment, "production")
@@ -36,6 +37,10 @@ class SecurityContractTests(unittest.TestCase):
             Settings(debug=False, **(values | {"cors_origins": ["http://localhost:5173"]}))
         with self.assertRaises(ValidationError):
             Settings(debug=False, **(values | {"secret_key": "replace-with-a-secret-that-is-long-enough"}))
+        with self.assertRaises(ValidationError):
+            Settings(debug=False, **(values | {"hiop_ad_secret_key": ""}))
+        with self.assertRaises(ValidationError):
+            Settings(debug=False, **(values | {"database_url": "sqlite:///production.db"}))
 
     def test_access_tokens_have_required_security_claims(self):
         token = create_access_token({"sub": "security@example.com", "role": "admin"})

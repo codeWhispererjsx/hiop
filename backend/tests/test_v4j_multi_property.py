@@ -2,6 +2,8 @@ from pathlib import Path
 
 from app.api.v1 import property_management
 from app.core import tenant
+from app.dashboard import routes as dashboard_routes
+from app.services import dashboard_service
 from app.models.asset_intelligence import ManagedAsset
 from app.models.hierarchy import Property
 from app.models.local_agent import LocalAgentRegistration
@@ -45,6 +47,18 @@ def test_v4j_network_operations_enforce_property_context():
     assert 'raise HTTPException(400, "Select a property before opening operational data")' in tenant_source
 
 
+def test_v4j_dashboard_and_discovery_are_tenant_scoped():
+    dashboard_route_source = Path(dashboard_routes.__file__).read_text(encoding="utf-8")
+    dashboard_service_source = Path(dashboard_service.__file__).read_text(encoding="utf-8")
+    discovery_source = (Path(__file__).parents[1] / "app" / "api" / "v1" / "discovery_intelligence.py").read_text(encoding="utf-8")
+    for source in (dashboard_route_source, discovery_source):
+        assert "Depends(organization_context)" in source
+        assert "Depends(property_context)" in source
+    assert "Property.organization_id == organization_id" in dashboard_service_source
+    assert "Property.organization_id==organization_id" in discovery_source
+    assert 'Select a property before starting discovery' in discovery_source
+
+
 def test_v4j_migration_is_additive_and_backfills_existing_data():
     migration=Path(__file__).parents[1]/"alembic"/"versions"/"v4j0a1b2c3d4_multi_property_foundation.py"
     source=migration.read_text(encoding="utf-8").lower()
@@ -56,5 +70,5 @@ def test_v4j_migration_is_additive_and_backfills_existing_data():
 
 def test_v4j_does_not_introduce_v5_or_automation_scope():
     source=Path(property_management.__file__).read_text(encoding="utf-8").lower()
-    for forbidden in ["billing","subscription","licensing","predictive","aiops","remote command","automated remediation"]:
+    for forbidden in ["licensing","predictive","aiops","remote command","automated remediation"]:
         assert forbidden not in source
