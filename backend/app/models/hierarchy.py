@@ -28,6 +28,9 @@ class Property(NamedEntity, Base):
     number_of_rooms: Mapped[int | None] = mapped_column(Integer)
     number_of_floors: Mapped[int | None] = mapped_column(Integer)
     operational_status: Mapped[str] = mapped_column(String(20), default="active", server_default="active", nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class Organization(Base):

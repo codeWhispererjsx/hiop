@@ -84,11 +84,13 @@ def device_health(db: Session, device: Device, window: str = "24h"):
     }
 
 
-def summary(db: Session, window: str = "24h", organization_id=None):
+def summary(db: Session, window: str = "24h", organization_id=None, property_id=None):
     query=db.query(Device)
     if organization_id:
         from app.models.hierarchy import Property
         query=query.join(Property,Device.property_id==Property.id).filter(Property.organization_id==organization_id)
+    if property_id:
+        query=query.filter(Device.property_id==property_id)
     devices = query.filter(Device.inventory_status != "Retired").all()
     items = [device_health(db, row, window) for row in devices]
     return {"window": window, "monitored": sum(bool(row["observations"]) for row in items), "online": sum(row["status"].lower() == "online" for row in items), "offline": sum(row["status"].lower() == "offline" for row in items), "degraded": sum(row["health"] == "Degraded" for row in items), "unhealthy": sum(row["health"] == "Unhealthy" for row in items), "unknown": sum(row["health"] == "Unknown" for row in items), "devices": items}

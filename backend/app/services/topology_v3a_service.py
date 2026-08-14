@@ -75,8 +75,8 @@ class SNMPMACTableProvider:
 
 
 class V3ATopologyService:
-    def __init__(self, db, neighbor_factory=TopologyNeighborCollectionService, mac_provider=None, organization_id=None):
-        self.db = db; self.organization_id=organization_id
+    def __init__(self, db, neighbor_factory=TopologyNeighborCollectionService, mac_provider=None, organization_id=None, property_id=None):
+        self.db = db; self.organization_id=organization_id; self.property_id=property_id
         self.neighbor_factory = neighbor_factory
         self.mac_provider = mac_provider or SNMPMACTableProvider(db)
 
@@ -173,7 +173,10 @@ class V3ATopologyService:
         return link, created
 
     def _apply_mac_associations(self, topology: Topology, observations: dict[str, list[SNMPTarget]], actor) -> tuple[int, int]:
-        devices = self.db.scalars(select(Device).where(Device.mac_address.is_not(None))).all()
+        device_query = select(Device).where(Device.mac_address.is_not(None))
+        if self.property_id:
+            device_query = device_query.where(Device.property_id == self.property_id)
+        devices = self.db.scalars(device_query).all()
         by_mac = defaultdict(list)
         for device in devices:
             if mac := normalize_mac(device.mac_address):
@@ -212,6 +215,7 @@ class V3ATopologyService:
         topology = self.ensure_default_topology(actor)
         targets = self.db.scalars(select(SNMPTarget).where(
             SNMPTarget.enabled.is_(True), SNMPTarget.device_id.is_not(None),
+            *( [SNMPTarget.device_id.in_(select(Device.id).where(Device.property_id == self.property_id))] if self.property_id else [] ),
         ).limit(settings.topology_neighbor_maximum_targets)).all()
         warnings: list[str] = []
         mac_observations: dict[str, list[SNMPTarget]] = defaultdict(list)
@@ -259,6 +263,8 @@ class V3ATopologyService:
         if self.organization_id:
             from app.models.hierarchy import Property
             device_query=device_query.join(Property,Device.property_id==Property.id).where(Property.organization_id==self.organization_id)
+        if self.property_id:
+            device_query=device_query.where(Device.property_id==self.property_id)
         devices = {row.id: row for row in self.db.scalars(device_query).all()} if nodes else {}
         nodes=[node for node in nodes if node.device_id in devices]
         if search:
@@ -296,6 +302,7 @@ class V3ATopologyService:
         if device and self.organization_id:
             from app.models.hierarchy import Property
             if not self.db.scalar(select(Property.id).where(Property.id==device.property_id,Property.organization_id==self.organization_id)):device=None
+        if device and self.property_id and device.property_id != self.property_id:device=None
         if not device:
             raise HTTPException(404, "Device was not found.")
         if not topology:

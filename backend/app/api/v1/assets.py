@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import organization_context, property_context
 from app.models.asset_intelligence import ManagedAsset
 from app.schemas.asset_intelligence import AssetCreate, AssetResponse, AssetUpdate, LifecycleEventResponse, LifecycleTransition
 from app.services.asset_intelligence_service import create_asset, list_assets, present, transition_asset, update_asset
@@ -22,13 +22,13 @@ def require_asset(db,asset_id,organization_id):
 
 
 @router.get("",response_model=list[AssetResponse])
-def assets(search:str|None=Query(None,max_length=180),status:str|None=None,device_type:str|None=None,department:str|None=None,location:str|None=None,health:str|None=None,vendor:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context)):
-    return list_assets(db,search,status,device_type,department,location,health,vendor,organization_id)
+def assets(search:str|None=Query(None,max_length=180),status:str|None=None,device_type:str|None=None,department:str|None=None,location:str|None=None,health:str|None=None,vendor:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    return list_assets(db,search,status,device_type,department,location,health,vendor,organization_id,property_id)
 
 
 @router.post("",response_model=AssetResponse,status_code=201)
-def add_asset(payload:AssetCreate,db:Session=Depends(get_db),actor=Depends(writer),organization_id=Depends(organization_context)):
-    return present(db,create_asset(db,payload,actor,organization_id),True)
+def add_asset(payload:AssetCreate,db:Session=Depends(get_db),actor=Depends(writer),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    return present(db,create_asset(db,payload,actor,organization_id,property_id),True)
 
 
 @router.get("/device/{device_id}",response_model=AssetResponse)

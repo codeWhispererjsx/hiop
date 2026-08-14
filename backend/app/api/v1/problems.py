@@ -8,7 +8,7 @@ from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import organization_context, property_context
 from app.models.asset_intelligence import ManagedAsset
 from app.models.asset_management import Vendor, VendorContact
 from app.models.device import Device
@@ -91,13 +91,14 @@ def present(db,row,detail=False):
     return result
 
 @router.get("/summary")
-def summary(db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context)):
-    rows=db.query(Problem).filter_by(organization_id=organization_id).all(); counts={x:sum(r.status==x for r in rows) for x in STATUSES}
+def summary(db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    query=db.query(Problem).filter_by(organization_id=organization_id);rows=(query.filter_by(property_id=property_id) if property_id else query).all(); counts={x:sum(r.status==x for r in rows) for x in STATUSES}
     return {"total":len(rows),**counts,"critical":sum(r.priority=="critical" and r.status not in {"resolved","closed"} for r in rows),"recurring":sum(db.query(ProblemRelationship).filter_by(problem_id=r.id,target_type="incident").count()>1 for r in rows)}
 
 @router.get("")
-def list_problems(search:str|None=None,status:str|None=None,priority:str|None=None,category:str|None=None,service_id:UUID|None=None,vendor_id:UUID|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context)):
+def list_problems(search:str|None=None,status:str|None=None,priority:str|None=None,category:str|None=None,service_id:UUID|None=None,vendor_id:UUID|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     q=db.query(Problem).filter_by(organization_id=organization_id)
+    if property_id:q=q.filter_by(property_id=property_id)
     if search:
         term=f"%{search}%"
         related_ids=db.query(ProblemRelationship.problem_id).filter(or_(

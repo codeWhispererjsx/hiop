@@ -53,7 +53,7 @@ def present(db, asset, include_relationships=False):
     acquisition=db.execute(select(AssetProcurement).join(ProcurementAssetLink,ProcurementAssetLink.procurement_id==AssetProcurement.id).where(ProcurementAssetLink.asset_id==asset.id)).scalar_one_or_none()
     supplier=db.get(Vendor,asset.vendor_id) if asset.vendor_id else None
     return {
-        "id": asset.id, "asset_number": asset.asset_number, "device_id": asset.device_id,
+        "id": asset.id, "property_id": asset.property_id, "asset_number": asset.asset_number, "device_id": asset.device_id,
         "name": asset.name, "asset_tag": asset.asset_tag, "device_type": device.device_type if device else asset.device_type,
         "status": asset.status, "ci_category": asset.ci_category,
         "vendor": device.brand if device else asset.vendor, "supplier":{"id":supplier.id,"vendor_id":supplier.vendor_number,"name":supplier.legal_name,"status":supplier.status,"primary_email":supplier.primary_email,"primary_phone":supplier.primary_phone} if supplier else None, "model": device.model if device else asset.model,
@@ -82,7 +82,7 @@ def ensure_asset_for_device(db, device, actor, organization_id=None):
     if existing: return existing
     organization_id=organization_id or actor.organization_id
     if not organization_id: raise HTTPException(403,"Organization context is required")
-    asset = ManagedAsset(asset_number=_next_number(db), organization_id=organization_id, device_id=device.id, name=device.hostname,
+    asset = ManagedAsset(asset_number=_next_number(db), organization_id=organization_id, property_id=device.property_id, device_id=device.id, name=device.hostname,
         asset_tag=device.asset_tag or None, device_type=device.device_type, status="retired" if device.inventory_status == "Retired" else "active",
         ci_category="network" if device.device_type.lower() in {"switch","router","firewall","access point","network appliance"} else "server" if device.device_type.lower()=="server" else "device",
         department_id=device.department_id, department_name=device.department or None, room_id=device.room_id, location_name=device.location or None,
@@ -92,11 +92,11 @@ def ensure_asset_for_device(db, device, actor, organization_id=None):
     return asset
 
 
-def create_asset(db, payload: AssetCreate, actor, organization_id=None):
+def create_asset(db, payload: AssetCreate, actor, organization_id=None, property_id=None):
     organization_id=organization_id or actor.organization_id
     if not organization_id: raise HTTPException(403,"Organization context is required")
     _validate_dates(payload.model_dump(exclude_unset=True))
-    asset=ManagedAsset(asset_number=_next_number(db),organization_id=organization_id,created_by=str(actor.id),updated_by=str(actor.id),source="manual",field_sources={"organizational_metadata":"Manual"},**payload.model_dump())
+    asset=ManagedAsset(asset_number=_next_number(db),organization_id=organization_id,property_id=property_id,created_by=str(actor.id),updated_by=str(actor.id),source="manual",field_sources={"organizational_metadata":"Manual"},**payload.model_dump())
     db.add(asset)
     try:
         db.flush();db.add(AssetLifecycleEvent(asset_id=asset.id,organization_id=organization_id,previous_status=None,new_status=asset.status,reason="Asset created",changed_by=str(actor.id),changed_by_name=actor.username));create_audit_log(db,actor.username,"ASSET_LIFECYCLE_CREATED","ManagedAsset",str(asset.id),f"Created manual asset {asset.asset_number} in {asset.status}");db.commit();db.refresh(asset)
@@ -149,9 +149,10 @@ def transition_asset(db,asset,payload:LifecycleTransition,actor):
     create_audit_log(db,actor.username,action,"ManagedAsset",str(asset.id),f"{previous} -> {payload.status}"+(f"; {payload.reason}" if payload.reason else ""));db.commit();db.refresh(asset);return asset
 
 
-def list_assets(db, search=None, status=None, device_type=None, department=None, location=None, health=None, vendor=None, organization_id=None):
+def list_assets(db, search=None, status=None, device_type=None, department=None, location=None, health=None, vendor=None, organization_id=None, property_id=None):
     query=select(ManagedAsset)
     if organization_id:query=query.where(ManagedAsset.organization_id==organization_id)
+    if property_id:query=query.where(ManagedAsset.property_id==property_id)
     rows=db.scalars(query.order_by(ManagedAsset.asset_number)).all();items=[present(db,row) for row in rows]
     def match(item):
         values=[item.get(k) for k in ("asset_number","asset_tag","name","hostname","ip_address","mac_address","serial_number")]

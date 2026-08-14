@@ -70,7 +70,8 @@ function queryString(values: Record<string, string | number | boolean | undefine
 async function download(path: string) {
   const token = getAuthToken();
   const organization=getOrganizationContext();
-  const headers:Record<string,string>={};if(token)headers.Authorization=`Bearer ${token}`;if(organization)headers["X-Organization-ID"]=organization;
+  const property=window.localStorage.getItem("hiop.active_property_id");
+  const headers:Record<string,string>={};if(token)headers.Authorization=`Bearer ${token}`;if(organization)headers["X-Organization-ID"]=organization;if(property)headers["X-HIOP-Property-ID"]=property;
   let response: Response;
   try { response = await fetch(`${API_URL}${path}`, { headers }); }
   catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
@@ -81,6 +82,14 @@ async function download(path: string) {
 }
 
 export const endpoints = {
+  propertyContext:()=>api<import("./types").PropertyContext>("/property-management/context"),
+  managedProperties:()=>api<import("./types").ManagedProperty[]>("/property-management"),
+  propertyComparison:()=>api<{organization_id:string;properties:import("./types").ManagedProperty[]}>("/property-management/comparison"),
+  createManagedProperty:(body:Record<string,unknown>)=>api<import("./types").ManagedProperty>("/property-management",{method:"POST",body:JSON.stringify(body)}),
+  updateManagedProperty:(id:string,body:Record<string,unknown>)=>api<import("./types").ManagedProperty>(`/property-management/${id}`,{method:"PATCH",body:JSON.stringify(body)}),
+  setManagedPropertyStatus:(id:string,active:boolean)=>api<import("./types").ManagedProperty>(`/property-management/${id}/${active?"activate":"deactivate"}`,{method:"POST"}),
+  assignPropertyAccess:(id:string,body:Record<string,unknown>)=>api<Record<string,unknown>>(`/property-management/${id}/access`,{method:"POST",body:JSON.stringify(body)}),
+  removePropertyAccess:(id:string,userId:string)=>api<void>(`/property-management/${id}/access/${userId}`,{method:"DELETE"}),
   platformSummary:()=>api<import("./types").PlatformSummary>("/platform/summary"),
   platformOrganizations:()=>api<import("./types").PlatformOrganization[]>("/platform/organizations"),
   createPlatformOrganization:(body:Record<string,unknown>)=>api<import("./types").PlatformOrganization>("/platform/organizations",{method:"POST",body:JSON.stringify(body)}),

@@ -133,6 +133,7 @@ class LifecycleEventResponse(BaseModel):
 
 class AssetResponse(BaseModel):
     id: UUID
+    property_id: UUID | None = None
     asset_number: str
     device_id: UUID | None
     name: str

@@ -4,7 +4,7 @@ from fastapi import APIRouter,Depends,HTTPException,Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import organization_context,property_context
 from app.models.procurement import AssetProcurement,ProcurementAssetLink
 from app.models.asset_management import Vendor
 from app.schemas.procurement import ProcurementAction,ProcurementAssetLinkCreate,ProcurementCreate,ProcurementOrder,ProcurementReceipt,ProcurementUpdate
@@ -15,8 +15,9 @@ def record(db,id,org):
     if not row:raise HTTPException(404,"Procurement record not found")
     return row
 @router.get("")
-def list_records(search:str|None=Query(None,max_length=180),status:str|None=None,department_id:UUID|None=None,requested_by:str|None=None,currency:str|None=None,expected_before:date|None=None,db:Session=Depends(get_db),_=Depends(reader),org=Depends(organization_context)):
+def list_records(search:str|None=Query(None,max_length=180),status:str|None=None,department_id:UUID|None=None,requested_by:str|None=None,currency:str|None=None,expected_before:date|None=None,db:Session=Depends(get_db),_=Depends(reader),org=Depends(organization_context),property_id=Depends(property_context)):
     q=db.query(AssetProcurement).filter(AssetProcurement.organization_id==org)
+    if property_id:q=q.filter(AssetProcurement.property_id==property_id)
     if search:q=q.filter(or_(AssetProcurement.procurement_number.ilike(f"%{search}%"),AssetProcurement.reference_number.ilike(f"%{search}%"),AssetProcurement.title.ilike(f"%{search}%"),AssetProcurement.description.ilike(f"%{search}%")))
     if status:q=q.filter(AssetProcurement.status==status)
     if department_id:q=q.filter(AssetProcurement.department_id==department_id)
@@ -29,7 +30,7 @@ def summary(db:Session=Depends(get_db),_=Depends(reader),org=Depends(organizatio
     rows=[service.present(db,x) for x in db.query(AssetProcurement).filter(AssetProcurement.organization_id==org).all()];currencies={x["currency"] for x in rows}
     return {"total":len(rows),**{s:sum(x["status"]==s for x in rows) for s in ("draft","requested","approved","ordered","partially_received","received","cancelled")},"overdue":sum(x["overdue"] for x in rows),"totals_by_currency":{code:str(sum((x["total_cost"] for x in rows if x["currency"]==code),0)) for code in currencies}}
 @router.post("",status_code=201)
-def create_record(payload:ProcurementCreate,db:Session=Depends(get_db),actor=Depends(manager),org=Depends(organization_context)):return service.present(db,service.create(db,payload,actor,org),True)
+def create_record(payload:ProcurementCreate,db:Session=Depends(get_db),actor=Depends(manager),org=Depends(organization_context),property_id=Depends(property_context)):return service.present(db,service.create(db,payload,actor,org,property_id),True)
 @router.get("/{record_id}")
 def get_record(record_id:UUID,db:Session=Depends(get_db),_=Depends(reader),org=Depends(organization_context)):return service.present(db,record(db,record_id,org),True)
 @router.patch("/{record_id}")

@@ -8,7 +8,7 @@ from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import organization_context, property_context
 from app.models.asset_intelligence import ManagedAsset
 from app.models.asset_management import Vendor
 from app.models.change_management import ChangeComment, ChangeRelationship, ChangeRequest, ChangeTimelineEvent, ChangeType, MaintenanceWindow
@@ -129,22 +129,24 @@ def display(db, row, detail=False):
 
 
 @router.get("/summary")
-def summary(db: Session = Depends(get_db), _=Depends(reader), org=Depends(organization_context)):
-    rows = db.query(ChangeRequest).filter_by(organization_id=org).all(); now = datetime.now(timezone.utc)
+def summary(db: Session = Depends(get_db), _=Depends(reader), org=Depends(organization_context), property_id=Depends(property_context)):
+    query=db.query(ChangeRequest).filter_by(organization_id=org);rows=(query.filter_by(property_id=property_id) if property_id else query).all(); now = datetime.now(timezone.utc)
     return {"total": len(rows), **{s: sum(x.status == s for x in rows) for s in STATUSES}, "high_risk": sum(x.risk_level in {"high", "critical"} and x.status not in {"closed", "cancelled"} for x in rows), "emergency": sum(x.change_type == "emergency" for x in rows), "upcoming": sum(bool(x.scheduled_start and x.scheduled_start >= now and x.status == "scheduled") for x in rows)}
 
 
 @router.get("/calendar")
-def calendar(start: datetime | None = None, end: datetime | None = None, db: Session = Depends(get_db), _=Depends(reader), org=Depends(organization_context)):
+def calendar(start: datetime | None = None, end: datetime | None = None, db: Session = Depends(get_db), _=Depends(reader), org=Depends(organization_context), property_id=Depends(property_context)):
     q = db.query(ChangeRequest).filter(ChangeRequest.organization_id == org, ChangeRequest.scheduled_start.isnot(None))
+    if property_id:q=q.filter(ChangeRequest.property_id==property_id)
     if start: q = q.filter(ChangeRequest.scheduled_end >= start)
     if end: q = q.filter(ChangeRequest.scheduled_start <= end)
     return [display(db, row) for row in q.order_by(ChangeRequest.scheduled_start).all()]
 
 
 @router.get("")
-def list_changes(search: str | None = None, status: str | None = None, change_type: str | None = None, priority: str | None = None, risk: str | None = None, owner_id: str | None = None, start: datetime | None = None, end: datetime | None = None, db: Session = Depends(get_db), _=Depends(reader), org=Depends(organization_context)):
+def list_changes(search: str | None = None, status: str | None = None, change_type: str | None = None, priority: str | None = None, risk: str | None = None, owner_id: str | None = None, start: datetime | None = None, end: datetime | None = None, db: Session = Depends(get_db), _=Depends(reader), org=Depends(organization_context), property_id=Depends(property_context)):
     q = db.query(ChangeRequest).filter_by(organization_id=org)
+    if property_id:q=q.filter_by(property_id=property_id)
     if search:
         term = f"%{search}%"; related = db.query(ChangeRelationship.change_request_id).filter(ChangeRelationship.target_id.in_(db.query(ManagedAsset.id).filter(or_(ManagedAsset.name.ilike(term), ManagedAsset.asset_number.ilike(term), ManagedAsset.asset_tag.ilike(term)))))
         q = q.filter(or_(ChangeRequest.change_id.ilike(term), ChangeRequest.title.ilike(term), ChangeRequest.description.ilike(term), ChangeRequest.business_justification.ilike(term), ChangeRequest.id.in_(related)))

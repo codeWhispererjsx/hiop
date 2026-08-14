@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
+from app.core.tenant import organization_context, property_context
 from app.services.port_intelligence_service import PortIntelligenceService
 
 router = APIRouter(prefix="/port-intelligence", tags=["V3B Switch and Port Intelligence"])
@@ -13,8 +14,8 @@ admin = require_roles(["admin"])
 
 
 @router.get("/devices/{device_id}/connection")
-def device_connection(device_id: UUID, db: Session = Depends(get_db), _=Depends(reader)):
-    return PortIntelligenceService(db).device_connection(device_id)
+def device_connection(device_id: UUID, db: Session = Depends(get_db), _=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    return PortIntelligenceService(db,organization_id=organization_id,property_id=property_id).device_connection(device_id)
 
 
 @router.get("/switches/{device_id}/interfaces")
@@ -23,21 +24,21 @@ def switch_interfaces(
     search: str | None = Query(default=None, max_length=100),
     status: str | None = Query(default=None, pattern="^(active)?$"),
     endpoint: str | None = Query(default=None, pattern="^(unknown)?$"),
-    db: Session = Depends(get_db), _=Depends(reader),
+    db: Session = Depends(get_db), _=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context),
 ):
-    return PortIntelligenceService(db).switch_interfaces(device_id, search, status, endpoint)
+    return PortIntelligenceService(db,organization_id=organization_id,property_id=property_id).switch_interfaces(device_id, search, status, endpoint)
 
 
 @router.get("/interfaces/{interface_id}")
-def interface_details(interface_id: UUID, db: Session = Depends(get_db), _=Depends(reader)):
-    return PortIntelligenceService(db).interface(interface_id)
+def interface_details(interface_id: UUID, db: Session = Depends(get_db), _=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    return PortIntelligenceService(db,organization_id=organization_id,property_id=property_id).interface(interface_id)
 
 
 @router.post("/switches/{device_id}/refresh")
-def refresh_switch(device_id: UUID, db: Session = Depends(get_db), actor=Depends(admin)):
-    return PortIntelligenceService(db).refresh(device_id, actor)
+def refresh_switch(device_id: UUID, db: Session = Depends(get_db), actor=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    return PortIntelligenceService(db,organization_id=organization_id,property_id=property_id).refresh(device_id, actor)
 
 
 @router.get("/stats")
-def port_stats(db: Session = Depends(get_db), _=Depends(reader)):
-    return PortIntelligenceService(db).stats()
+def port_stats(db: Session = Depends(get_db), _=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    return PortIntelligenceService(db,organization_id=organization_id,property_id=property_id).stats()

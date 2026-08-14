@@ -4,7 +4,7 @@ from typing import List
 
 from app.api.dependencies import get_db
 from app.core.security import get_current_user, require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import organization_context, property_context
 from app.models.hierarchy import Property
 from app.models.device import Device
 from app.models.alert import Alert
@@ -59,8 +59,11 @@ def get_devices(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     organization_id=Depends(organization_context),
+    property_id=Depends(property_context),
 ):
-    return db.query(Device).join(Property,Device.property_id==Property.id).filter(Property.organization_id==organization_id).all()
+    query=db.query(Device).join(Property,Device.property_id==Property.id).filter(Property.organization_id==organization_id)
+    if property_id:query=query.filter(Device.property_id==property_id)
+    return query.all()
 
 
 @router.put("/{device_id}", response_model=DeviceResponse)

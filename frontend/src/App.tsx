@@ -33,6 +33,7 @@ const ProblemsPage = lazy(() => import("./pages/ProblemsPage"));
 const ChangesPage = lazy(() => import("./pages/ChangesPage"));
 const KnowledgePage = lazy(() => import("./pages/KnowledgePage"));
 const ReportingPage = lazy(() => import("./pages/ReportingPage"));
+const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -107,6 +108,7 @@ export default function App() {
     <Route path="/administration/roles" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/audit" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/organization" element={roleProtectedPage(<OrganizationStructurePage />, ["admin"])} />
+    <Route path="/administration/properties" element={roleProtectedPage(<PropertiesPage />, ["admin"])} />
     <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />
     <Route path="/" element={<Navigate to="/dashboard" replace />} />
     <Route path="*" element={<Navigate to="/dashboard" replace />} />

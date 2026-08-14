@@ -20,6 +20,7 @@ const monitorLinks: { label:string;to:string;icon:IconName }[]=[
 const manageLinks: {label:string;to:string;icon:IconName}[]=[{label:"Reports",to:"/reports",icon:"audit"},{label:"Procurement",to:"/procurement",icon:"devices"},{label:"Vendors",to:"/vendors",icon:"users"}];
 const administrationLinks: { label:string;to:string;icon:IconName }[]=[
   {label:"Organization",to:"/administration/organization",icon:"hierarchy"},
+  {label:"Properties",to:"/administration/properties",icon:"server"},
   {label:"Users",to:"/users",icon:"users"},
   {label:"Roles & access",to:"/administration/roles",icon:"lock"},
   {label:"Audit log",to:"/administration/audit",icon:"audit"},

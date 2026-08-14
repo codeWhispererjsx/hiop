@@ -94,10 +94,21 @@ class PortMACTableProvider:
 
 
 class PortIntelligenceService:
-    def __init__(self, db, mac_provider=None, polling_factory=SNMPPollingService):
+    def __init__(self, db, mac_provider=None, polling_factory=SNMPPollingService, organization_id=None, property_id=None):
         self.db = db
+        self.organization_id = organization_id
+        self.property_id = property_id
         self.mac_provider = mac_provider or PortMACTableProvider(db)
         self.polling_factory = polling_factory
+
+    def _scoped_device(self, device_id: UUID) -> Device | None:
+        query = select(Device).where(Device.id == device_id)
+        if self.property_id:
+            query = query.where(Device.property_id == self.property_id)
+        elif self.organization_id:
+            from app.models.hierarchy import Property
+            query = query.join(Property, Device.property_id == Property.id).where(Property.organization_id == self.organization_id)
+        return self.db.scalar(query)
 
     def _target(self, switch_device_id: UUID) -> SNMPTarget | None:
         return self.db.scalar(select(SNMPTarget).where(
@@ -251,7 +262,7 @@ class PortIntelligenceService:
         return {"resolved": resolved, "unresolved": unresolved, "uplinks": uplink_count, "observed": len(observations), "interfaces": len(interfaces)}
 
     def refresh(self, switch_device_id: UUID, actor) -> dict:
-        switch = self.db.get(Device, switch_device_id)
+        switch = self._scoped_device(switch_device_id)
         if not switch:
             raise HTTPException(404, "Switch device was not found.")
         target = self._target(switch.id)
@@ -267,7 +278,7 @@ class PortIntelligenceService:
         return {"status": "complete" if run.status == "completed" else "partial", "message": "Read-only interface and MAC-table refresh completed.", **result}
 
     def switch_interfaces(self, switch_device_id: UUID, search=None, status=None, endpoint=None) -> dict:
-        switch = self.db.get(Device, switch_device_id)
+        switch = self._scoped_device(switch_device_id)
         if not switch:
             raise HTTPException(404, "Switch device was not found.")
         target = self._target(switch.id)
@@ -286,12 +297,13 @@ class PortIntelligenceService:
 
     def interface(self, interface_id: UUID) -> dict:
         row = self.db.get(SNMPInterface, interface_id)
-        if not row:
+        target = self.db.get(SNMPTarget, row.target_id) if row else None
+        if not row or not target or not target.device_id or not self._scoped_device(target.device_id):
             raise HTTPException(404, "Interface was not found.")
         return self._interface(row, include_history=True)
 
     def device_connection(self, device_id: UUID) -> dict:
-        device = self.db.get(Device, device_id)
+        device = self._scoped_device(device_id)
         if not device:
             raise HTTPException(404, "Device was not found.")
         current = self.db.scalars(select(PortDeviceAssociation).where(
@@ -310,8 +322,16 @@ class PortIntelligenceService:
         }
 
     def stats(self) -> dict:
-        interfaces = self.db.scalars(select(SNMPInterface)).all()
-        associations = self.db.scalars(select(PortDeviceAssociation)).all()
+        device_query = select(Device.id)
+        if self.property_id:
+            device_query = device_query.where(Device.property_id == self.property_id)
+        elif self.organization_id:
+            from app.models.hierarchy import Property
+            device_query = device_query.join(Property, Device.property_id == Property.id).where(Property.organization_id == self.organization_id)
+        target_ids = select(SNMPTarget.id).where(SNMPTarget.device_id.in_(device_query))
+        interfaces = self.db.scalars(select(SNMPInterface).where(SNMPInterface.target_id.in_(target_ids))).all()
+        interface_ids = [row.id for row in interfaces]
+        associations = self.db.scalars(select(PortDeviceAssociation).where(PortDeviceAssociation.interface_id.in_(interface_ids))).all() if interface_ids else []
         current = [row for row in associations if row.is_current]
         return {
             "network_devices_with_interfaces": len({row.target_id for row in interfaces}),

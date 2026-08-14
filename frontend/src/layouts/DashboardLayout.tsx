@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
 import { endpoints } from "../lib/api";
-import type { LiveEvent, PublicSettings, User } from "../lib/types";
+import type { LiveEvent, PropertyContext, PublicSettings, User } from "../lib/types";
 import { clearAuthToken, getAuthToken, getOrganizationContext, setOrganizationContext } from "../lib/auth";
 import "../styles/dashboard.css";
 export default function DashboardLayout({
@@ -22,6 +22,7 @@ export default function DashboardLayout({
   const [live, setLive] = useState(false);
   const [user, setUser] = useState<User>();
   const [branding, setBranding] = useState<PublicSettings>();
+  const [propertyContext,setPropertyContext]=useState<PropertyContext>();
   const liveEventRef = useRef(onLiveEvent);
   const liveStateRef = useRef(onLiveStateChange);
   liveEventRef.current = onLiveEvent;
@@ -43,7 +44,8 @@ export default function DashboardLayout({
   useEffect(() => {
     void endpoints
       .me()
-      .then(setUser)
+      .then(account=>{setUser(account);return endpoints.propertyContext()})
+      .then(context=>{setPropertyContext(context);if(!window.localStorage.getItem("hiop.active_property_id")&&context.active_property_id)window.localStorage.setItem("hiop.active_property_id",context.active_property_id)})
       .catch(() => undefined);
   }, []);
   useEffect(() => { void endpoints.publicSettings().then(setBranding).catch(() => undefined); }, []);
@@ -107,6 +109,8 @@ export default function DashboardLayout({
           onLogout={logout}
           user={user}
           propertyName={branding?.property_name}
+          propertyContext={propertyContext}
+          onPropertyChange={id=>{if(id==="organization")window.localStorage.removeItem("hiop.active_property_id");else window.localStorage.setItem("hiop.active_property_id",id);window.location.reload()}}
         />
         {user?.role==="platformadmin"&&getOrganizationContext()&&<div className="platform-context-bar"><strong>Viewing organization: {branding?.property_name??"Selected organization"}</strong><button onClick={()=>{setOrganizationContext(null);navigate("/platform")}}>Return to Platform Control Center</button></div>}
         <main className="page-content">{children}</main>

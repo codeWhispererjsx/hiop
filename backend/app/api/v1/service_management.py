@@ -6,7 +6,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import organization_context, property_context
 from app.models.asset_intelligence import ManagedAsset
 from app.models.hospitality_operations import HospitalityTechnologyService
 from app.models.incidents import OperationalIncident
@@ -21,19 +21,22 @@ admin = require_roles(["admin"])
 
 
 @router.get("/summary")
-def summary(db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context)):
+def summary(db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context), property_id=Depends(property_context)):
     incidents = db.query(OperationalIncident).filter_by(organization_id=organization_id).all()
+    if property_id: incidents=[x for x in incidents if x.property_id==property_id]
     statuses = [service.status_of(row) for row in incidents]
     today = datetime.now(timezone.utc).date()
     resolved_today = sum(bool(row.resolved_at and row.resolved_at.date() == today) for row in incidents)
     durations = [(row.resolved_at-row.created_at).total_seconds() for row in incidents if row.resolved_at]
     services = db.query(HospitalityTechnologyService).filter_by(organization_id=organization_id).all()
+    if property_id: services=[x for x in services if x.property_id==property_id]
     return {"total": len(incidents), "open": sum(x not in {"resolved", "closed"} for x in statuses), "critical": sum(row.priority == "critical" or row.severity == "critical" for row in incidents if service.status_of(row) not in {"resolved", "closed"}), "unassigned": sum(not row.assigned_technician_id for row in incidents if service.status_of(row) not in {"resolved", "closed"}), "in_progress": statuses.count("in_progress"), "on_hold": statuses.count("on_hold"), "resolved_today": resolved_today, "average_resolution_seconds": int(sum(durations)/len(durations)) if durations else None, "services": len(services), "services_operational": sum(x.status == "operational" for x in services), "services_degraded": sum(x.status == "degraded" for x in services), "services_outage": sum(x.status == "outage" for x in services)}
 
 
 @router.get("/services")
-def list_services(search: str | None = None, status: str | None = None, criticality: str | None = None, db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context)):
+def list_services(search: str | None = None, status: str | None = None, criticality: str | None = None, db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context), property_id=Depends(property_context)):
     query = db.query(HospitalityTechnologyService).filter_by(organization_id=organization_id)
+    if property_id:query=query.filter_by(property_id=property_id)
     if search: query = query.filter(or_(HospitalityTechnologyService.name.ilike(f"%{search}%"), HospitalityTechnologyService.code.ilike(f"%{search}%")))
     if status: query = query.filter_by(status=status)
     if criticality: query = query.filter_by(criticality=criticality)
@@ -69,8 +72,9 @@ def link_service_device(service_id: UUID, device_id: UUID, db: Session = Depends
 
 
 @router.get("/incidents")
-def list_incidents(search: str | None = None, status: str | None = None, priority: str | None = None, severity: str | None = None, category: str | None = None, technician_id: str | None = None, service_id: UUID | None = None, asset_id: UUID | None = None, date_from: date | None = None, db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context)):
+def list_incidents(search: str | None = None, status: str | None = None, priority: str | None = None, severity: str | None = None, category: str | None = None, technician_id: str | None = None, service_id: UUID | None = None, asset_id: UUID | None = None, date_from: date | None = None, db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context), property_id=Depends(property_context)):
     query = db.query(OperationalIncident).filter_by(organization_id=organization_id)
+    if property_id:query=query.filter_by(property_id=property_id)
     if search:
         query = query.outerjoin(ManagedAsset, ManagedAsset.id == OperationalIncident.asset_id).filter(or_(OperationalIncident.incident_number.ilike(f"%{search}%"), OperationalIncident.title.ilike(f"%{search}%"), OperationalIncident.description.ilike(f"%{search}%"), ManagedAsset.asset_number.ilike(f"%{search}%"), ManagedAsset.asset_tag.ilike(f"%{search}%")))
     if priority: query = query.filter_by(priority=priority)

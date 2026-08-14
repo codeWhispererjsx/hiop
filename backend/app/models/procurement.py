@@ -11,6 +11,7 @@ class AssetProcurement(Base):
     __table_args__=(UniqueConstraint("procurement_number",name="uq_asset_procurement_number"),Index("ix_asset_procurement_org_status","organization_id","status"),CheckConstraint("status IN ('draft','requested','approved','ordered','partially_received','received','cancelled')",name="ck_asset_procurement_status"))
     id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
     organization_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id",ondelete="RESTRICT"),nullable=False,index=True)
+    property_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id",ondelete="RESTRICT"),index=True)
     procurement_number:Mapped[str]=mapped_column(String(24),nullable=False)
     reference_number:Mapped[str|None]=mapped_column(String(80),index=True)
     title:Mapped[str]=mapped_column(String(220),nullable=False)

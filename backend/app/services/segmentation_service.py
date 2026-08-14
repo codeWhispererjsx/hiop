@@ -106,8 +106,21 @@ class VLANTableProvider:
 
 
 class SegmentationService:
-    def __init__(self, db, provider=None):
+    def __init__(self, db, provider=None, organization_id=None, property_id=None):
         self.db, self.provider = db, provider or VLANTableProvider(db)
+        self.organization_id, self.property_id = organization_id, property_id
+
+    def _device_query(self):
+        query = select(Device.id)
+        if self.property_id:
+            return query.where(Device.property_id == self.property_id)
+        if self.organization_id:
+            from app.models.hierarchy import Property
+            return query.join(Property, Device.property_id == Property.id).where(Property.organization_id == self.organization_id)
+        return query
+
+    def _scoped_device(self, device_id):
+        return self.db.scalar(select(Device).where(Device.id == device_id, Device.id.in_(self._device_query())))
 
     def _target(self, device_id):
         return self.db.scalar(select(SNMPTarget).where(SNMPTarget.device_id == device_id, SNMPTarget.enabled.is_(True)).order_by(SNMPTarget.updated_at.desc()))
@@ -197,7 +210,7 @@ class SegmentationService:
         return {"vlans":len(segments),"memberships":len(seen),"devices":endpoint_count,"trunks":trunk_count}
 
     def refresh(self, switch_device_id: UUID, actor):
-        switch, target = self.db.get(Device, switch_device_id), self._target(switch_device_id)
+        switch, target = self._scoped_device(switch_device_id), self._target(switch_device_id)
         if not switch: raise HTTPException(404, "Switch device was not found.")
         if not settings.snmp_enabled or not target: return {"status":"unavailable","message":"VLAN information unavailable because SNMP is disabled or no linked target exists.","vlans":0,"memberships":0,"devices":0,"trunks":0}
         try: vlans, ports = self.provider.collect(target)
@@ -216,7 +229,8 @@ class SegmentationService:
     def list_vlans(self, search=None, vlan_id=None, subnet=None, switch=None, port=None):
         topology = self._topology()
         if not topology: return {"items":[],"total":0,"data_state":"unavailable","message":"No topology exists yet."}
-        rows = self.db.scalars(select(NetworkSegment).where(NetworkSegment.topology_id == topology.id, NetworkSegment.vlan_id.is_not(None)).order_by(NetworkSegment.vlan_id)).all()
+        scoped_segments = select(VLANMembershipObservation.network_segment_id).where(VLANMembershipObservation.switch_device_id.in_(self._device_query()))
+        rows = self.db.scalars(select(NetworkSegment).where(NetworkSegment.topology_id == topology.id, NetworkSegment.vlan_id.is_not(None), NetworkSegment.id.in_(scoped_segments)).order_by(NetworkSegment.vlan_id)).all()
         items = [self._item(x) for x in rows]
         needle = (search or "").lower()
         if needle: items = [x for x in items if needle in str(x).lower()]
@@ -231,9 +245,9 @@ class SegmentationService:
         return {"items":items,"total":len(items),"data_state":"current" if items else "no_segments","message":None if items else "No VLAN observations are available."}
 
     def vlan_details(self, segment_id):
-        segment = self.db.get(NetworkSegment, segment_id)
+        segment = self.db.scalar(select(NetworkSegment).where(NetworkSegment.id == segment_id, NetworkSegment.id.in_(select(VLANMembershipObservation.network_segment_id).where(VLANMembershipObservation.switch_device_id.in_(self._device_query())))))
         if not segment or segment.vlan_id is None: raise HTTPException(404,"VLAN was not found.")
-        rows = self.db.scalars(select(VLANMembershipObservation).where(VLANMembershipObservation.network_segment_id==segment.id).order_by(VLANMembershipObservation.is_current.desc(), VLANMembershipObservation.last_observed_at.desc())).all()
+        rows = self.db.scalars(select(VLANMembershipObservation).where(VLANMembershipObservation.network_segment_id==segment.id,VLANMembershipObservation.switch_device_id.in_(self._device_query())).order_by(VLANMembershipObservation.is_current.desc(), VLANMembershipObservation.last_observed_at.desc())).all()
         memberships=[]
         for row in rows:
             interface, switch = self.db.get(SNMPInterface,row.interface_id), self.db.get(Device,row.switch_device_id)
@@ -242,7 +256,7 @@ class SegmentationService:
         return {**self._item(segment),"memberships":memberships}
 
     def device_vlan(self, device_id):
-        if not self.db.get(Device,device_id): raise HTTPException(404,"Device was not found.")
+        if not self._scoped_device(device_id): raise HTTPException(404,"Device was not found.")
         rows=self.db.scalars(select(VLANMembershipObservation).where(VLANMembershipObservation.connected_device_id==device_id).order_by(VLANMembershipObservation.is_current.desc(),VLANMembershipObservation.last_observed_at.desc())).all()
         history=[]
         for row in rows:
@@ -252,7 +266,7 @@ class SegmentationService:
         return {"device_id":str(device_id),"current":current,"history":[x for x in history if x["state"]=="stale"],"data_state":"current" if current else "unknown","message":None if current else "VLAN membership is unknown or port-level VLAN information is unavailable."}
 
     def stats(self):
-        segments=self.db.scalars(select(NetworkSegment).where(NetworkSegment.vlan_id.is_not(None))).all(); rows=self.db.scalars(select(VLANMembershipObservation)).all(); current=[x for x in rows if x.is_current]
+        rows=self.db.scalars(select(VLANMembershipObservation).where(VLANMembershipObservation.switch_device_id.in_(self._device_query()))).all(); segment_ids={x.network_segment_id for x in rows}; segments=self.db.scalars(select(NetworkSegment).where(NetworkSegment.id.in_(segment_ids),NetworkSegment.vlan_id.is_not(None))).all() if segment_ids else []; current=[x for x in rows if x.is_current]
         by_interface=defaultdict(set)
         for row in current: by_interface[row.interface_id].add(row.network_segment_id)
         return {"vlans_discovered":len(segments),"subnets_identified":len([x for x in segments if x.cidr]),"devices_with_vlan_information":len({x.connected_device_id for x in current if x.connected_device_id}),"ports_with_vlan_information":len({x.interface_id for x in current}),"trunk_ports":len({x.interface_id for x in current if x.port_mode=="trunk"}),"multi_vlan_relationships":len([values for values in by_interface.values() if len(values)>1]),"stale_vlan_relationships":len([x for x in rows if not x.is_current]),"unknown_vlan_relationships":len([x for x in current if not x.connected_device_id]),"duplicates":0}

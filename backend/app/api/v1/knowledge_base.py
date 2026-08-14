@@ -11,7 +11,7 @@ from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import organization_context, property_context
 from app.models.asset_intelligence import ManagedAsset
 from app.models.asset_management import Vendor
 from app.models.change_management import ChangeRequest
@@ -99,13 +99,16 @@ def present(db,row,detail=False):
     return result
 
 @router.get("/summary")
-def summary(db:Session=Depends(get_db),user=Depends(reader),org=Depends(organization_context)):
-    rows=db.query(KnowledgeArticle).filter_by(organization_id=org).all();visible=[x for x in rows if can_see(x,user)];now=datetime.now(timezone.utc)
+def summary(db:Session=Depends(get_db),user=Depends(reader),org=Depends(organization_context),property_id=Depends(property_context)):
+    q=db.query(KnowledgeArticle).filter_by(organization_id=org)
+    if property_id:q=q.filter(or_(KnowledgeArticle.property_id==property_id,KnowledgeArticle.property_id.is_(None)))
+    rows=q.all();visible=[x for x in rows if can_see(x,user)];now=datetime.now(timezone.utc)
     return {"total":len(visible),**{s:sum(x.status==s for x in visible) for s in STATUSES},"review_due":sum(bool(x.next_review_at and x.next_review_at<now and x.status=="published") for x in visible),"recently_updated":sum((now-x.updated_at).days<=30 for x in visible),"most_viewed":max((x.view_count for x in visible),default=0)}
 
 @router.get("")
-def list_articles(search:str|None=None,status:str|None=None,article_type:str|None=None,category:str|None=None,tag:str|None=None,author_id:str|None=None,owner_id:str|None=None,db:Session=Depends(get_db),user=Depends(reader),org=Depends(organization_context)):
+def list_articles(search:str|None=None,status:str|None=None,article_type:str|None=None,category:str|None=None,tag:str|None=None,author_id:str|None=None,owner_id:str|None=None,db:Session=Depends(get_db),user=Depends(reader),org=Depends(organization_context),property_id=Depends(property_context)):
     q=db.query(KnowledgeArticle).filter_by(organization_id=org)
+    if property_id:q=q.filter(or_(KnowledgeArticle.property_id==property_id,KnowledgeArticle.property_id.is_(None)))
     if user.role not in {"admin","platformadmin"}:q=q.filter(or_(KnowledgeArticle.status=="published",KnowledgeArticle.author_id==user.id) if user.role=="technician" else KnowledgeArticle.status=="published")
     if search:
         term=f"%{search}%";q=q.filter(or_(KnowledgeArticle.article_number.ilike(term),KnowledgeArticle.title.ilike(term),KnowledgeArticle.summary.ilike(term),KnowledgeArticle.body.ilike(term),KnowledgeArticle.tags_text.ilike(term),KnowledgeArticle.category.ilike(term)))

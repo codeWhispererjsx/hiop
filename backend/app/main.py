@@ -42,6 +42,7 @@ from app.api.v1.problems import router as problems_router
 from app.api.v1.changes import router as changes_router
 from app.api.v1.knowledge_base import router as knowledge_base_router
 from app.api.v1.reporting import router as reporting_router
+from app.api.v1.property_management import router as property_management_router
 from app.users.routes import router as users_router
 from app.services.scheduler_service import scheduler
 from app.websocket.connection_manager import manager
@@ -170,3 +171,4 @@ app.include_router(problems_router, prefix=settings.api_prefix)
 app.include_router(changes_router, prefix=settings.api_prefix)
 app.include_router(knowledge_base_router, prefix=settings.api_prefix)
 app.include_router(reporting_router, prefix=settings.api_prefix)
+app.include_router(property_management_router, prefix=settings.api_prefix)

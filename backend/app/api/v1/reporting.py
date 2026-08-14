@@ -10,7 +10,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import organization_context, property_context
 from app.models.alert import Alert
 from app.models.asset_intelligence import ManagedAsset
 from app.models.asset_management import Vendor
@@ -51,18 +51,18 @@ def trend(rows,field,start,end):
 def metric(value,label,drilldown=None,quality="available"):
     return {"label":label,"value":value if value is not None else "Insufficient data","quality":quality if value is not None else "insufficient_data","drilldown":drilldown}
 
-def context(db,org,start,end):
-    property_ids=[x[0] for x in db.query(Property.id).filter_by(organization_id=org).all()]
+def context(db,org,start,end,selected_property=None):
+    property_ids=[selected_property] if selected_property else [x[0] for x in db.query(Property.id).filter_by(organization_id=org).all()]
     devices=db.query(Device).filter(Device.property_id.in_(property_ids)).all() if property_ids else []
     device_ids=[x.id for x in devices]
-    assets=db.query(ManagedAsset).filter_by(organization_id=org).all()
-    incidents=db.query(OperationalIncident).filter_by(organization_id=org).all()
-    problems=db.query(Problem).filter_by(organization_id=org).all()
-    changes=db.query(ChangeRequest).filter_by(organization_id=org).all()
-    procurement=db.query(AssetProcurement).filter_by(organization_id=org).all()
+    assets=db.query(ManagedAsset).filter(ManagedAsset.organization_id==org, *((ManagedAsset.property_id==selected_property,) if selected_property else ())).all()
+    incidents=db.query(OperationalIncident).filter(OperationalIncident.organization_id==org, *((OperationalIncident.property_id==selected_property,) if selected_property else ())).all()
+    problems=db.query(Problem).filter(Problem.organization_id==org, *((Problem.property_id==selected_property,) if selected_property else ())).all()
+    changes=db.query(ChangeRequest).filter(ChangeRequest.organization_id==org, *((ChangeRequest.property_id==selected_property,) if selected_property else ())).all()
+    procurement=db.query(AssetProcurement).filter(AssetProcurement.organization_id==org, *((AssetProcurement.property_id==selected_property,) if selected_property else ())).all()
     vendors=db.query(Vendor).filter_by(organization_id=org).all()
     knowledge=db.query(KnowledgeArticle).filter_by(organization_id=org).all()
-    services=db.query(HospitalityTechnologyService).filter_by(organization_id=org).all()
+    services=db.query(HospitalityTechnologyService).filter(HospitalityTechnologyService.organization_id==org, *((HospitalityTechnologyService.property_id==selected_property,) if selected_property else ())).all()
     departments=db.query(Department).filter_by(organization_id=org).all()
     rooms=db.query(Room).filter_by(organization_id=org).all()
     alerts=db.query(Alert).filter(Alert.device_id.in_(device_ids)).all() if device_ids else []
@@ -70,7 +70,7 @@ def context(db,org,start,end):
     return locals()
 
 def build(report,db,org,start,end,filters):
-    c=context(db,org,start,end);assets=c["assets"];devices=c["devices"];incidents=c["incidents"];problems=c["problems"];changes=c["changes"];procurements=c["procurement"];vendors=c["vendors"];knowledge=c["knowledge"];services=c["services"];alerts=c["alerts"];scans=c["scans"]
+    c=context(db,org,start,end,filters.get("selected_property"));assets=c["assets"];devices=c["devices"];incidents=c["incidents"];problems=c["problems"];changes=c["changes"];procurements=c["procurement"];vendors=c["vendors"];knowledge=c["knowledge"];services=c["services"];alerts=c["alerts"];scans=c["scans"]
     if filters.get("department_id"):
         dep=UUID(filters["department_id"]);assets=[x for x in assets if x.department_id==dep];incidents=[x for x in incidents if x.department_id==dep];problems=[x for x in problems if x.department_id==dep];procurements=[x for x in procurements if x.department_id==dep];services=[x for x in services if x.department_id==dep]
     if filters.get("service_id"):
@@ -147,12 +147,12 @@ def build(report,db,org,start,end,filters):
     return {"report":report,"period":{"start":start,"end":end},"generated_at":datetime.now(timezone.utc),"metrics":metrics,"breakdowns":breakdowns,"trends":trends,"drilldowns":drilldowns,"insufficient_data":insufficient,"source":"Live HIOP organization data"}
 
 @router.get("/{report}")
-def report(report:str,period:str="30d",start:datetime|None=None,end:datetime|None=None,department_id:str|None=None,location_id:str|None=None,service_id:str|None=None,device_type:str|None=None,status:str|None=None,vendor_id:str|None=None,db:Session=Depends(get_db),_=Depends(reader),org=Depends(organization_context)):
+def report(report:str,period:str="30d",start:datetime|None=None,end:datetime|None=None,department_id:str|None=None,location_id:str|None=None,service_id:str|None=None,device_type:str|None=None,status:str|None=None,vendor_id:str|None=None,db:Session=Depends(get_db),_=Depends(reader),org=Depends(organization_context),selected_property=Depends(property_context)):
     if report not in REPORTS:raise HTTPException(404,"Unsupported report")
     start_at,end_at=bounds(period,start,end);return build(report,db,org,start_at,end_at,locals())
 
 @router.get("/{report}/export.csv")
-def export_csv(report:str,period:str="30d",start:datetime|None=None,end:datetime|None=None,department_id:str|None=None,location_id:str|None=None,service_id:str|None=None,device_type:str|None=None,status:str|None=None,vendor_id:str|None=None,db:Session=Depends(get_db),_=Depends(reader),org=Depends(organization_context)):
+def export_csv(report:str,period:str="30d",start:datetime|None=None,end:datetime|None=None,department_id:str|None=None,location_id:str|None=None,service_id:str|None=None,device_type:str|None=None,status:str|None=None,vendor_id:str|None=None,db:Session=Depends(get_db),_=Depends(reader),org=Depends(organization_context),selected_property=Depends(property_context)):
     if report not in REPORTS:raise HTTPException(404,"Unsupported report")
     start_at,end_at=bounds(period,start,end);payload=build(report,db,org,start_at,end_at,locals());stream=io.StringIO();writer=csv.writer(stream);writer.writerow(["Report",report]);writer.writerow(["Period",start_at.isoformat(),end_at.isoformat()]);writer.writerow([]);writer.writerow(["Metric","Value","Quality"])
     for row in payload["metrics"]:writer.writerow([row["label"],row["value"],row["quality"]])
