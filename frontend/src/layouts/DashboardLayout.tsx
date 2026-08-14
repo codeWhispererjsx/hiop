@@ -7,6 +7,7 @@ import { endpoints } from "../lib/api";
 import type { LiveEvent, PropertyContext, PublicSettings, User } from "../lib/types";
 import { clearAuthToken, getAuthToken, getOrganizationContext, setOrganizationContext } from "../lib/auth";
 import "../styles/dashboard.css";
+import "../styles/product-polish.css";
 export default function DashboardLayout({
   children,
   onLiveEvent,

@@ -67,6 +67,22 @@ test("shared components use semantic surfaces, controls, focus, and responsive r
   assert.match(styles, /var\(--color-primary\)/);
 });
 
+test("final product polish keeps shared states, context, and platform authority accessible", () => {
+  const polish = read("src/styles/product-polish.css");
+  const feedback = read("src/components/Feedback.tsx");
+  const status = read("src/components/StatusBadge.tsx");
+  const pageTitle = read("src/components/PageTitle.tsx");
+  const platform = read("src/pages/PlatformControlCenterPage.tsx");
+  assert.match(polish, /--control-height/);
+  assert.match(polish, /prefers-reduced-motion/);
+  assert.match(feedback, /aria-live="polite"/);
+  assert.match(feedback, /Unable to load this information/);
+  assert.match(status, /aria-label={`Status:/);
+  assert.match(pageTitle, /<header className="page-title">/);
+  assert.match(platform, /platform-context-banner/);
+  assert.match(platform, /PLATFORM ADMINISTRATION/);
+});
+
 test("theme switching remains instant, system-aware, and persisted", () => {
   const context = read("src/theme/ThemeContext.tsx");
   const bootstrap = read("public/theme-init.js");

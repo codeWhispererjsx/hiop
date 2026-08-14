@@ -6,6 +6,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import { endpoints } from "../lib/api";
 import { setAuthToken } from "../lib/auth";
 import "../App.css";
+import "../styles/product-polish.css";
 
 export default function LoginPage() {
   const navigate = useNavigate();

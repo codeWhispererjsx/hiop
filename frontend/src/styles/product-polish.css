@@ -1,0 +1,119 @@
+/* Final product-quality layer. Loaded after legacy module CSS to keep HIOP coherent. */
+:root {
+  --control-height: 40px;
+  --content-measure: 72rem;
+}
+
+body { letter-spacing: -.005em; }
+button, a, input, select, textarea { transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease, box-shadow 140ms ease; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+.page-content { padding-top: var(--space-8); }
+.page-title { align-items: flex-start; margin-bottom: var(--space-6); padding-bottom: var(--space-5); border-bottom: 1px solid var(--border); }
+.page-title-copy { min-width: 0; }
+.page-title h1 { max-width: 52rem; font-size: clamp(1.75rem, 2.5vw, 2.25rem); letter-spacing: -.035em; text-wrap: balance; }
+.page-title > div > p:last-child, .page-title-copy > p:last-child { max-width: var(--content-measure); margin-top: var(--space-2); font-size: var(--font-size-md); line-height: var(--line-height-normal); }
+.page-kicker { margin-bottom: var(--space-2); color: var(--color-primary); letter-spacing: .13em; }
+.page-title-actions, .page-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+
+.panel, .data-panel, .stat-card, .asset-metric-card, .asset-insight-card, .asset-inventory-panel, .device-details, .device-form-card, .toolbar-panel, .feedback-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+.panel, .stat-card, .asset-metric-card, .asset-insight-card { background-image: none !important; }
+.panel-head, .section-head, .asset-inventory-head { padding: var(--space-5); border-bottom: 1px solid var(--border); }
+.panel h2, .section-head h2, .asset-inventory-head h2 { color: var(--text); font-size: var(--font-size-lg); line-height: var(--line-height-tight); }
+.panel p, .section-head p { line-height: var(--line-height-normal); }
+
+.primary-action, .secondary-action, .danger-action, button.primary, button.secondary, .platform-button {
+  min-height: var(--control-height);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  line-height: 1;
+}
+.primary-action { box-shadow: none; }
+.danger-action { padding-inline: var(--space-4); color: var(--color-white); background: var(--color-danger); }
+
+.toolbar-panel, .port-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-3); }
+.toolbar-panel .search-field, .port-filters input:first-child { flex: 1 1 18rem; }
+.filter-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+input:not([type="checkbox"]):not([type="radio"]), select, textarea { min-height: var(--control-height); padding: .625rem .75rem; }
+textarea { min-height: 7rem; resize: vertical; }
+label { gap: var(--space-2); font-size: var(--font-size-sm); }
+label > small, .field-help { color: var(--text-muted); font-size: var(--font-size-xs); font-weight: 400; }
+
+.data-panel, .asset-table-wrap, .noc-table-wrap, .platform-table-wrap { scrollbar-gutter: stable; }
+.data-table, .asset-table, .noc-table, .platform-main table { font-size: var(--font-size-sm); }
+.table-head, .asset-table th, .noc-table th, .platform-main th { color: var(--text-muted); background: var(--surface-soft); font-size: var(--font-size-xs); font-weight: 650; letter-spacing: .045em; }
+.table-row, .asset-table td, .noc-table td, .platform-main td { min-height: 52px; padding: .8rem 1rem; color: var(--text-muted); border-color: var(--border); }
+.table-row:not(.table-head):hover, .asset-table tbody tr:hover, .noc-table tbody tr:hover, .platform-main tbody tr:hover { background: var(--surface-hover); }
+.table-row:focus-visible, .asset-table a:focus-visible { position: relative; z-index: 2; }
+
+.status-badge { min-height: 24px; padding: .28rem .55rem; gap: .38rem; white-space: nowrap; text-transform: capitalize; }
+.status-badge > i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: currentColor; opacity: .78; }
+.status-badge.offline, .status-badge.critical, .status-badge.failed, .status-badge.error, .status-badge.rejected, .status-badge.outage { color: var(--status-danger-text); background: var(--danger-soft); }
+.status-badge.warning, .status-badge.high, .status-badge.pending, .status-badge.degraded, .status-badge.in-review, .status-badge.under-review, .status-badge.on-hold, .status-badge.partially-received, .status-badge.review-due { color: var(--status-warning-text); background: var(--warning-soft); }
+.status-badge.info, .status-badge.running, .status-badge.review, .status-badge.acknowledged, .status-badge.in-progress, .status-badge.deployed, .status-badge.scheduled { color: var(--status-info-text); background: var(--info-soft); }
+.status-badge.online, .status-badge.healthy, .status-badge.success, .status-badge.active, .status-badge.operational, .status-badge.completed, .status-badge.resolved, .status-badge.closed, .status-badge.published, .status-badge.received, .status-badge.approved { color: var(--status-success-text); background: var(--success-soft); }
+.status-badge.maintenance, .status-badge.in-maintenance { color: var(--status-info-text); background: var(--info-soft); }
+.status-badge.unknown, .status-badge.disabled, .status-badge.archived, .status-badge.inactive, .status-badge.retired, .status-badge.cancelled, .status-badge.n-a { color: var(--status-offline-text); background: var(--neutral-soft); }
+
+.feedback-card { min-height: 210px; display: grid; place-items: center; align-content: center; gap: var(--space-2); padding: var(--space-8); text-align: center; }
+.feedback-card h3 { margin: var(--space-2) 0 0; color: var(--text); font-size: var(--font-size-lg); }
+.feedback-card p { max-width: 38rem; margin: 0; color: var(--text-muted); }
+.feedback-card.error { border-color: color-mix(in srgb, var(--color-danger) 34%, var(--border)); background: color-mix(in srgb, var(--color-danger) 4%, var(--surface)); }
+.feedback-skeleton { width: min(28rem, 80vw); display: grid; gap: var(--space-2); margin-top: var(--space-4); }
+.feedback-skeleton i { height: 8px; border-radius: var(--radius-full); background: var(--surface-subtle); animation: feedback-pulse 1.3s ease-in-out infinite alternate; }
+.feedback-skeleton i:nth-child(2) { width: 86%; }.feedback-skeleton i:nth-child(3) { width: 62%; }
+@keyframes feedback-pulse { to { opacity: .42; } }
+
+.property-context { min-width: 0; display: grid; gap: 3px; }
+.property-context > span { font-size: .6875rem; font-weight: 600; letter-spacing: .03em; }
+.property-context select { width: min(25rem, 40vw); min-height: 34px; padding: .3rem 2rem .3rem .55rem; font-size: var(--font-size-sm); font-weight: 650; }
+.platform-context-bar { padding: .65rem clamp(var(--space-4), 3vw, var(--space-8)); background: var(--info-soft); border-color: color-mix(in srgb, var(--color-info) 26%, var(--border)); }
+
+.device-details { overflow: hidden; padding: 0 0 var(--space-6); }
+.device-details > header { padding: var(--space-5); border-bottom: 1px solid var(--border); background: var(--surface-soft); }
+.device-details > h2 { margin: var(--space-7, 1.75rem) var(--space-6) var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--border); font-size: var(--font-size-lg); }
+.device-details > h2:first-of-type { border-top: 0; }
+.device-details > dl, .device-details > p, .device-details > .linked-list, .device-details > .data-table, .device-details > .lifecycle-timeline, .device-details > .vendor-contact-grid, .device-details > .tag-list { margin-inline: var(--space-6); }
+.detail-grid, .device-details dl { gap: var(--space-4); }
+
+.platform-shell { background: var(--background); }
+.platform-main { max-width: 1680px; width: 100%; margin: 0 auto; padding-top: var(--space-5); }
+.platform-context-banner { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-6); padding: var(--space-3) var(--space-4); border: 1px solid color-mix(in srgb, var(--color-primary) 28%, var(--border)); border-radius: var(--radius-lg); color: var(--color-primary); background: var(--primary-soft); }
+.platform-context-banner svg { width: 18px; }.platform-context-banner div { display: grid; gap: 2px; }.platform-context-banner strong { font-size: var(--font-size-sm); }.platform-context-banner span { color: var(--text-muted); font-size: var(--font-size-xs); }
+.platform-main > header { align-items: flex-start; padding-bottom: var(--space-5); border-bottom: 1px solid var(--border); }
+.platform-main > header h1 { font-size: clamp(1.75rem, 2.5vw, 2.25rem); }
+.platform-main > header p, .platform-section-heading p, .platform-audit-toolbar p, .platform-health-hero p { font-size: var(--font-size-sm); }
+.platform-stats { gap: var(--space-3); }
+.platform-table-panel, .platform-audit, .platform-settings, .platform-health-hero { border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
+.platform-section-heading, .platform-audit-toolbar { background: var(--surface); }
+.platform-main th { font-size: var(--font-size-xs); }.platform-main td, .platform-main td small { font-size: var(--font-size-sm); }
+.platform-cell-metrics span, .platform-cell-metrics strong { font-size: var(--font-size-xs); }
+
+@media (max-width: 900px) {
+  .page-title { flex-direction: column; }
+  .page-title-actions, .page-title-actions > .page-actions { width: 100%; justify-content: flex-start; }
+  .topbar { min-height: 64px; height: auto; gap: var(--space-2); padding-block: var(--space-2); }
+  .property-context { flex: 1; }.property-context select { width: min(56vw, 25rem); }
+  .toolbar-panel, .port-filters { align-items: stretch; flex-direction: column; }
+  .filter-row > * { flex: 1 1 10rem; }
+}
+
+@media (max-width: 560px) {
+  .page-content { padding-inline: var(--space-3); }
+  .page-title-actions > *, .page-title-actions > .page-actions > * { flex: 1 1 auto; }
+  .property-context > span { max-width: 48vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .property-context select { width: 48vw; }
+  .topbar-actions .theme-toggle { display: none; }
+  .device-details > h2, .device-details > dl, .device-details > p, .device-details > .linked-list, .device-details > .data-table, .device-details > .lifecycle-timeline, .device-details > .vendor-contact-grid, .device-details > .tag-list { margin-inline: var(--space-4); }
+  .feedback-card { min-height: 180px; padding: var(--space-6) var(--space-4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedback-skeleton i { animation: none; }
+}

@@ -1,4 +1,5 @@
 export function StatusBadge({ status }: { status: string }) {
-  const className = status.trim().toLowerCase().replaceAll(" ", "-");
-  return <b className={`status-badge ${className}`}>{status}</b>;
+  const label = status?.trim() || "Unknown";
+  const className = label.toLowerCase().replaceAll("_", "-").replaceAll(" ", "-");
+  return <span className={`status-badge ${className}`} aria-label={`Status: ${label}`}><i aria-hidden="true"/>{label.replaceAll("_", " ")}</span>;
 }

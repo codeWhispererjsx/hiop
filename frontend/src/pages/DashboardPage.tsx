@@ -6,6 +6,7 @@ import { Icon } from "../components/Icon";
 import { useRequest } from "../hooks/useRequest";
 import { endpoints } from "../lib/api";
 import type { Device } from "../lib/types";
+export { PageTitle } from "../components/PageTitle";
 
 export default function DashboardPage() {
   const dashboard = useRequest(endpoints.dashboard, []);
@@ -82,12 +83,8 @@ function AssetTable({ devices }: { devices: Device[] }) {
   return <div className="asset-table-wrap"><table className="asset-table"><thead><tr><th>Asset name</th><th>Type</th><th>Vendor / model</th><th>Status</th><th>IP address</th><th>Location</th></tr></thead><tbody>{devices.slice(0, 50).map((device) => <tr key={device.id}>
     <td data-label="Asset"><Link to={`/devices/${device.id}`}><span className="asset-device-icon"><Icon name="devices"/></span><strong>{device.hostname || device.asset_tag || "Unnamed device"}</strong></Link></td>
     <td data-label="Type"><span className="asset-tag">{device.device_type || "Unknown"}</span></td>
-    <td>{[device.brand, device.model].filter(Boolean).join(" · ") || "—"}</td>
+    <td>{[device.brand, device.model].filter(Boolean).join(" · ") || "Not available"}</td>
     <td data-label="Status"><span className={`status-badge ${(device.network_status || "unknown").toLowerCase()}`}>{device.network_status || "Unknown"}</span></td>
-    <td className="asset-mono">{device.ip_address || "—"}</td><td>{device.location || "Unassigned"}</td>
+    <td className="asset-mono">{device.ip_address || "Not available"}</td><td>{device.location || "Unknown"}</td>
   </tr>)}</tbody></table></div>;
-}
-
-export function PageTitle({ eyebrow, title, copy, action }: { eyebrow: string; title: string; copy: string; action?: React.ReactNode }) {
-  return <div className="page-title"><div><p className="page-kicker">{eyebrow}</p><h1>{title}</h1><p>{copy}</p></div>{action}</div>;
 }
