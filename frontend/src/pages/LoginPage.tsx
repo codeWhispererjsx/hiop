@@ -22,9 +22,9 @@ export default function LoginPage() {
     try {
       const data = await endpoints.login(email, password);
       setAuthToken(data.access_token);
-      const user=await endpoints.me();
+      const user = await endpoints.me();
       setPassword("");
-      navigate(user.role==="platformadmin"?"/platform":"/dashboard");
+      navigate(user.role === "platformadmin" ? "/platform" : "/dashboard");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to sign in");
     } finally {
@@ -32,25 +32,119 @@ export default function LoginPage() {
     }
   };
 
-  return <main className="login-page">
-    <ThemeToggle className="login-theme-toggle" />
-    <section className="login-story">
-      <BrandLogo className="login-logo" />
-      <div className="login-copy"><p className="login-kicker">Hospitality operations, beautifully connected</p><h1>Technology that stays behind the scenes.</h1><p>See every critical hotel system, respond before service is disrupted, and keep every guest-facing team moving from one secure workspace.</p><div className="login-proof"><span><Icon name="check" size={16}/>Live infrastructure visibility</span><span><Icon name="check" size={16}/>Incident-ready operations</span></div></div>
-      <div className="login-stats"><div className="login-stat"><strong><i className="status-dot" />Operational</strong><span>Platform status</span></div><div className="login-stat"><strong>24 / 7</strong><span>Infrastructure watch</span></div><div className="login-stat"><strong>Secure</strong><span>Role-based access</span></div></div>
-    </section>
-    <section className="login-panel">
-      <div className="login-card">
-        <div className="login-card-head"><span className="login-access-mark"><Icon name="lock" size={18}/></span><p className="login-kicker">Secure operations access</p><h2>Welcome back</h2><p>Sign in to your Hospitality IT Ops workspace.</p></div>
-        <form className="login-form" onSubmit={submit}>
-          <label className="field-label">Work email<div className="field-wrap"><Icon name="mail" className="field-icon" /><input type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="username" required /></div></label>
-          <label className="field-label">Password<div className="field-wrap"><Icon name="lock" className="field-icon" /><input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete="current-password" required /></div></label>
-          <button className="submit-button" disabled={busy}>{busy ? "Verifying access…" : <><span>Enter operations portal</span><Icon name="arrow" size={18}/></>}</button>
-        </form>
-        <p className="login-message" role="alert">{message && <><Icon name="warning" size={16} />{message}</>}</p>
-        <p className="login-security"><Icon name="lock" size={15}/>Protected access. Activity is recorded in the hospitality IT audit trail.</p>
-        <p className="login-public-links"><Link to="/">Back to HIOP</Link><Link to="/get-started">Create an organization</Link></p>
-      </div>
-    </section>
-  </main>;
+  return (
+    <main className="login-page" role="main">
+      <ThemeToggle className="login-theme-toggle" aria-label="Toggle theme" />
+      <section className="login-story" aria-label="About HIOP">
+        <BrandLogo className="login-logo" />
+        <div className="login-copy">
+          <p className="login-kicker">Hospitality operations, beautifully connected</p>
+          <h1>Technology that stays behind the scenes.</h1>
+          <p>
+            See every critical hotel system, respond before service is disrupted, and keep every
+            guest-facing team moving from one secure workspace.
+          </p>
+          <div className="login-proof">
+            <span>
+              <Icon name="check" size={16} aria-hidden="true" />
+              Live infrastructure visibility
+            </span>
+            <span>
+              <Icon name="check" size={16} aria-hidden="true" />
+              Incident-ready operations
+            </span>
+          </div>
+        </div>
+        <div className="login-stats">
+          <div className="login-stat">
+            <strong>
+              <i className="status-dot" aria-hidden="true" />
+              Operational
+            </strong>
+            <span>Platform status</span>
+          </div>
+          <div className="login-stat">
+            <strong>24 / 7</strong>
+            <span>Infrastructure watch</span>
+          </div>
+          <div className="login-stat">
+            <strong>Secure</strong>
+            <span>Role-based access</span>
+          </div>
+        </div>
+      </section>
+      <section className="login-panel" aria-label="Sign in form">
+        <div className="login-card">
+          <div className="login-card-head">
+            <span className="login-access-mark">
+              <Icon name="lock" size={18} aria-hidden="true" />
+            </span>
+            <p className="login-kicker">Secure operations access</p>
+            <h2>Welcome back</h2>
+            <p>Sign in to your Hospitality IT Ops workspace.</p>
+          </div>
+          <form className="login-form" onSubmit={submit} noValidate>
+            <label className="field-label" htmlFor="email">
+              Work email
+              <div className="field-wrap">
+                <Icon name="mail" className="field-icon" aria-hidden="true" />
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  autoComplete="username"
+                  required
+                  aria-invalid={message ? "true" : "false"}
+                  aria-describedby={message ? "login-error" : undefined}
+                  style={{ paddingLeft: "2.5rem" }}
+                />
+              </div>
+            </label>
+            <label className="field-label" htmlFor="password">
+              Password
+              <div className="field-wrap">
+                <Icon name="lock" className="field-icon" aria-hidden="true" />
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="current-password"
+                  required
+                  aria-invalid={message ? "true" : "false"}
+                  aria-describedby={message ? "login-error" : undefined}
+                  style={{ paddingLeft: "2.5rem" }}
+                />
+              </div>
+            </label>
+            <button className="submit-button" type="submit" disabled={busy} aria-busy={busy}>
+              {busy ? "Verifying access…" : (
+                <>
+                  <span>Enter operations portal</span>
+                  <Icon name="arrow" size={18} aria-hidden="true" />
+                </>
+              )}
+            </button>
+          </form>
+          <p className="login-message" id="login-error" role="alert" aria-live="polite">
+            {message && (
+              <>
+                <Icon name="warning" size={16} aria-hidden="true" />
+                {message}
+              </>
+            )}
+          </p>
+          <p className="login-security">
+            <Icon name="lock" size={15} aria-hidden="true" />
+            Protected access. Activity is recorded in the hospitality IT audit trail.
+          </p>
+          <p className="login-public-links">
+            <Link to="/">Back to HIOP</Link>
+            <Link to="/get-started">Create an organization</Link>
+          </p>
+        </div>
+      </section>
+    </main>
+  );
 }

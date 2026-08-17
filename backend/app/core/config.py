@@ -131,6 +131,10 @@ class Settings(BaseSettings):
     email_password: str
     email_recipient: str
 
+    # Tenant/Multi-tenancy Settings
+    base_domain: str = "localhost"
+    enable_subdomain_routing: bool = True  # Enabled for testing
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8"

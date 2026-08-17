@@ -90,7 +90,11 @@ def execute_safe_job(db,job,user):
     try:run=DiscoveryService(db,config=config).discover_range(job.network_range,trigger_type=job.trigger_type,triggered_by=user.id,audit_actor=user.username)
     except Exception as exc:
         job=db.get(DiscoveryJob,job.id);job.status="failed";job.tasks_failed+=1;job.completed_at=datetime.now(timezone.utc);db.commit();raise HTTPException(502,f"Safe discovery failed: {exc}") from exc
-    network=ipaddress.ip_network(job.network_range,strict=False);legacy=[x for x in db.query(DiscoveredDevice).all() if ipaddress.ip_address(x.ip_address) in network and x.last_seen_at>=run.started_at]
+    network=ipaddress.ip_network(job.network_range,strict=False);legacy=[]
+    for x in db.query(DiscoveredDevice).all():
+        try:
+            if x.ip_address and ipaddress.ip_address(x.ip_address) in network and x.last_seen_at>=run.started_at: legacy.append(x)
+        except ValueError: pass
     service=DiscoveryIntelligenceService(db);results=[];stage_errors=[]
     enabled=set(parse_json(policy.enabled_stages,[]));stage_enabled=lambda key:not enabled or key in enabled
     dns_collector=DNSCorrelationCollector();netbios_collector=NetBIOSNameCollector(timeout=min(float(policy.timeout_seconds),1.0));ad_collector=ActiveDirectoryCorrelationCollector(db);dhcp_collector=DHCPLeaseCorrelationCollector(db)
@@ -147,7 +151,12 @@ def quick_scan(body:QuickScanWrite,db:Session=Depends(get_db),user=Depends(opera
     if not policy:
         policy=DiscoveryPolicy(name=f"Quick Scan · {scope}",property_id=property_id,authorized_ranges=json.dumps([scope]),excluded_ranges="[]",enabled_stages=json.dumps(safe_stages),allowed_ports=json.dumps([22,53,80,135,139,161,443,445,3389,5985,5986]),max_hosts=1024,concurrency=32,timeout_seconds=1,rate_limit_per_second=50,allow_credentialed=False,enabled=True,created_by=user.id);db.add(policy);db.flush()
     job=DiscoveryIntelligenceService(db).create_job(policy,scope,"full","quick_scan",user.id);audit(db,user,"CREATE","discovery_job",job.id,"Started credential-free Quick Network Scan");db.commit();db.refresh(job)
-    execution=execute_safe_job(db,job,user);devices=[item for item in consolidated_device_rows(db,organization_id,property_id) if ipaddress.ip_address(item["ip_address"]) in network]
+    execution=execute_safe_job(db,job,user)
+    devices=[]
+    for item in consolidated_device_rows(db,organization_id,property_id):
+        try:
+            if item.get("ip_address") and ipaddress.ip_address(item["ip_address"]) in network: devices.append(item)
+        except ValueError: pass
     return {"job":execution["job"],"summary":{"found":len(devices),"identified":sum(x["confidence_score"]>=80 for x in devices),"partial":sum(40<=x["confidence_score"]<80 for x in devices),"needs_review":sum(x["confidence_score"]<40 for x in devices)},"devices":devices,"warnings":execution.get("warnings",[])}
 @router.get("/devices")
 def consolidated_devices(search:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):

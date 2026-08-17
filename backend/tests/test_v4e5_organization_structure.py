@@ -20,11 +20,11 @@ def test_v4e5_assignments_extend_existing_entities():
     assert "department_id" in ManagedAsset.__table__.columns and "room_id" in ManagedAsset.__table__.columns
 
 
-def test_agent_foundation_is_passive_and_organization_bound():
+def test_agent_foundation_is_secure_and_organization_bound():
     assert LocalAgentRegistration.__tablename__ == "local_agent_registrations"
     assert "organization_id" in LocalAgentRegistration.__table__.columns
     source = Path(__file__).parents[1].joinpath("app/models/local_agent.py").read_text(encoding="utf-8").lower()
-    assert "no command channel" in source
+    assert "credential_hash" in source and "property_id" in source
     for unsafe in ("execute_command", "remote_shell", "auto_update"): assert unsafe not in source
 
 

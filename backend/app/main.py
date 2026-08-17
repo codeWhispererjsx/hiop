@@ -45,9 +45,11 @@ from app.api.v1.reporting import router as reporting_router
 from app.api.v1.property_management import router as property_management_router
 from app.api.v1.public_onboarding import router as public_onboarding_router
 from app.api.v1.billing import router as billing_router
+from app.api.v1.local_agents import admin_router as local_agent_admin_router, agent_router as local_agent_router
 from app.users.routes import router as users_router
 from app.services.scheduler_service import scheduler
 from app.websocket.connection_manager import manager
+from app.core.tenant_middleware import TenantMiddleware
 
 configure_logging(settings.log_level)
 
@@ -90,6 +92,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+# app.add_middleware(TenantMiddleware)  # Temporarily disabled for testing
 
 app.include_router(
     auth_router,
@@ -192,3 +195,5 @@ app.include_router(reporting_router, prefix=settings.api_prefix)
 app.include_router(property_management_router, prefix=settings.api_prefix)
 app.include_router(public_onboarding_router, prefix=settings.api_prefix)
 app.include_router(billing_router, prefix=settings.api_prefix)
+app.include_router(local_agent_admin_router, prefix=settings.api_prefix)
+app.include_router(local_agent_router, prefix=settings.api_prefix)

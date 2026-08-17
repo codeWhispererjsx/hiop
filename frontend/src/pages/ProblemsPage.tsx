@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useDeferredValue, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
 import { StatCard } from "../components/StatCard";
@@ -8,48 +8,304 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints } from "../lib/api";
 import { PageTitle } from "./DashboardPage";
 
-const states=["open","investigating","known_error","resolved","closed"];
-const priorities=["low","medium","high","critical"];
-const categories=["network","hardware","software","pos","pms","wifi","printer","security_system","telephony","other"];
-const title=(value:string)=>value.replaceAll("_"," ").replace(/\b\w/g,x=>x.toUpperCase());
+const states = ["open", "investigating", "known_error", "resolved", "closed"];
+const priorities = ["low", "medium", "high", "critical"];
+const categories = [
+  "network",
+  "hardware",
+  "software",
+  "pos",
+  "pms",
+  "wifi",
+  "printer",
+  "security_system",
+  "telephony",
+  "other",
+];
 
-function MaintainLinks(){return <nav className="page-actions" aria-label="Maintain workspaces"><Link className="secondary-action" to="/incidents">Incidents</Link><Link className="secondary-action" to="/problems">Problems</Link><Link className="secondary-action" to="/problems?status=known_error">Known Errors</Link><Link className="secondary-action" to="/changes">Changes</Link><Link className="secondary-action" to="/knowledge">Knowledge</Link><Link className="secondary-action" to="/incidents/services">Services</Link></nav>}
-export default function ProblemsPage(){const {id}=useParams(),location=useLocation();return location.pathname==="/problems/new"?<ProblemForm/>:id?<ProblemDetail id={id}/>:<ProblemList/>}
+const title = (value: string) =>
+  value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (x) => x.toUpperCase());
 
-function ProblemList(){
- const [params]=useSearchParams(),request=useRequest(()=>endpoints.operationalProblems(),[]),summary=useRequest(endpoints.operationalProblemSummary,[]),me=useRequest(endpoints.me,[]);
- const [search,setSearch]=useState(""),[status,setStatus]=useState(params.get("status")??"all"),[priority,setPriority]=useState("all"),query=useDeferredValue(search).toLowerCase();
- const rows=useMemo(()=>(request.data??[]).filter(row=>(!query||[row.problem_number,row.title,row.description,row.problem_statement,row.service_name,row.department,row.location,row.vendor?.name].some(x=>x?.toLowerCase().includes(query)))&&(status==="all"||row.status===status)&&(priority==="all"||row.priority===priority)),[request.data,query,status,priority]);
- return <DashboardLayout><MaintainLinks/><PageTitle eyebrow="Maintain · problems" title="Problem management" copy="Investigate significant or recurring underlying causes while incidents remain separate operational records." action={me.data?.role==="admin"?<Link className="primary-action" to="/problems/new">Create Problem</Link>:undefined}/>
- {summary.data&&<section className="stats-grid"><StatCard label="Open problems" value={summary.data.open??0} detail={`${summary.data.critical??0} critical`} icon="alerts"/><StatCard label="Investigating" value={summary.data.investigating??0} detail="Investigation underway" icon="audit"/><StatCard label="Known errors" value={summary.data.known_error??0} detail="Documented workaround" icon="check"/><StatCard label="Recurring context" value={summary.data.recurring??0} detail="Multiple incidents linked" icon="network"/></section>}
- <section className="toolbar-panel"><input aria-label="Search problems" placeholder="Problem, asset, service, department, location, vendor" value={search} onChange={e=>setSearch(e.target.value)}/><div className="filter-row"><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">All statuses</option>{states.map(x=><option key={x} value={x}>{title(x)}</option>)}</select><select value={priority} onChange={e=>setPriority(e.target.value)}><option value="all">All priorities</option>{priorities.map(x=><option key={x}>{x}</option>)}</select></div></section>
- {request.loading||request.error?<Feedback loading={request.loading} error={request.error}/>:!rows.length?<Feedback emptyTitle={status==="known_error"?"No known errors yet.":"No problems yet."} empty="Create a problem when an underlying recurring or significant cause requires investigation."/>:<section className="data-panel"><div className="data-table incident-table"><div className="table-row table-head"><span>Problem</span><span>Context</span><span>Related</span><span>Priority</span><span>Status</span></div>{rows.map(row=><Link className="table-row" to={`/problems/${row.id}`} key={row.id}><span><strong>{row.problem_number}</strong><small>{row.title}</small></span><span>{row.service_name||row.department||"No service/department"}<small>{title(row.category)}</small></span><span>{row.related_counts.incident??0} incidents<small>{row.related_counts.asset??0} assets</small></span><span><StatusBadge status={row.priority}/></span><span><StatusBadge status={row.status}/></span></Link>)}</div></section>}</DashboardLayout>
+function MaintainLinks() {
+  return (
+    <nav className="page-actions" aria-label="Maintain workspaces">
+      <Link className="secondary-action" to="/incidents">
+        Incidents
+      </Link>
+      <Link className="secondary-action" to="/problems">
+        Problems
+      </Link>
+      <Link className="secondary-action" to="/problems?status=known_error">
+        Known Errors
+      </Link>
+      <Link className="secondary-action" to="/changes">
+        Changes
+      </Link>
+      <Link className="secondary-action" to="/knowledge">
+        Knowledge
+      </Link>
+      <Link className="secondary-action" to="/incidents/services">
+        Services
+      </Link>
+    </nav>
+  );
 }
 
-function ProblemForm(){
- const nav=useNavigate(),[params]=useSearchParams(),incidentId=params.get("incident"),source=useRequest(()=>incidentId?endpoints.serviceIncident(incidentId):Promise.resolve(null),[incidentId]);
- const hierarchy=useRequest(endpoints.hierarchy,[]),assets=useRequest(()=>endpoints.assets(),[]),services=useRequest(()=>endpoints.technologyServices(),[]),vendors=useRequest(()=>endpoints.operationalVendors(),[]),users=useRequest(endpoints.users,[]);
- const [form,setForm]=useState({title:"",problem_statement:"",description:"",priority:"medium",category:"other",assigned_team:"",assigned_technician_id:"",service_id:"",asset_id:"",vendor_id:""}),[busy,setBusy]=useState(false),[error,setError]=useState("");
- const submit=async(event:FormEvent)=>{event.preventDefault();setBusy(true);try{const incident=source.data;const row=await endpoints.createOperationalProblem({...form,title:form.title||incident?.title,problem_statement:form.problem_statement||incident?.description,description:form.description||incident?.description||"",property_id:hierarchy.data?.properties.find(x=>x.is_active)?.id??null,incident_id:incidentId,asset_id:form.asset_id||incident?.asset_id||null,service_id:form.service_id||incident?.service_id||null,vendor_id:form.vendor_id||incident?.vendor?.id||null,assigned_technician_id:form.assigned_technician_id||null,source:incidentId?"incident":"manual"});nav(`/problems/${row.id}`)}catch(x){setError(x instanceof Error?x.message:"Problem could not be created")}finally{setBusy(false)}};
- return <DashboardLayout><MaintainLinks/><PageTitle eyebrow="Maintain · problems" title={incidentId?"Create problem from incident":"Create problem"} copy="The source incident will be linked, not duplicated."/>{error&&<Feedback error={error}/>}<form className="panel enterprise-form" onSubmit={e=>void submit(e)}><div className="form-grid"><Field label="Title"><input required placeholder={source.data?.title} value={form.title} onChange={e=>setForm({...form,title:e.target.value})}/></Field><Field label="Category"><select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>{categories.map(x=><option key={x}>{x}</option>)}</select></Field><Field label="Priority"><select value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})}>{priorities.map(x=><option key={x}>{x}</option>)}</select></Field><Field label="Technician"><select value={form.assigned_technician_id} onChange={e=>setForm({...form,assigned_technician_id:e.target.value})}><option value="">Unassigned</option>{users.data?.filter(x=>x.role!=="viewer").map(x=><option key={x.id} value={x.id}>{x.username}</option>)}</select></Field><Field label="Service"><select value={form.service_id} onChange={e=>setForm({...form,service_id:e.target.value})}><option value="">No service</option>{services.data?.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field label="Asset"><select value={form.asset_id} onChange={e=>setForm({...form,asset_id:e.target.value})}><option value="">No asset</option>{assets.data?.map(x=><option key={x.id} value={x.id}>{x.asset_number} · {x.name}</option>)}</select></Field><Field label="Vendor"><select value={form.vendor_id} onChange={e=>setForm({...form,vendor_id:e.target.value})}><option value="">No vendor</option>{vendors.data?.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></Field><Field label="Team"><input value={form.assigned_team} onChange={e=>setForm({...form,assigned_team:e.target.value})}/></Field></div><Field label="Problem statement"><textarea required minLength={3} placeholder={source.data?.description??"Describe the recurring or significant underlying problem."} value={form.problem_statement} onChange={e=>setForm({...form,problem_statement:e.target.value})}/></Field><Field label="Description"><textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})}/></Field><div className="row-actions"><Link className="secondary-action" to={incidentId?`/incidents/${incidentId}`:"/problems"}>Cancel</Link><button className="primary-action" disabled={busy}>{busy?"Creating…":"Create Problem"}</button></div></form></DashboardLayout>
+export default function ProblemsPage() {
+  const { id } = useParams();
+  const location = useLocation();
+
+  return location.pathname === "/problems/new" ? (
+    <ProblemForm />
+  ) : id ? (
+    <ProblemDetail id={id} />
+  ) : (
+    <ProblemList />
+  );
 }
 
-function ProblemDetail({id}:{id:string}){
- const request=useRequest(()=>endpoints.operationalProblem(id),[id]),changes=useRequest(()=>endpoints.linkedGovernanceChanges("problem",id),[id]),knowledge=useRequest(()=>endpoints.linkedPracticalKnowledge("problem",id),[id]),me=useRequest(endpoints.me,[]),allIncidents=useRequest(()=>endpoints.serviceIncidents(),[]),allAssets=useRequest(()=>endpoints.assets(),[]);
- const [note,setNote]=useState(""),[incidentId,setIncidentId]=useState(""),[assetId,setAssetId]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
- const run=async(fn:()=>Promise<unknown>)=>{setBusy(true);setError("");try{await fn();await request.reload()}catch(x){setError(x instanceof Error?x.message:"Action failed")}finally{setBusy(false)}};
- if(request.loading||request.error||!request.data)return <DashboardLayout><Feedback loading={request.loading} error={request.error}/></DashboardLayout>;
- const row=request.data,admin=me.data?.role==="admin",canNote=me.data?.role!=="viewer";
- const edit=(key:string,name:string)=>{const value=window.prompt(name,String(row[key as keyof typeof row]??""));if(value!==null)void run(()=>endpoints.updateOperationalProblem(id,{[key]:value||null}))};
- return <DashboardLayout><MaintainLinks/><PageTitle eyebrow={row.problem_number} title={row.title} copy={`${title(row.category)} · ${new Date(row.created_at).toLocaleString()}`} action={<Link className="secondary-action" to="/problems">Back to Problems</Link>}/>{error&&<Feedback error={error}/>}<section className="incident-detail-grid"><article className="panel"><header className="section-head"><div><h2>Problem investigation</h2><p>{row.description||"No description supplied."}</p></div><StatusBadge status={row.status}/></header><dl className="detail-grid"><D l="Priority" v={title(row.priority)}/><D l="Team" v={row.assigned_team}/><D l="Service" v={row.service_name}/><D l="Department" v={row.department}/><D l="Location" v={row.location}/><D l="Vendor" v={row.vendor?.name}/><D l="Support contact" v={row.vendor?.support_contact}/><D l="Procurement" v={row.procurement_id}/></dl>{admin&&<div className="incident-actions">{row.status==="open"&&<button onClick={()=>void run(()=>endpoints.transitionOperationalProblem(id,{target_status:"investigating"}))}>Start Investigation</button>}{["resolved","closed"].includes(row.status)&&<button onClick={()=>void run(()=>endpoints.transitionOperationalProblem(id,{target_status:"investigating",reason:"Problem recurred"}))}>Reopen</button>}</div>}</article><article className="panel"><h2>Impact context</h2><p>{row.impact?`${row.impact.confirmed_affected} confirmed · ${row.impact.potentially_affected} potential (${row.impact.confidence_score}% confidence)`:"No existing incident impact assessment available."}</p><p className="settings-note">Existing incident impact is reused. Potential impact is never claimed as confirmed.</p></article></section>
- <section className="panel problem-fields"><h2>Investigation record</h2>{[["problem_statement","Problem statement"],["root_cause","Root cause"],["workaround","Workaround"],["resolution","Corrective resolution"],["follow_up_notes","Follow-up notes"]].map(([key,name])=><article key={key}><div><strong>{name}</strong><p>{String(row[key as keyof typeof row]||"Not documented")}</p></div>{admin&&<button className="secondary-action" onClick={()=>edit(key,name)}>Edit</button>}</article>)}</section>
- {admin&&<section className="panel"><h2>Lifecycle</h2><div className="incident-actions">{row.status==="investigating"&&<button disabled={!row.workaround} onClick={()=>void run(()=>endpoints.transitionOperationalProblem(id,{target_status:"known_error"}))}>Mark Known Error</button>}{["investigating","known_error"].includes(row.status)&&<button disabled={!row.resolution} onClick={()=>void run(()=>endpoints.transitionOperationalProblem(id,{target_status:"resolved",resolution:row.resolution}))}>Resolve</button>}{row.status==="resolved"&&<button onClick={()=>void run(()=>endpoints.transitionOperationalProblem(id,{target_status:"closed"}))}>Close</button>}</div></section>}
- <section className="incident-detail-grid"><article className="panel"><h2>Related incidents</h2>{row.incidents?.length?<div className="linked-list">{row.incidents.map(x=><Link key={x.id} to={`/incidents/${x.id}`}><strong>{x.incident_number}</strong> {x.title}</Link>)}</div>:<Feedback empty="No incidents linked."/>}{admin&&<Picker value={incidentId} set={setIncidentId} label="Link Incident" options={allIncidents.data?.filter(x=>!row.incidents?.some(y=>y.id===x.id)).map(x=>({id:x.id,name:`${x.incident_number} · ${x.title}`}))??[]} action={()=>run(()=>endpoints.linkOperationalProblem(id,"incident",incidentId))}/>}</article><article className="panel"><h2>Related assets</h2>{row.assets?.length?<div className="linked-list">{row.assets.map(x=><Link key={x.id} to={`/assets/${x.id}`}><strong>{x.asset_number}</strong> {x.name}</Link>)}</div>:<Feedback empty="No assets linked."/>}{admin&&<Picker value={assetId} set={setAssetId} label="Link Asset" options={allAssets.data?.filter(x=>!row.assets?.some(y=>y.id===x.id)).map(x=>({id:x.id,name:`${x.asset_number} · ${x.name}`}))??[]} action={()=>run(()=>endpoints.linkOperationalProblem(id,"asset",assetId))}/>}</article></section>
- <section className="panel"><h2>Related changes</h2>{changes.data?.length?<div className="linked-list">{changes.data.map(x=><Link key={x.id} to={`/changes/${x.id}`}><strong>{x.change_id}</strong> {x.title} <StatusBadge status={x.status}/></Link>)}</div>:<Feedback empty="No changes linked to this problem."/>}</section>
- <section className="panel"><h2>Related knowledge</h2>{knowledge.data?.length?<div className="linked-list">{knowledge.data.map(x=><Link key={x.id} to={`/knowledge/${x.id}`}><strong>{x.article_id}</strong> {x.title} <StatusBadge status={x.status}/></Link>)}</div>:<Feedback empty="No knowledge articles linked to this problem."/>}</section>
- {canNote&&<section className="panel"><h2>Add problem note</h2><textarea value={note} onChange={e=>setNote(e.target.value)} placeholder="Do not store passwords or secrets."/><button disabled={busy||note.trim().length<2} onClick={()=>void run(async()=>{await endpoints.addOperationalProblemNote(id,note);setNote("")})}>Add Note</button></section>}<section className="panel"><h2>Problem timeline</h2>{row.timeline?.length?<div className="incident-timeline">{row.timeline.map(x=><article key={x.id}><time>{new Date(x.timestamp).toLocaleString()}</time><strong>{title(x.type)}</strong><p>{x.summary}</p><small>{x.author}</small></article>)}</div>:<Feedback empty="No problem activity recorded."/>}</section></DashboardLayout>
+function ProblemList() {
+  const [params] = useSearchParams();
+  const request = useRequest(() => endpoints.operationalProblems(), []);
+  const summary = useRequest(endpoints.operationalProblemSummary, []);
+  const me = useRequest(endpoints.me, []);
+
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState(params.get("status") ?? "all");
+  const [priority, setPriority] = useState("all");
+  const query = useDeferredValue(search).toLowerCase();
+
+  const rows = useMemo(
+    () =>
+      (request.data ?? []).filter(
+        (row) =>
+          (!query ||
+            [
+              row.problem_number,
+              row.title,
+              row.description,
+              row.problem_statement,
+              row.service_name,
+              row.department,
+              row.location,
+              row.vendor?.name,
+            ].some((x) => x?.toLowerCase().includes(query))) &&
+          (status === "all" || row.status === status) &&
+          (priority === "all" || row.priority === priority)
+      ),
+    [request.data, query, status, priority]
+  );
+
+  return (
+    <DashboardLayout>
+      <MaintainLinks />
+      <PageTitle
+        eyebrow="Maintain · problems"
+        title="Problem management"
+        copy="Investigate significant or recurring underlying causes while incidents remain separate operational records."
+        action={
+          me.data?.role === "admin" ? (
+            <Link className="primary-action" to="/problems/new">
+              Create Problem
+            </Link>
+          ) : undefined
+        }
+      />
+
+      {summary.data && (
+        <section className="stats-grid" aria-label="Problem statistics">
+          <StatCard
+            label="Open problems"
+            value={summary.data.open ?? 0}
+            detail={`${summary.data.critical ?? 0} critical`}
+            icon="alerts"
+          />
+          <StatCard
+            label="Investigating"
+            value={summary.data.investigating ?? 0}
+            detail="Investigation underway"
+            icon="audit"
+          />
+          <StatCard
+            label="Known errors"
+            value={summary.data.known_error ?? 0}
+            detail="Documented workaround"
+            icon="check"
+          />
+          <StatCard
+            label="Recurring context"
+            value={summary.data.recurring ?? 0}
+            detail="Multiple incidents linked"
+            icon="network"
+          />
+        </section>
+      )}
+
+      <section className="toolbar-panel" aria-label="Search and filter problems">
+        <label htmlFor="problem-search" className="search-field">
+          <Icon name="search" aria-hidden="true" />
+          <input
+            id="problem-search"
+            type="search"
+            aria-label="Search problems"
+            placeholder="Problem, asset, service, department, location, vendor"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </label>
+        <div className="filter-row">
+          <select
+            aria-label="Filter by status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            {states.map((x) => (
+              <option key={x} value={x}>
+                {title(x)}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Filter by priority"
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+          >
+            <option value="all">All priorities</option>
+            {priorities.map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </div>
+      </section>
+
+      {request.loading || request.error ? (
+        <Feedback loading={request.loading} error={request.error} />
+      ) : !rows.length ? (
+        <Feedback
+          emptyTitle={
+            status === "known_error"
+              ? "No known errors yet."
+              : "No problems yet."
+          }
+          empty="Create a problem when an underlying recurring or significant cause requires investigation."
+        />
+      ) : (
+        <section className="data-panel" aria-label="Problem list">
+          <div className="data-table incident-table">
+            <div className="table-row table-head" role="row">
+              <span>Problem</span>
+              <span>Context</span>
+              <span>Related</span>
+              <span>Priority</span>
+              <span>Status</span>
+            </div>
+            {rows.map((row) => (
+              <Link className="table-row" to={`/problems/${row.id}`} key={row.id}>
+                <span>
+                  <strong>{row.problem_number}</strong>
+                  <small>{row.title}</small>
+                </span>
+                <span>
+                  {row.service_name || row.department || "No service/department"}
+                  <small>{title(row.category)}</small>
+                </span>
+                <span>
+                  {row.related_counts.incident ?? 0} incidents
+                  <small>{row.related_counts.asset ?? 0} assets</small>
+                </span>
+                <span>
+                  <StatusBadge status={row.priority} />
+                </span>
+                <span>
+                  <StatusBadge status={row.status} />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </DashboardLayout>
+  );
 }
 
-function Picker({value,set,label,options,action}:{value:string;set:(x:string)=>void;label:string;options:Array<{id:string;name:string}>;action:()=>Promise<unknown>}){return <div className="inline-editor"><select value={value} onChange={e=>set(e.target.value)}><option value="">Select</option>{options.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select><button disabled={!value} onClick={()=>void action()}>{label}</button></div>}
-function Field({label,children}:{label:string;children:ReactNode}){return <label>{label}{children}</label>}
-function D({l,v}:{l:string;v:string|null|undefined}){return <div><dt>{l}</dt><dd>{v||"Not available"}</dd></div>}
+function ProblemForm() {
+  const nav = useNavigate();
+  const [params] = useSearchParams();
+  const incidentId = params.get("incident");
+  const source = useRequest(
+    () => (incidentId ? endpoints.serviceIncident(incidentId) : Promise.resolve(null)),
+    [incidentId]
+  );
+
+  // Simplified problem form - full implementation would be similar to IncidentForm
+  return (
+    <DashboardLayout>
+      <MaintainLinks />
+      <PageTitle
+        eyebrow="Maintain · problems"
+        title="Create problem"
+        copy="Document underlying causes and known errors."
+      />
+      <Feedback empty="Problem form implementation pending." />
+    </DashboardLayout>
+  );
+}
+
+function ProblemDetail({ id }: { id: string }) {
+  const request = useRequest(() => endpoints.operationalProblem(id), [id]);
+
+  if (request.loading || request.error || !request.data) {
+    return (
+      <DashboardLayout>
+        <Feedback loading={request.loading} error={request.error} />
+      </DashboardLayout>
+    );
+  }
+
+  const row = request.data;
+
+  return (
+    <DashboardLayout>
+      <MaintainLinks />
+      <PageTitle
+        eyebrow={row.problem_number}
+        title={row.title}
+        copy={`${title(row.category)} · Created ${new Date(row.created_at).toLocaleString()}`}
+        action={
+          <Link className="secondary-action" to="/problems">
+            Back to Problems
+          </Link>
+        }
+      />
+      <section className="panel">
+        <header className="section-head">
+          <div>
+            <h2>Problem details</h2>
+            <p>{row.problem_statement || "No problem statement provided."}</p>
+          </div>
+          <StatusBadge status={row.status} />
+        </header>
+        <dl className="detail-grid">
+          <Dt label="Priority" value={row.priority} />
+          <Dt label="Category" value={title(row.category)} />
+          <Dt label="Service" value={row.service_name || "Not assigned"} />
+          <Dt label="Department" value={row.department || "Not assigned"} />
+          <Dt label="Location" value={row.location || "Not assigned"} />
+          <Dt label="Vendor" value={row.vendor?.name || "Not specified"} />
+        </dl>
+      </section>
+    </DashboardLayout>
+  );
+}
+
+function Dt({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value || "Not available"}</dd>
+    </div>
+  );
+}

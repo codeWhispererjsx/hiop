@@ -15,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -392,7 +393,7 @@ class ActiveDirectorySyncConfiguration(Base):
         nullable=False,
     )
     checkpoints: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -538,7 +539,7 @@ class ActiveDirectoryObject(Base):
     )
     raw_attributes: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
-        server_default=func.text("'{}'::jsonb"),
+        server_default=text("'{}'::jsonb"),
         nullable=False,
     )
     first_seen_at: Mapped[datetime] = mapped_column(
@@ -670,22 +671,22 @@ class ActiveDirectorySyncRun(Base):
     )
     sync_mode: Mapped[str] = mapped_column(String(20), default="full", nullable=False)
     object_types: Mapped[list[str]] = mapped_column(
-        JSONB, server_default=func.text("'[]'::jsonb"), nullable=False
+        JSONB, server_default=text("'[]'::jsonb"), nullable=False
     )
     checkpoint_before: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
     checkpoint_after: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
     per_type_status: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
     progress: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
     dry_run_results: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
     cancel_requested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -790,13 +791,13 @@ class ActiveDirectoryObjectChange(Base):
     )
     change_type: Mapped[str] = mapped_column(String(30), nullable=False)
     changed_fields: Mapped[list[str]] = mapped_column(
-        JSONB, server_default=func.text("'[]'::jsonb"), nullable=False
+        JSONB, server_default=text("'[]'::jsonb"), nullable=False
     )
     before_values: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
     after_values: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, server_default=func.text("'{}'::jsonb"), nullable=False
+        JSONB, server_default=text("'{}'::jsonb"), nullable=False
     )
     detected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -919,17 +920,17 @@ class ActiveDirectoryMatchCandidate(Base):
     )
     matching_fields: Mapped[list[Any]] = mapped_column(
         JSONB,
-        server_default=func.text("'[]'::jsonb"),
+        server_default=text("'[]'::jsonb"),
         nullable=False,
     )
     conflicting_fields: Mapped[list[Any]] = mapped_column(
         JSONB,
-        server_default=func.text("'[]'::jsonb"),
+        server_default=text("'[]'::jsonb"),
         nullable=False,
     )
     evidence: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
-        server_default=func.text("'{}'::jsonb"),
+        server_default=text("'{}'::jsonb"),
         nullable=False,
     )
     recommended_action: Mapped[str] = mapped_column(
@@ -1076,8 +1077,8 @@ class ActiveDirectoryReconciliationResult(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     target_user_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     target_device_id: Mapped[uuid.UUID | None] = mapped_column(PG_UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"))
-    before_values: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=func.text("'{}'::jsonb"), nullable=False)
-    after_values: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=func.text("'{}'::jsonb"), nullable=False)
+    before_values: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), nullable=False)
+    after_values: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), nullable=False)
     safe_error: Mapped[str | None] = mapped_column(String(500))
     retryable: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     reviewed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))

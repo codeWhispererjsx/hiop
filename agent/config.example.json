@@ -1,0 +1,10 @@
+{
+  "backend_url": "https://hiop.example.com",
+  "data_dir": "%ProgramData%\\HIOP Agent",
+  "heartbeat_seconds": 60,
+  "poll_seconds": 15,
+  "queue_max_items": 10000,
+  "queue_retention_days": 7,
+  "request_timeout_seconds": 30,
+  "allow_insecure_http": false
+}

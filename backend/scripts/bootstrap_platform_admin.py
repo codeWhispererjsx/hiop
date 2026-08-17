@@ -11,6 +11,7 @@ from sqlalchemy import func
 
 from app.core.security import hash_password
 from app.db.database import SessionLocal
+from app.models.hierarchy import Organization  # noqa: F401 - register user foreign key metadata
 from app.models.user import User
 from app.services.audit_service import create_audit_log
 

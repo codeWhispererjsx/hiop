@@ -67,6 +67,8 @@ docker compose ps
 
 Compose waits for PostgreSQL, runs `alembic upgrade head` as a one-shot migration service, starts one backend worker, then exposes frontend Nginx on port `8080` by default. PostgreSQL data persists in `hiop_postgres_data`. The database is not published to the host network.
 
+On a genuinely empty database, Alembic creates the current application schema as a deterministic baseline, creates the required public-ID sequences and initial plan configuration, and records the current migration head. A database containing any application tables is never treated as empty and continues through the normal incremental migration path.
+
 Do not run schema downgrades in production. Apply upgrades in a maintenance window after a verified backup. Review new migrations before deployment and keep application rollback images available; schema rollback requires an explicit recovery plan.
 
 ## Clean installation and first administrator

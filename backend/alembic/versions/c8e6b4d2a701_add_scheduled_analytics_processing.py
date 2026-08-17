@@ -15,6 +15,9 @@ depends_on = None
 
 
 def upgrade():
+    existing_run_columns = {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns("analytics_runs")
+    }
     op.create_table(
         "analytics_schedule_configurations",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
@@ -102,7 +105,8 @@ def upgrade():
         ("records_skipped", sa.Integer(), "0"), ("retry_count", sa.Integer(), "0"),
         ("stale_recovery_status", sa.String(30), None),
     ):
-        op.add_column("analytics_runs", sa.Column(name, kind, server_default=default, nullable=default is not None))
+        if name not in existing_run_columns:
+            op.add_column("analytics_runs", sa.Column(name, kind, server_default=default, nullable=default is not None))
 
 
 def downgrade():

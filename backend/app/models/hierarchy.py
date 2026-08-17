@@ -48,6 +48,7 @@ class Organization(Base):
     address: Mapped[str | None] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
+    custom_domain: Mapped[str | None] = mapped_column(String(255), unique=True)  # For custom domain support
     created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     administrator_id: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     hiop_version: Mapped[str] = mapped_column(String(30), default="4A.5", server_default="4A.5", nullable=False)

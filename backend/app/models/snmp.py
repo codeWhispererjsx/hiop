@@ -9,7 +9,7 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean, CheckConstraint, DateTime, Float, ForeignKey, Index, Integer,
-    BigInteger, Numeric, String, Text, UniqueConstraint, func,
+    BigInteger, Numeric, String, Text, UniqueConstraint, func, text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -192,7 +192,7 @@ class SNMPDeviceProfile(Base):
     sys_descr_pattern: Mapped[str | None] = mapped_column(String(255))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     priority: Mapped[int] = mapped_column(Integer, default=100, server_default="100", nullable=False)
-    profile_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    profile_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     oid_definitions: Mapped[list["SNMPOIDDefinition"]] = relationship(back_populates="profile", cascade="all, delete-orphan")
@@ -436,7 +436,7 @@ class SNMPDiscoveryCandidate(Base):
     device_type_guess: Mapped[str | None] = mapped_column(String(40))
     profile_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_device_profiles.id", ondelete="SET NULL"))
     confidence_score: Mapped[float] = mapped_column(Float, default=0, server_default="0", nullable=False)
-    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
     review_status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", nullable=False)
     matched_device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"))
     matched_discovery_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("discovered_devices.id", ondelete="SET NULL"))
@@ -464,9 +464,9 @@ class SNMPMatchCandidate(Base):
     match_score: Mapped[float] = mapped_column(Float, nullable=False)
     match_level: Mapped[str] = mapped_column(String(20), nullable=False)
     match_status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", nullable=False)
-    matching_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=func.text("'[]'::jsonb"), nullable=False)
-    conflicting_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=func.text("'[]'::jsonb"), nullable=False)
-    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    matching_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    conflicting_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
     recommended_action: Mapped[str] = mapped_column(String(20), nullable=False)
     reviewed_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -505,9 +505,9 @@ class SNMPInterfaceChange(Base):
     interface_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_interfaces.id", ondelete="CASCADE"), nullable=False)
     poll_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("snmp_poll_runs.id", ondelete="SET NULL"))
     change_type: Mapped[str] = mapped_column(String(30), nullable=False)
-    changed_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=func.text("'[]'::jsonb"), nullable=False)
-    before_values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
-    after_values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    changed_fields: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    before_values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
+    after_values: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     interface: Mapped[SNMPInterface] = relationship(back_populates="changes")
@@ -528,7 +528,7 @@ class SNMPStateChange(Base):
     severity_hint: Mapped[str] = mapped_column(String(20), default="info", server_default="info", nullable=False)
     previous_value: Mapped[str | None] = mapped_column(String(500))
     current_value: Mapped[str | None] = mapped_column(String(500))
-    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -584,8 +584,8 @@ class SNMPAlertEvent(Base):
     breach_count: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
     recovery_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     flapping: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
-    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    recovery_evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=func.text("'{}'::jsonb"), nullable=False)
+    recovery_evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)

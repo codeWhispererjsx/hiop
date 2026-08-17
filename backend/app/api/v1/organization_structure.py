@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
-from app.core.tenant import organization_context
+from app.core.tenant import allowed_property_ids, organization_context
 from app.models.asset_intelligence import ManagedAsset
 from app.models.device import Device
 from app.models.hierarchy import Building, Department, Floor, Organization, Property, Room
@@ -223,20 +223,15 @@ def suggest_department(asset_id: UUID, db: Session = Depends(get_db), _=Depends(
 
 @router.get("/agents")
 def list_agents(db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context)):
-    return db.query(LocalAgentRegistration).filter_by(organization_id=organization_id).order_by(LocalAgentRegistration.name).all()
+    allowed=allowed_property_ids(db, _, organization_id)
+    return db.query(LocalAgentRegistration).filter(LocalAgentRegistration.organization_id==organization_id,LocalAgentRegistration.property_id.in_(allowed)).order_by(LocalAgentRegistration.name).all()
 
 
 @router.post("/agents", status_code=201)
 def register_agent(payload: AgentWrite, db: Session = Depends(get_db), actor=Depends(manager), organization_id=Depends(organization_context)):
-    number=db.execute(__import__('sqlalchemy').text("SELECT nextval('local_agent_number_seq')")).scalar_one()
-    row=LocalAgentRegistration(agent_id=f"HIOP-AGENT-{number:04d}", organization_id=organization_id, name=payload.name.strip(), version=payload.version, status="unknown", registered_by=actor.id)
-    db.add(row); db.flush(); _audit(db, actor, "AGENT_REGISTERED", "LocalAgent", row.id, f"Registered passive agent {row.agent_id}; no remote command channel", organization_id); db.commit(); db.refresh(row)
-    return row
+    raise HTTPException(410, "Direct agent registration was replaced by one-time enrollment")
 
 
 @router.post("/agents/{agent_id}/heartbeat")
 def heartbeat(agent_id: UUID, db: Session = Depends(get_db), _=Depends(manager), organization_id=Depends(organization_context)):
-    row=db.query(LocalAgentRegistration).filter_by(id=agent_id, organization_id=organization_id).first()
-    if not row: raise HTTPException(404, "Agent not found")
-    row.status="online"; row.last_seen=row.last_heartbeat=datetime.now(timezone.utc); db.commit(); db.refresh(row)
-    return row
+    raise HTTPException(410, "Human-authenticated heartbeat was replaced by machine authentication")
