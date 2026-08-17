@@ -96,6 +96,7 @@ async function download(path: string) {
 }
 
 export const endpoints = {
+  onboardingProgress:()=>api<{organization_created:boolean;property_created:boolean;discovery_configured:boolean;agent_connected:boolean;scan_run:boolean;devices_approved:boolean;monitoring_configured:boolean}>("/onboarding/progress"),
   propertyContext:()=>api<import("./types").PropertyContext>("/property-management/context"),
   billingPlans:()=>api<import("./types").BillingPlan[]>("/billing/public/plans"),
   currentBilling:()=>api<{subscription:import("./types").OrganizationSubscription|null;usage?:Record<string,number>}>("/billing/current"),

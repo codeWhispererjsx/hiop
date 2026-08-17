@@ -5,15 +5,16 @@ from sqlalchemy.orm import Session
 from app.db.database import SessionLocal
 from app.models.hierarchy import Organization
 from app.core.config import settings
+from starlette.middleware.base import BaseHTTPMiddleware
 
 tenant_logger = logging.getLogger("hiop.tenant")
 
 
-class TenantMiddleware:
+class TenantMiddleware(BaseHTTPMiddleware):
     """Middleware to extract tenant context from subdomain and validate access."""
     
     def __init__(self, app):
-        self.app = app
+        super().__init__(app)
         # Base domain for tenant subdomain extraction
         self.base_domain = settings.base_domain
         self.enable_routing = settings.enable_subdomain_routing
@@ -33,20 +34,36 @@ class TenantMiddleware:
             return origin
         return "localhost"  # Default for development
     
-    async def __call__(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next):
         """Process request to extract and validate tenant context."""
+        from starlette.responses import JSONResponse
+        
+        # Check for path-based tenant routing
+        path = request.url.path
+        tenant_code = None
+        
+        # Path format: /t/{tenant_code}/...
+        if path.startswith("/t/"):
+            parts = path.split("/", 3)
+            if len(parts) >= 3:
+                tenant_code = parts[2].lower().strip()
+                # Rewrite the path in the ASGI scope so FastAPI routes match correctly
+                new_path = "/" + parts[3] if len(parts) > 3 else "/"
+                request.scope["path"] = new_path
         
         # Skip tenant validation for public routes and health checks
-        if self._is_public_route(request.url.path):
+        check_path = request.scope.get("path", request.url.path)
+        if self._is_public_route(check_path):
             return await call_next(request)
         
-        # Only process subdomain routing if enabled
+        # Only process routing if enabled
         if not self.enable_routing:
             return await call_next(request)
         
-        # Extract subdomain from Host header
-        host = request.headers.get("host", "")
-        tenant_code = self._extract_tenant_code(host)
+        if not tenant_code:
+            # Extract subdomain from Host header
+            host = request.headers.get("host", "")
+            tenant_code = self._extract_tenant_code(host)
         
         if tenant_code:
             # Look up organization by tenant code
@@ -59,14 +76,14 @@ class TenantMiddleware:
                 tenant_logger.info(f"Tenant context set: {tenant_code} -> {organization.id}")
             else:
                 tenant_logger.warning(f"Invalid tenant code: {tenant_code}")
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Organization not found"
+                return JSONResponse(
+                    status_code=404,
+                    content={"detail": "Organization not found"}
                 )
         else:
-            # No subdomain - this might be direct access to main domain
+            # No subdomain or path prefix - this might be direct access to main domain
             # For now, allow this for development compatibility
-            tenant_logger.debug(f"No tenant subdomain found in host: {host}")
+            tenant_logger.debug("No tenant context found in request")
         
         response = await call_next(request)
         return response
@@ -79,11 +96,20 @@ class TenantMiddleware:
             "/",
             "/docs",
             "/openapi.json",
+            # Auth and public routes (with and without API prefix)
+            "/auth/",
+            "/api/v1/auth/",
             "/public/onboarding",
-            "/auth/login",
-            "/api/v1/billing/public"
+            "/api/v1/public/onboarding",
+            "/api/v1/billing/public",
+            "/billing/public",
+            "/api/v1/onboarding/",
+            "/onboarding/",
         ]
-        return any(path.startswith(public_path) for public_path in public_paths)
+        # Exact match for root
+        if path == "/":
+            return True
+        return any(path.startswith(pp) for pp in public_paths if pp != "/")
     
     def _extract_tenant_code(self, host: str) -> Optional[str]:
         """Extract tenant code from subdomain."""
