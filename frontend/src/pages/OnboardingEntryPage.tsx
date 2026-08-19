@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useState } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { Icon } from "../components/Icon";
 import { Feedback } from "../components/Feedback";
@@ -40,6 +40,7 @@ const steps: { key: keyof ProgressData["checklist"]; label: string; link: string
 
 export default function OnboardingEntryPage() {
   const progress = useRequest<ProgressData>(endpoints.onboardingProgress, []);
+  const [isSkipping, setIsSkipping] = useState(false);
 
   let context: { organization?: { name: string }; property?: { name: string } } = {};
   try {
@@ -56,19 +57,42 @@ export default function OnboardingEntryPage() {
 
   const handleComplete = async () => {
     try {
-      await endpoints.completeOnboarding();
-      window.location.href = "/dashboard";
+      const response = await fetch("/api/v1/onboarding/complete", { 
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("hiop.auth_token")}`,
+          "Content-Type": "application/json"
+        }
+      });
+      if (response.ok) {
+        window.location.href = "/dashboard";
+      } else {
+        console.error("Failed to complete onboarding:", response.status);
+      }
     } catch (error) {
       console.error("Failed to complete onboarding:", error);
     }
   };
 
   const handleSkip = async () => {
+    setIsSkipping(true);
     try {
-      await fetch("/api/v1/onboarding/skip", { method: "POST" });
-      window.location.href = "/dashboard";
+      const response = await fetch("/api/v1/onboarding/skip", { 
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("hiop.auth_token")}`,
+          "Content-Type": "application/json"
+        }
+      });
+      if (response.ok) {
+        window.location.href = "/dashboard";
+      } else {
+        console.error("Failed to skip onboarding:", response.status);
+        setIsSkipping(false);
+      }
     } catch (error) {
       console.error("Failed to skip onboarding:", error);
+      setIsSkipping(false);
     }
   };
 
@@ -106,17 +130,24 @@ export default function OnboardingEntryPage() {
         {progress.loading || progress.error ? (
           <Feedback loading={progress.loading} error={progress.error} />
         ) : (
-          <ol>
-            {steps.map((step) => {
-              const done = progress.data?.checklist[step.key] ?? false;
-              return (
-                <li className={done ? "done" : ""} key={step.key}>
-                  {done ? <Icon name="check" /> : <span />}
-                  {step.label}
-                </li>
-              );
-            })}
-          </ol>
+          <>
+            <ol>
+              {steps.map((step) => {
+                const done = progress.data?.checklist[step.key] ?? false;
+                return (
+                  <li className={done ? "done" : ""} key={step.key}>
+                    {done ? <Icon name="check" /> : <span />}
+                    <Link to={step.link} style={{ color: "inherit", textDecoration: "none" }}>
+                      {step.label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ol>
+            <p style={{ marginTop: "1rem", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+              Click any step to configure it, or skip to complete setup later.
+            </p>
+          </>
         )}
 
         <div className="first-run-actions">
@@ -129,11 +160,12 @@ export default function OnboardingEntryPage() {
               <Link className="primary-action" to="/local-agents">
                 Connect agent
               </Link>
-              <Link className="secondary-action" to="/dashboard">
-                Open dashboard
-              </Link>
-              <button className="tertiary-action" onClick={handleSkip}>
-                Skip for now
+              <button 
+                className="secondary-action" 
+                onClick={handleSkip}
+                disabled={isSkipping}
+              >
+                {isSkipping ? "Skipping..." : "Skip for now"}
               </button>
             </>
           )}

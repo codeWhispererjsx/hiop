@@ -100,7 +100,6 @@ async function download(path: string) {
 
 export const endpoints = {
   onboardingProgress:()=>api<{state:string;checklist:{organization_configured:boolean;departments_configured:boolean;locations_configured:boolean;agent_connected:boolean;network_configured:boolean;discovery_run:boolean;devices_reviewed:boolean;devices_approved:boolean;monitoring_configured:boolean};current_step:string;progress_percentage:number;steps_completed:number;total_steps:number;started_at:string|null;completed_at:string|null}>("/onboarding/progress"),
-  completeOnboarding:()=>api<{message:string}>("/onboarding/complete",{method:"POST"}),
   propertyContext:()=>api<import("./types").PropertyContext>("/property-management/context"),
   billingPlans:()=>api<import("./types").BillingPlan[]>("/billing/public/plans"),
   currentBilling:()=>api<{subscription:import("./types").OrganizationSubscription|null;usage?:Record<string,number>}>("/billing/current"),
