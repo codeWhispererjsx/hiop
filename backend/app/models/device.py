@@ -13,6 +13,7 @@ class Device(Base):
     __table_args__ = (
         Index("ix_devices_hostname", "hostname"),
         Index("ix_devices_ip_address", "ip_address"),
+        Index("ix_devices_property_id", "property_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

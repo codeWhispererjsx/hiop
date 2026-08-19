@@ -149,12 +149,32 @@ def transition_asset(db,asset,payload:LifecycleTransition,actor):
     create_audit_log(db,actor.username,action,"ManagedAsset",str(asset.id),f"{previous} -> {payload.status}"+(f"; {payload.reason}" if payload.reason else ""));db.commit();db.refresh(asset);return asset
 
 
-def list_assets(db, search=None, status=None, device_type=None, department=None, location=None, health=None, vendor=None, organization_id=None, property_id=None):
+def list_assets(db, search=None, status=None, device_type=None, department=None, location=None, health=None, vendor=None, organization_id=None, property_id=None, page=1, page_size=50):
     query=select(ManagedAsset)
     if organization_id:query=query.where(ManagedAsset.organization_id==organization_id)
     if property_id:query=query.where(ManagedAsset.property_id==property_id)
-    rows=db.scalars(query.order_by(ManagedAsset.asset_number)).all();items=[present(db,row) for row in rows]
+    
+    # Get total count with filters
+    total_query=query
+    rows=db.scalars(total_query.order_by(ManagedAsset.asset_number)).all()
+    items=[present(db,row) for row in rows]
+    
     def match(item):
         values=[item.get(k) for k in ("asset_number","asset_tag","name","hostname","ip_address","mac_address","serial_number")]
         return (not search or any(search.casefold() in str(x).casefold() for x in values if x)) and (not status or item["status"]==status) and (not device_type or item["device_type"].casefold()==device_type.casefold()) and (not department or (item["department"] or "").casefold()==department.casefold()) and (not location or (item["location"] or "").casefold()==location.casefold()) and (not health or item["health"].casefold()==health.casefold()) and (not vendor or (item["vendor"] or "").casefold()==vendor.casefold())
-    return [item for item in items if match(item)]
+    
+    filtered_items=[item for item in items if match(item)]
+    
+    # Calculate pagination
+    total=len(filtered_items)
+    total_pages=(total+page_size-1)//page_size
+    offset=(page-1)*page_size
+    paginated_items=filtered_items[offset:offset+page_size]
+    
+    return {
+        "items": paginated_items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages
+    }

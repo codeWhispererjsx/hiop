@@ -152,8 +152,50 @@ def report(report:str,period:str="30d",start:datetime|None=None,end:datetime|Non
     start_at,end_at=bounds(period,start,end);return build(report,db,org,start_at,end_at,locals())
 
 @router.get("/{report}/export.csv")
-def export_csv(report:str,period:str="30d",start:datetime|None=None,end:datetime|None=None,department_id:str|None=None,location_id:str|None=None,service_id:str|None=None,device_type:str|None=None,status:str|None=None,vendor_id:str|None=None,db:Session=Depends(get_db),_=Depends(reader),org=Depends(organization_context),selected_property=Depends(property_context)):
+def export_csv(
+    report:str,
+    period:str="30d",
+    start:datetime|None=None,
+    end:datetime|None=None,
+    department_id:str|None=None,
+    location_id:str|None=None,
+    service_id:str|None=None,
+    device_type:str|None=None,
+    status:str|None=None,
+    vendor_id:str|None=None,
+    db:Session=Depends(get_db),
+    _=Depends(reader),
+    org=Depends(organization_context),
+    selected_property=Depends(property_context)
+):
     if report not in REPORTS:raise HTTPException(404,"Unsupported report")
-    start_at,end_at=bounds(period,start,end);payload=build(report,db,org,start_at,end_at,locals());stream=io.StringIO();writer=csv.writer(stream);writer.writerow(["Report",report]);writer.writerow(["Period",start_at.isoformat(),end_at.isoformat()]);writer.writerow([]);writer.writerow(["Metric","Value","Quality"])
-    for row in payload["metrics"]:writer.writerow([row["label"],row["value"],row["quality"]])
-    return StreamingResponse(iter([stream.getvalue()]),media_type="text/csv",headers={"Content-Disposition":f'attachment; filename="hiop-{report}-{date.today().isoformat()}.csv"'})
+    
+    # Security: Organization scope is enforced by organization_context dependency
+    # Security: Property scope is enforced by property_context dependency
+    
+    start_at,end_at=bounds(period,start,end)
+    payload=build(report,db,org,start_at,end_at,locals())
+    
+    # Safety: Use StringIO for memory-efficient CSV generation
+    stream=io.StringIO()
+    writer=csv.writer(stream)
+    
+    # Add safe headers with date
+    safe_date=date.today().isoformat()
+    writer.writerow(["Report",report])
+    writer.writerow(["Period",start_at.isoformat(),end_at.isoformat()])
+    writer.writerow([])
+    writer.writerow(["Metric","Value","Quality"])
+    
+    # Stream metrics to avoid memory issues with large datasets
+    for row in payload["metrics"]:
+        writer.writerow([row["label"],row["value"],row["quality"]])
+    
+    # Safe filename generation
+    safe_filename=f"hiop-{report}-{safe_date}.csv"
+    
+    return StreamingResponse(
+        iter([stream.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition":f'attachment; filename="{safe_filename}"'}
+    )

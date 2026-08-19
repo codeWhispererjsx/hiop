@@ -365,7 +365,14 @@ def _playbook(db, user, playbook_id):
 
 def _page(query, page, page_size, order):
     total = query.count()
-    return {"items": query.order_by(order).offset((page - 1) * page_size).limit(page_size).all(), "total": total, "page": page, "page_size": page_size}
+    total_pages = (total + page_size - 1) // page_size
+    return {
+        "items": query.order_by(order).offset((page - 1) * page_size).limit(page_size).all(),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages
+    }
 
 
 def _audit_commit(db, user, action, entity, row, description):

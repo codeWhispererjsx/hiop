@@ -60,8 +60,10 @@ def test_search_and_filters_cover_required_asset_identity(monkeypatch):
     payloads={"a":{"asset_number":"HIOP-000001","asset_tag":"LC-POS-001","name":"Restaurant POS","hostname":"pos01","ip_address":"10.0.0.10","mac_address":"AA:BB:CC:DD:EE:FF","serial_number":"SER1","status":"active","device_type":"POS Terminal","department":"Food & Beverage","location":"Restaurant","health":"Healthy","vendor":"Dell"},"b":{"asset_number":"HIOP-000002","asset_tag":None,"name":"Spare","hostname":None,"ip_address":None,"mac_address":None,"serial_number":None,"status":"planned","device_type":"Laptop","department":None,"location":None,"health":"Unknown","vendor":None}}
     monkeypatch.setattr(service,"present",lambda _db,row:payloads[row.key])
     for query in ("HIOP-000001","LC-POS-001","pos01","10.0.0.10","AA:BB","SER1"):
-        assert len(service.list_assets(db,search=query))==1
-    assert len(service.list_assets(db,status="active",device_type="POS Terminal",department="Food & Beverage",location="Restaurant",health="Healthy",vendor="Dell"))==1
+        result = service.list_assets(db,search=query)
+        assert len(result["items"])==1
+    result = service.list_assets(db,status="active",device_type="POS Terminal",department="Food & Beverage",location="Restaurant",health="Healthy",vendor="Dell")
+    assert len(result["items"])==1
 
 
 def test_asset_write_authorization_excludes_technician_and_viewer():

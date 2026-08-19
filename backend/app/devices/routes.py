@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_db
 from app.core.security import get_current_user, require_roles
@@ -25,6 +26,14 @@ from app.services.device_service import (
     update_device as update_device_service,
     delete_device as delete_device_service,
 )
+
+
+class PaginatedDeviceResponse(BaseModel):
+    items: List[DeviceResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 router = APIRouter(
     prefix="/devices",
@@ -56,16 +65,36 @@ def create_device(
     )
 
 
-@router.get("/", response_model=List[DeviceResponse])
+@router.get("/", response_model=PaginatedDeviceResponse)
 def get_devices(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     organization_id=Depends(organization_context),
     property_id=Depends(property_context),
 ):
+    # Apply organization scope first (pagination security)
     query=db.query(Device).join(Property,Device.property_id==Property.id).filter(Property.organization_id==organization_id)
     if property_id:query=query.filter(Device.property_id==property_id)
-    return query.all()
+    
+    # Get total count
+    total = query.count()
+    
+    # Calculate pagination
+    total_pages = (total + page_size - 1) // page_size
+    offset = (page - 1) * page_size
+    
+    # Apply pagination
+    devices = query.offset(offset).limit(page_size).all()
+    
+    return {
+        "items": devices,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages
+    }
 
 
 @router.put("/{device_id}", response_model=DeviceResponse)

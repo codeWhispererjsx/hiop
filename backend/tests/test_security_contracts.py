@@ -28,6 +28,10 @@ class SecurityContractTests(unittest.TestCase):
             "cors_origins": ["https://hiop.example.com"], "email_address": "", "email_password": "",
             "email_recipient": "", "hiop_ad_secret_key": "a" * 32,
             "hiop_snmp_secret_key": "b" * 32, "hiop_discovery_credential_key": "c" * 32,
+            "smtp_host": "smtp.example.com", "smtp_port": 587, "smtp_security": "STARTTLS",
+            "smtp_username": "user@example.com", "smtp_password": "password",
+            "smtp_sender_name": "HIOP Notifications", "smtp_sender_address": "noreply@example.com",
+            "snmp_allow_legacy_protocols": False, "snmp_allow_v1": False, "snmp_v3_required_in_production": True,
         }
         production = Settings(debug=False, **values)
         self.assertEqual(production.environment, "production")

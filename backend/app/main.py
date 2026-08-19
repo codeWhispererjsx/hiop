@@ -12,12 +12,19 @@ from app.models.network_scan import NetworkScan
 from app.devices.routes import router as device_router
 from app.scanner.routes import router as scanner_router
 from app.dashboard.routes import router as dashboard_router
+from app.discovery.routes import router as discovery_router
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.services.scheduler_service import (
     start_scheduler,
     stop_scheduler,
+)
+from app.services.health_service import (
+    get_platform_health_summary,
+    record_health,
+    update_database_health,
+    update_api_health,
 )
 from app.websocket.routes import router as websocket_router
 from app.operations.routes import router as operations_router
@@ -26,6 +33,7 @@ from app.api.v1.automation import router as automation_router
 from app.api.v1.automation_triggers import router as automation_triggers_router
 from app.api.v1.incidents import router as incidents_router
 from app.api.v1.discovery_intelligence import router as discovery_intelligence_router
+from app.api.v1.snmp import router as snmp_router
 from app.api.v1.active_directory_v2c import router as active_directory_v2c_router
 from app.api.v1.topology_v3a import router as topology_v3a_router
 from app.api.v1.port_intelligence import router as port_intelligence_router
@@ -47,6 +55,11 @@ from app.api.v1.public_onboarding import router as public_onboarding_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.onboarding_progress import router as onboarding_progress_router
 from app.api.v1.local_agents import admin_router as local_agent_admin_router, agent_router as local_agent_router
+from app.api.v1.system_health import router as system_health_router
+from app.api.v1.backup_recovery import router as backup_recovery_router
+from app.api.v1.email import router as email_router
+from app.api.v1.circuit_breakers import router as circuit_breakers_router
+from app.api.v1.integration_status import router as integration_status_router
 from app.users.routes import router as users_router
 from app.services.scheduler_service import scheduler
 from app.websocket.connection_manager import manager
@@ -56,6 +69,8 @@ configure_logging(settings.log_level)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from app.services.integration_status import initialize_integrations
+    initialize_integrations()
     start_scheduler()
     try:
         yield
@@ -83,17 +98,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
         if request.url.path.startswith(settings.api_prefix):
-            response.headers["Cache-Control"] = "no-store"
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
         if request.url.scheme == "https":
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         return response
 
 
 app.add_middleware(SecurityHeadersMiddleware)
-# app.add_middleware(TenantMiddleware)  # Disabled — causes 502 in BaseHTTPMiddleware
+app.add_middleware(TenantMiddleware)
 
 app.include_router(
     auth_router,
@@ -110,24 +126,47 @@ def root():
 
 @app.get("/health", tags=["Operations"])
 def health():
-    database = "available"
-    last_scan = None
     db = SessionLocal()
     try:
+        # Check database with timing
+        import time
+        start = time.perf_counter()
         db.execute(text("SELECT 1"))
-        latest = db.query(NetworkScan.scanned_at).order_by(NetworkScan.scanned_at.desc()).first()
-        last_scan = latest[0].isoformat() if latest and latest[0] else None
+        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        database_available = True
     except Exception:
-        database = "unavailable"
+        database_available = False
+        latency_ms = None
+    finally:
+        db.close()
+    
+    # Update health records (gracefully handle if tables don't exist)
+    db = SessionLocal()
+    try:
+        if database_available:
+            update_database_health(db, database_available, latency_ms)
+        else:
+            update_database_health(db, database_available, latency_ms)
+        update_api_health(db)
+        
+        # Get last scan info
+        last_scan = None
+        if database_available:
+            latest = db.query(NetworkScan.scanned_at).order_by(NetworkScan.scanned_at.desc()).first()
+            last_scan = latest[0].isoformat() if latest and latest[0] else None
+    except Exception as e:
+        # Health tables may not exist, log and continue
+        pass
     finally:
         db.close()
 
     scheduler_state = "disabled" if not settings.scheduler_enabled else "running" if scheduler.running else "stopped"
-    healthy = database == "available" and scheduler_state in {"running", "disabled"}
+    healthy = database_available and scheduler_state in {"running", "disabled"}
     payload = {
         "status": "healthy" if healthy else "degraded",
         "api": "available",
-        "database": database,
+        "database": "available" if database_available else "unavailable",
+        "database_latency_ms": latency_ms,
         "application_version": settings.app_version,
         "environment": settings.environment,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -169,6 +208,11 @@ app.include_router(
     prefix=settings.api_prefix
 )
 
+app.include_router(
+    discovery_router,
+    prefix=settings.api_prefix
+)
+
 app.include_router(websocket_router)
 app.include_router(users_router, prefix=settings.api_prefix)
 app.include_router(operations_router, prefix=settings.api_prefix)
@@ -177,6 +221,7 @@ app.include_router(automation_router, prefix=settings.api_prefix)
 app.include_router(automation_triggers_router, prefix=settings.api_prefix)
 app.include_router(incidents_router, prefix=settings.api_prefix)
 app.include_router(discovery_intelligence_router, prefix=settings.api_prefix)
+app.include_router(snmp_router, prefix=settings.api_prefix)
 app.include_router(active_directory_v2c_router, prefix=settings.api_prefix)
 app.include_router(topology_v3a_router, prefix=settings.api_prefix)
 app.include_router(port_intelligence_router, prefix=settings.api_prefix)
@@ -199,3 +244,8 @@ app.include_router(billing_router, prefix=settings.api_prefix)
 app.include_router(onboarding_progress_router, prefix=settings.api_prefix)
 app.include_router(local_agent_admin_router, prefix=settings.api_prefix)
 app.include_router(local_agent_router, prefix=settings.api_prefix)
+app.include_router(system_health_router, prefix=settings.api_prefix)
+app.include_router(backup_recovery_router, prefix=settings.api_prefix)
+app.include_router(email_router, prefix=settings.api_prefix)
+app.include_router(circuit_breakers_router, prefix=settings.api_prefix)
+app.include_router(integration_status_router, prefix=settings.api_prefix)

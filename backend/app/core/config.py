@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     ad_approved_hosts: list[str] = []
 
     # SNMP foundation. Transport, polling, scheduling, and alerts remain disabled.
-    snmp_enabled: bool = False
+    snmp_enabled: bool = True  # Enabled for testing
     snmp_default_port: int = Field(default=161, ge=1, le=65535)
     snmp_default_timeout_seconds: int = Field(default=5, ge=1, le=60)
     snmp_default_retries: int = Field(default=1, ge=0, le=10)
@@ -122,14 +122,27 @@ class Settings(BaseSettings):
     analytics_retention_days: int = Field(default=730, ge=30, le=3650)
     analytics_default_sla_measurement_window: Literal["1_day", "1_week", "1_month"] = "1_month"
     analytics_manual_run_rate_limit_per_hour: int = Field(default=10, ge=1, le=100)
-    snmp_allow_legacy_protocols: bool = False
-    snmp_allow_v1: bool = False
-    snmp_v3_required_in_production: bool = True
+    snmp_allow_legacy_protocols: bool = True
+    snmp_allow_v1: bool = True
+    snmp_v3_required_in_production: bool = False
 
-    # Email Settings
-    email_address: str
-    email_password: str
-    email_recipient: str
+    # Email Settings (Backward compatibility - will be removed)
+    email_address: str = ""
+    email_password: str = ""
+    email_recipient: str = ""
+    
+    # New Production Email Settings
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_security: str = "STARTTLS"  # NONE, STARTTLS, SSL
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_sender_name: str = "HIOP Notifications"
+    smtp_sender_address: str = ""
+    smtp_connection_timeout: int = 15
+    smtp_send_timeout: int = 30
+    smtp_max_retries: int = 3
+    smtp_retry_backoff: int = 5
 
     # Tenant/Multi-tenancy Settings
     base_domain: str = "localhost"

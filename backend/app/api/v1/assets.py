@@ -1,4 +1,5 @@
 from uuid import UUID
+from pydantic import BaseModel, Field
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -15,6 +16,13 @@ reader=require_roles(["platformadmin","admin","technician","viewer"])
 writer=require_roles(["admin"])
 lifecycle_writer=require_roles(["admin","technician"])
 
+class PaginatedAssetResponse(BaseModel):
+    items: list[AssetResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
 
 def require_asset(db,asset_id,organization_id):
     row=db.query(ManagedAsset).filter(ManagedAsset.id==asset_id,ManagedAsset.organization_id==organization_id).first()
@@ -22,9 +30,23 @@ def require_asset(db,asset_id,organization_id):
     return row
 
 
-@router.get("",response_model=list[AssetResponse])
-def assets(search:str|None=Query(None,max_length=180),status:str|None=None,device_type:str|None=None,department:str|None=None,location:str|None=None,health:str|None=None,vendor:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
-    return list_assets(db,search,status,device_type,department,location,health,vendor,organization_id,property_id)
+@router.get("",response_model=PaginatedAssetResponse)
+def assets(
+    search:str|None=Query(None,max_length=180),
+    status:str|None=None,
+    device_type:str|None=None,
+    department:str|None=None,
+    location:str|None=None,
+    health:str|None=None,
+    vendor:str|None=None,
+    page:int=Query(1,ge=1),
+    page_size:int=Query(50,ge=1,le=100),
+    db:Session=Depends(get_db),
+    _=Depends(reader),
+    organization_id=Depends(organization_context),
+    property_id=Depends(property_context)
+):
+    return list_assets(db,search,status,device_type,department,location,health,vendor,organization_id,property_id,page,page_size)
 
 
 @router.post("",response_model=AssetResponse,status_code=201)

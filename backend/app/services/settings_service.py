@@ -64,6 +64,9 @@ DEFAULTS = {
     "incidents.external_communications_enabled": "false", "incidents.life_safety_confirmation_required": "true",
     "incidents.remediation_recommendations_enabled": "true", "incidents.automatic_remediation_enabled": "false",
     "incidents.incident_merge_enabled": "true", "incidents.incident_reopen_enabled": "true",
+    "snmp.enabled": "false", "snmp.allow_v1": "false", "snmp.allow_legacy_protocols": "false",
+    "snmp.default_timeout_seconds": "5", "snmp.default_retries": "1", "snmp.maximum_concurrent_polls": "5",
+    "snmp.metric_retention_days": "90", "snmp.interface_retention_days": "365",
 }
 
 
@@ -91,14 +94,51 @@ def _group(values: dict[str, str], prefix: str) -> dict[str, Any]:
 
 def read_bundle(db: Session) -> dict[str, Any]:
     values = _all(db)
-    configured = bool(settings.email_address and settings.email_password)
+    use_new_config = bool(settings.smtp_host and settings.smtp_sender_address)
+    configured = use_new_config or bool(settings.email_address and settings.email_password)
+    
+    if use_new_config:
+        email_config = {
+            "configured": True,
+            "host": settings.smtp_host,
+            "port": settings.smtp_port,
+            "security": settings.smtp_security,
+            "sender_address": settings.smtp_sender_address,
+            "sender_name": settings.smtp_sender_name,
+            "has_credentials": bool(settings.smtp_username and settings.smtp_password),
+            "connection_timeout": settings.smtp_connection_timeout,
+            "max_retries": settings.smtp_max_retries,
+            "configuration_type": "production"
+        }
+    elif settings.email_address and settings.email_password:
+        email_config = {
+            "configured": True,
+            "host": "smtp.gmail.com",
+            "port": 465,
+            "security": "SSL",
+            "sender_address": settings.email_address,
+            "sender_name": "HIOP Notifications",
+            "has_credentials": True,
+            "connection_timeout": 15,
+            "max_retries": 3,
+            "configuration_type": "legacy_gmail",
+            "warning": "Using legacy Gmail configuration - migrate to production SMTP settings"
+        }
+    else:
+        email_config = {
+            "configured": False,
+            "configuration_type": "none",
+            "message": "Email delivery is not configured"
+        }
+    
     return {
         "general": _group(values, "general"), "organization": _group(values, "organization"),
         "network": _group(values, "network"), "notifications": _group(values, "notifications"),
         "discovery": read_discovery(db),
         "incidents": read_incident_settings(db),
-        "email": {"configured": configured, "host": "smtp.gmail.com" if settings.email_address else None, "port": 465 if settings.email_address else None, "security": "TLS" if settings.email_address else "Not configured", "credentials_editable": False},
-        "security": {"authentication": "JWT bearer token", "access_token_lifetime": f"{settings.access_token_expire_minutes} minutes", "roles": ["admin", "technician"], "inactive_user_login_blocked": True, "failed_login_auditing": False, "refresh_tokens": False, "mfa": False, "session_revocation": False},
+        "snmp": read_snmp_settings(db),
+        "email": email_config,
+        "security": {"authentication": "JWT bearer token", "access_token_lifetime": f"{settings.access_token_expire_minutes} minutes", "roles": ["admin", "technician"], "inactive_user_login_blocked": True, "failed_login_auditing": False, "refresh_tokens": False, "mfa": False, "session_revocation": True},
         "application": {"product_name": "Hospitality IT Operations Platform", "short_name": "HIOP", "frontend_version": "3.0.0-dev", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": settings.environment.title()},
     }
 
@@ -179,6 +219,17 @@ def read_incident_settings(db: Session) -> dict[str, Any]:
         "p2_acknowledgement_minutes", "p2_containment_minutes", "p2_recovery_minutes",
         "incident_retention_days", "evidence_retention_days",
     )
+    for key in booleans:
+        values[key] = _bool(values[key])
+    for key in integers:
+        values[key] = int(values[key])
+    return values
+
+
+def read_snmp_settings(db: Session) -> dict[str, Any]:
+    values = _group(_all(db), "snmp")
+    booleans = ("enabled", "allow_v1", "allow_legacy_protocols")
+    integers = ("default_timeout_seconds", "default_retries", "maximum_concurrent_polls", "metric_retention_days", "interface_retention_days")
     for key in booleans:
         values[key] = _bool(values[key])
     for key in integers:

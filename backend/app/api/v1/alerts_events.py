@@ -14,6 +14,13 @@ from app.services.audit_service import create_audit_log
 router=APIRouter(prefix="/alert-center",tags=["V3E Alerts and Events"]);reader=require_roles(["platformadmin","admin","technician","viewer"]);operator=require_roles(["admin","technician"]);admin=require_roles(["admin"])
 class Resolution(BaseModel):reason:str=Field(min_length=3,max_length=500)
 class RuleUpdate(BaseModel):enabled:bool;severity:str=Field(pattern="^(info|warning|critical)$");threshold_value:float|None=None;duration_minutes:int=Field(ge=0,le=1440);consecutive_observations:int=Field(ge=1,le=100);notify_in_app:bool=True;notify_email:bool=False
+class PaginatedAlertResponse(BaseModel):
+    items: list
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    summary: dict
 def view(db,row,device=None):
     device=device or db.get(Device,row.device_id);return {"id":str(row.id),"device_id":str(row.device_id),"device_name":device.hostname if device else "Unavailable device","device_type":device.device_type if device else "Unknown","ip_address":device.ip_address if device else None,"title":row.title,"severity":row.severity,"status":row.lifecycle_status,"alert_type":row.alert_type,"source":row.source,"reason":row.reason,"evidence":row.evidence,"current_value":row.current_value,"threshold_value":row.threshold_value,"triggered_at":row.created_at,"last_updated":row.last_updated_at,"acknowledged_by":row.acknowledged_by,"acknowledged_at":row.acknowledged_at,"resolved_at":row.resolved_at,"resolution_reason":row.resolution_reason,"manually_resolved":row.manually_resolved}
 def scoped_alert(db,alert_id,organization_id,property_id=None):
@@ -22,11 +29,48 @@ def scoped_alert(db,alert_id,organization_id,property_id=None):
     row=query.first()
     if not row:raise HTTPException(404,"Alert not found")
     return row
-@router.get("/alerts")
-def alerts(status:str|None=None,severity:str|None=None,alert_type:str|None=None,search:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+@router.get("/alerts", response_model=PaginatedAlertResponse)
+def alerts(
+    status:str|None=None,
+    severity:str|None=None,
+    alert_type:str|None=None,
+    search:str|None=None,
+    page:int=Query(1,ge=1),
+    page_size:int=Query(50,ge=1,le=100),
+    db:Session=Depends(get_db),
+    _=Depends(reader),
+    organization_id=Depends(organization_context),
+    property_id=Depends(property_context)
+):
+    # Apply organization scope first (pagination security)
     allowed_devices=db.query(Device.id).join(Property,Device.property_id==Property.id).filter(Property.organization_id==organization_id)
     if property_id:allowed_devices=allowed_devices.filter(Device.property_id==property_id)
-    allowed_devices=allowed_devices.subquery();rows=db.query(Alert).filter(Alert.device_id.in_(allowed_devices)).order_by(Alert.created_at.desc()).limit(1000).all();device_ids={row.device_id for row in rows};devices={row.id:row for row in db.query(Device).filter(Device.id.in_(device_ids)).all()} if device_ids else {};items=[view(db,row,devices.get(row.device_id)) for row in rows];items=[row for row in items if (not status or row["status"]==status) and (not severity or row["severity"]==severity) and (not alert_type or row["alert_type"]==alert_type) and (not search or search.lower() in f'{row["title"]} {row["device_name"]} {row["ip_address"]}'.lower())];return {"items":items,"summary":{key:sum(row["severity"]==key for row in items) for key in ("critical","warning","info")}}
+    allowed_devices=allowed_devices.subquery()
+    
+    # Get base query with organization scope
+    query=db.query(Alert).filter(Alert.device_id.in_(allowed_devices)).order_by(Alert.created_at.desc())
+    
+    # Apply filters
+    filtered_items=query.all()
+    device_ids={row.device_id for row in filtered_items}
+    devices={row.id:row for row in db.query(Device).filter(Device.id.in_(device_ids)).all()} if device_ids else {}
+    items=[view(db,row,devices.get(row.device_id)) for row in filtered_items]
+    items=[row for row in items if (not status or row["status"]==status) and (not severity or row["severity"]==severity) and (not alert_type or row["alert_type"]==alert_type) and (not search or search.lower() in f'{row["title"]} {row["device_name"]} {row["ip_address"]}'.lower())]
+    
+    # Calculate pagination
+    total=len(items)
+    total_pages=(total+page_size-1)//page_size
+    offset=(page-1)*page_size
+    paginated_items=items[offset:offset+page_size]
+    
+    return {
+        "items":paginated_items,
+        "total":total,
+        "page":page,
+        "page_size":page_size,
+        "total_pages":total_pages,
+        "summary":{key:sum(row["severity"]==key for row in items) for key in ("critical","warning","info")}
+    }
 @router.get("/alerts/{alert_id}")
 def alert_detail(alert_id:UUID,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=scoped_alert(db,alert_id,organization_id,property_id)

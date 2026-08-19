@@ -1,6 +1,7 @@
 import csv
 import io
 import logging
+import os
 import tempfile
 from collections import Counter
 from datetime import datetime, timezone
@@ -22,6 +23,11 @@ from app.services.settings_service import read_import_settings
 
 logger = logging.getLogger(__name__)
 STORAGE_ROOT = Path(tempfile.gettempdir()) / "hiop-imports"
+
+# Safety constants
+MAX_IMPORT_FILE_SIZE = 50 * 1024 * 1024  # 50MB limit
+ALLOWED_FILE_EXTENSIONS = {'.csv', '.xlsx', '.xls'}
+SUPPORTED_FORMATS = {'csv', 'xlsx', 'xls'}
 
 
 class ImportNotFoundError(ValueError): pass
@@ -54,29 +60,69 @@ class ImportService:
 
     def _remove_file(self, session: ImportSession) -> None:
         try:
-            self._path(session).unlink(missing_ok=True)
+            file_path = self._path(session)
+            if file_path.exists():
+                file_path.unlink()
+                logger.info("Temporary import file cleaned up: %s", file_path)
         except OSError:
             logger.warning("Temporary import file cleanup failed session=%s", session.id)
 
+    def _validate_filename(self, filename: str) -> str:
+        """Validate and sanitize filename to prevent path traversal and ensure safety."""
+        if not filename:
+            raise ImportValidationError("A valid filename is required")
+        
+        # Get the basename to prevent path traversal
+        safe_name = Path(filename).name
+        
+        # Check for path traversal attempts
+        if safe_name != filename or '..' in filename or '/' in filename or '\\' in filename:
+            raise ImportValidationError("Invalid filename: path traversal detected")
+        
+        # Check for dangerous patterns
+        dangerous_patterns = ['..', '\0', '<', '>', ':', '"', '|', '?', '*']
+        if any(pattern in safe_name for pattern in dangerous_patterns):
+            raise ImportValidationError("Invalid filename: contains dangerous characters")
+        
+        # Check extension
+        file_ext = Path(safe_name).suffix.lower()
+        if file_ext not in ALLOWED_FILE_EXTENSIONS:
+            raise ImportValidationError(f"Invalid file extension: {file_ext}. Allowed: {', '.join(ALLOWED_FILE_EXTENSIONS)}")
+        
+        # Limit filename length
+        if len(safe_name) > 255:
+            raise ImportValidationError("Filename too long (max 255 characters)")
+        
+        return safe_name
+
     def create_import_session(self, *, original_filename: str, content_type: str | None, content: bytes, uploader: User) -> tuple[ImportSession, dict]:
         config = self._settings()
+        
+        # Safety: Check file size
         if not content:
             raise ImportValidationError("The uploaded file is empty")
-        if len(content) > config["maximum_import_file_size"]:
-            raise ImportValidationError("The uploaded file exceeds the configured size limit")
-        display_name = Path(original_filename or "").name
-        if not display_name or display_name in {".", ".."}:
-            raise ImportValidationError("A valid filename is required")
+        
+        # Use safety constant instead of config
+        if len(content) > MAX_IMPORT_FILE_SIZE:
+            raise ImportValidationError(f"The uploaded file exceeds the size limit of {MAX_IMPORT_FILE_SIZE // (1024*1024)}MB")
+        
+        # Safety: Validate and sanitize filename
+        display_name = self._validate_filename(original_filename)
+        
         try:
             file_format = detect_format(display_name, content_type, content[:8192])
         except ImportFileError as exc:
             raise ImportValidationError(str(exc)) from exc
-        if file_format not in config["supported_formats"]:
-            raise ImportValidationError("File format is disabled by configuration")
+        
+        if file_format not in SUPPORTED_FORMATS:
+            raise ImportValidationError(f"Unsupported file format: {file_format}. Supported: {', '.join(SUPPORTED_FORMATS)}")
+        
+        # Safety: Create secure temporary directory
         STORAGE_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
         safe_name = f"{uuid4().hex}.{file_format}"
         path = STORAGE_ROOT / safe_name
         path.write_bytes(content)
+        
         try:
             parsed = parse_file(path, file_format, config)
             mapping = detect_mapping(parsed.headers)

@@ -67,29 +67,50 @@ class CollectedObservation:
 
 
 class DNSCorrelationCollector:
-    def __init__(self, reverse: Callable = socket.gethostbyaddr, forward: Callable = socket.getaddrinfo):
-        self.reverse, self.forward = reverse, forward
+    def __init__(self, reverse: Callable = socket.gethostbyaddr, forward: Callable = socket.getaddrinfo, timeout: float = 1.0):
+        self.reverse, self.forward, self.timeout = reverse, forward, timeout
 
     def collect(self, ip: str):
         result = CollectedObservation(ip)
         try:
-            primary, aliases, _addresses = self.reverse(ip)
-            candidates = [primary, *aliases]
-            valid = [name for name in (normalize_hostname(value) for value in candidates) if name]
-            result.data["dns_status"] = "ptr_found"
-            result.data["fqdn"] = next((name for name in valid if "." in name), valid[0] if valid else None)
-            result.evidence.append(evidence("dns_resolution", "reverse_dns", primary, verified=True))
-            for normalized in valid:
-                forward_addresses = {row[4][0] for row in self.forward(normalized, None)}
-                if ip in forward_addresses:
-                    result.hostnames.append(normalized)
-                    result.data["dns_status"] = "forward_confirmed"
-                    result.evidence.append(evidence("hostname_match", "forward_confirmed_dns", normalized, verified=True))
-                else:
-                    result.warnings.append(f"PTR hostname {normalized} did not resolve back to {ip}.")
+            import signal
+            def timeout_handler(signum, frame):
+                raise TimeoutError("DNS resolution timeout")
+            
+            # Set timeout for DNS operations
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(int(self.timeout))
+            
+            try:
+                primary, aliases, _addresses = self.reverse(ip)
+                candidates = [primary, *aliases]
+                valid = [name for name in (normalize_hostname(value) for value in candidates) if name]
+                result.data["dns_status"] = "ptr_found"
+                result.data["fqdn"] = next((name for name in valid if "." in name), valid[0] if valid else None)
+                result.evidence.append(evidence("dns_resolution", "reverse_dns", primary, verified=True))
+                for normalized in valid:
+                    forward_addresses = {row[4][0] for row in self.forward(normalized, None)}
+                    if ip in forward_addresses:
+                        result.hostnames.append(normalized)
+                        result.data["dns_status"] = "forward_confirmed"
+                        result.evidence.append(evidence("hostname_match", "forward_confirmed_dns", normalized, verified=True))
+                    else:
+                        result.warnings.append(f"PTR hostname {normalized} did not resolve back to {ip}.")
+            finally:
+                signal.alarm(0)
+                
+        except TimeoutError:
+            result.data["dns_status"] = "timeout"
+            result.warnings.append("DNS resolution timed out")
+            result.evidence.append(evidence("dns_resolution", "reverse_dns", "timeout", verified=True))
         except (OSError, socket.error):
-            result.data["dns_status"] = "unresolved"
-            result.evidence.append(evidence("dns_resolution", "reverse_dns", "unresolved", verified=True))
+            result.data["dns_status"] = "unavailable"
+            result.warnings.append("DNS resolution failed")
+            result.evidence.append(evidence("dns_resolution", "reverse_dns", "unavailable", verified=True))
+        except Exception as e:
+            result.data["dns_status"] = "error"
+            result.warnings.append(f"DNS resolution error: {str(e)}")
+            result.evidence.append(evidence("dns_resolution", "reverse_dns", "error", verified=True))
         return result
 
 
