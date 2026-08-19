@@ -6,23 +6,36 @@ import { useRequest } from "../hooks/useRequest";
 import { endpoints } from "../lib/api";
 
 type ProgressData = {
-  organization_created: boolean;
-  property_created: boolean;
-  discovery_configured: boolean;
-  agent_connected: boolean;
-  scan_run: boolean;
-  devices_approved: boolean;
-  monitoring_configured: boolean;
+  state: string;
+  checklist: {
+    organization_configured: boolean;
+    departments_configured: boolean;
+    locations_configured: boolean;
+    agent_connected: boolean;
+    network_configured: boolean;
+    discovery_run: boolean;
+    devices_reviewed: boolean;
+    devices_approved: boolean;
+    monitoring_configured: boolean;
+  };
+  current_step: string;
+  progress_percentage: number;
+  steps_completed: number;
+  total_steps: number;
+  started_at: string | null;
+  completed_at: string | null;
 };
 
-const steps: { key: keyof ProgressData; label: string }[] = [
-  { key: "organization_created", label: "Organization created" },
-  { key: "property_created", label: "Property created" },
-  { key: "discovery_configured", label: "Configure discovery" },
-  { key: "agent_connected", label: "Connect local agent" },
-  { key: "scan_run", label: "Run first scan" },
-  { key: "devices_approved", label: "Approve first devices" },
-  { key: "monitoring_configured", label: "Configure monitoring" },
+const steps: { key: keyof ProgressData["checklist"]; label: string; link: string }[] = [
+  { key: "organization_configured", label: "Organization configured", link: "/organization-structure" },
+  { key: "departments_configured", label: "Departments configured", link: "/organization-structure" },
+  { key: "locations_configured", label: "Locations configured", link: "/organization-structure" },
+  { key: "agent_connected", label: "Connect local agent", link: "/local-agents" },
+  { key: "network_configured", label: "Configure network", link: "/network" },
+  { key: "discovery_run", label: "Run first discovery", link: "/discovery-intelligence" },
+  { key: "devices_reviewed", label: "Review discovered devices", link: "/devices" },
+  { key: "devices_approved", label: "Approve first devices", link: "/devices" },
+  { key: "monitoring_configured", label: "Configure monitoring", link: "/integrations" },
 ];
 
 export default function OnboardingEntryPage() {
@@ -36,17 +49,38 @@ export default function OnboardingEntryPage() {
   }
 
   const completedCount = progress.data
-    ? steps.filter((s) => progress.data![s.key]).length
+    ? steps.filter((s) => progress.data!.checklist[s.key]).length
     : 0;
+
+  const isComplete = progress.data?.state === "completed";
+
+  const handleComplete = async () => {
+    try {
+      await endpoints.completeOnboarding();
+      window.location.href = "/dashboard";
+    } catch (error) {
+      console.error("Failed to complete onboarding:", error);
+    }
+  };
+
+  const handleSkip = async () => {
+    try {
+      await fetch("/api/v1/onboarding/skip", { method: "POST" });
+      window.location.href = "/dashboard";
+    } catch (error) {
+      console.error("Failed to skip onboarding:", error);
+    }
+  };
 
   return (
     <DashboardLayout>
       <section className="first-run">
-        <p className="page-kicker">Workspace ready</p>
-        <h1>Welcome to HIOP</h1>
+        <p className="page-kicker">{isComplete ? "Setup complete" : "Workspace ready"}</p>
+        <h1>{isComplete ? "HIOP is ready" : "Welcome to HIOP"}</h1>
         <p>
-          Your isolated organization workspace is ready. Start with discovery when
-          your property network is prepared.
+          {isComplete
+            ? "Your HIOP workspace is fully configured. Start managing your IT infrastructure."
+            : "Your isolated organization workspace is ready. Complete the setup steps below to get started with discovery and monitoring."}
         </p>
 
         <div className="first-run-context">
@@ -64,7 +98,7 @@ export default function OnboardingEntryPage() {
           HIOP setup{" "}
           {progress.data && (
             <small style={{ fontWeight: 400, fontSize: ".85rem", color: "var(--text-muted)" }}>
-              {completedCount} / {steps.length} complete
+              {completedCount} / {steps.length} complete ({Math.round(progress.data.progress_percentage)}%)
             </small>
           )}
         </h2>
@@ -74,7 +108,7 @@ export default function OnboardingEntryPage() {
         ) : (
           <ol>
             {steps.map((step) => {
-              const done = progress.data?.[step.key] ?? false;
+              const done = progress.data?.checklist[step.key] ?? false;
               return (
                 <li className={done ? "done" : ""} key={step.key}>
                   {done ? <Icon name="check" /> : <span />}
@@ -86,12 +120,23 @@ export default function OnboardingEntryPage() {
         )}
 
         <div className="first-run-actions">
-          <Link className="primary-action" to="/discovery-intelligence">
-            Configure discovery
-          </Link>
-          <Link className="secondary-action" to="/dashboard">
-            Open dashboard
-          </Link>
+          {isComplete ? (
+            <Link className="primary-action" to="/dashboard">
+              Go to HIOP
+            </Link>
+          ) : (
+            <>
+              <Link className="primary-action" to="/local-agents">
+                Connect agent
+              </Link>
+              <Link className="secondary-action" to="/dashboard">
+                Open dashboard
+              </Link>
+              <button className="tertiary-action" onClick={handleSkip}>
+                Skip for now
+              </button>
+            </>
+          )}
         </div>
       </section>
     </DashboardLayout>

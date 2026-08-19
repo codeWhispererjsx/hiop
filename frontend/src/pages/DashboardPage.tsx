@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const discoveries = useRequest(endpoints.consolidatedDiscoveryDevices, []);
   const alerts = useRequest(() => endpoints.v3eAlerts({}), []);
   const incidents = useRequest(() => endpoints.incidents({ page_size: 100 }), []);
+  const onboarding = useRequest(endpoints.onboardingProgress, []);
   const [query, setQuery] = useState("");
   
   const devices = useMemo(() => inventory.data ?? [], [inventory.data]);
@@ -31,6 +32,8 @@ export default function DashboardPage() {
   const types = summarize(devices, (device) => device.device_type || "Unknown");
   const locations = summarize(devices, (device) => device.location || "Unassigned");
   const d = dashboard.data;
+  const isOnboardingIncomplete = onboarding.data?.state !== "completed";
+  const hasNoData = devices.length === 0 && (!d || d.devices.total === 0);
 
   return (
     <DashboardLayout>
@@ -48,6 +51,19 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {isOnboardingIncomplete && hasNoData && (
+        <section className="asset-onboarding-banner">
+          <Icon name="info" size={24} aria-hidden="true" />
+          <div>
+            <h3>Complete your HIOP setup</h3>
+            <p>Complete the onboarding steps to start discovering and managing your environment.</p>
+            <Link className="primary-action" to="/app">
+              Start setup
+            </Link>
+          </div>
+        </section>
+      )}
 
       {dashboard.loading || inventory.loading || dashboard.error || inventory.error || !d ? (
         <Feedback

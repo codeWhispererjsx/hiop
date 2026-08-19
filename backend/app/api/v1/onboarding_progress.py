@@ -138,9 +138,35 @@ def complete_onboarding(
         return {"error": "No onboarding state found"}
     
     onboarding_state.state = OnboardingState.COMPLETED.value
-    onboarding_state.completed_at = None
+    onboarding_state.completed_at = datetime.now(timezone.utc)
     onboarding_state.current_step = "completed"
     db.commit()
     
     return {"message": "Onboarding marked as complete"}
+
+
+@router.post("/skip")
+def skip_onboarding(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Skip onboarding"""
+    property_id = current_user.primary_location_id if current_user.primary_location_type == "property" else None
+    
+    if not property_id:
+        return {"error": "No property context"}
+    
+    onboarding_state = db.query(PropertyOnboardingState).filter(
+        PropertyOnboardingState.property_id == property_id
+    ).first()
+    
+    if not onboarding_state:
+        return {"error": "No onboarding state found"}
+    
+    onboarding_state.state = OnboardingState.SKIPPED.value
+    onboarding_state.completed_at = datetime.now(timezone.utc)
+    onboarding_state.current_step = "skipped"
+    db.commit()
+    
+    return {"message": "Onboarding skipped"}
 

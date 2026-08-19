@@ -39,7 +39,10 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
   const method = (init.method ?? "GET").toUpperCase();
   const activeProperty = window.localStorage.getItem("hiop.active_property_id");
   const activeOrganization=getOrganizationContext();
-  if(activeOrganization&&!headers.has("X-Organization-ID"))headers.set("X-Organization-ID",activeOrganization);
+  // Only set organization header if it exists - some endpoints don't require it
+  if(activeOrganization && !headers.has("X-Organization-ID")) {
+    headers.set("X-Organization-ID", activeOrganization);
+  }
   if (activeProperty && !headers.has("X-HIOP-Property-ID")) headers.set("X-HIOP-Property-ID", activeProperty);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -96,7 +99,8 @@ async function download(path: string) {
 }
 
 export const endpoints = {
-  onboardingProgress:()=>api<{organization_created:boolean;property_created:boolean;discovery_configured:boolean;agent_connected:boolean;scan_run:boolean;devices_approved:boolean;monitoring_configured:boolean}>("/onboarding/progress"),
+  onboardingProgress:()=>api<{state:string;checklist:{organization_configured:boolean;departments_configured:boolean;locations_configured:boolean;agent_connected:boolean;network_configured:boolean;discovery_run:boolean;devices_reviewed:boolean;devices_approved:boolean;monitoring_configured:boolean};current_step:string;progress_percentage:number;steps_completed:number;total_steps:number;started_at:string|null;completed_at:string|null}>("/onboarding/progress"),
+  completeOnboarding:()=>api<{message:string}>("/onboarding/complete",{method:"POST"}),
   propertyContext:()=>api<import("./types").PropertyContext>("/property-management/context"),
   billingPlans:()=>api<import("./types").BillingPlan[]>("/billing/public/plans"),
   currentBilling:()=>api<{subscription:import("./types").OrganizationSubscription|null;usage?:Record<string,number>}>("/billing/current"),
@@ -124,6 +128,12 @@ export const endpoints = {
   createPlatformUser:(body:Record<string,unknown>)=>api<import("./types").PlatformUser>("/platform/users",{method:"POST",body:JSON.stringify(body)}),
   setPlatformUserStatus:(id:string,active:boolean)=>api<import("./types").PlatformUser>(`/platform/users/${id}/status?active=${active}`,{method:"POST"}),
   platformHealth:()=>api<Record<string,string>>("/platform/health"),
+  systemHealthPlatform:()=>api<import("./types").PlatformHealthSummary>("/system-health/platform"),
+  systemHealthOrganization:(orgId:string)=>api<import("./types").OrganizationHealthSummary>(`/system-health/organizations/${orgId}`),
+  backupHealth:()=>api<import("./types").BackupHealth>("/backup-recovery/health"),
+  backupList:()=>api<import("./types").BackupRecord[]>("/backup-recovery/backups"),
+  backupCreate:(body:{backup_type:string;retention_days:number})=>api<import("./types").BackupRecord>("/backup-recovery/backups",{method:"POST",body:JSON.stringify(body)}),
+  restoreTestList:()=>api<import("./types").RestoreTest[]>("/backup-recovery/restore-tests"),
   platformAudit:()=>api<import("./types").PlatformAuditEvent[]>("/platform/audit"),
   operationalVendors:(filters:Record<string,string|undefined>={})=>api<import("./types").OperationalVendor[]>(`/vendors${queryString(filters)}`),
   operationalVendor:(id:string)=>api<import("./types").OperationalVendor>(`/vendors/${id}`),
@@ -194,6 +204,9 @@ export const endpoints = {
   v3eAlert:(id:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}`),
   acknowledgeV3EAlert:(id:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}/acknowledge`,{method:"POST"}),
   resolveV3EAlert:(id:string,reason:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}/resolve`,{method:"POST",body:JSON.stringify({reason})}),
+  listLocalAgents: (filters: Record<string,string|undefined>={}) => api<import("./types").LocalAgent[]>(`/local-agents${queryString(filters)}`),
+  createAgentEnrollment: (body: {name:string;property_id:string;expires_minutes:number}) => api<{id:string;enrollment_token:string;expires_at:string;property_id:string;name:string}>("/local-agents/enrollments",{method:"POST",body:JSON.stringify(body)}),
+  revokeAgent: (id:string) => api<import("./types").LocalAgent>(`/local-agents/${id}/revoke`,{method:"POST"}),
   v3eEvents:()=>api<Array<Record<string,unknown>>>("/alert-center/events"),
   v3eRules:()=>api<import("./types").V3EAlertRule[]>("/alert-center/rules"),
   updateV3ERule:(id:string,body:Omit<import("./types").V3EAlertRule,"id"|"rule_type"|"name"|"description">)=>api<import("./types").V3EAlertRule>(`/alert-center/rules/${id}`,{method:"PUT",body:JSON.stringify(body)}),
@@ -225,6 +238,9 @@ export const endpoints = {
   updateNotificationSettings: (body: import("./types").NotificationSettings) => api<import("./types").SettingsBundle>("/settings/notifications", { method: "PUT", body: JSON.stringify(body) }),
   updateDiscoverySettings: (body: import("./types").DiscoverySettings) => api<import("./types").SettingsBundle>("/settings/discovery", { method: "PUT", body: JSON.stringify(body) }),
   updateIncidentSettings: (body: import("./types").IncidentSettings) => api<import("./types").SettingsBundle>("/settings/incidents", { method: "PUT", body: JSON.stringify(body) }),
+  updateSNMPSettings: (body: import("./types").SNMPSettings) => api<import("./types").SettingsBundle>("/settings/snmp", { method: "PUT", body: JSON.stringify(body) }),
+  snmpCredentials: (filters: { skip?: number; limit?: number; enabled?: boolean; search?: string } = {}) => api<import("./types").SNMPPage<import("./types").SNMPCredential>>(`/snmp/credentials${queryString(filters)}`),
+  snmpTargets: (filters: { skip?: number; limit?: number; enabled?: boolean; polling_enabled?: boolean; search?: string } = {}) => api<import("./types").SNMPPage<import("./types").SNMPTarget>>(`/snmp/targets${queryString(filters)}`),
   systemHealth: () => api<import("./types").SystemHealth>("/settings/system-health"),
   hierarchy: () => api<import("./types").HierarchyCatalog>("/hierarchy"),
   createHierarchy: (kind: import("./types").HierarchyKind, body: Partial<import("./types").HierarchyItem>) => api<import("./types").HierarchyItem>(`/hierarchy/${kind}`, { method: "POST", body: JSON.stringify(body) }),

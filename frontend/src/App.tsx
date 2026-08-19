@@ -26,7 +26,9 @@ const IncidentsPage = lazy(() => import("./pages/IncidentsPage"));
 const DiscoveryIntelligencePage = lazy(() => import("./pages/DiscoveryIntelligencePage"));
 const TopologyPage = lazy(() => import("./pages/TopologyPage"));
 const SegmentationPage = lazy(() => import("./pages/SegmentationPage"));
+const NetworkPerformancePage = lazy(() => import("./pages/NetworkPerformancePage"));
 const AdministrationPage = lazy(() => import("./pages/AdministrationPage"));
+const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage"));
 const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 const AssetFormPage = lazy(() => import("./pages/AssetFormPage"));
 const AssetDetailsPage = lazy(() => import("./pages/AssetDetailsPage"));
@@ -40,6 +42,39 @@ const KnowledgePage = lazy(() => import("./pages/KnowledgePage"));
 const ReportingPage = lazy(() => import("./pages/ReportingPage"));
 const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
 const BillingPage = lazy(() => import("./pages/BillingPage"));
+const SNMPPage = lazy(() => import("./pages/SNMPPage"));
+const LocalAgentsPage = lazy(() => import("./pages/LocalAgentsPage"));
+
+function OnboardingRedirect() {
+  const [loading, setLoading] = useState(true);
+  const [redirect, setRedirect] = useState<string | null>(null);
+  
+  useEffect(() => {
+    let active = true;
+    endpoints.onboardingProgress()
+      .then((data) => {
+        if (active) {
+          if (data.state === "completed") {
+            setRedirect("/dashboard");
+          } else {
+            setRedirect("/app");
+          }
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setRedirect("/app");
+          setLoading(false);
+        }
+      });
+    return () => { active = false; };
+  }, []);
+  
+  if (loading) return <Feedback loading />;
+  if (redirect) return <Navigate to={redirect} replace />;
+  return null;
+}
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -75,7 +110,7 @@ export default function App() {
     <Route path="/get-started" element={<GetStartedPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/app" element={protectedPage(<OnboardingEntryPage />)} />
-    <Route path="/dashboard" element={protectedPage(<DashboardPage />)} />
+    <Route path="/dashboard" element={protectedPage(<OnboardingRedirect />)} />
     <Route path="/devices" element={protectedPage(<DevicesPage />)} />
     <Route path="/procurement" element={protectedPage(<ProcurementPage />)} />
     <Route path="/procurement/:id" element={protectedPage(<ProcurementPage />)} />
@@ -89,8 +124,10 @@ export default function App() {
     <Route path="/devices/:id" element={protectedPage(<DeviceDetailsPage />)} />
     <Route path="/network" element={protectedPage(<NetworkPage />)} />
     <Route path="/alerts" element={protectedPage(<AlertsPage />)} />
+    <Route path="/snmp" element={protectedPage(<SNMPPage />)} />
     <Route path="/topology" element={protectedPage(<TopologyPage />)} />
     <Route path="/segmentation" element={protectedPage(<SegmentationPage />)} />
+    <Route path="/network-performance" element={protectedPage(<NetworkPerformancePage />)} />
     <Route path="/discovery-intelligence/*" element={protectedPage(<DiscoveryIntelligencePage />)} />
     <Route path="/automation/*" element={protectedPage(<AutomationPage />)} />
     <Route path="/incidents" element={protectedPage(<IncidentsPage />)} />
@@ -118,9 +155,11 @@ export default function App() {
     <Route path="/administration" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/roles" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/audit" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
+    <Route path="/administration/integrations" element={roleProtectedPage(<IntegrationsPage />, ["admin"])} />
     <Route path="/administration/organization" element={roleProtectedPage(<OrganizationStructurePage />, ["admin"])} />
     <Route path="/administration/properties" element={roleProtectedPage(<PropertiesPage />, ["admin"])} />
     <Route path="/administration/billing" element={roleProtectedPage(<BillingPage />, ["admin"])} />
+    <Route path="/administration/agents" element={roleProtectedPage(<LocalAgentsPage />, ["admin"])} />
     <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></Suspense>;
