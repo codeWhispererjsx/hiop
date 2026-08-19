@@ -45,37 +45,6 @@ const BillingPage = lazy(() => import("./pages/BillingPage"));
 const SNMPPage = lazy(() => import("./pages/SNMPPage"));
 const LocalAgentsPage = lazy(() => import("./pages/LocalAgentsPage"));
 
-function OnboardingRedirect() {
-  const [loading, setLoading] = useState(true);
-  const [redirect, setRedirect] = useState<string | null>(null);
-  
-  useEffect(() => {
-    let active = true;
-    endpoints.onboardingProgress()
-      .then((data) => {
-        if (active) {
-          if (data.state === "completed") {
-            setRedirect("/dashboard");
-          } else {
-            setRedirect("/app");
-          }
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setRedirect("/app");
-          setLoading(false);
-        }
-      });
-    return () => { active = false; };
-  }, []);
-  
-  if (loading) return <Feedback loading />;
-  if (redirect) return <Navigate to={redirect} replace />;
-  return null;
-}
-
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
 }
@@ -110,7 +79,7 @@ export default function App() {
     <Route path="/get-started" element={<GetStartedPage />} />
     <Route path="/login" element={<LoginPage />} />
     <Route path="/app" element={protectedPage(<OnboardingEntryPage />)} />
-    <Route path="/dashboard" element={protectedPage(<OnboardingRedirect />)} />
+    <Route path="/dashboard" element={protectedPage(<DashboardPage />)} />
     <Route path="/devices" element={protectedPage(<DevicesPage />)} />
     <Route path="/procurement" element={protectedPage(<ProcurementPage />)} />
     <Route path="/procurement/:id" element={protectedPage(<ProcurementPage />)} />

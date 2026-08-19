@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
 
 from app.core.security import get_current_user, get_db
 from app.models.user import User
@@ -125,22 +126,27 @@ def complete_onboarding(
     db: Session = Depends(get_db),
 ):
     """Mark onboarding as complete"""
+    # Get the user's first property if no primary location is set
     property_id = current_user.primary_location_id if current_user.primary_location_type == "property" else None
     
     if not property_id:
-        return {"error": "No property context"}
+        # Try to get the first property for this user's organization
+        property = db.query(Property).filter(
+            Property.organization_id == current_user.organization_id
+        ).first()
+        if property:
+            property_id = property.id
     
-    onboarding_state = db.query(PropertyOnboardingState).filter(
-        PropertyOnboardingState.property_id == property_id
-    ).first()
-    
-    if not onboarding_state:
-        return {"error": "No onboarding state found"}
-    
-    onboarding_state.state = OnboardingState.COMPLETED.value
-    onboarding_state.completed_at = datetime.now(timezone.utc)
-    onboarding_state.current_step = "completed"
-    db.commit()
+    if property_id:
+        onboarding_state = db.query(PropertyOnboardingState).filter(
+            PropertyOnboardingState.property_id == property_id
+        ).first()
+        
+        if onboarding_state:
+            onboarding_state.state = OnboardingState.COMPLETED.value
+            onboarding_state.completed_at = datetime.now(timezone.utc)
+            onboarding_state.current_step = "completed"
+            db.commit()
     
     return {"message": "Onboarding marked as complete"}
 
@@ -151,22 +157,27 @@ def skip_onboarding(
     db: Session = Depends(get_db),
 ):
     """Skip onboarding"""
+    # Get the user's first property if no primary location is set
     property_id = current_user.primary_location_id if current_user.primary_location_type == "property" else None
     
     if not property_id:
-        return {"error": "No property context"}
+        # Try to get the first property for this user's organization
+        property = db.query(Property).filter(
+            Property.organization_id == current_user.organization_id
+        ).first()
+        if property:
+            property_id = property.id
     
-    onboarding_state = db.query(PropertyOnboardingState).filter(
-        PropertyOnboardingState.property_id == property_id
-    ).first()
-    
-    if not onboarding_state:
-        return {"error": "No onboarding state found"}
-    
-    onboarding_state.state = OnboardingState.SKIPPED.value
-    onboarding_state.completed_at = datetime.now(timezone.utc)
-    onboarding_state.current_step = "skipped"
-    db.commit()
+    if property_id:
+        onboarding_state = db.query(PropertyOnboardingState).filter(
+            PropertyOnboardingState.property_id == property_id
+        ).first()
+        
+        if onboarding_state:
+            onboarding_state.state = OnboardingState.SKIPPED.value
+            onboarding_state.completed_at = datetime.now(timezone.utc)
+            onboarding_state.current_step = "skipped"
+            db.commit()
     
     return {"message": "Onboarding skipped"}
 
