@@ -5,6 +5,7 @@ import { Icon } from "../components/Icon";
 import { Feedback } from "../components/Feedback";
 import { useRequest } from "../hooks/useRequest";
 import { endpoints } from "../lib/api";
+import { getAuthToken } from "../lib/auth";
 
 type ProgressData = {
   state: string;
@@ -61,7 +62,7 @@ export default function OnboardingEntryPage() {
       const response = await fetch("/api/v1/onboarding/complete", { 
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${localStorage.getItem("hiop.auth_token")}`,
+          "Authorization": `Bearer ${getAuthToken()}`,
           "Content-Type": "application/json"
         }
       });
@@ -81,7 +82,7 @@ export default function OnboardingEntryPage() {
       const response = await fetch("/api/v1/onboarding/skip", { 
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${localStorage.getItem("hiop.auth_token")}`,
+          "Authorization": `Bearer ${getAuthToken()}`,
           "Content-Type": "application/json"
         }
       });
