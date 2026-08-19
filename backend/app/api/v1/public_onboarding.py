@@ -11,14 +11,13 @@ from app.core.security import create_access_token, get_db, hash_password
 from app.models.hierarchy import Organization, Property
 from app.models.property_access import UserPropertyAccess
 from app.models.user import User
+from app.models.onboarding_state import PropertyOnboardingState, OnboardingState
 from app.services.audit_service import create_audit_log
-from app.services.billing_service import start_trial
 
 router = APIRouter(prefix="/public/onboarding", tags=["Public customer onboarding"])
 
 
 class PublicOnboardingRequest(BaseModel):
-    plan_code: str = Field(default="starter", pattern=r"^(starter|core|enterprise)$")
     organization_name: str = Field(min_length=2, max_length=160)
     organization_code: str = Field(min_length=2, max_length=40)
     contact_email: EmailStr
@@ -90,8 +89,20 @@ def register_customer(payload: PublicOnboardingRequest, db: Session = Depends(ge
             user_id=administrator.id, property_id=property_row.id, access_level="property_admin",
             enabled=True, is_default=True, granted_by=administrator.id,
         ))
-        create_audit_log(db, administrator.username, "CUSTOMER_ONBOARDING_COMPLETED", "Organization", str(organization.id), "Created organization and initial property through public onboarding")
-        subscription = start_trial(db, organization.id, payload.plan_code, administrator)
+        
+        # Create onboarding state for the property
+        onboarding_state = PropertyOnboardingState(
+            property_id=property_row.id,
+            organization_id=organization.id,
+            state=OnboardingState.IN_PROGRESS.value,
+            organization_configured=True,
+            current_step="organization_configured",
+            started_at=datetime.now(timezone.utc),
+            steps_completed=1,
+        )
+        db.add(onboarding_state)
+        
+        create_audit_log(db, administrator.username, "CUSTOMER_ONBOARDING_STARTED", "Organization", str(organization.id), "Started onboarding through public registration")
         db.commit()
     except Exception:
         db.rollback()
@@ -103,5 +114,4 @@ def register_customer(payload: PublicOnboardingRequest, db: Session = Depends(ge
         "organization": {"id": str(organization.id), "name": organization.name, "code": organization.code},
         "property": {"id": str(property_row.id), "name": property_row.name, "code": property_row.code},
         "administrator": {"id": administrator.id, "username": administrator.username, "email": administrator.email, "role": "admin"},
-        "subscription": {"id": str(subscription.id), "status": subscription.status, "plan_code": payload.plan_code},
     }

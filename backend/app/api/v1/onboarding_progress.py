@@ -9,6 +9,7 @@ from app.models.device import Device
 from app.models.network_scan import NetworkScan
 from app.models.discovered_device import DiscoveryRun
 from app.models.alert import Alert
+from app.models.onboarding_state import PropertyOnboardingState, OnboardingState
 
 router = APIRouter(prefix="/onboarding", tags=["Onboarding Progress"])
 
@@ -19,83 +20,127 @@ def get_onboarding_progress(
     db: Session = Depends(get_db),
 ):
     org_id = current_user.organization_id
-
-    # 1. Organization created – always true if the user has an org context
-    org_created = org_id is not None
-
-    # 2. Property created
-    property_ids = [
-        row[0]
-        for row in db.query(Property.id)
-        .filter(Property.organization_id == org_id)
-        .all()
-    ]
-    prop_created = len(property_ids) > 0
-
-    # 3. Discovery configured – at least one DiscoveryRun triggered by a user in this org
-    user_ids = [
-        row[0]
-        for row in db.query(User.id)
-        .filter(User.organization_id == org_id)
-        .all()
-    ]
-    discovery_configured = False
-    if user_ids:
-        discovery_configured = (
-            db.query(DiscoveryRun.id)
-            .filter(DiscoveryRun.triggered_by.in_(user_ids))
-            .first()
-            is not None
+    property_id = current_user.primary_location_id if current_user.primary_location_type == "property" else None
+    
+    # Try to get existing onboarding state
+    onboarding_state = None
+    if property_id:
+        onboarding_state = db.query(PropertyOnboardingState).filter(
+            PropertyOnboardingState.property_id == property_id
+        ).first()
+    
+    # If no state exists, create one
+    if not onboarding_state and property_id:
+        onboarding_state = PropertyOnboardingState(
+            property_id=property_id,
+            organization_id=org_id,
+            state=OnboardingState.IN_PROGRESS.value,
+            organization_configured=True,  # Assume org is configured if user exists
+            current_step="organization_configured",
+            started_at=None,
+            steps_completed=1,
         )
-
-    # 4. Local agent connected
-    agent_connected = (
-        db.query(LocalAgentRegistration.id)
-        .filter(LocalAgentRegistration.organization_id == org_id)
-        .first()
-        is not None
-    )
-
-    # 5. First network scan completed
-    scan_run = False
-    device_ids_query = db.query(Device.id).filter(
-        Device.property_id.in_(property_ids)
-    )
-    if property_ids:
-        scan_run = (
-            db.query(NetworkScan.id)
-            .filter(NetworkScan.device_id.in_(device_ids_query))
-            .first()
-            is not None
-        )
-
-    # 6. First devices approved into inventory
-    devices_approved = False
-    if property_ids:
-        devices_approved = (
-            db.query(Device.id)
-            .filter(Device.property_id.in_(property_ids))
-            .first()
-            is not None
-        )
-
-    # 7. Monitoring configured – at least one alert has fired for a device in this org
-    monitoring_configured = False
-    if property_ids:
-        monitoring_configured = (
-            db.query(Alert.id)
-            .filter(Alert.device_id.in_(device_ids_query))
-            .first()
-            is not None
-        )
-
+        db.add(onboarding_state)
+        db.commit()
+    
+    # If still no state (no property), return basic progress
+    if not onboarding_state:
+        # Basic progress tracking for organizations without onboarding state
+        property_ids = [
+            row[0]
+            for row in db.query(Property.id)
+            .filter(Property.organization_id == org_id)
+            .all()
+        ]
+        return {
+            "state": "in_progress",
+            "checklist": {
+                "organization_configured": True,
+                "departments_configured": False,
+                "locations_configured": False,
+                "agent_connected": False,
+                "network_configured": False,
+                "discovery_run": False,
+                "devices_reviewed": False,
+                "devices_approved": False,
+                "monitoring_configured": False,
+            },
+            "current_step": "organization_configured",
+            "progress_percentage": 12.5,  # 1/8 steps
+            "steps_completed": 1,
+            "total_steps": 8,
+        }
+    
+    # Update checklist dynamically based on actual system state
+    if property_id:
+        # Check agent connection
+        onboarding_state.agent_connected = db.query(LocalAgentRegistration.id).filter(
+            LocalAgentRegistration.property_id == property_id
+        ).first() is not None
+        
+        # Check discovery runs
+        onboarding_state.discovery_run = db.query(DiscoveryRun.id).filter(
+            DiscoveryRun.property_id == property_id
+        ).first() is not None
+        
+        # Check devices
+        onboarding_state.devices_approved = db.query(Device.id).filter(
+            Device.property_id == property_id
+        ).first() is not None
+        
+        # Check monitoring (alerts)
+        device_ids_query = db.query(Device.id).filter(Device.property_id == property_id)
+        onboarding_state.monitoring_configured = db.query(Alert.id).filter(
+            Alert.device_id.in_(device_ids_query)
+        ).first() is not None
+        
+        # Update steps completed count
+        checklist = onboarding_state.get_checklist()
+        completed_count = sum(1 for v in checklist.values() if v)
+        onboarding_state.steps_completed = completed_count
+        
+        # Update state if core complete
+        if onboarding_state.is_core_complete() and onboarding_state.state != OnboardingState.COMPLETED.value:
+            onboarding_state.state = OnboardingState.COMPLETED.value
+            onboarding_state.completed_at = None  # Will be set when explicitly completed
+            onboarding_state.current_step = "completed"
+        
+        db.commit()
+    
     return {
-        "organization_created": org_created,
-        "property_created": prop_created,
-        "discovery_configured": discovery_configured,
-        "agent_connected": agent_connected,
-        "scan_run": scan_run,
-        "devices_approved": devices_approved,
-        "monitoring_configured": monitoring_configured,
+        "state": onboarding_state.state,
+        "checklist": onboarding_state.get_checklist(),
+        "current_step": onboarding_state.current_step,
+        "progress_percentage": onboarding_state.get_progress_percentage(),
+        "steps_completed": onboarding_state.steps_completed,
+        "total_steps": onboarding_state.total_steps,
+        "started_at": onboarding_state.started_at.isoformat() if onboarding_state.started_at else None,
+        "completed_at": onboarding_state.completed_at.isoformat() if onboarding_state.completed_at else None,
     }
+
+
+@router.post("/complete")
+def complete_onboarding(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark onboarding as complete"""
+    property_id = current_user.primary_location_id if current_user.primary_location_type == "property" else None
+    
+    if not property_id:
+        return {"error": "No property context"}
+    
+    onboarding_state = db.query(PropertyOnboardingState).filter(
+        PropertyOnboardingState.property_id == property_id
+    ).first()
+    
+    if not onboarding_state:
+        return {"error": "No onboarding state found"}
+    
+    onboarding_state.state = OnboardingState.COMPLETED.value
+    onboarding_state.completed_at = None
+    onboarding_state.current_step = "completed"
+    db.commit()
+    
+    return {"message": "Onboarding marked as complete"}
 

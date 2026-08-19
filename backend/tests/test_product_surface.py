@@ -10,7 +10,8 @@ def test_removed_specialist_apis_are_not_exposed():
         "/api/v1/cmdb",
         "/api/v1/configuration-management",
         "/api/v1/reports",
-        "/api/v1/snmp",
+        # Note: SNMP is now exposed as a legitimate integration (P8)
+        # "/api/v1/snmp",
         "/api/v1/tickets",
         "/api/v1/topologies",
     )
