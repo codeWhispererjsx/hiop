@@ -72,7 +72,15 @@ export default function NetworkPage() {
     return latest;
   }, [scans.data]);
   
-  const activeDevices = (devices.data ?? []).filter((device) => device.inventory_status !== "Retired");
+  // Handle both array and paginated response structures
+  const devicesList = useMemo(() => {
+    if (!devices.data) return [];
+    if (Array.isArray(devices.data)) return devices.data;
+    if (devices.data.items && Array.isArray(devices.data.items)) return devices.data.items;
+    return [];
+  }, [devices.data]);
+  
+  const activeDevices = devicesList.filter((device) => device.inventory_status !== "Retired");
   
   const averageResponse = useMemo(() => {
     const values = activeDevices
@@ -226,7 +234,7 @@ export default function NetworkPage() {
 
           <HealthEvidence
             summary={health.data}
-            devices={devices.data ?? []}
+            devices={devicesList}
             onOpen={(id) => navigate(`/devices/${id}`)}
           />
 
@@ -240,14 +248,14 @@ export default function NetworkPage() {
                 {socketConnected ? "Live updates" : "Reconnecting"}
               </span>
             </header>
-            {!devices.data?.length ? (
+            {!devicesList.length ? (
               <Feedback
                 emptyTitle="No network devices"
                 empty="Add a device with an IP address before running network checks."
               />
             ) : (
               <NetworkDeviceTable
-                devices={devices.data}
+                devices={devicesList}
                 latest={latestByDevice}
                 busy={running}
                 scanningDevice={scanningDevice}
@@ -274,7 +282,7 @@ export default function NetworkPage() {
               ) : (
                 <div className="noc-history-list">
                   {scans.data.slice(0, 12).map((scan) => {
-                    const device = devices.data?.find((item) => item.id === scan.device_id);
+                    const device = devicesList.find((item) => item.id === scan.device_id);
                     return (
                       <button
                         key={scan.id}
@@ -314,7 +322,7 @@ export default function NetworkPage() {
                     <AlertRow
                       key={alert.id}
                       alert={alert}
-                      device={devices.data?.find((item) => item.id === alert.device_id)}
+                      device={devicesList.find((item) => item.id === alert.device_id)}
                       onOpen={() => navigate(`/devices/${alert.device_id}`)}
                     />
                   ))}
