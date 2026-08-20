@@ -55,26 +55,7 @@ export default function OnboardingEntryPage() {
     ? steps.filter((s) => progress.data!.checklist[s.key]).length
     : 0;
 
-  const isComplete = progress.data?.state === "completed";
-
-  const handleComplete = async () => {
-    try {
-      const response = await fetch("/api/v1/onboarding/complete", { 
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${getAuthToken()}`,
-          "Content-Type": "application/json"
-        }
-      });
-      if (response.ok) {
-        window.location.href = "/dashboard";
-      } else {
-        console.error("Failed to complete onboarding:", response.status);
-      }
-    } catch (error) {
-      console.error("Failed to complete onboarding:", error);
-    }
-  };
+  const isComplete = progress.data?.state === "completed" || progress.data?.state === "skipped";
 
   const handleSkip = async () => {
     setIsSkipping(true);
@@ -97,6 +78,28 @@ export default function OnboardingEntryPage() {
       setIsSkipping(false);
     }
   };
+
+  // Simple fallback if API fails
+  if (progress.error) {
+    return (
+      <DashboardLayout>
+        <section className="first-run">
+          <p className="page-kicker">Workspace ready</p>
+          <h1>Welcome to HIOP</h1>
+          <p>Your isolated organization workspace is ready. You can configure it later.</p>
+          <div className="first-run-actions">
+            <button 
+              className="secondary-action" 
+              onClick={handleSkip}
+              disabled={isSkipping}
+            >
+              {isSkipping ? "Skipping..." : "Skip for now"}
+            </button>
+          </div>
+        </section>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
