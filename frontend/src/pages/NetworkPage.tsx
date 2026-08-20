@@ -6,7 +6,7 @@ import { Icon } from "../components/Icon";
 import { Feedback } from "../components/Feedback";
 import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
-import { endpoints } from "../lib/api";
+import { endpoints, getPaginatedItems } from "../lib/api";
 import { useRequest } from "../hooks/useRequest";
 import type { Alert, Device, LiveEvent, MonitoringSummary, Scan } from "../lib/types";
 
@@ -68,17 +68,11 @@ export default function NetworkPage() {
 
   const latestByDevice = useMemo(() => {
     const latest = new Map<string, Scan>();
-    for (const scan of scans.data ?? []) if (!latest.has(scan.device_id)) latest.set(scan.device_id, scan);
+    for (const scan of getPaginatedItems(scans.data)) if (!latest.has(scan.device_id)) latest.set(scan.device_id, scan);
     return latest;
   }, [scans.data]);
   
-  // Handle both array and paginated response structures
-  const devicesList = useMemo(() => {
-    if (!devices.data) return [];
-    if (Array.isArray(devices.data)) return devices.data;
-    if (devices.data.items && Array.isArray(devices.data.items)) return devices.data.items;
-    return [];
-  }, [devices.data]);
+  const devicesList = useMemo(() => getPaginatedItems(devices.data), [devices.data]);
   
   const activeDevices = devicesList.filter((device) => device.inventory_status !== "Retired");
   
@@ -90,7 +84,7 @@ export default function NetworkPage() {
   }, [activeDevices, latestByDevice]);
   
   const lastScan = scans.data?.[0]?.scanned_at ?? null;
-  const activeAlerts = (alerts.data ?? []).filter((alert) => !alert.acknowledged);
+  const activeAlerts = getPaginatedItems(alerts.data).filter((alert) => !alert.acknowledged);
   const running = scanState === "running";
   const initialLoading = devices.loading || scans.loading || alerts.loading || health.loading;
   const initialError = devices.error || scans.error || alerts.error || health.error;

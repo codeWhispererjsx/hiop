@@ -6,7 +6,7 @@ import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
-import { endpoints } from "../lib/api";
+import { endpoints, getPaginatedItems } from "../lib/api";
 import { PageTitle } from "./DashboardPage";
 
 const statuses = [
@@ -79,7 +79,7 @@ function ChangeList() {
 
   const rows = useMemo(
     () =>
-      (request.data ?? []).filter(
+      getPaginatedItems(request.data).filter(
         (row) =>
           (!query ||
             [

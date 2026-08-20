@@ -4,7 +4,7 @@ import { PageTitle } from "../components/PageTitle";
 import { StatusBadge } from "../components/StatusBadge";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
-import { endpoints } from "../lib/api";
+import { endpoints, getPaginatedItems } from "../lib/api";
 import type { BillingPlan, OrganizationSubscription } from "../lib/types";
 
 const when = (value: string | null) =>
@@ -52,7 +52,7 @@ export default function BillingPage() {
       ) : subscription ? (
         <SubscriptionView
           row={subscription}
-          plans={plans.data ?? []}
+          plans={getPaginatedItems(plans.data)}
           busy={busy}
           change={(code, interval) =>
             act(() => endpoints.changeBillingPlan(code, interval))
@@ -67,7 +67,7 @@ export default function BillingPage() {
             details are collected by HIOP.
           </p>
           <PlanChoices
-            plans={plans.data ?? []}
+            plans={getPaginatedItems(plans.data)}
             busy={busy}
             select={(code) => act(() => endpoints.startBillingTrial(code))}
           />

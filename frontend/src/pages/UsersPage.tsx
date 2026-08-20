@@ -4,7 +4,7 @@ import { Feedback } from "../components/Feedback";
 import { Icon, type IconName } from "../components/Icon";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
-import { endpoints } from "../lib/api";
+import { endpoints, getPaginatedItems } from "../lib/api";
 import { PageTitle } from "./DashboardPage";
 
 const PAGE_SIZE = 10;
@@ -18,7 +18,7 @@ export default function UsersPage() {
   const [active, setActive] = useState("all");
   const [page, setPage] = useState(1);
 
-  const all = useMemo(() => users.data ?? [], [users.data]);
+  const all = useMemo(() => getPaginatedItems(users.data), [users.data]);
   const rows = useMemo(
     () => all.filter((user) =>
       `${user.username} ${user.email}`.toLowerCase().includes(query.trim().toLowerCase()) &&

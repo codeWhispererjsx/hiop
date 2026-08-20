@@ -6,7 +6,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { StatCard } from "../components/StatCard";
 import { PageTitle } from "./DashboardPage";
 import { Icon } from "../components/Icon";
-import { endpoints } from "../lib/api";
+import { endpoints, getPaginatedItems } from "../lib/api";
 import { useRequest } from "../hooks/useRequest";
 
 const CATEGORIES = [
@@ -114,7 +114,7 @@ function IncidentList() {
 
   const filtered = useMemo(
     () =>
-      (rows.data ?? []).filter(
+      getPaginatedItems(rows.data).filter(
         (x) =>
           (!q ||
             [
@@ -131,6 +131,8 @@ function IncidentList() {
       ),
     [rows.data, q, status, priority]
   );
+
+  const paginatedRows = getPaginatedItems(rows.data);
 
   return (
     <DashboardLayout>
@@ -223,7 +225,7 @@ function IncidentList() {
 
       {rows.loading || rows.error ? (
         <Feedback loading={rows.loading} error={rows.error} />
-      ) : !filtered.length ? (
+      ) : !paginatedRows.length ? (
         <Feedback
           emptyTitle="No incidents found"
           empty="Adjust filters or create your first incident."

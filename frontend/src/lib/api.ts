@@ -5,6 +5,16 @@ const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 
 export class ApiError extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status; } }
 
+// Utility function to handle both array and paginated API responses
+export function getPaginatedItems<T>(response: T[] | { items: T[]; total: number; page: number; page_size: number } | null | undefined): T[] {
+  if (!response) return [];
+  if (Array.isArray(response)) return response;
+  if (typeof response === 'object' && response !== null && 'items' in response && Array.isArray(response.items)) {
+    return response.items;
+  }
+  return [];
+}
+
 const inFlightGets = new Map<string, Promise<unknown>>();
 
 function errorDetailMessage(detail: unknown): string | undefined {

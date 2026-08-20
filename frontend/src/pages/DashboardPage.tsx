@@ -4,7 +4,7 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
 import { useRequest } from "../hooks/useRequest";
-import { endpoints } from "../lib/api";
+import { endpoints, getPaginatedItems } from "../lib/api";
 import type { Device } from "../lib/types";
 import "../styles/dashboard-improvements.css";
 export { PageTitle } from "../components/PageTitle";
@@ -14,13 +14,7 @@ export default function DashboardPage() {
   const inventory = useRequest(endpoints.devices, []);
   const [query, setQuery] = useState("");
   
-  // Handle both array and paginated response structures
-  const devices = useMemo(() => {
-    if (!inventory.data) return [];
-    if (Array.isArray(inventory.data)) return inventory.data;
-    if (inventory.data.items && Array.isArray(inventory.data.items)) return inventory.data.items;
-    return [];
-  }, [inventory.data]);
+  const devices = useMemo(() => getPaginatedItems(inventory.data), [inventory.data]);
   
   const visible = useMemo(() => {
     const value = query.trim().toLowerCase();
