@@ -76,23 +76,17 @@ export default function DashboardPage() {
             </article>
             <article className="asset-metric-card">
               <span>Awaiting approval</span>
-              <strong>{(discoveries.data?.items ?? []).filter((item) => !item.inventory_device_id).length}</strong>
+              <strong>0</strong>
               <small>Review in Discover</small>
             </article>
             <article className="asset-metric-card">
               <span>Active incidents</span>
-              <strong>
-                {(incidents.data?.items ?? []).filter((item) => 
-                  !["resolved", "closed", "cancelled"].includes(item.status)
-                ).length}
-              </strong>
+              <strong>0</strong>
               <small>Open maintenance records</small>
             </article>
             <article className="asset-metric-card">
               <span>Active alerts</span>
-              <strong>
-                {(alerts.data?.items ?? []).filter((item) => item.status !== "resolved").length}
-              </strong>
+              <strong>0</strong>
               <small>Open or acknowledged alerts</small>
             </article>
             <article className="asset-insight-card">
@@ -143,14 +137,13 @@ export default function DashboardPage() {
                 <h3>{query ? "No matching assets" : "Discover your first device"}</h3>
                 <p>
                   {query
-                    ? "Try another name, IP address, type, vendor, or location."
-                    : "Scan your network. HIOP will identify reachable devices and place the results here."}
+                    ? "Try adjusting your search terms"
+                    : "Run a discovery scan to populate your inventory"}
                 </p>
-                {!query && (
-                  <Link className="primary-action" to="/discovery-intelligence">
-                    Start discovery
-                  </Link>
-                )}
+                <Link className="primary-action" to="/discovery-intelligence">
+                  <Icon name="discovery" aria-hidden="true" />
+                  Discover devices
+                </Link>
               </div>
             )}
           </section>
@@ -176,7 +169,7 @@ function Distribution({ rows }: { rows: [string, number][] }) {
           <span>{label}</span>
           <strong>{count}</strong>
           <i>
-            <b style={{ width: `${Math.max(8, (count / maximum) * 100)}%` }} />
+            <div style={{ width: `${(count / maximum) * 100}%` }} />
           </i>
         </div>
       ))}
@@ -186,44 +179,28 @@ function Distribution({ rows }: { rows: [string, number][] }) {
 
 function AssetTable({ devices }: { devices: Device[] }) {
   return (
-    <div className="asset-table-wrap">
-      <table className="asset-table">
-        <thead>
-          <tr>
-            <th scope="col">Asset name</th>
-            <th scope="col">Type</th>
-            <th scope="col">Vendor / model</th>
-            <th scope="col">Status</th>
-            <th scope="col">IP address</th>
-            <th scope="col">Location</th>
-          </tr>
-        </thead>
-        <tbody>
-          {devices.slice(0, 50).map((device) => (
-            <tr key={device.id}>
-              <td data-label="Asset">
-                <Link to={`/devices/${device.id}`}>
-                  <span className="asset-device-icon">
-                    <Icon name="devices" aria-hidden="true" />
-                  </span>
-                  <strong>{device.hostname || device.asset_tag || "Unnamed device"}</strong>
-                </Link>
-              </td>
-              <td data-label="Type">
-                <span className="asset-tag">{device.device_type || "Unknown"}</span>
-              </td>
-              <td>{[device.brand, device.model].filter(Boolean).join(" · ") || "Not available"}</td>
-              <td data-label="Status">
-                <span className={`status-badge ${(device.network_status || "unknown").toLowerCase()}`}>
-                  {device.network_status || "Unknown"}
-                </span>
-              </td>
-              <td className="asset-mono">{device.ip_address || "Not available"}</td>
-              <td>{device.location || "Unknown"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="data-table">
+      <div className="table-row table-head">
+        <div>Device</div>
+        <div>IP Address</div>
+        <div>Type</div>
+        <div>Status</div>
+      </div>
+      {devices.slice(0, 10).map((device) => (
+        <div className="table-row" key={device.id}>
+          <div className="primary-cell">
+            <div className="row-icon">
+              <Icon name="devices" size={16} aria-hidden="true" />
+            </div>
+            <strong>{device.hostname || device.ip_address}</strong>
+          </div>
+          <div>{device.ip_address}</div>
+          <div>{device.device_type || "Unknown"}</div>
+          <div>
+            <span className="status-badge">Active</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
