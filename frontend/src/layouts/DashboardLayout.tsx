@@ -55,38 +55,48 @@ export default function DashboardLayout({
     let socket: WebSocket | undefined;
     let retry: number | undefined;
     const connect = () => {
-      const token = getAuthToken();
-      if (!token) return;
-      const defaultWebSocketUrl =
-        `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
-      const configuredWebSocketUrl = import.meta.env.VITE_WS_URL;
-      const websocketUrl = configuredWebSocketUrl?.startsWith("/")
-        ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${configuredWebSocketUrl}`
-        : configuredWebSocketUrl ?? defaultWebSocketUrl;
-      socket = new WebSocket(
-        websocketUrl,
-        ["hiop", token],
-      );
-      socket.onopen = () => { setLive(true); liveStateRef.current?.(true); };
-      socket.onmessage = (e) => {
-        try {
-          liveEventRef.current?.(JSON.parse(e.data) as LiveEvent);
-        } catch {
-          /* malformed event */
-        }
-      };
-      socket.onerror = () => { setLive(false); liveStateRef.current?.(false); };
-      socket.onclose = () => {
+      try {
+        const token = getAuthToken();
+        if (!token) return;
+        const defaultWebSocketUrl =
+          `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
+        const configuredWebSocketUrl = import.meta.env.VITE_WS_URL;
+        const websocketUrl = configuredWebSocketUrl?.startsWith("/")
+          ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${configuredWebSocketUrl}`
+          : configuredWebSocketUrl ?? defaultWebSocketUrl;
+        socket = new WebSocket(
+          websocketUrl,
+          ["hiop", token],
+        );
+        socket.onopen = () => { setLive(true); liveStateRef.current?.(true); };
+        socket.onmessage = (e) => {
+          try {
+            liveEventRef.current?.(JSON.parse(e.data) as LiveEvent);
+          } catch {
+            /* malformed event */
+          }
+        };
+        socket.onerror = () => { setLive(false); liveStateRef.current?.(false); };
+        socket.onclose = () => {
+          setLive(false);
+          liveStateRef.current?.(false);
+          if (!closed) retry = window.setTimeout(connect, 2500);
+        };
+      } catch (e) {
+        // WebSocket connection failed - don't block UI
         setLive(false);
-        liveStateRef.current?.(false);
-        if (!closed) retry = window.setTimeout(connect, 2500);
-      };
+        if (!closed) retry = window.setTimeout(connect, 5000);
+      }
     };
     connect();
     return () => {
       closed = true;
       if (retry) clearTimeout(retry);
-      socket?.close();
+      try {
+        socket?.close();
+      } catch (e) {
+        // Ignore close errors
+      }
     };
   }, []);
   const logout = () => {

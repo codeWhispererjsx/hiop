@@ -14,7 +14,13 @@ export default function DashboardPage() {
   const inventory = useRequest(endpoints.devices, []);
   const [query, setQuery] = useState("");
   
-  const devices = useMemo(() => inventory.data ?? [], [inventory.data]);
+  // Handle both array and paginated response structures
+  const devices = useMemo(() => {
+    if (!inventory.data) return [];
+    if (Array.isArray(inventory.data)) return inventory.data;
+    if (inventory.data.items && Array.isArray(inventory.data.items)) return inventory.data.items;
+    return [];
+  }, [inventory.data]);
   
   const visible = useMemo(() => {
     const value = query.trim().toLowerCase();
@@ -154,8 +160,16 @@ export default function DashboardPage() {
 }
 
 function summarize(devices: Device[], key: (device: Device) => string) {
+  if (!Array.isArray(devices)) return [];
   const counts = new Map<string, number>();
-  devices.forEach((device) => counts.set(key(device), (counts.get(key(device)) ?? 0) + 1));
+  devices.forEach((device) => {
+    try {
+      const keyValue = key(device);
+      counts.set(keyValue, (counts.get(keyValue) ?? 0) + 1);
+    } catch (e) {
+      // Skip if key function fails
+    }
+  });
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
 }
 
