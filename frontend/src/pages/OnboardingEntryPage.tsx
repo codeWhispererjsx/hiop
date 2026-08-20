@@ -101,6 +101,16 @@ export default function OnboardingEntryPage() {
     );
   }
 
+  if (progress.loading) {
+    return (
+      <DashboardLayout>
+        <section className="first-run">
+          <Feedback loading={true} />
+        </section>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <section className="first-run">
