@@ -12,9 +12,6 @@ export { PageTitle } from "../components/PageTitle";
 export default function DashboardPage() {
   const dashboard = useRequest(endpoints.dashboard, []);
   const inventory = useRequest(endpoints.devices, []);
-  const discoveries = useRequest(endpoints.consolidatedDiscoveryDevices, []);
-  const alerts = useRequest(() => endpoints.v3eAlerts({}), []);
-  const incidents = useRequest(() => endpoints.incidents({ page_size: 100 }), []);
   const [query, setQuery] = useState("");
   
   const devices = useMemo(() => inventory.data ?? [], [inventory.data]);
@@ -49,15 +46,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {dashboard.loading || inventory.loading || dashboard.error || inventory.error || !d ? (
-        <Feedback
-          loading={dashboard.loading || inventory.loading}
-          error={dashboard.error || inventory.error}
-          onRetry={() => {
-            void dashboard.reload();
-            void inventory.reload();
-          }}
-        />
+      {dashboard.loading || inventory.loading ? (
+        <Feedback loading={true} />
+      ) : dashboard.error || inventory.error ? (
+        <Feedback error={dashboard.error || inventory.error} />
+      ) : !d ? (
+        <Feedback loading={true} />
       ) : (
         <>
           <section className="asset-summary-grid" aria-label="Asset metrics">
