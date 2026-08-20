@@ -132,8 +132,6 @@ function IncidentList() {
     [rows.data, q, status, priority]
   );
 
-  const paginatedRows = getPaginatedItems(rows.data);
-
   return (
     <DashboardLayout>
       <WorkspaceLinks />
@@ -225,7 +223,7 @@ function IncidentList() {
 
       {rows.loading || rows.error ? (
         <Feedback loading={rows.loading} error={rows.error} />
-      ) : !paginatedRows.length ? (
+      ) : !filtered.length ? (
         <Feedback
           emptyTitle="No incidents found"
           empty="Adjust filters or create your first incident."
