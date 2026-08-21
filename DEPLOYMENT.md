@@ -5,7 +5,7 @@
 HIOP uses a split production architecture. Vercel hosts the compiled React frontend. FastAPI, PostgreSQL, WebSockets, the scheduler, discovery, monitoring, backups, and agent ingestion must run on a persistent backend host.
 
 1. Deploy the backend first and confirm `https://<backend-host>/healthz` returns healthy.
-2. Import the repository root into Vercel. The root `vercel.json` builds `frontend/` and preserves React Router deep links.
+2. Import the repository into Vercel and set **Root Directory** to `frontend`. The root `vercel.json` builds that workspace and preserves React Router deep links.
 3. Add `VITE_API_URL=https://<backend-host>/api/v1` and `VITE_WS_URL=wss://<backend-host>/ws/dashboard` to the Vercel Production environment.
 4. Set the backend `CORS_ORIGINS` to a JSON list containing the exact Vercel production URL and only the preview URLs you intentionally support.
 5. Redeploy after changing either Vite variable because Vite embeds them at build time.
