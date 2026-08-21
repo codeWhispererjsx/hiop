@@ -14,6 +14,7 @@ from app.models.discovery_intelligence import DiscoveryPolicy
 from app.models.local_agent import AgentEnrollment, AgentJob, AgentObservation, LocalAgentRegistration
 from app.models.user import User
 from app.services.audit_service import create_audit_log
+from app.services.billing_service import enforce_limit
 
 admin_router=APIRouter(prefix="/local-agents",tags=["Local Agents"])
 agent_router=APIRouter(prefix="/agent",tags=["Agent Protocol"])
@@ -93,7 +94,7 @@ def list_agents(db:Session=Depends(get_db),user:User=Depends(reader),org=Depends
 
 @admin_router.post("/enrollments",status_code=201)
 def create_enrollment(body:EnrollmentCreate,request:Request,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
-    enrollment_limiter.check(f"enroll:{request.client.host if request.client else 'unknown'}:{actor.id}");_property(db,actor,org,body.property_id)
+    enrollment_limiter.check(f"enroll:{request.client.host if request.client else 'unknown'}:{actor.id}");_property(db,actor,org,body.property_id);enforce_limit(db,org,"agents")
     token=secrets.token_urlsafe(40);row=AgentEnrollment(organization_id=org,property_id=body.property_id,name=body.name.strip(),token_hash=_digest(token),expires_at=datetime.now(timezone.utc)+timedelta(minutes=body.expires_minutes),created_by=actor.id)
     db.add(row);db.flush();create_audit_log(db,actor.username,"AGENT_ENROLLMENT_CREATED","AgentEnrollment",str(row.id),f"Created one-time enrollment for property {body.property_id}");db.commit()
     return {"id":row.id,"enrollment_token":token,"expires_at":row.expires_at,"property_id":row.property_id,"name":row.name}

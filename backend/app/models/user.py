@@ -66,3 +66,7 @@ class User(Base):
         nullable=True,
         default=False
     )
+    email_verified_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    invited_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    invitation_accepted_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
+    tokens_valid_after: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))

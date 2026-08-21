@@ -109,6 +109,12 @@ async function download(path: string) {
 }
 
 export const endpoints = {
+  requestPasswordRecovery:(email:string)=>api<{message:string}>("/accounts/password-recovery/request",{method:"POST",body:JSON.stringify({email})}),
+  confirmPasswordRecovery:(token:string,password:string)=>api<{message:string}>("/accounts/password-recovery/confirm",{method:"POST",body:JSON.stringify({token,password})}),
+  requestEmailVerification:(email:string)=>api<{message:string}>("/accounts/verification/request",{method:"POST",body:JSON.stringify({email})}),
+  confirmEmailVerification:(token:string)=>api<{message:string}>("/accounts/verification/confirm",{method:"POST",body:JSON.stringify({token})}),
+  acceptInvitation:(token:string,username:string,password:string)=>api<{message:string}>("/accounts/invitations/accept",{method:"POST",body:JSON.stringify({token,username,password})}),
+  inviteOrganizationUser:(email:string,role:string,property_id?:string)=>api<{delivery_status:string}>("/accounts/invitations",{method:"POST",body:JSON.stringify({email,role,property_id:property_id||null})}),
   onboardingProgress:()=>api<{state:string;checklist:{organization_configured:boolean;departments_configured:boolean;locations_configured:boolean;agent_connected:boolean;network_configured:boolean;discovery_run:boolean;devices_reviewed:boolean;devices_approved:boolean;monitoring_configured:boolean};current_step:string;progress_percentage:number;steps_completed:number;total_steps:number;started_at:string|null;completed_at:string|null}>("/onboarding/progress"),
   propertyContext:()=>api<import("./types").PropertyContext>("/property-management/context"),
   billingPlans:()=>api<import("./types").BillingPlan[]>("/billing/public/plans"),
@@ -144,6 +150,7 @@ export const endpoints = {
   backupCreate:(body:{backup_type:string;retention_days:number})=>api<import("./types").BackupRecord>("/backup-recovery/backups",{method:"POST",body:JSON.stringify(body)}),
   restoreTestList:()=>api<import("./types").RestoreTest[]>("/backup-recovery/restore-tests"),
   platformAudit:()=>api<import("./types").PlatformAuditEvent[]>("/platform/audit"),
+  securityAccessEvents:(deniedOnly=false)=>api<{items:Array<{id:string;method:string;path:string;status_code:number;source_ip:string|null;organization_id:string|null;property_id:string|null;denied:boolean;duration_ms:number;created_at:string}>;denied:number;total:number}|null>(`/saas-admin/security/access-events?denied_only=${deniedOnly}`),
   operationalVendors:(filters:Record<string,string|undefined>={})=>api<import("./types").OperationalVendor[]>(`/vendors${queryString(filters)}`),
   operationalVendor:(id:string)=>api<import("./types").OperationalVendor>(`/vendors/${id}`),
   createOperationalVendor:(body:Record<string,unknown>)=>api<import("./types").OperationalVendor>("/vendors",{method:"POST",body:JSON.stringify(body)}),

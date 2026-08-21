@@ -118,6 +118,7 @@ export default function LoginPage() {
                 />
               </div>
             </label>
+            <div className="login-form-help"><Link to="/forgot-password">Forgot password?</Link></div>
             <button className="submit-button" type="submit" disabled={busy} aria-busy={busy}>
               {busy ? "Verifying access…" : (
                 <>

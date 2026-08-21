@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
+import Modal from "../components/Modal";
 import { Icon, type IconName } from "../components/Icon";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -17,6 +18,7 @@ export default function UsersPage() {
   const [role, setRole] = useState("all");
   const [active, setActive] = useState("all");
   const [page, setPage] = useState(1);
+  const [inviting,setInviting]=useState(false);
 
   const all = useMemo(() => getPaginatedItems(users.data), [users.data]);
   const rows = useMemo(
@@ -41,7 +43,7 @@ export default function UsersPage() {
   return <DashboardLayout>
     <div className="page-title-row users-title-row">
       <PageTitle eyebrow="Administration" title="Team & access" copy="Manage accounts, access levels, and sign-in availability across HIOP." />
-      {me.data?.role==="admin" && <Link className="primary-action" to="/users/new"><Icon name="users" size={16} />Add user</Link>}
+      {me.data?.role==="admin" && <div className="page-actions"><button className="secondary-action" onClick={()=>setInviting(true)}><Icon name="mail" size={16}/>Invite user</button><Link className="primary-action" to="/users/new"><Icon name="users" size={16} />Add user</Link></div>}
     </div>
 
     <section className="users-summary" aria-label="User account summary">
@@ -74,5 +76,12 @@ export default function UsersPage() {
 
       {rows.length > PAGE_SIZE && <nav className="pagination users-pagination" aria-label="User pages"><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Previous</button>{Array.from({ length: pages }, (_, index) => index + 1).map((number) => <button className={number === currentPage ? "active" : ""} key={number} onClick={() => setPage(number)}>{number}</button>)}<button disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>Next</button></nav>}
     </section>
+    {inviting&&<InviteUser close={()=>setInviting(false)}/>}
   </DashboardLayout>;
+}
+
+function InviteUser({close}:{close:()=>void}){
+  const properties=useRequest(endpoints.propertyContext,[]);const [email,setEmail]=useState("");const [role,setRole]=useState("viewer");const [property,setProperty]=useState("");const [message,setMessage]=useState("");const [busy,setBusy]=useState(false);
+  const submit=async(event:FormEvent)=>{event.preventDefault();setBusy(true);setMessage("");try{const result=await endpoints.inviteOrganizationUser(email,role,property||undefined);setMessage(`Invitation created. Delivery: ${result.delivery_status}.`);setEmail("")}catch(reason){setMessage(reason instanceof Error?reason.message:"Unable to create invitation.")}finally{setBusy(false)}};
+  return <Modal title="Invite organization user" onClose={close}><form className="form-grid" onSubmit={submit}><p className="form-help">The recipient receives a single-use link that expires after 72 hours.</p><label className="field-label">Work email<input type="email" value={email} onChange={event=>setEmail(event.target.value)} required/></label><label className="field-label">Role<select value={role} onChange={event=>setRole(event.target.value)}><option value="viewer">Viewer</option><option value="technician">Technician</option><option value="admin">Organization administrator</option></select></label><label className="field-label">Property access<select value={property} onChange={event=>setProperty(event.target.value)}><option value="">Organization-wide</option>{properties.data?.properties.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{message&&<p role="status">{message}</p>}<div className="modal-actions"><button type="button" className="secondary-action" onClick={close}>Cancel</button><button className="primary-action" disabled={busy}>{busy?"Sending…":"Send invitation"}</button></div></form></Modal>
 }

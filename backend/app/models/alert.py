@@ -66,8 +66,11 @@ class Alert(Base):
 
 class AlertRule(Base):
     __tablename__="alert_rules"
+    __table_args__=(UniqueConstraint("organization_id","property_id","rule_type",name="uq_alert_rule_tenant_scope"),)
     id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),primary_key=True,default=uuid.uuid4)
-    rule_type:Mapped[str]=mapped_column(String(40),unique=True,nullable=False)
+    rule_type:Mapped[str]=mapped_column(String(40),nullable=False)
+    organization_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("organizations.id",ondelete="CASCADE"),index=True)
+    property_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id",ondelete="CASCADE"),index=True)
     name:Mapped[str]=mapped_column(String(120),nullable=False)
     description:Mapped[str]=mapped_column(String(500),nullable=False)
     enabled:Mapped[bool]=mapped_column(Boolean,default=True,server_default="true",nullable=False)

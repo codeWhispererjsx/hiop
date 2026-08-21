@@ -25,8 +25,8 @@ def role_catalog(_: User = Depends(admin)):
 
 
 @router.get("/administration-audit")
-def administration_audit(db: Session = Depends(get_db), _: User = Depends(admin)):
-    return db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(100).all()
+def administration_audit(db: Session = Depends(get_db), actor: User = Depends(admin)):
+    return db.query(AuditLog).filter(AuditLog.organization_id == actor.organization_id).order_by(AuditLog.created_at.desc()).limit(100).all()
 
 
 @router.get("/eligible-assignees", response_model=list[UserResponse])

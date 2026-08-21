@@ -1,5 +1,18 @@
 # HIOP Disaster Recovery Runbook
 
+## Automated production controls
+
+Set `SCHEDULED_BACKUP_ENABLED=true`, mount `BACKUP_DIR` on durable encrypted storage,
+and supply a completely separate `RESTORE_TEST_DATABASE_URL`. HIOP refuses to run a
+restore drill against the primary database and requires the drill database name to
+contain `restore` or `drill`. Backup and restore tooling (`pg_dump` and `pg_restore`)
+must be installed in the persistent backend image.
+
+Restore drills verify that organizations, properties, users, assets, devices, and
+incidents are readable after restoration. Operators must monitor failed backup and
+restore records in Platform Control Center and test regional infrastructure failover
+outside the application at least quarterly.
+
 ## Overview
 
 This runbook provides the operational procedures for recovering HIOP from various failure scenarios. It is designed for platform administrators and operators responsible for HIOP availability and data integrity.

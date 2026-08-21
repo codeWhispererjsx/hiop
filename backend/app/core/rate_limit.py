@@ -52,9 +52,10 @@ login_limiter = FailedLoginLimiter()
 class OperationRateLimiter:
     """Small fixed-window limiter for sensitive administrative operations."""
 
-    def __init__(self, limit: int = 5, window_seconds: int = 60):
+    def __init__(self, limit: int = 5, window_seconds: int = 60, message: str = "Too many requests. Try again later."):
         self.limit = limit
         self.window_seconds = window_seconds
+        self.message = message
         self._attempts: dict[str, deque[float]] = defaultdict(deque)
         self._lock = Lock()
 
@@ -69,7 +70,7 @@ class OperationRateLimiter:
                 retry_after = max(1, int(self.window_seconds - (now - attempts[0])))
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail="Too many directory connection tests. Try again later.",
+                    detail=self.message,
                     headers={"Retry-After": str(retry_after)},
                 )
             attempts.append(now)
@@ -80,3 +81,4 @@ snmp_target_test_limiter = OperationRateLimiter(limit=5, window_seconds=60)
 snmp_manual_poll_limiter = OperationRateLimiter(limit=10, window_seconds=60)
 snmp_identity_limiter = OperationRateLimiter(limit=10, window_seconds=60)
 snmp_cancel_limiter = OperationRateLimiter(limit=20, window_seconds=60)
+api_request_limiter = OperationRateLimiter(limit=300, window_seconds=60)

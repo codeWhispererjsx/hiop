@@ -90,12 +90,20 @@ def events(limit:int=Query(200,ge=1,le=1000),db:Session=Depends(get_db),_=Depend
     if property_id:query=query.filter(Device.property_id==property_id)
     return [{"id":str(x.id),"device_id":str(x.device_id),"event_type":x.event_type,"source":x.source,"value":x.value_numeric,"evidence":x.evidence,"occurred_at":x.occurred_at} for x in query.order_by(MonitoringEvent.occurred_at.desc()).limit(limit)]
 @router.get("/rules")
-def rules(db:Session=Depends(get_db),_=Depends(reader)):return db.query(AlertRule).order_by(AlertRule.name).all()
+def rules(db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    rows=db.query(AlertRule).filter((AlertRule.organization_id==organization_id)|(AlertRule.organization_id.is_(None))).order_by(AlertRule.name).all()
+    selected={row.rule_type:row for row in rows if row.organization_id is None}
+    for row in rows:
+        if row.organization_id==organization_id and row.property_id is None:selected[row.rule_type]=row
+        if property_id and row.organization_id==organization_id and row.property_id==property_id:selected[row.rule_type]=row
+    return list(selected.values())
 @router.put("/rules/{rule_id}")
-def update_rule(rule_id:UUID,payload:RuleUpdate,db:Session=Depends(get_db),user:User=Depends(admin)):
+def update_rule(rule_id:UUID,payload:RuleUpdate,db:Session=Depends(get_db),user:User=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=db.get(AlertRule,rule_id)
-    if not row:raise HTTPException(404,"Alert rule not found")
+    if not row or (row.organization_id is not None and row.organization_id!=organization_id):raise HTTPException(404,"Alert rule not found")
+    if row.organization_id is None:
+        row=AlertRule(rule_type=row.rule_type,name=row.name,description=row.description,organization_id=organization_id,property_id=property_id,severity=row.severity,threshold_value=row.threshold_value,duration_minutes=row.duration_minutes,consecutive_observations=row.consecutive_observations,notify_in_app=row.notify_in_app,notify_email=row.notify_email);db.add(row);db.flush()
     for key,value in payload.model_dump().items():setattr(row,key,value)
-    row.updated_by=str(user.id);row.updated_at=datetime.now(timezone.utc);create_audit_log(db,user.username,"ALERT_RULE_CHANGED","AlertRule",str(row.id),f"Updated predefined rule {row.name}");db.commit();return row
+    row.updated_by=str(user.id);row.updated_at=datetime.now(timezone.utc);create_audit_log(db,user.username,"ALERT_RULE_CHANGED","AlertRule",str(row.id),f"Updated tenant-scoped rule {row.name}",organization_id=organization_id,property_id=property_id);db.commit();return row
 @router.get("/notifications")
 def notifications(db:Session=Depends(get_db),user:User=Depends(reader)):return [{"id":str(x.id),"alert_id":str(x.alert_id),"channel":x.channel,"status":x.delivery_status,"read_at":x.read_at,"created_at":x.created_at} for x in db.query(InAppNotification).filter(InAppNotification.user_id==str(user.id)).order_by(InAppNotification.created_at.desc()).limit(200)]

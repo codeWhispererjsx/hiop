@@ -85,7 +85,13 @@ def user_from_token(db: Session, token: str) -> User | None:
         if revoked:
             return None
     
-    return db.query(User).filter(User.email == payload["sub"], User.is_active.is_(True)).first()
+    user = db.query(User).filter(User.email == payload["sub"], User.is_active.is_(True)).first()
+    if user and user.tokens_valid_after:
+        issued_at = payload.get("iat")
+        issued = datetime.fromtimestamp(issued_at, timezone.utc) if isinstance(issued_at, (int, float)) else None
+        if issued is None or issued < user.tokens_valid_after:
+            return None
+    return user
 
 
 def revoke_token(db: Session, jti: str, user_id: str, reason: str = None):

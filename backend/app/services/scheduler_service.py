@@ -50,6 +50,9 @@ AUTOMATION_DELAY_JOB_PREFIX = "automation_delayed_"
 AUTOMATION_OUTBOX_JOB_ID = "automation_event_outbox"
 AUTOMATION_RETENTION_JOB_ID = "automation_retention_cleanup"
 DAILY_AUDIT_EMAIL_JOB_ID = "daily_audit_email"
+DATABASE_BACKUP_JOB_ID = "database_backup"
+SAAS_RETENTION_JOB_ID = "saas_security_retention"
+RESTORE_DRILL_JOB_ID = "database_restore_drill"
 INCIDENT_JOB_PREFIX = "incident_"
 INCIDENT_JOB_INTERVALS = {
     "sla_evaluation": 5,
@@ -220,6 +223,44 @@ def scheduled_daily_audit_email():
         send_daily_audit_digest(db)
     except Exception:
         db.rollback();logger.exception("Daily audit email failed")
+    finally:db.close()
+
+
+def scheduled_database_backup():
+    db=SessionLocal()
+    try:
+        from app.services.backup_service import perform_backup
+        record=perform_backup(db,"scheduled",30)
+        if record.status!="success":logger.error("Scheduled database backup failed: %s",record.error)
+    except Exception:db.rollback();logger.exception("Scheduled database backup failed")
+    finally:db.close()
+
+
+def scheduled_restore_drill():
+    db=SessionLocal()
+    try:
+        from app.models.backup import BackupRecord
+        from app.services.backup_service import perform_restore_drill
+        backup=db.query(BackupRecord).filter_by(status="success").order_by(BackupRecord.completed_at.desc()).first()
+        if not backup:
+            logger.warning("Restore drill skipped: no successful backup exists")
+            return
+        result=perform_restore_drill(db,backup,settings.restore_test_database_url)
+        if result.status!="success":logger.error("Restore drill failed: %s",result.error)
+    except Exception:db.rollback();logger.exception("Scheduled restore drill failed")
+    finally:db.close()
+
+
+def scheduled_saas_retention():
+    db=SessionLocal()
+    try:
+        from app.models.audit_log import AuditLog
+        from app.models.saas_security import AccountToken,SecurityAccessEvent
+        now=datetime.now(timezone.utc);audit_cutoff=now-timedelta(days=settings.audit_retention_days);access_cutoff=now-timedelta(days=settings.access_event_retention_days)
+        db.query(AuditLog).filter(AuditLog.created_at<audit_cutoff,AuditLog.archived_at.is_(None),AuditLog.legal_hold.is_(False)).update({AuditLog.archived_at:now},synchronize_session=False)
+        db.query(SecurityAccessEvent).filter(SecurityAccessEvent.created_at<access_cutoff).delete(synchronize_session=False)
+        db.query(AccountToken).filter(AccountToken.expires_at<now-timedelta(days=7)).delete(synchronize_session=False);db.commit()
+    except Exception:db.rollback();logger.exception("SaaS retention cleanup failed")
     finally:db.close()
 
 
@@ -1404,6 +1445,11 @@ def start_scheduler():
         scheduler.add_job(scheduled_automation_outbox,"interval",minutes=1,id=AUTOMATION_OUTBOX_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
         scheduler.add_job(scheduled_automation_retention,"cron",hour=4,id=AUTOMATION_RETENTION_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
         scheduler.add_job(scheduled_daily_audit_email,"interval",minutes=5,id=DAILY_AUDIT_EMAIL_JOB_ID,replace_existing=True,max_instances=1,coalesce=True,misfire_grace_time=300)
+        scheduler.add_job(scheduled_saas_retention,"cron",hour=3,id=SAAS_RETENTION_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
+        if settings.scheduled_backup_enabled:
+            scheduler.add_job(scheduled_database_backup,"cron",hour=settings.scheduled_backup_hour_utc,id=DATABASE_BACKUP_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
+        if settings.scheduled_backup_enabled and settings.restore_test_database_url:
+            scheduler.add_job(scheduled_restore_drill,"interval",days=settings.restore_drill_interval_days,id=RESTORE_DRILL_JOB_ID,replace_existing=True,max_instances=1,coalesce=True)
         recover_stale_incident_runs(db)
         reconcile_incident_jobs()
         reconcile_discovery_intelligence_jobs()

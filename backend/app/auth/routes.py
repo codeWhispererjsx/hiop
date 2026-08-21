@@ -1,4 +1,5 @@
 import logging
+from app.core.config import settings
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status, Header
 from sqlalchemy.orm import Session
@@ -49,6 +50,10 @@ def login(
             detail="Password change required. Please change your password before continuing."
         )
 
+    if settings.require_email_verification and not user.email_verified_at:
+        login_limiter.failure(client)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Verify your email before signing in.")
+
     login_limiter.success(client)
     user.last_login_at = datetime.now(timezone.utc)
     create_audit_log(db, user.username, "LOGIN_SUCCESS", "User", user.id, "Authenticated successfully")
@@ -57,7 +62,9 @@ def login(
     access_token = create_access_token(
         data={
             "sub": user.email,
-            "role": user.role
+            "role": user.role,
+            "uid": user.id,
+            "organization_id": str(user.organization_id) if user.organization_id else None,
         }
     )
 

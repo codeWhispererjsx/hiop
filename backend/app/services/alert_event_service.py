@@ -6,6 +6,8 @@ from app.models.device import Device
 from app.models.network_scan import NetworkScan
 from app.models.port_intelligence import PortDeviceAssociation
 from app.models.user import User
+from app.models.hierarchy import Property
+from app.models.property_access import UserPropertyAccess
 from app.services.monitoring_health_service import device_health
 from app.services.settings_service import _all, _group
 
@@ -18,7 +20,10 @@ def _history(db,alert,action,actor,previous,current,reason):db.add(AlertHistory(
 
 def _notify(db:Session,alert:Alert,rule:AlertRule):
     if rule.notify_in_app:
-        for user in db.query(User).filter(User.is_active.is_(True)).all():db.add(InAppNotification(alert_id=alert.id,user_id=user.id,delivery_status="delivered"))
+        query=db.query(User).filter(User.is_active.is_(True),User.organization_id==rule.organization_id) if rule.organization_id else db.query(User).filter(User.is_active.is_(True))
+        if rule.property_id:
+            query=query.join(UserPropertyAccess,UserPropertyAccess.user_id==User.id).filter(UserPropertyAccess.property_id==rule.property_id,UserPropertyAccess.enabled.is_(True))
+        for user in query.all():db.add(InAppNotification(alert_id=alert.id,user_id=user.id,delivery_status="delivered"))
     if rule.notify_email:
         config=_group(_all(db),"notifications");recipient=config.get("recipient_email")
         note=InAppNotification(alert_id=alert.id,user_id=None,channel="email",delivery_status="pending");db.add(note)
@@ -43,7 +48,13 @@ def evaluate_scan(db:Session,device:Device,scan:NetworkScan):
     existing_event=db.query(MonitoringEvent).filter_by(source_type="network_scan",source_id=str(scan.id),event_type=event_type).first()
     if existing_event:return {"event":existing_event,"opened":0,"resolved":0,"duplicate_prevented":True}
     event=MonitoringEvent(device_id=device.id,event_type=event_type,source="ICMP",source_type="network_scan",source_id=str(scan.id),value_numeric=scan.response_time,evidence={"status":scan.status,"latency_ms":scan.response_time},occurred_at=scan.scanned_at or datetime.now(timezone.utc));db.add(event)
-    rules={row.rule_type:row for row in db.query(AlertRule).filter(AlertRule.enabled.is_(True)).all()};recent=db.query(NetworkScan).filter(NetworkScan.device_id==device.id).order_by(NetworkScan.scanned_at.desc()).limit(20).all();opened=resolved=0
+    prop=db.get(Property,device.property_id) if device.property_id else None;organization_id=prop.organization_id if prop else None
+    available=db.query(AlertRule).filter(AlertRule.enabled.is_(True),((AlertRule.organization_id==organization_id)|(AlertRule.organization_id.is_(None)))).all()
+    rules={row.rule_type:row for row in available if row.organization_id is None}
+    for row in available:
+        if row.organization_id==organization_id and row.property_id is None:rules[row.rule_type]=row
+        if device.property_id and row.organization_id==organization_id and row.property_id==device.property_id:rules[row.rule_type]=row
+    recent=db.query(NetworkScan).filter(NetworkScan.device_id==device.id).order_by(NetworkScan.scanned_at.desc()).limit(20).all();opened=resolved=0
     offline=rules.get("device_offline")
     if offline:
         required=1 if any(word in device.device_type.lower() for word in ("switch","router","firewall")) else offline.consecutive_observations

@@ -147,6 +147,14 @@ class Settings(BaseSettings):
     # Tenant/Multi-tenancy Settings
     base_domain: str = "localhost"
     enable_subdomain_routing: bool = True  # Enabled for testing
+    commercial_enforcement_enabled: bool = False
+    require_email_verification: bool = False
+    audit_retention_days: int = Field(default=2555, ge=365, le=3650)
+    access_event_retention_days: int = Field(default=90, ge=30, le=3650)
+    scheduled_backup_enabled: bool = False
+    scheduled_backup_hour_utc: int = Field(default=2, ge=0, le=23)
+    restore_drill_interval_days: int = Field(default=30, ge=7, le=365)
+    restore_test_database_url: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -20,7 +20,7 @@ class EmailServiceError(Exception):
         self.safe_message = safe_message or message
 
 
-def send_email(
+def _send_email_raw(
     subject: str,
     body: str,
     recipient: str | None = None,
@@ -168,6 +168,25 @@ def send_email(
         "safe_message": "Email delivery failed after maximum retries",
         "attempts": max_retries
     }
+
+
+def send_email(subject: str, body: str, recipient: str | None = None, max_retries: int = None) -> dict:
+    """Deliver email and persist provider-neutral delivery health metadata."""
+    result = _send_email_raw(subject, body, recipient, max_retries)
+    try:
+        from datetime import datetime, timezone
+        from app.db.database import SessionLocal
+        from app.models.system_health import NotificationDelivery
+        destination = recipient or settings.email_recipient
+        status_value = getattr(result.get("status"), "value", result.get("status", "failed"))
+        db = SessionLocal()
+        try:
+            db.add(NotificationDelivery(notification_type="email", recipient=destination or "unconfigured", status=status_value, attempted_at=datetime.now(timezone.utc), delivered_at=datetime.now(timezone.utc) if status_value == "sent" else None, retry_count=max(0, int(result.get("attempts", 1))-1), error=None if status_value == "sent" else str(result.get("safe_message", "Delivery failed"))[:500]))
+            db.commit()
+        finally: db.close()
+    except Exception:
+        pass
+    return result
 
 
 def test_email_configuration() -> dict:

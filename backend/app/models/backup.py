@@ -29,7 +29,7 @@ class RestoreTest(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # in_progress, success, failed
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    backup_id: Mapped[uuid.UUID | None] = mapped_column(UUID, nullable=False)  # References backup_record.id
+    backup_id: Mapped[uuid.UUID | None] = mapped_column(UUID, nullable=True)  # References backup_record.id
     backup_file: Mapped[str] = mapped_column(String(500), nullable=False)
     database_version: Mapped[str | None] = mapped_column(String(50))
     restore_duration_seconds: Mapped[int | None] = mapped_column(Integer)

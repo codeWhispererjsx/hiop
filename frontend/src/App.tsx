@@ -44,6 +44,7 @@ const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
 const BillingPage = lazy(() => import("./pages/BillingPage"));
 const SNMPPage = lazy(() => import("./pages/SNMPPage"));
 const LocalAgentsPage = lazy(() => import("./pages/LocalAgentsPage"));
+const AccountAccessPage = lazy(() => import("./pages/AccountAccessPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -90,6 +91,10 @@ export default function App() {
     <Route path="/pricing" element={<PricingPage />} />
     <Route path="/get-started" element={<GetStartedPage />} />
     <Route path="/login" element={<LoginPage />} />
+    <Route path="/forgot-password" element={<AccountAccessPage mode="forgot" />} />
+    <Route path="/reset-password" element={<AccountAccessPage mode="reset" />} />
+    <Route path="/verify-email" element={<AccountAccessPage mode="verify" />} />
+    <Route path="/accept-invitation" element={<AccountAccessPage mode="invitation" />} />
     <Route path="/app" element={protectedPage(<OnboardingEntryPage />)} />
     <Route path="/dashboard" element={protectedPage(<DashboardPage />)} />
     <Route path="/devices" element={protectedPage(<DevicesPage />)} />

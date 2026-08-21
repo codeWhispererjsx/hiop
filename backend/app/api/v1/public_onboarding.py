@@ -1,5 +1,7 @@
+import hashlib
 import re
-from datetime import datetime, timezone
+import secrets
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -12,8 +14,10 @@ from app.models.hierarchy import Organization, Property
 from app.models.property_access import UserPropertyAccess
 from app.models.user import User
 from app.models.onboarding_state import PropertyOnboardingState, OnboardingState
+from app.models.saas_security import AccountToken
 from app.services.audit_service import create_audit_log
 from app.services.billing_service import present_subscription, start_trial
+from app.services.email_service import send_email
 
 router = APIRouter(prefix="/public/onboarding", tags=["Public customer onboarding"])
 
@@ -75,9 +79,14 @@ def register_customer(payload: PublicOnboardingRequest, db: Session = Depends(ge
             username=payload.admin_username.strip(), email=str(payload.admin_email).lower(),
             hashed_password=hash_password(payload.admin_password), role="admin", is_active=True,
             organization_id=organization.id,
+            email_verified_at=None if settings.require_email_verification else datetime.now(timezone.utc),
         )
         db.add(administrator)
         db.flush()
+        verification_token = None
+        if settings.require_email_verification:
+            verification_token = secrets.token_urlsafe(48)
+            db.add(AccountToken(user_id=administrator.id, purpose="email_verification", token_hash=hashlib.sha256(verification_token.encode()).hexdigest(), expires_at=datetime.now(timezone.utc)+timedelta(hours=24)))
         property_row = Property(
             name=payload.property_name.strip(), code=property_code, organization_id=organization.id,
             city=payload.property_city.strip(), country=payload.country.strip(), timezone=payload.timezone,
@@ -115,7 +124,10 @@ def register_customer(payload: PublicOnboardingRequest, db: Session = Depends(ge
         db.rollback()
         raise
 
-    token = create_access_token({"sub": administrator.username})
+    if verification_token:
+        origin=settings.cors_origins[0].rstrip("/") if settings.cors_origins else "http://localhost:5173"
+        send_email("Verify your HIOP email",f"Verify your email: {origin}/verify-email?token={verification_token}",administrator.email,max_retries=1)
+    token = create_access_token({"sub": administrator.email, "role": administrator.role, "uid": administrator.id, "organization_id": str(organization.id), "property_id": str(property_row.id)})
     return {
         "access_token": token, "token_type": "bearer",
         "organization": {"id": str(organization.id), "name": organization.name, "code": organization.code},

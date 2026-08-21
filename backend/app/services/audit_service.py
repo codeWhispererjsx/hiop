@@ -8,6 +8,7 @@ from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Query, Session
 
 from app.models.audit_log import AuditLog
+from app.models.user import User
 
 
 def create_audit_log(
@@ -16,14 +17,25 @@ def create_audit_log(
     action: str,
     entity_type: str,
     entity_id: str,
-    description: str
+    description: str,
+    *, organization_id=None, property_id=None, event_category: str = "activity",
+    request_id: str | None = None, source_ip: str | None = None,
+    http_method: str | None = None, request_path: str | None = None,
+    response_status: int | None = None,
 ) -> AuditLog:
+    actor_user = db.query(User).filter(User.username == actor).first() if actor and actor not in {"System", "system"} else None
+    if actor_user:
+        organization_id = organization_id or actor_user.organization_id
     audit_log = AuditLog(
         actor=actor,
         action=action,
         entity_type=entity_type,
         entity_id=entity_id,
-        description=description
+        description=description,
+        actor_user_id=actor_user.id if actor_user else None,
+        organization_id=organization_id, property_id=property_id,
+        event_category=event_category, request_id=request_id, source_ip=source_ip,
+        http_method=http_method, request_path=request_path, response_status=response_status,
     )
 
     db.add(audit_log)
@@ -48,10 +60,19 @@ def _filtered_query(
     start_date: datetime | None,
     end_date: datetime | None,
     search: str | None,
+    organization_id=None,
+    property_id=None,
+    include_archived: bool = False,
 ) -> Query:
     if start_date and end_date and start_date > end_date:
         raise HTTPException(400, "Start date must be before or equal to end date")
     query = db.query(AuditLog)
+    if organization_id is not None:
+        query = query.filter(AuditLog.organization_id == organization_id)
+    if property_id is not None:
+        query = query.filter(AuditLog.property_id == property_id)
+    if not include_archived:
+        query = query.filter(AuditLog.archived_at.is_(None))
     if actor:
         query = query.filter(AuditLog.actor == actor)
     if action:
@@ -70,9 +91,20 @@ def _filtered_query(
     return query
 
 
-def _summary(db: Session) -> dict[str, int]:
+def _scoped(db: Session, organization_id=None, property_id=None, include_archived=False):
+    query = db.query(AuditLog)
+    if organization_id is not None:
+        query = query.filter(AuditLog.organization_id == organization_id)
+    if property_id is not None:
+        query = query.filter(AuditLog.property_id == property_id)
+    if not include_archived:
+        query = query.filter(AuditLog.archived_at.is_(None))
+    return query
+
+
+def _summary(db: Session, organization_id=None, property_id=None, include_archived=False) -> dict[str, int]:
     today_start = datetime.combine(datetime.now(timezone.utc).date(), time.min, tzinfo=timezone.utc)
-    values = db.query(
+    values = _scoped(db, organization_id, property_id, include_archived).with_entities(
         func.count(AuditLog.id),
         func.sum(case((AuditLog.created_at >= today_start, 1), else_=0)),
         func.sum(case((func.lower(AuditLog.entity_type) == "user", 1), else_=0)),
@@ -90,21 +122,22 @@ def _summary(db: Session) -> dict[str, int]:
     }
 
 
-def _options(db: Session) -> dict[str, list[str]]:
+def _options(db: Session, organization_id=None, property_id=None, include_archived=False) -> dict[str, list[str]]:
     def values(column):
-        return [value for value, in db.query(column).filter(column.isnot(None), column != "").distinct().order_by(column).all()]
+        query = _scoped(db, organization_id, property_id, include_archived).with_entities(column)
+        return [value for value, in query.filter(column.isnot(None), column != "").distinct().order_by(column).all()]
     return {"actors": values(AuditLog.actor), "actions": values(AuditLog.action), "entity_types": values(AuditLog.entity_type)}
 
 
-def list_logs(db: Session, actor=None, action=None, entity_type=None, entity_id=None, start_date=None, end_date=None, search=None, page=1, page_size=25, sort_order="desc"):
-    query = _filtered_query(db, actor, action, entity_type, entity_id, start_date, end_date, search)
+def list_logs(db: Session, actor=None, action=None, entity_type=None, entity_id=None, start_date=None, end_date=None, search=None, page=1, page_size=25, sort_order="desc", organization_id=None, property_id=None, include_archived=False):
+    query = _filtered_query(db, actor, action, entity_type, entity_id, start_date, end_date, search, organization_id, property_id, include_archived)
     total = query.count()
     pages = max(1, math.ceil(total / page_size))
     if total and page > pages:
         raise HTTPException(400, "Requested page is outside the filtered result set")
     order = AuditLog.created_at.asc() if sort_order == "asc" else AuditLog.created_at.desc()
     items = query.order_by(order, AuditLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-    return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages, "summary": _summary(db), "options": _options(db)}
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages, "summary": _summary(db, organization_id, property_id, include_archived), "options": _options(db, organization_id, property_id, include_archived)}
 
 
 def get_log(db: Session, audit_id: str) -> AuditLog:

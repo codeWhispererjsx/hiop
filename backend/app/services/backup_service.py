@@ -1,12 +1,15 @@
 import logging
 import os
 import subprocess
+import shutil
+import secrets
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.models.backup import BackupRecord, RestoreTest
@@ -250,20 +253,16 @@ def perform_backup(
     retention_days: int = 14,
 ) -> BackupRecord:
     """Execute a database backup and record the result."""
-    # Get PostgreSQL configuration from environment
-    pg_host = os.environ.get("PGHOST", "localhost")
-    pg_database = os.environ.get("PGDATABASE", "hiop")
-    pg_user = os.environ.get("PGUSER", "hiop")
+    from sqlalchemy.engine import make_url
+    from app.core.config import settings
+    database_url = make_url(settings.database_url.replace("postgresql+psycopg2://", "postgresql://"))
+    pg_host = os.environ.get("PGHOST") or database_url.host or "localhost"
+    pg_database = os.environ.get("PGDATABASE") or database_url.database or "hiop"
+    pg_user = os.environ.get("PGUSER") or database_url.username or "hiop"
     backup_dir = os.environ.get("BACKUP_DIR", "./backups")
     
     # Extract password from DATABASE_URL if not set
-    if "PGPASSWORD" not in os.environ:
-        from app.core.config import settings
-        # Parse DATABASE_URL to extract password
-        import re
-        match = re.search(r'postgresql://[^:]+:([^@]+)@', settings.database_url)
-        if match:
-            os.environ["PGPASSWORD"] = match.group(1)
+    pg_password = os.environ.get("PGPASSWORD") or database_url.password or ""
     
     # Record backup start
     backup_record = record_backup_start(db, backup_type, retention_days)
@@ -281,19 +280,15 @@ def perform_backup(
         env["PGPASSWORD"] = os.environ.get("PGPASSWORD", "")
         
         # Build pg_dump command with database connection parameters
-        pg_host = os.environ.get("PGHOST", "localhost")
-        pg_user = os.environ.get("PGUSER", "hiop")
-        pg_database = os.environ.get("PGDATABASE", "hiop")
-        
-        # Use the explicit path for PostgreSQL 18 on Windows
-        pg_dump_cmd = r"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe"
-        
-        if not os.path.exists(pg_dump_cmd):
-            raise FileNotFoundError(f"pg_dump not found at {pg_dump_cmd}")
+        pg_dump_cmd = os.environ.get("PG_DUMP_PATH") or shutil.which("pg_dump")
+        if not pg_dump_cmd:
+            windows = r"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe"
+            pg_dump_cmd = windows if os.path.exists(windows) else None
+        if not pg_dump_cmd: raise FileNotFoundError("pg_dump is not installed in the backend runtime")
         
         # Set up environment with password
         backup_env = env.copy()
-        backup_env["PGPASSWORD"] = env.get("PGPASSWORD", "")
+        backup_env["PGPASSWORD"] = pg_password
         
         result = subprocess.run(
             [
@@ -301,6 +296,7 @@ def perform_backup(
                 "-h", pg_host,
                 "-U", pg_user,
                 "-d", pg_database,
+                "-p", str(database_url.port or 5432),
                 "--format=custom",
                 "--no-owner",
                 "--no-acl",
@@ -336,7 +332,7 @@ def perform_backup(
             conn = psycopg2.connect(
                 host=pg_host,
                 user=pg_user,
-                password=env.get("PGPASSWORD", ""),
+                password=pg_password,
                 database=pg_database
             )
             cursor = conn.cursor()
@@ -372,18 +368,17 @@ def verify_backup(file_path: str) -> bool:
         # Verify checksum if available
         checksum_file = f"{file_path}.sha256"
         if Path(checksum_file).exists():
-            result = subprocess.run(
-                ["sha256sum", "-c", checksum_file],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-            if result.returncode != 0:
-                return False
+            import hashlib
+            expected=Path(checksum_file).read_text().strip();digest=hashlib.sha256()
+            with open(file_path,"rb") as stream:
+                for block in iter(lambda:stream.read(1024*1024),b""):digest.update(block)
+            if not secrets.compare_digest(digest.hexdigest(),expected):return False
         
         # Verify backup can be read
+        pg_restore=os.environ.get("PG_RESTORE_PATH") or shutil.which("pg_restore")
+        if not pg_restore:return False
         result = subprocess.run(
-            ["pg_restore", "--list", file_path],
+            [pg_restore, "--list", file_path],
             capture_output=True,
             text=True,
             timeout=60,
@@ -393,3 +388,40 @@ def verify_backup(file_path: str) -> bool:
         
     except Exception:
         return False
+
+
+def perform_restore_drill(db: Session, backup: BackupRecord, target_url: str) -> RestoreTest:
+    """Restore a verified dump only into an explicitly isolated drill database."""
+    from sqlalchemy.engine import make_url
+    from app.core.config import settings
+    primary = make_url(settings.database_url.replace("postgresql+psycopg2://", "postgresql://"))
+    target = make_url(target_url.replace("postgresql+psycopg2://", "postgresql://"))
+    target_name = (target.database or "").lower()
+    if target.render_as_string(hide_password=True) == primary.render_as_string(hide_password=True):
+        raise ValueError("Restore drill target must never be the production database")
+    if not any(marker in target_name for marker in ("restore", "drill")):
+        raise ValueError("Restore drill database name must contain 'restore' or 'drill'")
+    if not backup.file_path or not verify_backup(backup.file_path):
+        raise ValueError("Backup verification failed; restore was not attempted")
+    record = record_restore_test_start(db, backup.file_path, "scheduler")
+    record.backup_id = backup.id
+    db.commit()
+    started = datetime.now(timezone.utc)
+    try:
+        pg_restore = os.environ.get("PG_RESTORE_PATH") or shutil.which("pg_restore")
+        if not pg_restore: raise FileNotFoundError("pg_restore is not installed in the backend runtime")
+        env = os.environ.copy(); env["PGPASSWORD"] = target.password or ""
+        command = [pg_restore, "--clean", "--if-exists", "--no-owner", "--no-acl", "-h", target.host or "localhost", "-p", str(target.port or 5432), "-U", target.username or "hiop", "-d", target.database, backup.file_path]
+        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=3600)
+        if result.returncode != 0: raise RuntimeError(f"pg_restore failed: {result.stderr[-900:]}")
+        engine = create_engine(target_url, pool_pre_ping=True)
+        counts = {}
+        with engine.connect() as connection:
+            for table in ("organizations", "properties", "users", "assets", "devices", "operational_incidents"):
+                counts[table] = connection.execute(text(f'SELECT count(*) FROM "{table}"')).scalar_one()
+            version = connection.execute(text("SELECT version()" )).scalar_one()
+        engine.dispose()
+        duration = int((datetime.now(timezone.utc) - started).total_seconds())
+        return record_restore_test_success(db, record.id, backup.id, duration, counts["organizations"], counts["properties"], counts["users"], counts["assets"], counts["devices"], counts["operational_incidents"], "Verified core table readability after isolated restore", version)
+    except Exception as exc:
+        return record_restore_test_failure(db, record.id, str(exc))

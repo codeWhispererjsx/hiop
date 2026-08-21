@@ -60,10 +60,13 @@ from app.api.v1.backup_recovery import router as backup_recovery_router
 from app.api.v1.email import router as email_router
 from app.api.v1.circuit_breakers import router as circuit_breakers_router
 from app.api.v1.integration_status import router as integration_status_router
+from app.api.v1.account_security import router as account_security_router
+from app.api.v1.saas_administration import router as saas_administration_router
 from app.users.routes import router as users_router
 from app.services.scheduler_service import scheduler
 from app.websocket.connection_manager import manager
 from app.core.tenant_middleware import TenantMiddleware
+from app.core.saas_middleware import SaaSSecurityMiddleware
 
 configure_logging(settings.log_level)
 
@@ -109,12 +112,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(SaaSSecurityMiddleware)
 app.add_middleware(TenantMiddleware)
 
 app.include_router(
     auth_router,
     prefix=settings.api_prefix
 )
+app.include_router(account_security_router, prefix=settings.api_prefix)
+app.include_router(saas_administration_router, prefix=settings.api_prefix)
 
 @app.get("/")
 def root():
