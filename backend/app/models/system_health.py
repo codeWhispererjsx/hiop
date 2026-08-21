@@ -23,7 +23,7 @@ class HealthEvent(Base):
     """Health state transitions for historical analysis."""
     __tablename__ = "health_events"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    component: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    component: Mapped[str] = mapped_column(String(40), nullable=False)
     previous_status: Mapped[str | None] = mapped_column(String(20))
     new_status: Mapped[str] = mapped_column(String(20), nullable=False)
     reason: Mapped[str | None] = mapped_column(String(500))
@@ -36,7 +36,7 @@ class JobExecution(Base):
     """Execution history for critical recurring jobs."""
     __tablename__ = "job_executions"
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    job_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    job_id: Mapped[str] = mapped_column(String(100), nullable=False)
     job_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
     property_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
@@ -55,7 +55,7 @@ class NotificationDelivery(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     notification_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     recipient: Mapped[str] = mapped_column(String(255), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)  # PENDING, SENT, FAILED, RETRYING
+    status: Mapped[str] = mapped_column(String(20), nullable=False)  # PENDING, SENT, FAILED, RETRYING
     attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)

@@ -92,7 +92,7 @@ class Device(Base):
     ad_last_logon_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
     property_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("properties.id", ondelete="SET NULL"), nullable=True, index=True
+        UUID(as_uuid=True), ForeignKey("properties.id", ondelete="SET NULL"), nullable=True
     )
     building_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("buildings.id", ondelete="SET NULL"), nullable=True, index=True)
     floor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("floors.id", ondelete="SET NULL"), nullable=True, index=True)
