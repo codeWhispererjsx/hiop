@@ -9,7 +9,7 @@
     radial-gradient(circle at 84% 82%, color-mix(in srgb, var(--color-maintenance) 18%, transparent), transparent 30%),
     var(--sidebar-bg);
 }
-.login-theme-toggle { position: absolute; z-index: var(--z-sticky); top: var(--space-6); right: var(--space-6); }
+.login-theme-toggle { position: absolute; z-index: var(--z-sticky); top: var(--space-6); right: var(--space-6); width:40px; min-width:40px; height:40px; min-height:40px; }
 .login-page .icon-button { color: var(--text-inverse); border-color: color-mix(in srgb, var(--color-white) 18%, transparent); background: color-mix(in srgb, var(--color-white) 7%, transparent); }
 .login-page .icon-button:hover { color: var(--color-white); border-color: color-mix(in srgb, var(--color-primary) 70%, transparent); background: color-mix(in srgb, var(--color-primary) 24%, transparent); }
 .login-story { position: relative; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding: clamp(var(--space-8), 5vw, 4.75rem); overflow: hidden; }

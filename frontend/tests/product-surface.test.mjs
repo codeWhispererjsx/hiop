@@ -14,7 +14,7 @@ test("the sidebar keeps seven primary pillars and exposes focused submenus", () 
   }
   assert.match(sidebar, /nav-sublink/);
   assert.match(app, /path="\/topology"/);
-  for (const route of ["analytics", "business-intelligence", "cmdb", "snmp", "tickets"]) {
+  for (const route of ["analytics", "business-intelligence", "cmdb", "tickets"]) {
     assert.doesNotMatch(app, new RegExp(`path="/${route}`));
   }
 });

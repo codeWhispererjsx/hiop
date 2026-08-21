@@ -1,7 +1,6 @@
 import { useDeferredValue, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
-import { Icon } from "../components/Icon";
 import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useRequest } from "../hooks/useRequest";
@@ -411,6 +410,10 @@ function ChangeForm() {
 
 function ChangeDetail({ id }: { id: string }) {
   const request = useRequest(() => endpoints.governanceChange(id), [id]);
+  const me = useRequest(endpoints.me, []);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const [actionData,setActionData]=useState({planned_start:"",planned_end:"",validation:"",outcome:"successful",closure_notes:"",rollback_reason:"",rollback_notes:""});
 
   if (request.loading || request.error || !request.data) {
     return (
@@ -421,6 +424,7 @@ function ChangeDetail({ id }: { id: string }) {
   }
 
   const row = request.data;
+  const run=async(action:string,body:Record<string,unknown>={})=>{setBusy(true);setError("");try{await endpoints.governanceChangeAction(id,action,body);await request.reload()}catch(x){setError(x instanceof Error?x.message:"Change action could not be completed")}finally{setBusy(false)}};
 
   return (
     <DashboardLayout>
@@ -428,13 +432,14 @@ function ChangeDetail({ id }: { id: string }) {
       <PageTitle
         eyebrow={row.change_id}
         title={row.title}
-        copy={`${title(row.change_type)} · ${title(row.risk)} risk`}
+        copy={`${title(row.type)} · ${title(row.risk)} risk`}
         action={
           <Link className="secondary-action" to="/changes">
             Back to Changes
           </Link>
         }
       />
+      {error&&<Feedback error={error}/>}
       <section className="panel">
         <header className="section-head">
           <div>
@@ -446,7 +451,7 @@ function ChangeDetail({ id }: { id: string }) {
         <dl className="detail-grid">
           <Dt label="Priority" value={row.priority} />
           <Dt label="Risk" value={row.risk} />
-          <Dt label="Type" value={title(row.change_type)} />
+          <Dt label="Type" value={title(row.type)} />
           <Dt
             label="Planned start"
             value={
@@ -465,6 +470,11 @@ function ChangeDetail({ id }: { id: string }) {
           />
         </dl>
       </section>
+      <section className="panel"><header className="section-head"><h2>Plan and risk controls</h2></header><dl className="detail-grid"><Dt label="Reason" value={row.reason}/><Dt label="Risk explanation" value={row.risk_explanation}/><Dt label="Implementation plan" value={row.implementation_plan}/><Dt label="Validation plan" value={row.validation_plan}/><Dt label="Rollback plan" value={row.rollback_plan}/><Dt label="Validation outcome" value={row.validation_outcome}/><Dt label="Outcome" value={row.outcome}/><Dt label="Closure notes" value={row.closure_notes}/></dl></section>
+      <section className="panel"><header className="section-head"><h2>Potential scheduling conflicts</h2></header>{row.conflicts.length?<div className="linked-list">{row.conflicts.map(conflict=><Link key={conflict.id} to={`/changes/${conflict.id}`}><strong>{conflict.change_id}</strong><small>{conflict.title}</small></Link>)}</div>:<p>No overlapping changes were detected.</p>}</section>
+      <section className="panel"><header className="section-head"><h2>Existing impact evidence</h2></header>{row.impact?<dl className="detail-grid"><Dt label="Directly affected" value={String(row.impact.confirmed_affected)}/><Dt label="Potential impact" value={String(row.impact.potentially_affected)}/><Dt label="Source" value={row.impact.source}/></dl>:<p>No dependency impact evidence is currently available.</p>}</section>
+      <section className="panel"><header className="section-head"><h2>Relationships</h2></header><div className="linked-list">{row.assets?.map(item=><Link key={item.id} to={`/assets/${item.id}`}><strong>{item.asset_number}</strong><small>{item.name}</small></Link>)}{row.services?.map(item=><Link key={item.id} to={`/incidents/services/${item.id}`}><strong>Service</strong><small>{item.name}</small></Link>)}{row.problems?.map(item=><Link key={item.id} to={`/problems/${item.id}`}><strong>{item.problem_number}</strong><small>{item.title}</small></Link>)}{row.incidents?.map(item=><Link key={item.id} to={`/incidents/${item.id}`}><strong>{item.incident_number}</strong><small>{item.title}</small></Link>)}{row.vendors?.map(item=><Link key={item.id} to={`/vendors/${item.id}`}><strong>Vendor</strong><small>{item.name}</small></Link>)}</div></section>
+      {me.data?.role==="admin"&&<section className="panel enterprise-form"><header className="section-head"><h2>Change lifecycle</h2></header>{row.status==="approved"&&<div className="form-grid"><label>Planned start<input type="datetime-local" value={actionData.planned_start} onChange={event=>setActionData({...actionData,planned_start:event.target.value})}/></label><label>Planned end<input type="datetime-local" value={actionData.planned_end} onChange={event=>setActionData({...actionData,planned_end:event.target.value})}/></label></div>}{row.status==="in_progress"&&<><label>Validation outcome<textarea value={actionData.validation} onChange={event=>setActionData({...actionData,validation:event.target.value})}/></label><label>Rollback reason<textarea value={actionData.rollback_reason} onChange={event=>setActionData({...actionData,rollback_reason:event.target.value})}/></label></>}{["completed","failed","rolled_back","cancelled"].includes(row.status)&&<label>Closure notes<textarea value={actionData.closure_notes} onChange={event=>setActionData({...actionData,closure_notes:event.target.value})}/></label>}<div className="row-actions">{row.status==="draft"&&<button disabled={busy} onClick={()=>void run("submit")}>Submit</button>}{row.status==="submitted"&&<button disabled={busy} onClick={()=>void run("review")}>Start review</button>}{row.status==="under_review"&&<button disabled={busy} onClick={()=>void run("approve")}>Approve</button>}{row.status==="approved"&&<button disabled={busy||!actionData.planned_start||!actionData.planned_end} onClick={()=>void run("schedule",{planned_start:actionData.planned_start,planned_end:actionData.planned_end})}>Schedule</button>}{row.status==="scheduled"&&<button disabled={busy} onClick={()=>void run("start")}>Start change</button>}{row.status==="in_progress"&&<><button disabled={busy||actionData.validation.trim().length<3} onClick={()=>void run("complete",{validation:actionData.validation,outcome:actionData.outcome})}>Complete</button><button disabled={busy} onClick={()=>void run("fail")}>Mark failed</button><button disabled={busy||actionData.rollback_reason.trim().length<3} onClick={()=>void run("rollback",{rollback_reason:actionData.rollback_reason,rollback_notes:actionData.rollback_notes})}>Record rollback</button></>}{["completed","failed","rolled_back","cancelled"].includes(row.status)&&<button disabled={busy||actionData.closure_notes.trim().length<3} onClick={()=>void run("close",{closure_notes:actionData.closure_notes})}>Close change</button>}</div></section>}
     </DashboardLayout>
   );
 }

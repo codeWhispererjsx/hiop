@@ -113,6 +113,17 @@ class IncidentSettings(BaseModel):
     incident_reopen_enabled: bool = True
 
 
+class SNMPSettings(BaseModel):
+    enabled: bool = False
+    allow_v1: bool = False
+    allow_legacy_protocols: bool = False
+    default_timeout_seconds: int = Field(5, ge=1, le=300)
+    default_retries: int = Field(1, ge=0, le=20)
+    maximum_concurrent_polls: int = Field(5, ge=1, le=200)
+    metric_retention_days: int = Field(90, ge=1, le=3650)
+    interface_retention_days: int = Field(365, ge=1, le=3650)
+
+
 class SettingsBundle(BaseModel):
     general: GeneralSettings
     organization: OrganizationSettings
@@ -120,6 +131,7 @@ class SettingsBundle(BaseModel):
     notifications: NotificationSettings
     discovery: DiscoverySettings
     incidents: IncidentSettings
+    snmp: SNMPSettings
     email: dict
     security: dict
     application: dict

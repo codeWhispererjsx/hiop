@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+import uuid
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import func, select
@@ -32,6 +33,7 @@ from app.models.multi_property import ExecutiveOperationsCache, GlobalNotificati
 from app.services.multi_property_service import property_ids_for_scope
 from app.models.discovery_intelligence import DiscoveryEvidence,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult
 from app.services.discovery_intelligence_service import DiscoveryIntelligenceService,confidence,parse_json,review_status
+from app.services.health_service import record_job_execution
 
 
 scheduler = BackgroundScheduler()
@@ -1394,6 +1396,7 @@ def start_scheduler():
     db = SessionLocal()
     try:
         from app.models.system_setting import SystemSetting
+        from app.services.health_service import update_scheduler_health
         values = {row.key: row.value for row in db.query(SystemSetting).filter(SystemSetting.key.in_(["network.automatic_scanning", "network.scan_interval_minutes", "discovery.enabled", "discovery.interval_minutes"])).all()}
         configure_scheduler(values.get("network.automatic_scanning", "true") == "true", max(5, int(values.get("network.scan_interval_minutes", "5"))))
         recover_stale_automation_runs(db)
@@ -1404,6 +1407,11 @@ def start_scheduler():
         recover_stale_incident_runs(db)
         reconcile_incident_jobs()
         reconcile_discovery_intelligence_jobs()
+        # Update scheduler health after successful start (gracefully handle if tables don't exist)
+        try:
+            update_scheduler_health(db, scheduler.running)
+        except Exception as e:
+            logger.warning(f"Could not update scheduler health (tables may not exist yet): {e}")
     finally:
         db.close()
     logger.info("HIOP scheduler started")

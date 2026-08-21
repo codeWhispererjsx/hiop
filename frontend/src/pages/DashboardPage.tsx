@@ -160,7 +160,7 @@ function summarize(devices: Device[], key: (device: Device) => string) {
     try {
       const keyValue = key(device);
       counts.set(keyValue, (counts.get(keyValue) ?? 0) + 1);
-    } catch (e) {
+    } catch {
       // Skip if key function fails
     }
   });

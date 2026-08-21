@@ -9,7 +9,7 @@ import type {OperationalVendor,OperationalVendorContact} from "../lib/types";
 import {PageTitle} from "./DashboardPage";
 
 const TYPES=["manufacturer","supplier","service_provider","contractor","other"];
-const label=(value:string)=>value.replaceAll("_"," ").replace(/\b\w/g,x=>x.toUpperCase());
+const label=(value:string|null|undefined)=>value ? value.replaceAll("_"," ").replace(/\b\w/g,x=>x.toUpperCase()) : "Not available";
 export default function VendorsPage(){const {id}=useParams();return id?<VendorDetails id={id}/>:<VendorDirectory/>}
 
 function VendorDirectory(){

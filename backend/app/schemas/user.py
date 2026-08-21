@@ -40,6 +40,26 @@ class UserRoleUpdate(BaseModel):
     role: str = Field(pattern="^(admin|technician|viewer)$")
 
 
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
+    confirm_password: str = Field(min_length=10, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def strong_password(cls, value: str):
+        if not any(char.islower() for char in value) or not any(char.isupper() for char in value) or not any(char.isdigit() for char in value):
+            raise ValueError("Password must include uppercase, lowercase and numeric characters")
+        return value
+
+    @field_validator("confirm_password")
+    @classmethod
+    def passwords_match(cls, value: str, info):
+        if value != info.data.get("new_password"):
+            raise ValueError("Passwords do not match")
+        return value
+
+
 class PasswordReset(BaseModel):
     password: str = Field(min_length=10, max_length=128)
 

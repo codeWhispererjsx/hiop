@@ -136,6 +136,11 @@ export default function TopologyPage() {
           </div>
         }
       />
+      <section className="operational-guide" aria-label="How network topology works">
+        <div><span>What it shows</span><strong>Observed device-to-device relationships</strong><p>HIOP combines discovered neighbors, switches, ports, and confidence evidence into this live operational map.</p></div>
+        <div><span>How to use it</span><strong>Refresh, select, inspect</strong><p>Administrators refresh evidence, then select a node or connection to inspect its source, confidence, port, and inventory record.</p></div>
+        <div><span>Safety</span><strong>Observation only</strong><p>This page reads current evidence. It never changes a switch, VLAN, firewall rule, or production device.</p></div>
+      </section>
       {notice && (
         <div className="topology-v3a-notice" role="status" aria-live="polite">
           {notice}
@@ -148,6 +153,13 @@ export default function TopologyPage() {
           <Kpi label="Verified" value={stats.relationships_verified} />
           <Kpi label="Stale" value={stats.stale_relationships} />
           <Kpi label="Unresolved evidence" value={stats.unresolved_relationships} />
+          <Kpi label="Network devices" value={stats.network_devices ?? 0} />
+          <Kpi label="End devices" value={stats.end_devices ?? 0} />
+          <Kpi label="Confidence avg" value={`${stats.average_confidence ?? 0}%`} />
+          <Kpi label="Active polls" value={stats.active_snmp_polls ?? 0} />
+          <Kpi label="Failed polls" value={stats.failed_snmp_polls ?? 0} />
+          <Kpi label="Avg response time" value={`${stats.average_response_time_ms ?? 0}ms`} />
+          <Kpi label="Data freshness" value={`${stats.data_freshness_minutes ?? 0}m`} />
         </section>
       )}
       <section className="topology-v3a-toolbar" aria-label="Topology controls">
@@ -534,7 +546,7 @@ function TopologyEmpty({ title, copy }: { title: string; copy: string }) {
   );
 }
 
-function Kpi({ label, value }: { label: string; value: number }) {
+function Kpi({ label, value }: { label: string; value: number | string }) {
   return (
     <article>
       <span>{label}</span>

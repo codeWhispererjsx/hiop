@@ -8,6 +8,8 @@ backend/.verify-venv/
 backend/.env
 backend/.env.production
 backend/.env.testing
+.pgpass
+**/.pgpass
 frontend/.env.local
 frontend/.env.*.local
 docker-compose.override.yml
@@ -21,6 +23,7 @@ __pycache__/
 node_modules/
 frontend/node_modules/
 frontend/dist/
+.pnpm-store/
 *.tsbuildinfo
 
 # IDE
@@ -37,6 +40,15 @@ Thumbs.db
 backups/
 *.dump
 *.sql
+*.log
+
+# Local diagnostics (may expose tokens or environment details)
+/check_db.py
+/check_backups.py
+/fix_permissions.py
+/test_auth.py
+/test_backup.py
+/test_backup_direct.py
 
 # Docker
 .docker/

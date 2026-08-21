@@ -103,7 +103,44 @@ label > small, .field-help { color: var(--text-muted); font-size: var(--font-siz
   .topbar { min-height: 64px; height: auto; gap: var(--space-2); padding-block: var(--space-2); }
   .property-context { flex: 1; }.property-context select { width: min(56vw, 25rem); }
   .toolbar-panel, .port-filters { align-items: stretch; flex-direction: column; }
+  .toolbar-panel .search-field { width: 100%; flex: 0 0 auto; }
   .filter-row > * { flex: 1 1 10rem; }
+}
+
+.property-table-wrap { overflow-x: auto; }
+.property-table { width: 100%; min-width: 860px; border-collapse: collapse; }
+.property-table th { color: var(--text-muted); font-size: .72rem; letter-spacing: .06em; text-align: left; text-transform: uppercase; }
+.property-table th, .property-table td { padding: .85rem .75rem; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+.property-table td:first-child strong, .property-table td:first-child small { display: block; }
+.property-table td:first-child small { margin-top: .2rem; color: var(--text-muted); }
+
+.billing-intro { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1rem; margin-bottom: 1rem; }
+.billing-intro > div { min-width: 0; padding: 1rem 1.1rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--surface-raised); }
+.billing-intro span, .billing-intro strong, .billing-intro small { display: block; }
+.billing-intro span { color: var(--text-muted); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; }
+.billing-intro strong { margin: .35rem 0; color: var(--text-primary); }
+.billing-intro small { color: var(--text-muted); line-height: 1.5; }
+.billing-current, .billing-usage, .billing-management { margin-bottom: 1rem; }
+.billing-current .section-head { align-items: flex-start; }
+.billing-usage .usage-grid { margin-top: .75rem; }
+.billing-management .row-actions { margin-top: 1rem; }
+
+.operational-guide { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1px; margin: 0 0 1rem; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--border-subtle); }
+.operational-guide > div { min-width: 0; padding: 1rem 1.1rem; background: var(--surface-raised); }
+.operational-guide span, .operational-guide strong { display: block; }
+.operational-guide span { color: var(--color-primary); font-size: .72rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.operational-guide strong { margin: .35rem 0; color: var(--text-primary); }
+.operational-guide p { margin: 0; color: var(--text-muted); font-size: .84rem; line-height: 1.55; }
+
+@media (max-width: 760px) {
+  .billing-intro { grid-template-columns: 1fr; }
+  .operational-guide { grid-template-columns: 1fr; }
+  .property-table { min-width: 0; }
+  .property-table thead { display: none; }
+  .property-table, .property-table tbody, .property-table tr, .property-table td { display: block; width: 100%; }
+  .property-table tr { padding: .75rem 0; border-bottom: 1px solid var(--border-subtle); }
+  .property-table td { display: grid; grid-template-columns: minmax(7rem,35%) 1fr; gap: .75rem; padding: .4rem .75rem; border: 0; }
+  .property-table td::before { content: attr(data-label); color: var(--text-muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 }
 
 @media (max-width: 560px) {

@@ -20,6 +20,7 @@ from app.services.snmp_client_service import (
 from app.services.snmp_notification_service import notify_snmp
 from app.services.snmp_operational_service import SNMPOperationalService
 from app.services.snmp_runtime import snmp_operation_lock
+from app.services.circuit_breaker import circuit_breaker, CircuitBreakerConfig, get_circuit_breaker, CircuitBreakerError
 from app.websocket.connection_manager import manager
 
 TRANSITIONS = {

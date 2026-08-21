@@ -66,14 +66,17 @@ def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
     for row in rows:
         canonical=by_id.get(row.canonical_result_id) if row.canonical_result_id else row
         mac=re.sub(r"[^0-9a-f]","",(row.mac_address or "").lower());name=(row.primary_hostname or "").strip().rstrip(".").lower()
-        key=f"canonical:{canonical.id}" if row.canonical_result_id or row.id in canonical_ids else None
+        key=f"canonical:{canonical.id}" if canonical and (row.canonical_result_id or row.id in canonical_ids) else None
         if not key:key=mac_index.get(mac) if len(mac)==12 else None
         if not key and name:key=name_index.get(name)
         if not key:key=ip_index.get(row.ip_address)
         if not key:key=f"mac:{mac}" if len(mac)==12 else f"name:{name}" if name else f"ip:{row.ip_address}"
         current=devices.get(key)
         if not current:
-            source=canonical
+            # Legacy rows can retain a canonical_result_id after the canonical
+            # observation has been removed.  Keep the observation usable rather
+            # than turning the whole Discover page into a 500 response.
+            source=canonical or row
             devices[key]={"id":source.id,"result_id":source.id,"job_id":source.job_id,"ip_address":source.ip_address,"primary_hostname":source.primary_hostname,"fqdn":source.fqdn,"dns_status":source.dns_status,"friendly_name":source.friendly_name,"department":source.department,"suggested_department":source.suggested_department,"device_number":source.device_number,"description":source.description,"description_source":source.description_source,"location":source.location,"mac_address":source.mac_address,"vendor":source.vendor,"device_type":source.device_type,"classification":source.classification,"operating_system":source.operating_system,"model":source.model,"serial_number":source.serial_number,"firmware":source.firmware,"uptime_seconds":source.uptime_seconds,"interface_count":source.interface_count,"snmp_enrichment_status":source.snmp_enrichment_status,"last_enriched_at":source.last_enriched_at,"ad_computer_name":source.ad_computer_name,"ad_domain":source.ad_domain,"ad_organizational_unit":source.ad_organizational_unit,"ad_operating_system":source.ad_operating_system,"ad_enabled":source.ad_enabled,"ad_enrichment_status":source.ad_enrichment_status,"ad_last_enriched_at":source.ad_last_enriched_at,"identity_confirmed":source.identity_confirmed,"confidence_level":source.confidence_level,"confidence_reason":source.confidence_reason,"conflict_status":source.conflict_status,"review_status":source.review_status,"confidence_score":source.confidence_score,"confidence_explanation":source.confidence_explanation,"ci_id":source.ci_id,"inventory_device_id":approved_by_result.get(source.id) or approved_by_result.get(row.id),"first_seen_at":source.first_seen_at,"last_seen_at":source.last_seen_at,"observations":1}
         else:
             current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)

@@ -13,11 +13,13 @@ from app.models.property_access import UserPropertyAccess
 from app.models.user import User
 from app.models.onboarding_state import PropertyOnboardingState, OnboardingState
 from app.services.audit_service import create_audit_log
+from app.services.billing_service import present_subscription, start_trial
 
 router = APIRouter(prefix="/public/onboarding", tags=["Public customer onboarding"])
 
 
 class PublicOnboardingRequest(BaseModel):
+    plan_code: str = Field(default="starter", pattern=r"^(starter|core|enterprise)$")
     organization_name: str = Field(min_length=2, max_length=160)
     organization_code: str = Field(min_length=2, max_length=40)
     contact_email: EmailStr
@@ -101,6 +103,11 @@ def register_customer(payload: PublicOnboardingRequest, db: Session = Depends(ge
             steps_completed=1,
         )
         db.add(onboarding_state)
+
+        # A SaaS workspace is not complete without commercial state. Keep the
+        # organization, first property, administrator, and trial atomic so a
+        # failed plan assignment cannot leave an unlicensed tenant behind.
+        subscription = start_trial(db, organization.id, payload.plan_code, administrator)
         
         create_audit_log(db, administrator.username, "CUSTOMER_ONBOARDING_STARTED", "Organization", str(organization.id), "Started onboarding through public registration")
         db.commit()
@@ -114,4 +121,5 @@ def register_customer(payload: PublicOnboardingRequest, db: Session = Depends(ge
         "organization": {"id": str(organization.id), "name": organization.name, "code": organization.code},
         "property": {"id": str(property_row.id), "name": property_row.name, "code": property_row.code},
         "administrator": {"id": administrator.id, "username": administrator.username, "email": administrator.email, "role": "admin"},
+        "subscription": present_subscription(db, subscription),
     }

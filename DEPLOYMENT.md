@@ -1,5 +1,17 @@
 # HIOP Production Deployment
 
+## Vercel frontend deployment
+
+HIOP uses a split production architecture. Vercel hosts the compiled React frontend. FastAPI, PostgreSQL, WebSockets, the scheduler, discovery, monitoring, backups, and agent ingestion must run on a persistent backend host.
+
+1. Deploy the backend first and confirm `https://<backend-host>/healthz` returns healthy.
+2. Import the repository root into Vercel. The root `vercel.json` builds `frontend/` and preserves React Router deep links.
+3. Add `VITE_API_URL=https://<backend-host>/api/v1` and `VITE_WS_URL=wss://<backend-host>/ws/dashboard` to the Vercel Production environment.
+4. Set the backend `CORS_ORIGINS` to a JSON list containing the exact Vercel production URL and only the preview URLs you intentionally support.
+5. Redeploy after changing either Vite variable because Vite embeds them at build time.
+
+The Vercel build intentionally fails when either endpoint is missing or insecure. Do not deploy FastAPI as a Vercel function: HIOP requires persistent processes, WebSockets, scheduled jobs, database pooling, and local-network integrations.
+
 ## Architecture
 
 The supported v1.0 topology is:
@@ -143,6 +155,15 @@ HIOP uses Authorization-header bearer tokens rather than cookies; secure-cookie 
 
 Backend `GET /healthz` is the readiness baseline and checks API process, database connectivity, and scheduler state. Discovery is reported only as configured; this endpoint does not claim that a hotel network or integration is reachable.
 
+**System Health API:** HIOP now provides comprehensive system health monitoring via:
+- Platform Control Center → System Health
+- API: `/system-health/platform` (platform administrators)
+- API: `/system-health/organizations/{org_id}` (organization administrators)
+
+**Health states:** HEALTHY, DEGRADED, STALE, FAILED, NOT_CONFIGURED, UNKNOWN
+
+**Components monitored:** API, Database, Scheduler, Discovery, Monitoring, Alert Processing, Notifications, Agents, Backup
+
 Monitor:
 
 - HTTP status and latency for `/health` and `/healthz`
@@ -152,14 +173,34 @@ Monitor:
 - scheduler scan completion/failure messages and age of `last_scan`
 - PostgreSQL connections, locks, storage, replication/backup age, and slow queries
 - container restarts, CPU, memory, disk, and network reachability
+- System Health component status (API, Database, Scheduler, Backup, etc.)
+- Backup age and verification status
+- Agent connectivity and queue status
 
 Logs are JSON on stdout/stderr and include timestamp, level, logger, and message. Route application/access/error/security streams in the log collector using the logger field. Never enable SQL echo (`DEBUG=true`) in production or collect Authorization/WebSocket protocol headers.
 
 ## Backup and recovery
 
+**Important:** See [DISASTER_RECOVERY_RUNBOOK.md](DISASTER_RECOVERY_RUNBOOK.md) for comprehensive disaster recovery procedures.
+
 Back up PostgreSQL outside the source tree and container volume. `scripts/backup-postgres.sh` creates a permission-restricted custom-format dump, checksum, and age-based retention. Provide `PGHOST`, `PGDATABASE`, `PGUSER`, and `PGPASSWORD` securely. Store encrypted copies off-host and define RPO/RTO with the hotel.
 
+**Backup tracking:** HIOP now tracks backup operations in the database. Monitor backup status via:
+- Platform Control Center → Backup & Recovery
+- API: `/backup-recovery/health`
+
+**Backup states:**
+- HEALTHY: Recent successful backup, verified checksum
+- DEGRADED: Backup too old (>48 hours)
+- FAILED: Last backup failed
+- UNKNOWN: No backup record found
+
+**Current RPO:** 24 hours (based on daily backup schedule)
+**Current RTO:** 34-70 minutes (restore + migrations + validation)
+
 Test restoration quarterly in an isolated database. `scripts/restore-postgres.sh` requires an explicit `CONFIRM_RESTORE=RESTORE_HIOP`, verifies the checksum when present, and performs a destructive clean restore. Take a rollback backup and stop application writes first. After restore, run `alembic upgrade head`, start HIOP, verify `/health`, authenticate, open each module, and confirm scan/audit continuity before reopening traffic.
+
+**Secret recovery:** Application secrets (database passwords, encryption keys, API keys) must be recovered through the organization's secure secret-management system. Do NOT store secrets in application backups. If encryption keys are lost, encrypted data cannot be recovered—this is an operational requirement.
 
 There are no uploaded assets in HIOP v1.0. Back up deployment manifests, encrypted environment/secrets through their owning platform, TLS certificates according to CA policy, and operational runbooks. Never include secrets or dumps in Git.
 

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Feedback } from "./components/Feedback";
 import { hasUsableToken } from "./lib/auth";
 import { endpoints } from "./lib/api";
@@ -61,6 +61,18 @@ function RoleProtected({ children, roles }: { children: ReactNode; roles: User["
   return children;
 }
 
+function ScrollToRouteTop() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (hash) {
+      window.requestAnimationFrame(() => document.getElementById(hash.slice(1))?.scrollIntoView());
+      return;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname, hash]);
+  return null;
+}
+
 export default function App() {
   const navigate = useNavigate();
   useEffect(() => {
@@ -72,7 +84,7 @@ export default function App() {
   const protectedPage = (page: ReactNode) => <Protected>{page}</Protected>;
   const roleProtectedPage = (page: ReactNode, roles: User["role"][]) =>
     <Protected><RoleProtected roles={roles}>{page}</RoleProtected></Protected>;
-  return <Suspense fallback={<Feedback loading />}><Routes>
+  return <Suspense fallback={<Feedback loading />}><ScrollToRouteTop /><Routes>
     <Route path="/" element={<PublicHomePage />} />
     <Route path="/features" element={<FeaturesPage />} />
     <Route path="/pricing" element={<PricingPage />} />

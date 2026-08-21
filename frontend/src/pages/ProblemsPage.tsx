@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
+import { Icon } from "../components/Icon";
 import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { useRequest } from "../hooks/useRequest";
@@ -239,8 +240,10 @@ function ProblemForm() {
     () => (incidentId ? endpoints.serviceIncident(incidentId) : Promise.resolve(null)),
     [incidentId]
   );
-
-  // Simplified problem form - full implementation would be similar to IncidentForm
+  const [form, setForm] = useState({title:"",description:"",problem_statement:"",priority:"medium",category:"other",assigned_team:""});
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const submit=async(event:FormEvent)=>{event.preventDefault();setBusy(true);setError("");try{const incident=source.data;const row=await endpoints.createOperationalProblem({...form,assigned_team:form.assigned_team||null,source:incident?"incident":"manual",incident_id:incident?.id??null,asset_id:incident?.asset_id??null,service_id:incident?.service_id??null});nav(`/problems/${row.id}`)}catch(x){setError(x instanceof Error?x.message:"Problem could not be created")}finally{setBusy(false)}};
   return (
     <DashboardLayout>
       <MaintainLinks />
@@ -249,13 +252,18 @@ function ProblemForm() {
         title="Create problem"
         copy="Document underlying causes and known errors."
       />
-      <Feedback empty="Problem form implementation pending." />
+      {source.loading?<Feedback loading/>:<form className="panel enterprise-form" onSubmit={event=>void submit(event)}>{error&&<Feedback error={error}/>} {source.data&&<p className="inline-notice">Context inherited from incident <strong>{source.data.incident_number}</strong>. The incident remains a separate record.</p>}<div className="form-grid"><label>Title<input required minLength={3} value={form.title} onChange={event=>setForm({...form,title:event.target.value})}/></label><label>Priority<select value={form.priority} onChange={event=>setForm({...form,priority:event.target.value})}>{priorities.map(value=><option key={value}>{value}</option>)}</select></label><label>Category<select value={form.category} onChange={event=>setForm({...form,category:event.target.value})}>{categories.map(value=><option key={value}>{value}</option>)}</select></label><label>Assigned team<input value={form.assigned_team} onChange={event=>setForm({...form,assigned_team:event.target.value})}/></label></div><label>Problem statement<textarea required minLength={3} rows={4} value={form.problem_statement} onChange={event=>setForm({...form,problem_statement:event.target.value})} placeholder="Describe the recurring or significant underlying problem."/></label><label>Description<textarea rows={4} value={form.description} onChange={event=>setForm({...form,description:event.target.value})}/></label><div className="row-actions"><Link className="secondary-action" to="/problems">Cancel</Link><button className="primary-action" disabled={busy}>{busy?"Creating…":"Create problem"}</button></div></form>}
     </DashboardLayout>
   );
 }
 
 function ProblemDetail({ id }: { id: string }) {
   const request = useRequest(() => endpoints.operationalProblem(id), [id]);
+  const me = useRequest(endpoints.me, []);
+  const [fields,setFields]=useState({root_cause:"",workaround:"",resolution:"",follow_up_notes:""});
+  const [note,setNote]=useState("");
+  const [error,setError]=useState("");
+  const [busy,setBusy]=useState(false);
 
   if (request.loading || request.error || !request.data) {
     return (
@@ -266,6 +274,8 @@ function ProblemDetail({ id }: { id: string }) {
   }
 
   const row = request.data;
+  const save=async()=>{setBusy(true);setError("");try{await endpoints.updateOperationalProblem(id,fields);await request.reload()}catch(x){setError(x instanceof Error?x.message:"Problem could not be updated")}finally{setBusy(false)}};
+  const transition=async(target_status:string)=>{setBusy(true);setError("");try{await endpoints.transitionOperationalProblem(id,{target_status,resolution:target_status==="resolved"?(fields.resolution||row.resolution):undefined});await request.reload()}catch(x){setError(x instanceof Error?x.message:"Status could not be updated")}finally{setBusy(false)}};
 
   return (
     <DashboardLayout>
@@ -280,6 +290,7 @@ function ProblemDetail({ id }: { id: string }) {
           </Link>
         }
       />
+      {error&&<Feedback error={error}/>}
       <section className="panel">
         <header className="section-head">
           <div>
@@ -297,6 +308,10 @@ function ProblemDetail({ id }: { id: string }) {
           <Dt label="Vendor" value={row.vendor?.name || "Not specified"} />
         </dl>
       </section>
+      <section className="panel"><header className="section-head"><h2>Investigation and resolution</h2></header><dl className="detail-grid"><Dt label="Root cause" value={row.root_cause}/><Dt label="Workaround" value={row.workaround}/><Dt label="Corrective resolution" value={row.resolution}/><Dt label="Follow-up notes" value={row.follow_up_notes}/></dl>{me.data?.role==="admin"&&<div className="enterprise-form"><label>Root cause<textarea value={fields.root_cause} onChange={event=>setFields({...fields,root_cause:event.target.value})}/></label><label>Workaround<textarea value={fields.workaround} onChange={event=>setFields({...fields,workaround:event.target.value})}/></label><label>Corrective resolution<textarea value={fields.resolution} onChange={event=>setFields({...fields,resolution:event.target.value})}/></label><label>Follow-up notes<textarea value={fields.follow_up_notes} onChange={event=>setFields({...fields,follow_up_notes:event.target.value})}/></label><div className="row-actions"><button className="secondary-action" disabled={busy} onClick={()=>void save()}>Save investigation</button>{states.filter(state=>state!==row.status).map(state=><button key={state} disabled={busy||(state==="resolved"&&!fields.resolution&&!row.resolution)} onClick={()=>void transition(state)}>{title(state)}</button>)}</div></div>}</section>
+      <section className="panel"><header className="section-head"><h2>Related incidents and assets</h2></header><div className="linked-list">{row.incidents?.map(item=><Link key={item.id} to={`/incidents/${item.id}`}><strong>{item.incident_number}</strong><small>{item.title}</small></Link>)}{row.assets?.map(item=><Link key={item.id} to={`/assets/${item.id}`}><strong>{item.asset_number}</strong><small>{item.name}</small></Link>)}</div>{!row.incidents?.length&&!row.assets?.length&&<p>No related incidents or assets.</p>}</section>
+      <section className="panel"><header className="section-head"><h2>Existing incident impact</h2></header>{row.impact?<dl className="detail-grid"><Dt label="Confirmed affected" value={String(row.impact.confirmed_affected)}/><Dt label="Potential impact" value={String(row.impact.potentially_affected)}/><Dt label="Evidence source" value={row.impact.source}/></dl>:<p>No existing incident impact evidence is available.</p>}</section>
+      {me.data?.role!=="viewer"&&<section className="panel"><h2>Add problem note</h2><form onSubmit={async event=>{event.preventDefault();if(!note.trim())return;setBusy(true);try{await endpoints.addOperationalProblemNote(id,note.trim());setNote("");await request.reload()}catch(x){setError(x instanceof Error?x.message:"Note could not be added")}finally{setBusy(false)}}}><label>Note<textarea required minLength={2} value={note} onChange={event=>setNote(event.target.value)}/></label><button className="primary-action" disabled={busy||note.trim().length<2}>Add note</button></form></section>}
     </DashboardLayout>
   );
 }

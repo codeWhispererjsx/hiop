@@ -17,6 +17,8 @@ const monitorLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Alerts", to: "/alerts", icon: "alerts" },
   { label: "Topology", to: "/topology", icon: "hierarchy" },
   { label: "Segments", to: "/segmentation", icon: "network" },
+  { label: "Performance", to: "/network-performance", icon: "chart" },
+  { label: "SNMP", to: "/snmp", icon: "server" },
 ];
 
 const manageLinks: { label: string; to: string; icon: IconName }[] = [
@@ -32,6 +34,7 @@ const administrationLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Roles & access", to: "/administration/roles", icon: "lock" },
   { label: "Audit log", to: "/administration/audit", icon: "audit" },
   { label: "Billing", to: "/administration/billing", icon: "devices" },
+  { label: "Local Agents", to: "/administration/agents", icon: "network" },
   { label: "Settings", to: "/settings", icon: "server" },
 ];
 
@@ -117,7 +120,6 @@ export default function Sidebar({
             className={({ isActive }) =>
               `nav-link ${isActive ? "active" : ""}`
             }
-            aria-current={({ isActive }) => isActive ? "page" : undefined}
           >
             <Icon name={link.icon} aria-hidden="true" />
             <span>{link.label}</span>
@@ -130,7 +132,6 @@ export default function Sidebar({
             to={link.to}
             onClick={handleNavigation}
             className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`}
-            aria-current={({ isActive }) => isActive ? "page" : undefined}
           >
             <Icon name={link.icon} aria-hidden="true" />
             <span>{link.label}</span>
@@ -143,7 +144,6 @@ export default function Sidebar({
             to={link.to}
             onClick={handleNavigation}
             className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`}
-            aria-current={({ isActive }) => isActive ? "page" : undefined}
           >
             <Icon name={link.icon} aria-hidden="true" />
             <span>{link.label}</span>
@@ -158,7 +158,6 @@ export default function Sidebar({
                 to={link.to}
                 onClick={handleNavigation}
                 className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`}
-                aria-current={({ isActive }) => isActive ? "page" : undefined}
               >
                 <Icon name={link.icon} aria-hidden="true" />
                 <span>{link.label}</span>

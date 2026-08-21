@@ -47,6 +47,11 @@ export default function BillingPage() {
         copy="Review your organization's plan, trial, renewal, usage and commercial limits."
       />
       {error && <Feedback error={error} />}
+      <section className="billing-intro" aria-label="Billing account overview">
+        <div><span>Commercial account</span><strong>One subscription for the organization</strong><small>Property users inherit access from the organization plan.</small></div>
+        <div><span>Secure payments</span><strong>Card details never enter HIOP</strong><small>Checkout and billing documents use the configured provider.</small></div>
+        <div><span>Safe limits</span><strong>Existing records are preserved</strong><small>Reaching a limit blocks new usage; it never deletes operational data.</small></div>
+      </section>
       {current.loading || current.error ? (
         <Feedback loading={current.loading} error={current.error} />
       ) : subscription ? (
@@ -123,7 +128,7 @@ function SubscriptionView({
 
   return (
     <>
-      <section className="panel" aria-label="Current subscription details">
+      <section className="panel billing-current" aria-label="Current subscription details">
         <header className="section-head">
           <div>
             <span>Current plan</span>
@@ -165,7 +170,7 @@ function SubscriptionView({
         </dl>
       </section>
 
-      <section className="panel" aria-label="Usage and limits">
+      <section className="panel billing-usage" aria-label="Usage and limits">
         <h2>Usage and limits</h2>
         <div className="usage-grid">
           {Object.entries(row.usage).map(([key, value]) => (
@@ -182,7 +187,7 @@ function SubscriptionView({
         </div>
       </section>
 
-      <section className="panel" aria-label="Plan management">
+      <section className="panel billing-management" aria-label="Plan management">
         <h2>Manage plan</h2>
         <div className="form-grid">
           <label htmlFor="billing-plan">
@@ -233,7 +238,7 @@ function SubscriptionView({
               aria-label="Cancel subscription"
               aria-busy={busy}
             >
-              {busy ? "Processing…" : "Cancel subscription"}
+              {busy ? "Processing…" : "Cancel at period end"}
             </button>
           )}
         </div>

@@ -468,7 +468,6 @@ function IncidentForm() {
 function IncidentDetails({ id }: { id: string }) {
   const request = useRequest(() => endpoints.serviceIncident(id), [id]);
   const me = useRequest(endpoints.me, []);
-  const users = useRequest(endpoints.users, []);
 
   const [note, setNote] = useState("");
   const [resolution, setResolution] = useState("");
@@ -561,16 +560,17 @@ function IncidentDetails({ id }: { id: string }) {
                   Pause work
                 </button>
               )}
-              {["new", "acknowledged", "in_progress", "on_hold"].includes(
-                row.status
-              ) && (
-                <button onClick={() => void transition("resolved")}>
-                  Resolve
+              {row.status === "resolved" && (
+                <button
+                  disabled={closure.trim().length < 3 || busy}
+                  onClick={() => void transition("closed", { closure_notes: closure.trim() })}
+                >
+                  Close incident
                 </button>
               )}
-              {row.status === "resolved" && (
-                <button onClick={() => void transition("closed")}>
-                  Close
+              {["resolved", "closed"].includes(row.status) && (
+                <button onClick={() => void transition("in_progress", { reason: "Incident reopened" })}>
+                  Reopen
                 </button>
               )}
             </div>
@@ -582,8 +582,10 @@ function IncidentDetails({ id }: { id: string }) {
             <h2>Resolution details</h2>
           </header>
           <dl className="detail-grid">
-            <Dt label="Resolution reason" value={row.resolution_reason} />
-            <Dt label="Resolved by" value={row.resolved_by} />
+            <Dt label="Resolution summary" value={row.resolution_summary} />
+            <Dt label="Root cause notes" value={row.root_cause_notes} />
+            <Dt label="Follow-up notes" value={row.follow_up_notes} />
+            <Dt label="Closure notes" value={row.closure_notes} />
             <Dt
               label="Resolved at"
               value={
@@ -593,6 +595,42 @@ function IncidentDetails({ id }: { id: string }) {
               }
             />
           </dl>
+          {operate && ["new", "acknowledged", "in_progress", "on_hold"].includes(row.status) && (
+            <form onSubmit={(event) => { event.preventDefault(); void transition("resolved", { resolution_summary: resolution.trim() }); }}>
+              <label htmlFor="incident-resolution">
+                Resolution summary
+                <textarea id="incident-resolution" rows={3} required minLength={3} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Describe what restored the service or resolved the issue." />
+              </label>
+              <div className="row-actions"><button className="primary-action" disabled={busy || resolution.trim().length < 3}>Resolve incident</button></div>
+            </form>
+          )}
+          {operate && row.status === "resolved" && (
+            <label htmlFor="incident-closure">
+              Closure notes
+              <textarea id="incident-closure" rows={3} required minLength={3} value={closure} onChange={(event) => setClosure(event.target.value)} placeholder="Confirm validation and acceptance before closing." />
+            </label>
+          )}
+        </article>
+
+        <article className="panel">
+          <header className="section-head"><h2>Business and technical context</h2></header>
+          <dl className="detail-grid">
+            <Dt label="Service" value={row.service_name} />
+            <Dt label="Department" value={row.department} />
+            <Dt label="Location" value={row.location} />
+            <Dt label="Support contact" value={row.vendor?.support_contact} />
+          </dl>
+          <div className="linked-list">
+            {row.asset && <Link to={`/assets/${row.asset.id}`}><strong>Asset</strong><small>{row.asset.asset_number} · {row.asset.name}</small></Link>}
+            {row.device && <Link to={`/devices/${row.device.id}`}><strong>Device</strong><small>{row.device.hostname} · {row.device.ip_address}</small></Link>}
+            {row.vendor && <Link to={`/vendors/${row.vendor.id}`}><strong>Vendor</strong><small>{row.vendor.name}</small></Link>}
+            {row.procurement && <Link to={`/procurement/${row.procurement.id}`}><strong>Procurement</strong><small>{row.procurement.procurement_number} · {row.procurement.title}</small></Link>}
+          </div>
+        </article>
+
+        <article className="panel">
+          <header className="section-head"><h2>Impact</h2></header>
+          {row.impact ? <dl className="detail-grid"><Dt label="Confirmed affected" value={String(row.impact.confirmed_affected)} /><Dt label="Potentially affected" value={String(row.impact.potentially_affected)} /><Dt label="Confidence" value={`${Math.round(row.impact.confidence_score * 100)}%`} /></dl> : <p>Impact evidence is not available for this incident.</p>}
         </article>
 
         <article className="panel">
@@ -968,11 +1006,11 @@ function ServiceForm({
   );
 }
 
-function Dt({ label, v }: { label: string; v: string | null | undefined }) {
+function Dt({ label, v, value }: { label: string; v?: string | null; value?: string | null }) {
   return (
     <div>
       <dt>{label}</dt>
-      <dd>{v || "Not available"}</dd>
+      <dd>{v || value || "Not available"}</dd>
     </div>
   );
 }

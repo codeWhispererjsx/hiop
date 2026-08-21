@@ -1,4 +1,4 @@
-.topology-v3a-kpis{display:grid;grid-template-columns:repeat(5,minmax(130px,1fr));gap:var(--space-3);margin-bottom:var(--space-4)}
+.topology-v3a-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:var(--space-3);margin-bottom:var(--space-4)}
 .topology-v3a-kpis article{padding:var(--space-4);border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface)}
 .topology-v3a-kpis span{display:block;color:var(--text-muted);font-size:var(--font-size-sm)}.topology-v3a-kpis strong{display:block;margin-top:.25rem;font-size:1.65rem}
 .topology-v3a-notice{margin-bottom:var(--space-4);padding:.85rem 1rem;border:1px solid color-mix(in srgb,var(--color-primary) 30%,var(--border));border-radius:var(--radius-md);background:color-mix(in srgb,var(--color-primary) 8%,var(--surface))}

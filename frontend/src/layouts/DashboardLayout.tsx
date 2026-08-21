@@ -82,7 +82,7 @@ export default function DashboardLayout({
           liveStateRef.current?.(false);
           if (!closed) retry = window.setTimeout(connect, 2500);
         };
-      } catch (e) {
+      } catch {
         // WebSocket connection failed - don't block UI
         setLive(false);
         if (!closed) retry = window.setTimeout(connect, 5000);
@@ -94,7 +94,7 @@ export default function DashboardLayout({
       if (retry) clearTimeout(retry);
       try {
         socket?.close();
-      } catch (e) {
+      } catch {
         // Ignore close errors
       }
     };

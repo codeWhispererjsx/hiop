@@ -509,6 +509,14 @@ function Rules({
         </p>
       </header>
 
+      {!canEdit && (
+        <p className="settings-note" role="note">
+          Rule settings are read-only for your account. An Organization Administrator can enable, disable, and tune predefined rules.
+        </p>
+      )}
+
+      {!rows.length && <Feedback emptyTitle="No predefined rules are configured." empty="Alert rules are created by platform configuration; no arbitrary rule scripts are accepted." />}
+
       {rows.map((row) => (
         <article className="admin-entry" key={row.id}>
           <div>

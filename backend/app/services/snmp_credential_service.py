@@ -26,7 +26,7 @@ class SNMPCredentialService:
         except SNMPSecretError as error:
             raise HTTPException(503, "SNMP credential encryption is unavailable.") from error
 
-    def create_credential(self, payload: SNMPCredentialCreate, actor):
+    def create_credential(self, payload: SNMPCredentialCreate, actor, organization_id):
         if payload.version.value == "v1" and not settings.snmp_allow_v1:
             raise HTTPException(400, "SNMPv1 is disabled by security policy.")
         if (
@@ -45,6 +45,7 @@ class SNMPCredentialService:
             exclude={"community", "authentication_secret", "privacy_secret"},
         )
         values.update(self._encrypted(payload))
+        values["organization_id"] = organization_id
         row = SNMPCredential(**values, created_by=actor.id, updated_by=actor.id)
         self.db.add(row)
         create_audit_log(self.db, actor.username, "SNMP_CREDENTIAL_CREATED", "SNMPCredential", str(row.id), f"Created SNMP credential profile '{row.name}'.")
@@ -52,6 +53,9 @@ class SNMPCredentialService:
             self.db.commit()
         except IntegrityError as error:
             self.db.rollback()
+            # Check if it's the organization-scoped unique constraint violation
+            if "uq_snmp_credentials_org_name" in str(error.orig):
+                raise HTTPException(409, "An SNMP credential with this name already exists in your organization.") from error
             raise HTTPException(409, "An SNMP credential with this name already exists.") from error
         self.db.refresh(row)
         return row

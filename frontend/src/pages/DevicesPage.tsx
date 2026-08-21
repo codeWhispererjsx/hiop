@@ -28,8 +28,9 @@ export default function DevicesPage() {
   const [condition, setCondition] = useState("All");
   const [warranty, setWarranty] = useState("All");
 
+  const all = useMemo(() => getPaginatedItems(assets.data), [assets.data]);
   const rows = useMemo(() => 
-    getPaginatedItems(assets.data).filter((row) => {
+    all.filter((row) => {
       const searchable = [
         row.asset_number,
         row.asset_tag,
@@ -52,10 +53,8 @@ export default function DevicesPage() {
         (warranty === "All" || row.warranty_status === warranty)
       );
     }), 
-    [getPaginatedItems(assets.data), query, status, type, department, location, health, vendor, condition, warranty]
+    [all, query, status, type, department, location, health, vendor, condition, warranty]
   );
-  
-  const all = getPaginatedItems(assets.data);
   const admin = me.data?.role === "admin";
 
   return (

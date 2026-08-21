@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.database import SessionLocal
 from app.models.user import User
+from app.models.revoked_token import RevokedToken
 
 
 ALGORITHM = "HS256"
@@ -76,7 +77,26 @@ def user_from_token(db: Session, token: str) -> User | None:
     payload = decode_access_token(token)
     if payload is None or not isinstance(payload.get("sub"), str):
         return None
+    
+    # Check if token is revoked
+    jti = payload.get("jti")
+    if jti:
+        revoked = db.query(RevokedToken).filter(RevokedToken.jti == jti).first()
+        if revoked:
+            return None
+    
     return db.query(User).filter(User.email == payload["sub"], User.is_active.is_(True)).first()
+
+
+def revoke_token(db: Session, jti: str, user_id: str, reason: str = None):
+    """Revoke a token by its JTI."""
+    revoked_token = RevokedToken(
+        jti=jti,
+        user_id=user_id,
+        reason=reason
+    )
+    db.add(revoked_token)
+    db.commit()
 
 
 def get_db():

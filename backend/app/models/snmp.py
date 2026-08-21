@@ -154,10 +154,12 @@ class SNMPCredential(Base):
             "security_level IN ('noAuthNoPriv','authNoPriv','authPriv')",
             name="ck_snmp_credential_security_level",
         ),
+        UniqueConstraint("organization_id", "name", name="uq_snmp_credentials_org_name"),
         Index("ix_snmp_credentials_enabled", "enabled"),
+        Index("ix_snmp_credentials_organization_id", "organization_id"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
     version: Mapped[str] = mapped_column(String(8), nullable=False)
     community_encrypted: Mapped[str | None] = mapped_column(Text)
     username: Mapped[str | None] = mapped_column(String(128))
@@ -169,6 +171,7 @@ class SNMPCredential(Base):
     context_name: Mapped[str | None] = mapped_column(String(128))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
     description: Mapped[str | None] = mapped_column(String(500))
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     created_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     updated_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -215,6 +218,7 @@ class SNMPTarget(Base):
         Index("ix_snmp_targets_last_successful_poll_at", "last_successful_poll_at"),
         Index("ix_snmp_targets_enabled", "enabled"),
         Index("ix_snmp_targets_detected_profile_id", "detected_profile_id"),
+        Index("ix_snmp_targets_organization_id", "organization_id"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -231,6 +235,7 @@ class SNMPTarget(Base):
     retries: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
     transport: Mapped[str] = mapped_column(String(8), default="udp", server_default="udp", nullable=False)
     context_name: Mapped[str] = mapped_column(String(128), default="", server_default="", nullable=False)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     network_zone_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("network_zones.id", ondelete="SET NULL"))
     location_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("rooms.id", ondelete="SET NULL"))
     last_tested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

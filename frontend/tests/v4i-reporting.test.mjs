@@ -9,7 +9,7 @@ const api=fs.readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
 
 test("reporting is a Manage workspace rather than a new primary pillar",()=>{
   assert.match(app,/path="\/reports"/);
-  assert.match(sidebar,/label:"Reports",to:"\/reports"/);
+  assert.match(sidebar,/label:\s*"Reports",\s*to:\s*"\/reports"/);
   assert.equal((sidebar.match(/label: "Overview"/g)||[]).length,1);
 });
 

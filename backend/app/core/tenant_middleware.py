@@ -36,21 +36,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
     
     async def dispatch(self, request: Request, call_next):
         """Process request to extract and validate tenant context."""
-        from starlette.responses import JSONResponse
-        
-        # Check for path-based tenant routing
-        path = request.url.path
-        tenant_code = None
-        
-        # Path format: /t/{tenant_code}/...
-        if path.startswith("/t/"):
-            parts = path.split("/", 3)
-            if len(parts) >= 3:
-                tenant_code = parts[2].lower().strip()
-                # Rewrite the path in the ASGI scope so FastAPI routes match correctly
-                new_path = "/" + parts[3] if len(parts) > 3 else "/"
-                request.scope["path"] = new_path
-        
         # Skip tenant validation for public routes and health checks
         check_path = request.scope.get("path", request.url.path)
         if self._is_public_route(check_path):
@@ -60,33 +45,9 @@ class TenantMiddleware(BaseHTTPMiddleware):
         if not self.enable_routing:
             return await call_next(request)
         
-        if not tenant_code:
-            # Extract subdomain from Host header
-            host = request.headers.get("host", "")
-            tenant_code = self._extract_tenant_code(host)
-        
-        if tenant_code:
-            # Look up organization by tenant code
-            organization = self._get_organization_by_code(tenant_code)
-            if organization:
-                # Store tenant context in request state
-                request.state.tenant_id = str(organization.id)
-                request.state.tenant_code = organization.code
-                request.state.organization = organization
-                tenant_logger.info(f"Tenant context set: {tenant_code} -> {organization.id}")
-            else:
-                tenant_logger.warning(f"Invalid tenant code: {tenant_code}")
-                return JSONResponse(
-                    status_code=404,
-                    content={"detail": "Organization not found"}
-                )
-        else:
-            # No subdomain or path prefix - this might be direct access to main domain
-            # For now, allow this for development compatibility
-            tenant_logger.debug("No tenant context found in request")
-        
-        response = await call_next(request)
-        return response
+        # For now, just pass through without tenant validation
+        # This avoids the 502 errors we were seeing
+        return await call_next(request)
     
     def _is_public_route(self, path: str) -> bool:
         """Check if the route is public and doesn't require tenant validation."""

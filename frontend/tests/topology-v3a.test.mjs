@@ -35,7 +35,7 @@ test("users can inspect neighbors and open the same inventory device",()=>{
 });
 
 test("refresh is administrator controlled and topology remains observation-only",()=>{
-  assert.match(page,/user\?\.role==="admin"/);
+  assert.match(page,/user\?\.role\s*===\s*"admin"/);
   assert.match(page,/Topology is observation-only/);
   assert.doesNotMatch(page,/change VLAN|restart device|configure port|manual link/i);
 });

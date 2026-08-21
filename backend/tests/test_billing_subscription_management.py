@@ -42,7 +42,7 @@ def test_provider_boundary_fails_closed_without_real_configuration():
 
 def test_public_onboarding_starts_configured_plan_trial_atomically():
     source=(ROOT/"app/api/v1/public_onboarding.py").read_text(encoding="utf-8")
-    # P9 removed billing integration from public onboarding
-    assert "plan_code" not in source
-    assert "start_trial" not in source
+    assert "plan_code" in source
+    assert "start_trial(db, organization.id, payload.plan_code, administrator)" in source
+    assert '"subscription": present_subscription(db, subscription)' in source
     assert "PropertyOnboardingState" in source

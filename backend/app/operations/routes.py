@@ -7,7 +7,7 @@ from app.api.dependencies import get_db
 from app.core.security import get_current_user, require_roles
 from app.models.alert import Alert
 from app.models.user import User
-from app.schemas.settings import DiscoverySettings, GeneralSettings, IncidentSettings, NetworkSettings, NotificationSettings, OrganizationSettings, PublicSettings, SettingsBundle, SystemHealth
+from app.schemas.settings import DiscoverySettings, GeneralSettings, IncidentSettings, NetworkSettings, NotificationSettings, OrganizationSettings, PublicSettings, SettingsBundle, SNMPSettings, SystemHealth
 from app.services.audit_service import create_audit_log
 from app.services import settings_service
 from app.services.scheduler_service import configure_discovery_scheduler, configure_scheduler
@@ -81,6 +81,11 @@ def update_discovery(payload: DiscoverySettings, db: Session = Depends(get_db), 
 @router.put("/settings/incidents", response_model=SettingsBundle)
 def update_incidents(payload: IncidentSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
     return save_settings_group(db, user, "incidents", payload)
+
+
+@router.put("/settings/snmp", response_model=SettingsBundle)
+def update_snmp(payload: SNMPSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
+    return save_settings_group(db, user, "snmp", payload)
 
 
 @router.get("/settings/system-health", response_model=SystemHealth)

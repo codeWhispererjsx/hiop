@@ -1,4 +1,5 @@
 import ipaddress
+import uuid
 from datetime import datetime, timezone
 from time import monotonic
 from copy import copy
@@ -28,10 +29,13 @@ class SNMPTargetService:
         self.db = db
         self.client_factory = client_factory
 
-    def _references(self, values: dict):
+    def _references(self, values: dict, organization_id: uuid.UUID):
         credential = self.db.get(SNMPCredential, values.get("credential_id"))
         if not credential or not credential.enabled:
             raise HTTPException(400, "Enabled SNMP credential was not found.")
+        # Verify credential belongs to the same organization
+        if credential.organization_id != organization_id:
+            raise HTTPException(403, "Credential belongs to a different organization.")
         requested_version = values.get("version")
         requested_version = getattr(requested_version, "value", requested_version)
         if requested_version and requested_version != credential.version:
@@ -50,9 +54,10 @@ class SNMPTargetService:
         if not ip.is_private:
             raise HTTPException(400, "Public SNMP targets are not permitted.")
 
-    def create_target(self, payload: SNMPTargetCreate, actor):
+    def create_target(self, payload: SNMPTargetCreate, actor, organization_id):
         values = payload.model_dump(mode="json")
-        self._references(values)
+        values["organization_id"] = organization_id
+        self._references(values, organization_id)
         self._authorized(values["ip_address"])
         row = SNMPTarget(**values, created_by=actor.id, updated_by=actor.id)
         self.db.add(row)
@@ -67,9 +72,9 @@ class SNMPTargetService:
 
     def update_target(self, row: SNMPTarget, payload: SNMPTargetUpdate, actor):
         values = payload.model_dump(exclude_unset=True)
-        merged = {"credential_id": values.get("credential_id", row.credential_id), "version": row.version}
+        merged = {"credential_id": values.get("credential_id", row.credential_id), "version": row.version, "organization_id": row.organization_id}
         merged.update(values)
-        self._references(merged)
+        self._references(merged, row.organization_id)
         self._authorized(values.get("ip_address", row.ip_address))
         for key, value in values.items():
             setattr(row, key, value)

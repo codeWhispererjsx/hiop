@@ -57,7 +57,12 @@ class User(Base):
     last_login_at: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
 
     is_active: Mapped[bool] = mapped_column(
-    Boolean,
-    default=True
-    
-)
+        Boolean,
+        default=True
+    )
+
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=True,
+        default=False
+    )
