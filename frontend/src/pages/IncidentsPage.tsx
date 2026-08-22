@@ -521,169 +521,62 @@ function IncidentDetails({ id }: { id: string }) {
         }
       />
       {error && <Feedback error={error} />}
-      <section className="incident-detail-grid">
-        <article className="panel">
-          <header className="section-head">
-            <div>
-              <h2>Current state</h2>
-              <p>{row.description || "No description supplied."}</p>
+      <section className="ticket-hero panel" aria-label="Ticket summary">
+        <div className="ticket-hero-copy">
+          <div className="ticket-badges"><StatusBadge status={row.status} /><StatusBadge status={row.priority} /><StatusBadge status={row.severity} /></div>
+          <p>{row.description || "No description supplied."}</p>
+        </div>
+        <dl className="ticket-owner-grid">
+          <Dt label="Assigned technician" value={row.assigned_technician || "Unassigned"} />
+          <Dt label="Assigned team" value={row.assigned_team || "No team assigned"} />
+          <Dt label="Service" value={row.service_name || "No service linked"} />
+          <Dt label="Source" value={row.source_alert_id ? "Monitoring alert" : title(row.source)} />
+        </dl>
+      </section>
+
+      <section className="ticket-detail-layout">
+        <div className="ticket-main-column">
+          <article className="panel ticket-workflow-panel">
+            <header className="section-head"><div><span className="section-kicker">Workflow</span><h2>Next action</h2><p>Move this ticket through its operational lifecycle. Every transition is retained in history.</p></div></header>
+            {operate ? <div className="ticket-action-bar">
+              {row.status === "new" && <button className="primary-action" disabled={busy} onClick={() => void transition("acknowledged")}>Acknowledge ticket</button>}
+              {["acknowledged", "on_hold"].includes(row.status) && <button className="primary-action" disabled={busy} onClick={() => void transition("in_progress")}>Start work</button>}
+              {row.status === "in_progress" && <button className="secondary-action" disabled={busy} onClick={() => void transition("on_hold")}>Place on hold</button>}
+              {["resolved", "closed"].includes(row.status) && <button className="secondary-action" disabled={busy} onClick={() => void transition("in_progress", { reason: "Ticket reopened" })}>Reopen ticket</button>}
+              {row.status === "closed" && <p className="ticket-complete-note"><Icon name="check" aria-hidden="true" /> This ticket is closed. Reopen it if work must continue.</p>}
+            </div> : <p className="ticket-readonly-note">You have read-only access to this ticket.</p>}
+          </article>
+
+          <article className="panel ticket-resolution-panel">
+            <header className="section-head"><div><span className="section-kicker">Outcome</span><h2>Resolution & closure</h2><p>Record the technical outcome before the ticket is closed.</p></div></header>
+            {(row.resolution_summary || row.root_cause_notes || row.follow_up_notes || row.closure_notes) && <dl className="ticket-resolution-grid">
+              <Dt label="Resolution summary" value={row.resolution_summary} />
+              <Dt label="Root cause notes" value={row.root_cause_notes} />
+              <Dt label="Follow-up notes" value={row.follow_up_notes} />
+              <Dt label="Closure notes" value={row.closure_notes} />
+            </dl>}
+            {operate && ["new", "acknowledged", "in_progress", "on_hold"].includes(row.status) && <form className="ticket-inline-form" onSubmit={(event) => { event.preventDefault(); void transition("resolved", { resolution_summary: resolution.trim() }); }}>
+              <label htmlFor="incident-resolution"><span>Resolution summary <b>Required</b></span><textarea id="incident-resolution" rows={4} required minLength={3} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Describe what was fixed, restored, or changed." /></label>
+              <div className="row-actions"><button className="primary-action" disabled={busy || resolution.trim().length < 3}>Resolve ticket</button></div>
+            </form>}
+            {operate && row.status === "resolved" && <div className="ticket-inline-form"><label htmlFor="incident-closure"><span>Closure notes <b>Required</b></span><textarea id="incident-closure" rows={4} required minLength={3} value={closure} onChange={(event) => setClosure(event.target.value)} placeholder="Confirm validation, acceptance, and any final handover." /></label><div className="row-actions"><button className="primary-action" disabled={busy || closure.trim().length < 3} onClick={() => void transition("closed", { closure_notes: closure.trim() })}>Close ticket</button></div></div>}
+            {!row.resolution_summary && !operate && <p className="ticket-empty-copy">No resolution has been recorded.</p>}
+          </article>
+
+          <article className="panel ticket-activity-panel">
+            <header className="section-head"><div><span className="section-kicker">History</span><h2>Activity & notes</h2><p>A chronological record of ticket activity.</p></div></header>
+            {operate && <form className="ticket-note-composer" onSubmit={async (event) => { event.preventDefault(); if (!note.trim()) return; await run(() => endpoints.addServiceIncidentNote(id, note)); setNote(""); }}><label htmlFor="incident-note"><span>Add operational note</span><textarea id="incident-note" rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Record investigation, communication, or work performed." /></label><button type="submit" className="primary-action" disabled={busy || !note.trim()}>Add note</button></form>}
+            <div className="incident-timeline">
+              {row.timeline?.length ? row.timeline.slice().reverse().map((event) => <article key={event.id}><time>{new Date(event.timestamp).toLocaleString()}</time><strong>{event.title}</strong><p>{event.summary || "No additional details."}</p><small>{event.author || "System"}</small></article>) : <p className="ticket-empty-copy">No activity has been recorded yet.</p>}
             </div>
-            <StatusBadge status={row.status} />
-          </header>
-          <dl className="detail-grid">
-            <Dt label="Priority" value={title(row.priority)} />
-            <Dt label="Severity" value={title(row.severity)} />
-            <Dt label="Assigned team" value={row.assigned_team} />
-            <Dt label="Technician" value={row.assigned_technician} />
-            <Dt label="Service" value={row.service_name} />
-            <Dt label="Source alert" value={row.source_alert_id} />
-            <Dt
-              label="Time to acknowledge"
-              value={duration(row.time_to_acknowledge_seconds)}
-            />
-            <Dt
-              label="Time to resolve"
-              value={duration(row.time_to_resolve_seconds)}
-            />
-          </dl>
-          {operate && (
-            <div className="incident-actions">
-              {row.status === "new" && (
-                <button onClick={() => void transition("acknowledged")}>
-                  Acknowledge
-                </button>
-              )}
-              {["acknowledged", "on_hold"].includes(row.status) && (
-                <button onClick={() => void transition("in_progress")}>
-                  Start work
-                </button>
-              )}
-              {row.status === "in_progress" && (
-                <button onClick={() => void transition("on_hold")}>
-                  Pause work
-                </button>
-              )}
-              {row.status === "resolved" && (
-                <button
-                  disabled={closure.trim().length < 3 || busy}
-                  onClick={() => void transition("closed", { closure_notes: closure.trim() })}
-                >
-                  Close incident
-                </button>
-              )}
-              {["resolved", "closed"].includes(row.status) && (
-                <button onClick={() => void transition("in_progress", { reason: "Incident reopened" })}>
-                  Reopen
-                </button>
-              )}
-            </div>
-          )}
-        </article>
+          </article>
+        </div>
 
-        <article className="panel">
-          <header className="section-head">
-            <h2>Resolution details</h2>
-          </header>
-          <dl className="detail-grid">
-            <Dt label="Resolution summary" value={row.resolution_summary} />
-            <Dt label="Root cause notes" value={row.root_cause_notes} />
-            <Dt label="Follow-up notes" value={row.follow_up_notes} />
-            <Dt label="Closure notes" value={row.closure_notes} />
-            <Dt
-              label="Resolved at"
-              value={
-                row.resolved_at
-                  ? new Date(row.resolved_at).toLocaleString()
-                  : "Not resolved"
-              }
-            />
-          </dl>
-          {operate && ["new", "acknowledged", "in_progress", "on_hold"].includes(row.status) && (
-            <form onSubmit={(event) => { event.preventDefault(); void transition("resolved", { resolution_summary: resolution.trim() }); }}>
-              <label htmlFor="incident-resolution">
-                Resolution summary
-                <textarea id="incident-resolution" rows={3} required minLength={3} value={resolution} onChange={(event) => setResolution(event.target.value)} placeholder="Describe what restored the service or resolved the issue." />
-              </label>
-              <div className="row-actions"><button className="primary-action" disabled={busy || resolution.trim().length < 3}>Resolve incident</button></div>
-            </form>
-          )}
-          {operate && row.status === "resolved" && (
-            <label htmlFor="incident-closure">
-              Closure notes
-              <textarea id="incident-closure" rows={3} required minLength={3} value={closure} onChange={(event) => setClosure(event.target.value)} placeholder="Confirm validation and acceptance before closing." />
-            </label>
-          )}
-        </article>
-
-        <article className="panel">
-          <header className="section-head"><h2>Business and technical context</h2></header>
-          <dl className="detail-grid">
-            <Dt label="Service" value={row.service_name} />
-            <Dt label="Department" value={row.department} />
-            <Dt label="Location" value={row.location} />
-            <Dt label="Support contact" value={row.vendor?.support_contact} />
-          </dl>
-          <div className="linked-list">
-            {row.asset && <Link to={`/assets/${row.asset.id}`}><strong>Asset</strong><small>{row.asset.asset_number} · {row.asset.name}</small></Link>}
-            {row.device && <Link to={`/devices/${row.device.id}`}><strong>Device</strong><small>{row.device.hostname} · {row.device.ip_address}</small></Link>}
-            {row.vendor && <Link to={`/vendors/${row.vendor.id}`}><strong>Vendor</strong><small>{row.vendor.name}</small></Link>}
-            {row.procurement && <Link to={`/procurement/${row.procurement.id}`}><strong>Procurement</strong><small>{row.procurement.procurement_number} · {row.procurement.title}</small></Link>}
-          </div>
-        </article>
-
-        <article className="panel">
-          <header className="section-head"><h2>Impact</h2></header>
-          {row.impact ? <dl className="detail-grid"><Dt label="Confirmed affected" value={String(row.impact.confirmed_affected)} /><Dt label="Potentially affected" value={String(row.impact.potentially_affected)} /><Dt label="Confidence" value={`${Math.round(row.impact.confidence_score * 100)}%`} /></dl> : <p>Impact evidence is not available for this incident.</p>}
-        </article>
-
-        <article className="panel">
-          <header className="section-head">
-            <h2>Add note</h2>
-          </header>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!note.trim()) return;
-              await run(() => endpoints.addServiceIncidentNote(id, note));
-              setNote("");
-            }}
-          >
-            <label htmlFor="incident-note">
-              Note
-              <textarea
-                id="incident-note"
-                rows={3}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Add an operational note"
-              />
-            </label>
-            <div className="row-actions">
-              <button type="submit" className="primary-action" disabled={busy || !note.trim()}>
-                Add note
-              </button>
-            </div>
-          </form>
-        </article>
-
-        <article className="panel">
-          <header className="section-head">
-            <h2>Incident notes</h2>
-          </header>
-          <div className="detail-notes">
-            {row.notes?.length ? (
-              row.notes.map((note) => (
-                <article key={note.id}>
-                  <time>{new Date(note.created_at).toLocaleString()}</time>
-                  <strong>{note.created_by}</strong>
-                  <p>{note.content}</p>
-                </article>
-              ))
-            ) : (
-              <p>No notes have been recorded yet.</p>
-            )}
-          </div>
-        </article>
+        <aside className="ticket-side-column">
+          <article className="panel ticket-context-panel"><header className="section-head"><div><span className="section-kicker">Context</span><h2>Business & technology</h2></div></header><dl className="ticket-side-facts"><Dt label="Category" value={title(row.category)} /><Dt label="Department" value={row.department} /><Dt label="Location" value={row.location} /><Dt label="Support contact" value={row.vendor?.support_contact} /></dl><div className="ticket-related-links">{row.asset && <Link to={`/assets/${row.asset.id}`}><span>Asset</span><strong>{row.asset.asset_number}</strong><small>{row.asset.name}</small></Link>}{row.device && <Link to={`/devices/${row.device.id}`}><span>Device</span><strong>{row.device.hostname}</strong><small>{row.device.ip_address}</small></Link>}{row.vendor && <Link to={`/vendors/${row.vendor.id}`}><span>Vendor</span><strong>{row.vendor.name}</strong><small>{row.vendor.support_contact || "Support contact unavailable"}</small></Link>}{row.procurement && <Link to={`/procurement/${row.procurement.id}`}><span>Procurement</span><strong>{row.procurement.procurement_number}</strong><small>{row.procurement.title}</small></Link>}{!row.asset && !row.device && !row.vendor && !row.procurement && <p className="ticket-empty-copy">No related operational records.</p>}</div></article>
+          <article className="panel ticket-metrics-panel"><header className="section-head"><div><span className="section-kicker">Timing</span><h2>Response metrics</h2></div></header><dl className="ticket-side-facts"><Dt label="Created" value={new Date(row.created_at).toLocaleString()} /><Dt label="Acknowledged" value={row.acknowledged_at ? new Date(row.acknowledged_at).toLocaleString() : "Not yet"} /><Dt label="Time to acknowledge" value={duration(row.time_to_acknowledge_seconds)} /><Dt label="Time to resolve" value={duration(row.time_to_resolve_seconds)} /></dl></article>
+          <article className="panel ticket-impact-panel"><header className="section-head"><div><span className="section-kicker">Impact</span><h2>Operational reach</h2></div></header>{row.impact ? <dl className="ticket-impact-grid"><Dt label="Confirmed" value={String(row.impact.confirmed_affected)} /><Dt label="Potential" value={String(row.impact.potentially_affected)} /><Dt label="Confidence" value={`${Math.round(row.impact.confidence_score * 100)}%`} /></dl> : <p className="ticket-empty-copy">Impact evidence is not available for this ticket.</p>}</article>
+        </aside>
       </section>
     </DashboardLayout>
   );
