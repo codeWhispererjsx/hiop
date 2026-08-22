@@ -42,7 +42,7 @@ def test_successful_ad_lookup_extracts_computer_description_ou_os_domain_and_evi
     assert outcome.status=="enriched" and outcome.attributes["computer_name"]=="HELOSHAPOSBQT01"
     assert outcome.attributes["organizational_unit"]=="POS" and outcome.attributes["operating_system"]=="Windows 11 Enterprise"
     assert outcome.attributes["domain"]=="ADLOSHA.LOCAL" and outcome.attributes["enabled"] is True
-    assert {row["evidence_type"] for row in outcome.evidence}>={"ad_match","active_directory","description","organizational_unit","operating_system","domain","ad_description_agreement","ad_department_agreement","ad_domain_match"}
+    assert {row["evidence_type"] for row in outcome.evidence}>={"ad_match","active_directory","description","organizational_unit","operating_system","domain","ad_description_agreement","ad_domain_match"}
 
 def test_computer_not_found_and_nonmatching_hostname_are_safe_unavailable():
     assert run_provider(Client([])).error_category=="computer_not_found"
@@ -60,7 +60,7 @@ def test_incomplete_and_disabled_computer_attributes_are_preserved_without_fabri
 
 def test_ou_and_department_suggestion_are_deterministic():
     assert _leaf_ou("CN=PC1,OU=POS,OU=Computers,DC=example,DC=local")=="POS"
-    assert _department("Banquet","POS Terminal 01")=="Banquet"
+    assert _department("Banquet","POS Terminal 01") is None
     assert _department("POS",None) is None
 
 def persisted_result():

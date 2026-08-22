@@ -105,5 +105,9 @@ class ActiveDirectoryDeviceEnrichmentService:
         if hasattr(result,"canonical_result_id"):
             from app.services.device_correlation_service import DeviceCorrelationService
             result=DeviceCorrelationService(self.db).correlate(result,"active_directory_enrichment")
+        from app.models.hierarchy import Property
+        from app.services.device_identity_service import DeviceIdentityService
+        prop=self.db.get(Property,result.property_id) if getattr(result,"property_id",None) else None
+        if prop:DeviceIdentityService(self.db).apply(result,prop.organization_id,actor.username)
         create_audit_log(self.db,actor.username,"ENRICH_DISCOVERY_AD","DiscoveryResult",str(result.id),f"Read-only Active Directory enrichment completed with status {outcome.status}.");self.db.commit();self.db.refresh(result)
         return {"status":outcome.status,"provider":self.provider.name,"device":result,"found":sorted(key for key,value in attrs.items() if value not in (None,"",[],{})),"warnings":outcome.warnings,"evidence_added":len(outcome.evidence),"confidence_score":result.confidence_score}

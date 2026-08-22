@@ -147,14 +147,23 @@ class DeviceCorrelationService:
         root=self.root(decision.canonical);result.canonical_result_id=root.id;self._merge(root,result,source);self.db.flush();return self.refresh(root)
     def confirm(self,result,actor,values):
         root=self.root(result)
-        for field in ("friendly_name","department","device_type"):
+        from app.models.hierarchy import Property
+        from app.services.device_identity_service import DeviceIdentityService
+        prop=self.db.get(Property,root.property_id) if root.property_id else None
+        profile=DeviceIdentityService(self.db).profile(root,prop.organization_id,create=True) if prop else None
+        for field in ("friendly_name","department","device_type","location"):
             value=values.get(field)
             if value:
                 previous=getattr(root,field,None);self._history(root,field,previous,value,"manual_confirmation");setattr(root,field,value)
                 if field=="device_type":root.classification=value
+                if profile:
+                    if field=="friendly_name":profile.friendly_name_source="MANUAL";profile.friendly_name_confidence=100
+                    elif field=="device_type":profile.classification_source="MANUAL";profile.classification_confidence=100
+                    elif field=="department":profile.department_source="MANUAL"
+                    elif field=="location":profile.location_source="MANUAL"
         root.identity_confirmed=True;root.confirmed_by=actor.id;root.confirmed_at=datetime.now(timezone.utc);root.review_status="manually_verified"
         existing=self.db.scalar(select(DiscoveryEvidence).where(DiscoveryEvidence.result_id==root.id,DiscoveryEvidence.evidence_type=="manual_confirmation",DiscoveryEvidence.source=="administrator"))
-        payload={field:getattr(root,field) for field in ("friendly_name","department","device_type")}
+        payload={field:getattr(root,field) for field in ("friendly_name","department","device_type","location")}
         if existing:existing.value=json.dumps(payload);existing.normalized_value=str(actor.id);existing.verified=True
         else:self.db.add(DiscoveryEvidence(result_id=root.id,evidence_type="manual_confirmation",source="administrator",value=json.dumps(payload),normalized_value=str(actor.id),weight=WEIGHTS["manual_confirmation"],verified=True))
         for conflict in self.conflicts(root,open_only=True):conflict.status="resolved";conflict.resolved_by=actor.id;conflict.resolved_at=datetime.now(timezone.utc)

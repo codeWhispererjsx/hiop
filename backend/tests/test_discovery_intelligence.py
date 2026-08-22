@@ -7,7 +7,7 @@ def test_pipeline_has_all_ordered_retryable_stages():
 def test_confidence_is_explainable_and_capped():
     result=confidence(["ping_response","mac_address","vendor_match","hostname_match","snmp","ad_match","cmdb_match","lldp","service_fingerprint","operating_system"]);assert result["score"]==100 and sum(x["weight"] for x in result["contributions"])==115;assert confidence(["ping_response","ping_response"])["score"]==15
 def test_hostname_rules_are_suggestions_and_unknown_names_stay_unknown():
-    assert interpret_hostname("heloshaposbqt01") == {"original_hostname":"heloshaposbqt01","device_type":"Point of Sale","department":"Banquet","device_number":"01","friendly_name":"POS Terminal 01"}
+    assert interpret_hostname("heloshaposbqt01", {"POS":"Point of Sale"}, {"BQT":"Banquet"}) == {"original_hostname":"heloshaposbqt01","device_type":"Point of Sale","department":"Banquet","device_number":"01","friendly_name":"POS Terminal 01"}
     assert interpret_hostname("ordinary-host") is None
 def test_discovered_description_preserves_manual_or_inventory_text():
     assert discovered_description("Front desk terminal", "Manual", "DHCP text", "DHCP") == ("Front desk terminal", "Manual")

@@ -7,9 +7,9 @@ from sqlalchemy import func,or_
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.core.tenant import organization_context,property_context
-from app.models.hierarchy import Property
+from app.models.hierarchy import Department,Property
 from app.models.cmdb import CIClass,CIIdentifier,CIType,ConfigurationItem
-from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryIdentityConflict,DiscoveryIdentityHistory,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask
+from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryIdentityConflict,DiscoveryIdentityHistory,DiscoveryIdentityProfile,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask,IdentityRule
 from app.models.topology import Topology,TopologyLink,TopologyNode
 from app.models.snmp import SNMPCredential,SNMPTarget
 from app.models.discovered_device import DiscoveredDevice,DiscoveryStatus
@@ -27,10 +27,11 @@ from app.services.snmp_credential_service import SNMPCredentialService
 from app.services.snmp_target_service import SNMPTargetService
 from app.services.device_correlation_service import DeviceCorrelationService
 from app.services.v1_v2_reconciliation_service import V1V2ReconciliationService
+from app.services.device_identity_service import DeviceIdentityService
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
-reader=require_roles(["platformadmin","admin","technician","viewer"]);operator=require_roles(["admin","technician"]);admin=require_roles(["admin"])
-REVIEW=("needs_review","automatically_identified","partially_identified","manually_verified","ignored","false_positive","duplicate","retired")
+reader=require_roles(["platformadmin","admin","technician","viewer"]);operator=require_roles(["admin","technician"]);admin=require_roles(["admin"]);identity_admin=require_roles(["platformadmin","admin"])
+REVIEW=("needs_review","automatically_identified","partially_identified","manually_verified","rejected","ignored","false_positive","duplicate","retired")
 class PolicyWrite(BaseModel):
     name:str=Field(min_length=2,max_length=180);property_id:UUID|None=None;authorized_ranges:list[str];excluded_ranges:list[str]=[];enabled_stages:list[str]=[];allowed_ports:list[int]=[];max_hosts:int=Field(1024,ge=1,le=65536);concurrency:int=Field(20,ge=1,le=128);timeout_seconds:int=Field(2,ge=1,le=30);rate_limit_per_second:int=Field(20,ge=1,le=500);allow_credentialed:bool=False;enabled:bool=True
 class CredentialWrite(BaseModel):
@@ -48,6 +49,28 @@ class ConfirmIdentityWrite(BaseModel):
     friendly_name:str|None=Field(default=None,max_length=253)
     department:str|None=Field(default=None,max_length=120)
     device_type:str|None=Field(default=None,max_length=80)
+    location:str|None=Field(default=None,max_length=160)
+class IdentityRuleWrite(BaseModel):
+    name:str=Field(min_length=2,max_length=180)
+    property_id:UUID|None=None
+    match_field:str=Field(pattern=r"^(hostname|fqdn|vendor|snmp|ad_ou|device_type)$")
+    match_operator:str=Field(pattern=r"^(contains|starts_with|ends_with|equals)$")
+    pattern:str=Field(min_length=1,max_length=255)
+    output_device_type:str|None=Field(default=None,max_length=80)
+    output_department_id:UUID|None=None
+    output_location:str|None=Field(default=None,max_length=160)
+    friendly_name_template:str=Field(default="{department} {device_type} {sequence}",min_length=3,max_length=255)
+    priority:int=Field(default=100,ge=0,le=1000)
+    confidence:int=Field(default=70,ge=1,le=100)
+    enabled:bool=True
+class IdentityPreviewWrite(BaseModel):
+    property_id:UUID|None=None
+    hostname:str|None=Field(default=None,max_length=255)
+    fqdn:str|None=Field(default=None,max_length=255)
+    vendor:str|None=Field(default=None,max_length=160)
+    snmp:str|None=Field(default=None,max_length=1000)
+    ad_ou:str|None=Field(default=None,max_length=512)
+    device_type:str|None=Field(default=None,max_length=80)
 class OUIWrite(BaseModel): prefix:str=Field(pattern=r"^[0-9A-Fa-f:-]{6,8}$");vendor:str=Field(min_length=2,max_length=180);version:str="manual"
 class DHCPLeaseWrite(BaseModel): ip_address:str;mac_address:str=Field(min_length=12,max_length=17);hostname:str|None=None;source:str=Field(min_length=2,max_length=120);lease_server:str|None=None;starts_at:datetime|None=None;expires_at:datetime|None=None;is_reservation:bool=False;reservation_name:str|None=None;description:str|None=Field(default=None,max_length=2000)
 def page(q,p,s):return {"items":q.offset((p-1)*s).limit(s).all(),"total":q.count(),"page":p,"page_size":s}
@@ -56,11 +79,18 @@ def get(db,model,id,label):
     if not row:raise HTTPException(404,f"{label} not found")
     return row
 def audit(db,user,action,entity,id,message):create_audit_log(db,user.username,action,entity,str(id),message)
+def scoped_result(db,id,organization_id,property_id=None):
+    query=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(DiscoveryResult.id==id,Property.organization_id==organization_id)
+    if property_id is not None:query=query.filter(DiscoveryResult.property_id==property_id)
+    row=query.first()
+    if not row:raise HTTPException(404,"Result not found")
+    return row
 def credential_view(row):return {"id":row.id,"policy_id":row.policy_id,"name":row.name,"credential_type":row.credential_type,"username":row.username,"scope_cidr":row.scope_cidr,"least_privilege_notes":row.least_privilege_notes,"enabled":row.enabled,"last_used_at":row.last_used_at,"created_at":row.created_at,"secret_configured":True}
 def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
     scoped=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(Property.organization_id==organization_id)
     if property_id is not None:scoped=scoped.filter(DiscoveryResult.property_id==property_id)
     rows=scoped.order_by(DiscoveryResult.confidence_score.desc(),DiscoveryResult.last_seen_at.desc()).limit(10000).all();devices={};mac_index={};name_index={};ip_index={}
+    profiles={row.result_id:row for row in db.query(DiscoveryIdentityProfile).filter(DiscoveryIdentityProfile.organization_id==organization_id).all()}
     by_id={row.id:row for row in rows};canonical_ids={row.canonical_result_id for row in rows if row.canonical_result_id}
     approved_by_result=dict(scoped.with_entities(DiscoveryResult.id,DiscoveredDevice.approved_device_id).join(DiscoveredDevice,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveredDevice.approved_device_id.is_not(None)).all())
     for row in rows:
@@ -77,7 +107,8 @@ def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
             # observation has been removed.  Keep the observation usable rather
             # than turning the whole Discover page into a 500 response.
             source=canonical or row
-            devices[key]={"id":source.id,"result_id":source.id,"job_id":source.job_id,"ip_address":source.ip_address,"primary_hostname":source.primary_hostname,"fqdn":source.fqdn,"dns_status":source.dns_status,"friendly_name":source.friendly_name,"department":source.department,"suggested_department":source.suggested_department,"device_number":source.device_number,"description":source.description,"description_source":source.description_source,"location":source.location,"mac_address":source.mac_address,"vendor":source.vendor,"device_type":source.device_type,"classification":source.classification,"operating_system":source.operating_system,"model":source.model,"serial_number":source.serial_number,"firmware":source.firmware,"uptime_seconds":source.uptime_seconds,"interface_count":source.interface_count,"snmp_enrichment_status":source.snmp_enrichment_status,"last_enriched_at":source.last_enriched_at,"ad_computer_name":source.ad_computer_name,"ad_domain":source.ad_domain,"ad_organizational_unit":source.ad_organizational_unit,"ad_operating_system":source.ad_operating_system,"ad_enabled":source.ad_enabled,"ad_enrichment_status":source.ad_enrichment_status,"ad_last_enriched_at":source.ad_last_enriched_at,"identity_confirmed":source.identity_confirmed,"confidence_level":source.confidence_level,"confidence_reason":source.confidence_reason,"conflict_status":source.conflict_status,"review_status":source.review_status,"confidence_score":source.confidence_score,"confidence_explanation":source.confidence_explanation,"ci_id":source.ci_id,"inventory_device_id":approved_by_result.get(source.id) or approved_by_result.get(row.id),"first_seen_at":source.first_seen_at,"last_seen_at":source.last_seen_at,"observations":1}
+            profile=profiles.get(source.id)
+            devices[key]={"id":source.id,"result_id":source.id,"job_id":source.job_id,"ip_address":source.ip_address,"primary_hostname":source.primary_hostname,"fqdn":source.fqdn,"dns_status":source.dns_status,"friendly_name":source.friendly_name,"friendly_name_source":profile.friendly_name_source if profile else "MANUAL" if source.identity_confirmed else None,"friendly_name_confidence":profile.friendly_name_confidence if profile else 100 if source.identity_confirmed else None,"department":source.department,"department_source":profile.department_source if profile else "MANUAL" if source.identity_confirmed else None,"suggested_department":source.suggested_department,"device_number":source.device_number,"description":source.description,"description_source":source.description_source,"location":source.location,"location_source":profile.location_source if profile else "MANUAL" if source.identity_confirmed else None,"mac_address":source.mac_address,"vendor":source.vendor,"device_type":source.device_type,"classification":source.classification,"classification_source":profile.classification_source if profile else "MANUAL" if source.identity_confirmed else None,"classification_confidence":profile.classification_confidence if profile else 100 if source.identity_confirmed else None,"identity_suggestion":profile.suggestion if profile else "{}","operating_system":source.operating_system,"model":source.model,"serial_number":source.serial_number,"firmware":source.firmware,"uptime_seconds":source.uptime_seconds,"interface_count":source.interface_count,"snmp_enrichment_status":source.snmp_enrichment_status,"last_enriched_at":source.last_enriched_at,"ad_computer_name":source.ad_computer_name,"ad_domain":source.ad_domain,"ad_organizational_unit":source.ad_organizational_unit,"ad_operating_system":source.ad_operating_system,"ad_enabled":source.ad_enabled,"ad_enrichment_status":source.ad_enrichment_status,"ad_last_enriched_at":source.ad_last_enriched_at,"identity_confirmed":source.identity_confirmed,"confidence_level":source.confidence_level,"confidence_reason":source.confidence_reason,"conflict_status":source.conflict_status,"review_status":source.review_status,"confidence_score":source.confidence_score,"confidence_explanation":source.confidence_explanation,"ci_id":source.ci_id,"inventory_device_id":approved_by_result.get(source.id) or approved_by_result.get(row.id),"first_seen_at":source.first_seen_at,"last_seen_at":source.last_seen_at,"observations":1}
         else:
             current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)
             current["inventory_device_id"]=current["inventory_device_id"] or approved_by_result.get(row.id)
@@ -165,7 +196,7 @@ def quick_scan(body:QuickScanWrite,db:Session=Depends(get_db),user=Depends(opera
 def consolidated_devices(search:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     rows=consolidated_device_rows(db,organization_id,property_id)
     if search:
-        term=search.lower();rows=[x for x in rows if term in " ".join(str(x.get(k) or "") for k in ("primary_hostname","ip_address","mac_address","vendor","classification","operating_system")).lower()]
+        term=search.lower();rows=[x for x in rows if term in " ".join(str(x.get(k) or "") for k in ("friendly_name","primary_hostname","ip_address","mac_address","vendor","classification","device_type","department","location","operating_system")).lower()]
     return {"items":rows,"total":len(rows)}
 @router.get("/dashboard")
 def dashboard(db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
@@ -186,6 +217,42 @@ def run_reconciliation(db:Session=Depends(get_db),user=Depends(admin)):
         report=service.reconcile(user);audit(db,user,"RECONCILE","v1_v2_devices","all",f"Preserved {report['preserved']} V1 devices and linked {report['linked_existing_devices']} clear V2 observations");db.commit();return report
     except Exception:
         db.rollback();raise
+@router.get("/identity/rules")
+def identity_rules(include_disabled:bool=False,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    rows=DeviceIdentityService(db).scoped_rules(organization_id,property_id,include_disabled)
+    departments={row.id:row.name for row in db.query(Department).filter(Department.organization_id==organization_id).all()}
+    return {"items":[{**{column.name:getattr(row,column.name) for column in row.__table__.columns},"department_name":departments.get(row.output_department_id),"scope":"PROPERTY" if row.property_id else "ORGANIZATION"} for row in rows]}
+@router.post("/identity/rules",status_code=201)
+def create_identity_rule(body:IdentityRuleWrite,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    target_property=body.property_id
+    if target_property:
+        if not db.query(Property).filter(Property.id==target_property,Property.organization_id==organization_id).first():raise HTTPException(422,"Property is outside this organization")
+        if property_id is not None and target_property!=property_id:raise HTTPException(403,"Rule property is outside the active property")
+    if body.output_department_id and not db.query(Department).filter(Department.id==body.output_department_id,Department.organization_id==organization_id,or_(Department.property_id.is_(None),Department.property_id==target_property)).first():raise HTTPException(422,"Department is outside the rule scope")
+    allowed={"department","device_type","location","sequence","hostname"};tokens=set(re.findall(r"\{([^{}]+)\}",body.friendly_name_template))
+    if not tokens.issubset(allowed):raise HTTPException(422,"Template supports only department, device_type, location, sequence, and hostname")
+    row=IdentityRule(**body.model_dump(),organization_id=organization_id,created_by=user.id);db.add(row);db.flush();create_audit_log(db,user.username,"CREATE","identity_rule",str(row.id),"Created scoped naming and classification rule",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+@router.put("/identity/rules/{id}")
+def update_identity_rule(id:UUID,body:IdentityRuleWrite,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=db.query(IdentityRule).filter(IdentityRule.id==id,IdentityRule.organization_id==organization_id).first()
+    if not row:raise HTTPException(404,"Identity rule not found")
+    if property_id is not None and row.property_id!=property_id:raise HTTPException(403,"Rule is outside the active property")
+    if body.property_id and not db.query(Property).filter(Property.id==body.property_id,Property.organization_id==organization_id).first():raise HTTPException(422,"Property is outside this organization")
+    if body.output_department_id and not db.query(Department).filter(Department.id==body.output_department_id,Department.organization_id==organization_id,or_(Department.property_id.is_(None),Department.property_id==body.property_id)).first():raise HTTPException(422,"Department is outside the rule scope")
+    for key,value in body.model_dump().items():setattr(row,key,value)
+    create_audit_log(db,user.username,"UPDATE","identity_rule",str(row.id),"Updated scoped naming and classification rule",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+@router.post("/identity/rules/{id}/disable")
+def disable_identity_rule(id:UUID,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=db.query(IdentityRule).filter(IdentityRule.id==id,IdentityRule.organization_id==organization_id).first()
+    if not row:raise HTTPException(404,"Identity rule not found")
+    if property_id is not None and row.property_id!=property_id:raise HTTPException(403,"Rule is outside the active property")
+    row.enabled=False;create_audit_log(db,user.username,"DISABLE","identity_rule",str(row.id),"Disabled naming and classification rule",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+@router.post("/identity/rules/preview")
+def preview_identity_rule(body:IdentityPreviewWrite,db:Session=Depends(get_db),_=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    target_property=body.property_id or property_id
+    if target_property and not db.query(Property).filter(Property.id==target_property,Property.organization_id==organization_id).first():raise HTTPException(403,"Property is outside your organization")
+    values=body.model_dump();values["primary_hostname"]=values.pop("hostname");values["sys_description"]=values.pop("snmp");values["ad_organizational_unit"]=values.pop("ad_ou")
+    return DeviceIdentityService(db).preview(organization_id,target_property,values)
 @router.get("/policies")
 def policies(db:Session=Depends(get_db),_=Depends(reader)):return {"items":db.query(DiscoveryPolicy).order_by(DiscoveryPolicy.name).all()}
 @router.post("/policies",status_code=201)
@@ -252,27 +319,30 @@ def retry_task(id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
     if row.attempts>=row.max_attempts:raise HTTPException(409,"Retry limit reached")
     row.status="pending";row.next_retry_at=None;row.error=None;row.error_code=None;audit(db,user,"RETRY","discovery_task",id,"Queued discovery task retry");db.commit();return row
 @router.get("/results")
-def results(search:str|None=None,status:str|None=None,page_number:int=Query(1,alias="page",ge=1),page_size:int=Query(25,ge=1,le=100),db:Session=Depends(get_db),_=Depends(reader)):
-    q=db.query(DiscoveryResult).order_by(DiscoveryResult.last_seen_at.desc());q=q.filter_by(review_status=status) if status else q
+def results(search:str|None=None,status:str|None=None,page_number:int=Query(1,alias="page",ge=1),page_size:int=Query(25,ge=1,le=100),db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    q=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(Property.organization_id==organization_id).order_by(DiscoveryResult.last_seen_at.desc());q=q.filter(DiscoveryResult.property_id==property_id) if property_id is not None else q;q=q.filter_by(review_status=status) if status else q
     if search:q=q.filter(or_(DiscoveryResult.ip_address.ilike(f"%{search}%"),DiscoveryResult.primary_hostname.ilike(f"%{search}%"),DiscoveryResult.vendor.ilike(f"%{search}%"),DiscoveryResult.classification.ilike(f"%{search}%")))
     return page(q,page_number,page_size)
 @router.get("/results/{id}")
-def result(id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
-    row=get(db,DiscoveryResult,id,"Result");correlation=DeviceCorrelationService(db);root=correlation.root(row);group_ids=correlation.group_ids(root)
+def result(id:UUID,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=scoped_result(db,id,organization_id,property_id);correlation=DeviceCorrelationService(db);root=correlation.root(row);group_ids=correlation.group_ids(root)
     inventory_device_id=db.query(DiscoveredDevice.approved_device_id).join(DiscoveryResult,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveryResult.id.in_(group_ids),DiscoveredDevice.approved_device_id.is_not(None)).scalar()
-    return {"result":root,"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(group_ids),"inventory_device_id":inventory_device_id,"fingerprint":db.query(DiscoveryFingerprint).filter_by(result_id=root.id).first(),"change_suggestions":db.query(DiscoveryChangeSuggestion).filter_by(result_id=root.id).all()}
+    profile=db.query(DiscoveryIdentityProfile).filter_by(result_id=root.id,organization_id=organization_id).first()
+    return {"result":root,"identity_profile":profile,"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(group_ids),"inventory_device_id":inventory_device_id,"fingerprint":db.query(DiscoveryFingerprint).filter_by(result_id=root.id).first(),"change_suggestions":db.query(DiscoveryChangeSuggestion).filter_by(result_id=root.id).all()}
 @router.get("/inventory/{device_id}")
-def inventory_identity(device_id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
-    row=db.query(DiscoveryResult).join(DiscoveredDevice,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveredDevice.approved_device_id==device_id).order_by(DiscoveryResult.last_seen_at.desc()).first()
+def inventory_identity(device_id:UUID,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    query=db.query(DiscoveryResult).join(DiscoveredDevice,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).join(Property,DiscoveryResult.property_id==Property.id).filter(DiscoveredDevice.approved_device_id==device_id,Property.organization_id==organization_id)
+    if property_id is not None:query=query.filter(DiscoveryResult.property_id==property_id)
+    row=query.order_by(DiscoveryResult.last_seen_at.desc()).first()
     if not row:raise HTTPException(404,"No discovery identity is linked to this inventory device")
     correlation=DeviceCorrelationService(db);root=correlation.root(row);group_ids=correlation.group_ids(root)
-    return {"result":root,"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(group_ids),"inventory_device_id":device_id}
+    return {"result":root,"identity_profile":db.query(DiscoveryIdentityProfile).filter_by(result_id=root.id,organization_id=organization_id).first(),"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(group_ids),"inventory_device_id":device_id}
 @router.post("/results/{id}/enrich")
-def enrich_result(id:UUID,db:Session=Depends(get_db),user=Depends(operator)):
-    return DeviceEnrichmentService(db).enrich(get(db,DiscoveryResult,id,"Result"),user)
+def enrich_result(id:UUID,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    return DeviceEnrichmentService(db).enrich(scoped_result(db,id,organization_id,property_id),user)
 @router.post("/results/{id}/enrich-active-directory")
-def enrich_result_from_active_directory(id:UUID,db:Session=Depends(get_db),user=Depends(operator)):
-    return ActiveDirectoryDeviceEnrichmentService(db).enrich(get(db,DiscoveryResult,id,"Result"),user)
+def enrich_result_from_active_directory(id:UUID,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    return ActiveDirectoryDeviceEnrichmentService(db).enrich(scoped_result(db,id,organization_id,property_id),user)
 def safe_snmp_credential(row):
     return {"id":row.id,"name":row.name,"version":row.version,"username":row.username,"authentication_protocol":row.authentication_protocol,"privacy_protocol":row.privacy_protocol,"security_level":row.security_level,"context_name":row.context_name,"enabled":row.enabled,"description":row.description,"has_community":bool(row.community_encrypted),"has_authentication_secret":bool(row.authentication_secret_encrypted),"has_privacy_secret":bool(row.privacy_secret_encrypted),"created_at":row.created_at,"updated_at":row.updated_at}
 def safe_snmp_target(row):
@@ -290,18 +360,33 @@ def snmp_targets(db:Session=Depends(get_db),_=Depends(admin)):
 def create_snmp_target(body:SNMPTargetCreate,db:Session=Depends(get_db),user=Depends(admin)):
     return safe_snmp_target(SNMPTargetService(db).create_target(body,user))
 @router.post("/results/{id}/review")
-def review(id:UUID,body:ReviewWrite,db:Session=Depends(get_db),user=Depends(admin)):
-    row=get(db,DiscoveryResult,id,"Result");row.review_status=body.status
+def review(id:UUID,body:ReviewWrite,db:Session=Depends(get_db),user=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=scoped_result(db,id,organization_id,property_id);row.review_status=body.status
     if body.classification:
         row.classification=body.classification;fp=db.query(DiscoveryFingerprint).filter_by(result_id=id).first()
         if fp:fp.editable_override=body.classification
     audit(db,user,"REVIEW","discovery_result",id,"Reviewed discovery identification");db.commit();return row
 @router.post("/results/{id}/confirm-identity")
-def confirm_identity(id:UUID,body:ConfirmIdentityWrite,db:Session=Depends(get_db),user=Depends(operator)):
-    row=DeviceCorrelationService(db).confirm(get(db,DiscoveryResult,id,"Result"),user,body.model_dump());audit(db,user,"CONFIRM_IDENTITY","discovery_result",row.id,"Manually confirmed the correlated device identity");db.commit();db.refresh(row);return row
+def confirm_identity(id:UUID,body:ConfirmIdentityWrite,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=DeviceCorrelationService(db).confirm(scoped_result(db,id,organization_id,property_id),user,body.model_dump());create_audit_log(db,user.username,"MANUAL_IDENTITY_OVERRIDE","discovery_result",str(row.id),"Manually confirmed the correlated device identity",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+@router.post("/results/{id}/identity/accept")
+def accept_identity(id:UUID,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=scoped_result(db,id,organization_id,property_id)
+    profile=DeviceIdentityService(db).profile(row,organization_id,create=True);suggestion=parse_json(profile.suggestion,{})
+    if not suggestion or not suggestion.get("friendly_name"):raise HTTPException(409,"No reviewable friendly identity is available")
+    row.friendly_name=suggestion["friendly_name"];row.device_type=suggestion.get("device_type") or row.device_type;row.department=suggestion.get("department") or row.department;row.location=suggestion.get("location") or row.location
+    profile.friendly_name_source=suggestion.get("source") or "RULE";profile.classification_source=suggestion.get("source") or "RULE";profile.department_source=suggestion.get("source") or "RULE";profile.location_source=(suggestion.get("source") or "RULE") if suggestion.get("location") else profile.location_source
+    profile.friendly_name_confidence=suggestion.get("confidence");profile.classification_confidence=suggestion.get("confidence");row.identity_confirmed=True;row.confirmed_by=user.id;row.confirmed_at=datetime.now(timezone.utc);row.review_status="manually_verified"
+    create_audit_log(db,user.username,"ACCEPT_IDENTITY_SUGGESTION","discovery_result",str(row.id),"Accepted explainable friendly identity suggestion",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+@router.post("/results/{id}/identity/reject")
+def reject_identity(id:UUID,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=scoped_result(db,id,organization_id,property_id)
+    profile=DeviceIdentityService(db).profile(row,organization_id,create=True)
+    if profile.friendly_name_source in {"RULE","INFERENCE"}:row.friendly_name=None;profile.friendly_name_source=None;profile.friendly_name_confidence=None
+    row.review_status="rejected";create_audit_log(db,user.username,"REJECT_IDENTITY_SUGGESTION","discovery_result",str(row.id),"Rejected automatic friendly identity suggestion",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
 @router.post("/results/{id}/approve",status_code=201)
-def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Depends(admin)):
-    correlation=DeviceCorrelationService(db);row=correlation.root(get(db,DiscoveryResult,id,"Result"))
+def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    correlation=DeviceCorrelationService(db);row=correlation.root(scoped_result(db,id,organization_id,property_id))
     discovered=db.get(DiscoveredDevice,row.discovered_device_id) if row.discovered_device_id else None
     if discovered and discovered.approved_device_id:
         return db.get(Device,discovered.approved_device_id)
@@ -318,7 +403,7 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
     if duplicate:raise HTTPException(409,"This device is already present in managed inventory")
     suffix=str(row.id).replace("-","")[:12].upper()
     device=Device(
-        asset_tag=f"HIOP-{suffix[:8]}",hostname=(body.friendly_name or row.friendly_name or row.primary_hostname or "Unknown").strip(),
+        asset_tag=f"HIOP-{suffix[:8]}",hostname=(row.primary_hostname or row.fqdn or row.ip_address).strip(),
         device_type=(body.category or row.device_type or row.classification or "Unknown").strip(),brand=(row.vendor or "Unknown").strip(),
         model=(row.model or "Unknown").strip(),serial_number=(row.serial_number or f"UNRESOLVED-{suffix}").strip(),department=((row.department or "Unassigned") if body.department.strip()=="Unassigned" else body.department.strip()),
         location=((row.location or "Unassigned") if body.location.strip()=="Unassigned" else body.location.strip()),ip_address=row.ip_address,

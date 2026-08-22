@@ -44,6 +44,6 @@ def test_approval_retains_enriched_identity_and_is_idempotent():
         first=approve_result(row.id,ApproveWrite(),db,actor)
         second=approve_result(row.id,ApproveWrite(),db,actor)
     assert first is second and len(managed)==1
-    assert first.hostname=="POS Terminal 01" and first.model=="EliteDesk 800" and first.serial_number=="SN-123"
+    assert first.hostname=="heloshaposbqt01" and first.model=="EliteDesk 800" and first.serial_number=="SN-123"
     assert first.department=="Banquet" and first.location=="Ballroom"
     assert discovered.approved_device_id==first.id

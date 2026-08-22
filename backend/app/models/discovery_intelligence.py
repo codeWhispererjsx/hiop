@@ -23,6 +23,57 @@ class DiscoveryTask(Base):
     __tablename__="enterprise_discovery_tasks";id:Mapped[uuid.UUID]=uid();job_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_discovery_jobs.id",ondelete="CASCADE"),index=True);stage_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_discovery_stages.id",ondelete="CASCADE"),index=True);target:Mapped[str]=mapped_column(String(255));status:Mapped[str]=mapped_column(String(30),default="pending",index=True);attempts:Mapped[int]=mapped_column(Integer,default=0);max_attempts:Mapped[int]=mapped_column(Integer,default=3);next_retry_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));started_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));completed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));error_code:Mapped[str|None]=mapped_column(String(80));error:Mapped[str|None]=mapped_column(Text);__table_args__=(UniqueConstraint("stage_id","target",name="uq_discovery_stage_target"),)
 class DiscoveryResult(Base):
     __tablename__="enterprise_discovery_results";id:Mapped[uuid.UUID]=uid();job_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_discovery_jobs.id",ondelete="CASCADE"),index=True);canonical_result_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_discovery_results.id",ondelete="SET NULL"),index=True);discovered_device_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("discovered_devices.id"),index=True);property_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("properties.id"),index=True);ip_address:Mapped[str]=mapped_column(String(45),index=True);primary_hostname:Mapped[str|None]=mapped_column(String(255));fqdn:Mapped[str|None]=mapped_column(String(255));dns_status:Mapped[str]=mapped_column(String(40),default="not_attempted",server_default="not_attempted");friendly_name:Mapped[str|None]=mapped_column(String(255));department:Mapped[str|None]=mapped_column(String(120));suggested_department:Mapped[str|None]=mapped_column(String(120));device_number:Mapped[str|None]=mapped_column(String(40));description:Mapped[str|None]=mapped_column(Text);description_source:Mapped[str|None]=mapped_column(String(40));location:Mapped[str|None]=mapped_column(String(160));mac_address:Mapped[str|None]=mapped_column(String(17),index=True);vendor:Mapped[str|None]=mapped_column(String(160));device_type:Mapped[str]=mapped_column(String(80),default="Unknown Device");classification:Mapped[str]=mapped_column(String(120),default="Unknown Device");operating_system:Mapped[str|None]=mapped_column(String(180));model:Mapped[str|None]=mapped_column(String(180));serial_number:Mapped[str|None]=mapped_column(String(180));firmware:Mapped[str|None]=mapped_column(String(180));sys_description:Mapped[str|None]=mapped_column(Text);sys_object_id:Mapped[str|None]=mapped_column(String(255));uptime_seconds:Mapped[float|None]=mapped_column(Float);interface_count:Mapped[int|None]=mapped_column(Integer);interface_information:Mapped[str]=mapped_column(Text,default="[]",server_default="[]");snmp_enrichment_status:Mapped[str]=mapped_column(String(40),default="not_attempted",server_default="not_attempted");snmp_last_error:Mapped[str|None]=mapped_column(String(80));last_enriched_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));ad_computer_name:Mapped[str|None]=mapped_column(String(255));ad_distinguished_name:Mapped[str|None]=mapped_column(String(512));ad_domain:Mapped[str|None]=mapped_column(String(255));ad_organizational_unit:Mapped[str|None]=mapped_column(String(255));ad_description:Mapped[str|None]=mapped_column(Text);ad_operating_system:Mapped[str|None]=mapped_column(String(255));ad_operating_system_version:Mapped[str|None]=mapped_column(String(255));ad_enabled:Mapped[bool|None]=mapped_column(Boolean);ad_last_logon_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));ad_enrichment_status:Mapped[str]=mapped_column(String(40),default="not_attempted",server_default="not_attempted");ad_last_error:Mapped[str|None]=mapped_column(String(80));ad_last_enriched_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));identity_confirmed:Mapped[bool]=mapped_column(Boolean,default=False,server_default="false");confirmed_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id",ondelete="SET NULL"));confirmed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));review_status:Mapped[str]=mapped_column(String(40),default="needs_review",index=True);confidence_score:Mapped[int]=mapped_column(Integer,default=0);confidence_level:Mapped[str]=mapped_column(String(20),default="low",server_default="low");confidence_reason:Mapped[str]=mapped_column(Text,default="Insufficient evidence.",server_default="Insufficient evidence.");confidence_explanation:Mapped[str]=mapped_column(Text,default="[]");conflict_status:Mapped[str]=mapped_column(String(20),default="none",server_default="none");configuration_snapshot:Mapped[str]=mapped_column(Text,default="{}");configuration_checksum:Mapped[str|None]=mapped_column(String(64));ci_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("configuration_items.id"),index=True);first_seen_at:Mapped[datetime]=now();last_seen_at:Mapped[datetime]=now();last_changed_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));__table_args__=(CheckConstraint("confidence_score BETWEEN 0 AND 100",name="ck_enterprise_discovery_confidence"),CheckConstraint("snmp_enrichment_status IN ('not_attempted','attempted','enriched','partially_enriched','unavailable')",name="ck_discovery_result_snmp_status"),CheckConstraint("ad_enrichment_status IN ('not_attempted','attempted','enriched','partially_enriched','unavailable')",name="ck_discovery_result_ad_status"),CheckConstraint("confidence_level IN ('low','medium','high','very_high')",name="ck_discovery_result_confidence_level"),CheckConstraint("conflict_status IN ('none','open','resolved')",name="ck_discovery_result_conflict_status"),UniqueConstraint("job_id","ip_address",name="uq_discovery_result_job_ip"))
+
+class DiscoveryIdentityProfile(Base):
+    """Additive human identity metadata; the legacy technical identity stays intact."""
+    __tablename__ = "discovery_identity_profiles"
+    id: Mapped[uuid.UUID] = uid()
+    result_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("enterprise_discovery_results.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    property_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), index=True)
+    friendly_name_source: Mapped[str | None] = mapped_column(String(20))
+    friendly_name_confidence: Mapped[int | None] = mapped_column(Integer)
+    classification_source: Mapped[str | None] = mapped_column(String(30))
+    classification_confidence: Mapped[int | None] = mapped_column(Integer)
+    department_source: Mapped[str | None] = mapped_column(String(30))
+    location_source: Mapped[str | None] = mapped_column(String(30))
+    identity_sequence: Mapped[int | None] = mapped_column(Integer)
+    suggestion: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    created_at: Mapped[datetime] = now()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    __table_args__ = (
+        CheckConstraint("friendly_name_confidence IS NULL OR friendly_name_confidence BETWEEN 0 AND 100", name="ck_identity_profile_friendly_confidence"),
+        CheckConstraint("classification_confidence IS NULL OR classification_confidence BETWEEN 0 AND 100", name="ck_identity_profile_classification_confidence"),
+        Index("ix_identity_profile_property_source", "property_id", "friendly_name_source"),
+    )
+
+
+class IdentityRule(Base):
+    __tablename__ = "discovery_identity_rules"
+    id: Mapped[uuid.UUID] = uid()
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    property_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(180), nullable=False)
+    match_field: Mapped[str] = mapped_column(String(30), nullable=False)
+    match_operator: Mapped[str] = mapped_column(String(20), nullable=False)
+    pattern: Mapped[str] = mapped_column(String(255), nullable=False)
+    output_device_type: Mapped[str | None] = mapped_column(String(80))
+    output_department_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("departments.id", ondelete="SET NULL"), index=True)
+    output_location: Mapped[str | None] = mapped_column(String(160))
+    friendly_name_template: Mapped[str] = mapped_column(String(255), nullable=False, default="{department} {device_type} {sequence}", server_default="{department} {device_type} {sequence}")
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100, server_default="100")
+    confidence: Mapped[int] = mapped_column(Integer, nullable=False, default=70, server_default="70")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False)
+    created_at: Mapped[datetime] = now()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    __table_args__ = (
+        CheckConstraint("match_field IN ('hostname','fqdn','vendor','snmp','ad_ou','device_type')", name="ck_identity_rule_match_field"),
+        CheckConstraint("match_operator IN ('contains','starts_with','ends_with','equals')", name="ck_identity_rule_match_operator"),
+        CheckConstraint("confidence BETWEEN 1 AND 100", name="ck_identity_rule_confidence"),
+        UniqueConstraint("organization_id", "property_id", "name", name="uq_identity_rule_scope_name"),
+        Index("ix_identity_rule_scope_enabled", "organization_id", "property_id", "enabled"),
+    )
 class DiscoveryEvidence(Base):
     __tablename__="enterprise_discovery_evidence";id:Mapped[uuid.UUID]=uid();result_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_discovery_results.id",ondelete="CASCADE"),index=True);task_id:Mapped[uuid.UUID|None]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_discovery_tasks.id",ondelete="SET NULL"));evidence_type:Mapped[str]=mapped_column(String(60),index=True);source:Mapped[str]=mapped_column(String(60));value:Mapped[str]=mapped_column(Text);normalized_value:Mapped[str|None]=mapped_column(String(500),index=True);weight:Mapped[int]=mapped_column(Integer,default=0);verified:Mapped[bool]=mapped_column(Boolean,default=False);observed_at:Mapped[datetime]=now();expires_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));__table_args__=(UniqueConstraint("result_id","evidence_type","source","normalized_value",name="uq_discovery_evidence_identity"),)
 class DiscoveryIdentityHistory(Base):
