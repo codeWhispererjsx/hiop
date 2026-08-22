@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from app.models.hospitality_operations import HospitalityTechnologyService
 from app.models.incidents import OperationalIncident
 from app.models.service_management import IncidentAssetRelationship, ServiceAssetRelationship
-from app.schemas.service_management import OperationalIncidentWrite, ServiceWrite, TransitionWrite
+from app.schemas.service_management import IncidentAssignmentWrite, OperationalIncidentWrite, ServiceWrite, TransitionWrite
 from app.services import service_management_service as service
 
 
@@ -65,6 +65,19 @@ def test_v4e_routes_enforce_roles_and_tenant_context():
     assert "Technicians may update only" in source
     for route in ("/services", "/incidents", "/transition/{target}", "/notes", "/assets/{asset_id}/incidents"):
         assert route in source
+
+
+def test_ticket_assignment_is_property_scoped_and_audited():
+    route_source = Path(__file__).parents[1].joinpath("app/api/v1/service_management.py").read_text(encoding="utf-8")
+    service_source = Path(__file__).parents[1].joinpath("app/services/service_management_service.py").read_text(encoding="utf-8")
+    payload = IncidentAssignmentWrite(assigned_technician_id="technician-1", assigned_team="IT Operations")
+    assert payload.assigned_technician_id == "technician-1"
+    assert '/incidents/{incident_id}/assignees' in route_source
+    assert '/incidents/{incident_id}/assign' in route_source
+    assert "Ticket is outside the active property" in route_source
+    assert 'role="technician", is_active=True' in service_source
+    assert "allowed_property_ids" in service_source
+    assert "INCIDENT_ASSIGNED" in service_source
 
 
 def test_v4e_migration_is_additive():

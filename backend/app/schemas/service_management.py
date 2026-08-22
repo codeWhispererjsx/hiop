@@ -92,6 +92,11 @@ class IncidentPatch(BaseModel):
     asset_id: UUID | None = None
 
 
+class IncidentAssignmentWrite(BaseModel):
+    assigned_technician_id: str
+    assigned_team: str | None = Field(None, max_length=160)
+
+
 class TransitionWrite(BaseModel):
     reason: str | None = Field(None, max_length=5000)
     resolution_summary: str | None = Field(None, max_length=10000)

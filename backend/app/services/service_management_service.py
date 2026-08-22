@@ -16,6 +16,7 @@ from app.models.procurement import AssetProcurement, ProcurementAssetLink
 from app.models.service_management import IncidentAssetRelationship, ServiceAssetRelationship
 from app.models.user import User
 from app.services.audit_service import create_audit_log
+from app.services.multi_property_service import allowed_property_ids
 
 
 STATUS_MAP = {"declared": "new", "detected": "new", "investigating": "in_progress", "contained": "in_progress", "mitigating": "in_progress", "monitoring": "in_progress", "recovered": "resolved"}
@@ -66,6 +67,21 @@ def require_user(db, user_id, organization_id):
     row = db.query(User).filter_by(id=user_id, organization_id=organization_id).first()
     if not row: raise HTTPException(404, "Organization user not found")
     return row
+
+
+def require_eligible_technician(db, user_id, organization_id, property_id):
+    row = db.query(User).filter_by(id=user_id, organization_id=organization_id, role="technician", is_active=True).first()
+    if not row:
+        raise HTTPException(422, "Select an active IT Technician from this organization")
+    if property_id not in allowed_property_ids(db, row):
+        raise HTTPException(422, "This technician does not have access to the ticket property")
+    return row
+
+
+def eligible_technicians(db, organization_id, property_id):
+    require_property(db, property_id, organization_id)
+    technicians = db.query(User).filter_by(organization_id=organization_id, role="technician", is_active=True).order_by(User.username).all()
+    return [{"id": technician.id, "username": technician.username} for technician in technicians if property_id in allowed_property_ids(db, technician)]
 
 
 def timeline(db, incident, actor, entry_type, title, summary=None):
@@ -143,7 +159,7 @@ def create_incident(db, payload, actor, organization_id):
     if payload.asset_id: require_asset(db, payload.asset_id, organization_id)
     if payload.device_id: require_device(db, payload.device_id, organization_id)
     if payload.service_id: require_service(db, payload.service_id, organization_id)
-    if payload.assigned_technician_id: require_user(db, payload.assigned_technician_id, organization_id)
+    if payload.assigned_technician_id: require_eligible_technician(db, payload.assigned_technician_id, organization_id, payload.property_id)
     values = payload.model_dump(exclude={"service_id", "alert_id"})
     if source_alert and not values.get("device_id"):
         values["device_id"] = source_alert.device_id
@@ -165,10 +181,26 @@ def update_incident(db, row, payload, actor):
     if "asset_id" in values:
         asset_id = values["asset_id"]
         if asset_id: require_asset(db, asset_id, row.organization_id)
-    if values.get("assigned_technician_id"): require_user(db, values["assigned_technician_id"], row.organization_id)
+    if values.get("assigned_technician_id"): require_eligible_technician(db, values["assigned_technician_id"], row.organization_id, row.property_id)
     for key, value in values.items(): setattr(row, key, value)
     row.updated_by = actor.username; timeline(db, row, actor, "incident_updated", "Incident details updated")
     audit(db, actor, "INCIDENT_UPDATED", "OperationalIncident", row.id, f"Updated {row.incident_number}"); db.commit(); db.refresh(row); return row
+
+
+def assign_incident(db, row, technician_id, assigned_team, actor):
+    technician = require_eligible_technician(db, technician_id, row.organization_id, row.property_id)
+    previous = db.get(User, row.assigned_technician_id) if row.assigned_technician_id else None
+    row.assigned_technician_id = technician.id
+    if assigned_team is not None:
+        row.assigned_team = assigned_team
+    row.updated_by = actor.username
+    summary = f"Assigned to {technician.username}"
+    if previous and previous.id != technician.id:
+        summary = f"Reassigned from {previous.username} to {technician.username}"
+    timeline(db, row, actor, "incident_assigned", "Ticket assignment changed", summary)
+    audit(db, actor, "INCIDENT_ASSIGNED", "OperationalIncident", row.id, f"{row.incident_number}: {summary}")
+    db.commit(); db.refresh(row)
+    return row
 
 
 def transition_incident(db, row, target, payload, actor):

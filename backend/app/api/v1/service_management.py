@@ -11,7 +11,7 @@ from app.models.asset_intelligence import ManagedAsset
 from app.models.hospitality_operations import HospitalityTechnologyService
 from app.models.incidents import OperationalIncident
 from app.models.service_management import IncidentAssetRelationship, ServiceAssetRelationship
-from app.schemas.service_management import IncidentPatch, NoteWrite, OperationalIncidentWrite, RelationshipWrite, ServicePatch, ServiceWrite, TransitionWrite
+from app.schemas.service_management import IncidentAssignmentWrite, IncidentPatch, NoteWrite, OperationalIncidentWrite, RelationshipWrite, ServicePatch, ServiceWrite, TransitionWrite
 from app.services import service_management_service as service
 
 router = APIRouter(prefix="/service-management", tags=["Service Management"])
@@ -99,11 +99,29 @@ def get_incident(incident_id: UUID, db: Session = Depends(get_db), _=Depends(rea
     return service.incident_present(db, service.require_incident(db, incident_id, organization_id), True)
 
 
+@router.get("/incidents/{incident_id}/assignees")
+def list_incident_assignees(incident_id: UUID, db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context), property_id=Depends(property_context)):
+    row = service.require_incident(db, incident_id, organization_id)
+    if property_id is not None and row.property_id != property_id:
+        raise HTTPException(403, "Ticket is outside the active property")
+    return service.eligible_technicians(db, organization_id, row.property_id)
+
+
 @router.patch("/incidents/{incident_id}")
 def update_incident(incident_id: UUID, payload: IncidentPatch, db: Session = Depends(get_db), actor=Depends(operator), organization_id=Depends(organization_context)):
     row = service.require_incident(db, incident_id, organization_id)
     if actor.role == "technician" and row.assigned_technician_id not in {None, actor.id}: raise HTTPException(403, "Technicians may update only unassigned incidents or incidents assigned to them")
     return service.incident_present(db, service.update_incident(db, row, payload, actor), True)
+
+
+@router.post("/incidents/{incident_id}/assign")
+def assign_incident(incident_id: UUID, payload: IncidentAssignmentWrite, db: Session = Depends(get_db), actor=Depends(operator), organization_id=Depends(organization_context), property_id=Depends(property_context)):
+    row = service.require_incident(db, incident_id, organization_id)
+    if property_id is not None and row.property_id != property_id:
+        raise HTTPException(403, "Ticket is outside the active property")
+    if actor.role == "technician" and row.assigned_technician_id not in {None, actor.id}:
+        raise HTTPException(403, "Technicians may reassign only unassigned tickets or tickets assigned to them")
+    return service.incident_present(db, service.assign_incident(db, row, payload.assigned_technician_id, payload.assigned_team, actor), True)
 
 
 @router.post("/incidents/{incident_id}/transition/{target}")

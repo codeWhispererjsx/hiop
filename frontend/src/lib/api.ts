@@ -386,6 +386,8 @@ export const endpoints = {
   serviceIncident: (id:string) => api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}`),
   createServiceIncident: (body:Record<string,unknown>) => api<import("./types").ServiceManagementIncident>("/service-management/incidents",{method:"POST",body:JSON.stringify(body)}),
   updateServiceIncident: (id:string,body:Record<string,unknown>) => api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}`,{method:"PATCH",body:JSON.stringify(body)}),
+  serviceIncidentAssignees: (id:string) => api<Array<{id:string;username:string}>>(`/service-management/incidents/${id}/assignees`),
+  assignServiceIncident: (id:string,assignedTechnicianId:string,assignedTeam?:string) => api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}/assign`,{method:"POST",body:JSON.stringify({assigned_technician_id:assignedTechnicianId,assigned_team:assignedTeam||null})}),
   transitionServiceIncident: (id:string,target:string,body:Record<string,unknown>={}) => api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}/transition/${target}`,{method:"POST",body:JSON.stringify(body)}),
   addServiceIncidentNote: (id:string,note:string) => api<Record<string,unknown>>(`/service-management/incidents/${id}/notes`,{method:"POST",body:JSON.stringify({note})}),
   assetIncidentHistory: (id:string) => api<import("./types").ServiceManagementIncident[]>(`/service-management/assets/${id}/incidents`),
