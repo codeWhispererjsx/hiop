@@ -2,8 +2,6 @@ from sqlalchemy.orm import Session
 from app.models.device import Device
 from app.models.network_scan import NetworkScan
 from app.network.utils import ping_host
-from app.models.ticket import Ticket
-from app.models.user import User
 from app.websocket.connection_manager import manager
 from app.services.settings_service import read_network
 from app.services.automation_event_outbox_service import publish_internal_event
@@ -45,7 +43,7 @@ def scan_single_device(
     if status_changed:
         if alert_result["opened"]:
             publish_internal_event(db,event_type="alert_created",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"opened":alert_result["opened"]},severity="critical" if new_scan.status=="Offline" else "informational",status="open",correlation_key=f"device:{device.id}:network")
-        publish_internal_event(db,event_type="device_offline" if new_scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={},severity="critical" if new_scan.status=="Offline" else "informational",status=new_scan.status.lower(),correlation_key=f"device:{device.id}:network")
+        publish_internal_event(db,event_type="device_offline" if new_scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"]},severity="critical" if new_scan.status=="Offline" else "informational",status=new_scan.status.lower(),correlation_key=f"device:{device.id}:network")
 
         live_event = {
             "event": "device_status_changed",
@@ -56,39 +54,10 @@ def scan_single_device(
             "current_status": new_scan.status
         }
 
-        if new_scan.status == "Offline" and runtime["automatic_offline_tickets"]:
-            existing_open_ticket = (
-                db.query(Ticket)
-                .filter(
-                    Ticket.title == f"{device.hostname} is offline",
-                    Ticket.status.in_(["Open", "In Progress"])
-                )
-                .first()
-            )
-
-            if not existing_open_ticket:
-                admin_user = (
-                    db.query(User)
-                    .filter(User.role == "admin")
-                    .first()
-                )
-
-                if admin_user:
-                    ticket = Ticket(
-                        title=f"{device.hostname} is offline",
-                        description=(
-                            f"HIOP detected that {device.hostname} "
-                            f"at {device.ip_address} changed from "
-                            f"{previous_scan.status} to Offline."
-                        ),
-                        priority="High",
-                        status="Open",
-                        reported_by=admin_user.id,
-                        assigned_to=None,
-                        device_id=device.id,
-                    )
-
-                    db.add(ticket)
+        # The internal event outbox is the single automatic ticket path. It
+        # creates a property-scoped OperationalIncident and deduplicates it by
+        # correlation key, so automated work appears in Maintain instead of
+        # disappearing into the legacy Ticket table.
 
     try:
         db.commit()

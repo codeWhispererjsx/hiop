@@ -1,6 +1,9 @@
+import json
 from datetime import datetime, timedelta, timezone
 
 from app.models.incidents import OperationalIncident, OperationalIncidentSource
+from app.models.device import Device
+from app.models.hierarchy import Property
 from app.services.incident_orchestration_service import publish, timeline
 
 EVENT_INCIDENT_TYPES = {
@@ -20,6 +23,9 @@ EVENT_INCIDENT_TYPES = {
 def create_pending_incident_from_event(db, event):
     incident_type = EVENT_INCIDENT_TYPES.get(event.event_type)
     if not incident_type or not event.property_id:
+        return None
+    payload = json.loads(event.safe_payload or "{}")
+    if event.event_type == "device_offline" and payload.get("automatic_ticket") is False:
         return None
     from app.services.settings_service import read_incident_settings
     config = read_incident_settings(db)
@@ -52,16 +58,23 @@ def create_pending_incident_from_event(db, event):
         config["automatic_incident_declaration_enabled"]
         and levels[severity] >= levels[config["minimum_automatic_severity"]]
     )
+    source_device = None
+    if event.source_entity_type == "device" and event.source_entity_id:
+        source_device = db.query(Device).filter_by(id=event.source_entity_id, property_id=event.property_id).first()
+    display_name = source_device.hostname if source_device else None
+    source_property = db.query(Property).filter_by(id=event.property_id).first()
     row = OperationalIncident(
         property_id=event.property_id,
+        organization_id=source_property.organization_id if source_property else None,
         incident_number=f"INC-{datetime.now(timezone.utc):%Y%m%d}-{str(event.event_id).replace('-', '')[:6].upper()}",
-        title=event.event_type.replace("_", " ").title(),
-        description="Pending incident created from an approved internal event; human declaration and playbook selection are required.",
+        title=f"{display_name} is offline" if event.event_type == "device_offline" and display_name else event.event_type.replace("_", " ").title(),
+        description=(f"Monitoring detected that {display_name or 'a managed device'} became unreachable. Review and assign this ticket before taking action." if event.event_type == "device_offline" else "Pending incident created from an approved internal event; human declaration and playbook selection are required."),
         incident_type=incident_type, status="declared" if auto_declared else "detected",
         declared_at=datetime.now(timezone.utc) if auto_declared else None,
         severity=severity, priority=priority,
         source_type="internal_event", source_reference_type=event.event_type,
         source_reference_id=event.id, correlation_key=key, created_by="automation:event",
+        device_id=source_device.id if source_device else None,
     )
     db.add(row)
     db.flush()

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
 import { Feedback } from "../components/Feedback";
@@ -269,6 +270,7 @@ export default function AlertsPage() {
           acknowledge={acknowledge}
           resolve={() => setResolveOpen(true)}
           close={() => setSelected(undefined)}
+          canCreateTicket={me.data?.role !== "viewer"}
         />
       )}
 
@@ -288,11 +290,13 @@ function AlertDetails({
   acknowledge,
   resolve,
   close,
+  canCreateTicket,
 }: {
   row: V3EAlert;
   acknowledge: () => Promise<void>;
   resolve: () => void;
   close: () => void;
+  canCreateTicket: boolean;
 }) {
   return (
     <Modal title="Alert details" onClose={close}>
@@ -375,6 +379,15 @@ function AlertDetails({
 
       {row.status !== "resolved" && (
         <footer className="alert-detail-actions">
+          {canCreateTicket && (
+            <Link
+              className="primary-action"
+              to={`/incidents/new?alert=${encodeURIComponent(row.id)}&title=${encodeURIComponent(row.title)}&description=${encodeURIComponent(`${row.reason}\n\nSource device: ${row.device_name}${row.ip_address ? ` (${row.ip_address})` : ""}`)}`}
+            >
+              <Icon name="tickets" aria-hidden="true" />
+              Create ticket
+            </Link>
+          )}
           <button
             className="secondary-action"
             onClick={() => void acknowledge()}

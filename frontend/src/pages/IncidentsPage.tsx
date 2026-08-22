@@ -1,5 +1,5 @@
 import { useDeferredValue, useMemo, useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { Feedback } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
@@ -63,7 +63,7 @@ function WorkspaceLinks() {
   return (
     <nav className="page-actions" aria-label="Maintain workspaces">
       <Link className="secondary-action" to="/incidents">
-        Incidents
+        Tickets
       </Link>
       <Link className="secondary-action" to="/problems">
         Problems
@@ -136,13 +136,13 @@ function IncidentList() {
     <DashboardLayout>
       <WorkspaceLinks />
       <PageTitle
-        eyebrow="Maintain · incidents"
-        title="Service & incident management"
-        copy="Track operational responsibility, business service impact, investigation, and resolution."
+        eyebrow="Maintain · service desk"
+        title="Tickets & incidents"
+        copy="Create, assign, investigate, and resolve operational work from one service desk queue."
         action={
           me.data?.role !== "viewer" ? (
             <Link className="primary-action" to="/incidents/new">
-              Create Incident
+              Create Ticket
             </Link>
           ) : undefined
         }
@@ -151,7 +151,7 @@ function IncidentList() {
       {summary.data && (
         <section className="stats-grid" aria-label="Incident statistics">
           <StatCard
-            label="Open incidents"
+            label="Open tickets"
             value={summary.data.open}
             detail={`${summary.data.critical} critical`}
             icon="alerts"
@@ -179,14 +179,14 @@ function IncidentList() {
         </section>
       )}
 
-      <section className="toolbar-panel" aria-label="Search and filter incidents">
+      <section className="toolbar-panel" aria-label="Search and filter tickets">
         <label htmlFor="incident-search" className="search-field">
           <Icon name="search" aria-hidden="true" />
           <input
             id="incident-search"
             type="search"
-            aria-label="Search incidents"
-            placeholder="Incident, hostname, IP, asset, service, technician"
+            aria-label="Search tickets"
+            placeholder="Ticket ID, hostname, IP, asset, service, technician"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -225,8 +225,8 @@ function IncidentList() {
         <Feedback loading={rows.loading} error={rows.error} />
       ) : !filtered.length ? (
         <Feedback
-          emptyTitle="No incidents found"
-          empty="Adjust filters or create your first incident."
+          emptyTitle="No tickets found"
+          empty="Adjust the filters or create your first service ticket."
         />
       ) : (
         <section className="data-panel" aria-label="Incident list">
@@ -279,6 +279,8 @@ function IncidentList() {
 
 function IncidentForm() {
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
+  const sourceAlertId = searchParams.get("alert");
   const hierarchy = useRequest(endpoints.hierarchy, []);
   const assets = useRequest(() => endpoints.assets({}), []);
   const services = useRequest(() => endpoints.technologyServices(), []);
@@ -293,8 +295,8 @@ function IncidentForm() {
     "";
 
   const [form, setForm] = useState({
-    title: "",
-    description: "",
+    title: searchParams.get("title") ?? "",
+    description: searchParams.get("description") ?? "",
     priority: "medium",
     severity: "medium",
     category: "other",
@@ -311,6 +313,7 @@ function IncidentForm() {
     try {
       const row = await endpoints.createServiceIncident({
         ...form,
+        alert_id: sourceAlertId || null,
         property_id: property,
         assigned_team: form.assigned_team || null,
         assigned_technician_id: form.assigned_technician_id || null,
@@ -319,7 +322,7 @@ function IncidentForm() {
       });
       nav(`/incidents/${row.id}`);
     } catch (x) {
-      setError(x instanceof Error ? x.message : "Incident could not be created");
+      setError(x instanceof Error ? x.message : "Ticket could not be created");
     } finally {
       setBusy(false);
     }
@@ -329,9 +332,9 @@ function IncidentForm() {
     <DashboardLayout>
       <WorkspaceLinks />
       <PageTitle
-        eyebrow="Maintain · incidents"
-        title="Create incident"
-        copy="Create a managed work item; alerts remain separate evidence."
+        eyebrow="Maintain · service desk"
+        title="Create service ticket"
+        copy={sourceAlertId ? "Create an assignable ticket linked to the source alert. The alert remains separate evidence." : "Create an assignable operational work item for investigation and resolution."}
       />
       {error && <Feedback error={error} />}
       <form className="panel enterprise-form" onSubmit={(e) => void submit(e)}>
@@ -419,7 +422,7 @@ function IncidentForm() {
               onChange={(e) => setForm({ ...form, asset_id: e.target.value })}
             >
               <option value="">Select asset</option>
-              {assets.data?.map((asset) => (
+              {getPaginatedItems(assets.data).map((asset) => (
                 <option key={asset.id} value={asset.id}>
                   {asset.asset_number} · {asset.name}
                 </option>
@@ -449,7 +452,7 @@ function IncidentForm() {
             rows={4}
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Describe the incident and its impact"
+            placeholder="Describe the issue, request, and operational impact"
           />
         </label>
         <div className="row-actions">
@@ -457,7 +460,7 @@ function IncidentForm() {
             Cancel
           </button>
           <button type="submit" className="primary-action" disabled={busy} aria-busy={busy}>
-            {busy ? "Creating…" : "Create incident"}
+            {busy ? "Creating…" : "Create ticket"}
           </button>
         </div>
       </form>
@@ -513,7 +516,7 @@ function IncidentDetails({ id }: { id: string }) {
         copy={`${title(row.category)} · Created ${new Date(row.created_at).toLocaleString()}`}
         action={
           <Link className="secondary-action" to="/incidents">
-            Back to Incidents
+            Back to Tickets
           </Link>
         }
       />

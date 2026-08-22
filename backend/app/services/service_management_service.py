@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import or_
 
 from app.models.asset_intelligence import ManagedAsset
+from app.models.alert import Alert
 from app.models.asset_management import Vendor, VendorContact
 from app.models.device import Device
 from app.models.hierarchy import Building, Department, Floor, Property, Room
@@ -131,11 +132,21 @@ def service_present(db, row, detail=False):
 
 def create_incident(db, payload, actor, organization_id):
     require_property(db, payload.property_id, organization_id)
+    source_alert = None
+    if payload.alert_id:
+        source_alert = db.query(Alert).join(Device, Device.id == Alert.device_id).filter(
+            Alert.id == payload.alert_id,
+            Device.property_id == payload.property_id,
+        ).first()
+        if not source_alert:
+            raise HTTPException(404, "Alert not found in this property")
     if payload.asset_id: require_asset(db, payload.asset_id, organization_id)
     if payload.device_id: require_device(db, payload.device_id, organization_id)
     if payload.service_id: require_service(db, payload.service_id, organization_id)
     if payload.assigned_technician_id: require_user(db, payload.assigned_technician_id, organization_id)
     values = payload.model_dump(exclude={"service_id", "alert_id"})
+    if source_alert and not values.get("device_id"):
+        values["device_id"] = source_alert.device_id
     row = OperationalIncident(**values, technology_service_id=payload.service_id, organization_id=organization_id, incident_number=f"INC-{datetime.now(timezone.utc):%Y%m%d}-{secrets.token_hex(3).upper()}", incident_type=payload.category, status="new", source_type="alert" if payload.alert_id else "manual", source_reference_type="alert" if payload.alert_id else None, source_reference_id=payload.alert_id, declared_at=datetime.now(timezone.utc), detected_at=datetime.now(timezone.utc), created_by=actor.username)
     db.add(row); db.flush()
     if payload.asset_id: db.add(IncidentAssetRelationship(organization_id=organization_id, incident_id=row.id, asset_id=payload.asset_id, created_by=actor.id))
