@@ -386,8 +386,22 @@ export const endpoints = {
   serviceIncident: (id:string) => api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}`),
   createServiceIncident: (body:Record<string,unknown>) => api<import("./types").ServiceManagementIncident>("/service-management/incidents",{method:"POST",body:JSON.stringify(body)}),
   updateServiceIncident: (id:string,body:Record<string,unknown>) => api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}`,{method:"PATCH",body:JSON.stringify(body)}),
-  serviceIncidentAssignees: (id:string) => api<Array<{id:string;username:string}>>(`/service-management/incidents/${id}/assignees`),
-  assignServiceIncident: (id:string,assignedTechnicianId:string,assignedTeam?:string) => api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}/assign`,{method:"POST",body:JSON.stringify({assigned_technician_id:assignedTechnicianId,assigned_team:assignedTeam||null})}),
+  serviceIncidentAssignees: async (id:string) => {
+    try { return await api<Array<{id:string;username:string}>>(`/service-management/incidents/${id}/assignees`); }
+    catch (error: unknown) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      const users = await api<import("./types").User[]>("/users/eligible-assignees");
+      return users.filter((user) => user.role === "technician").map((user) => ({id:user.id,username:user.username}));
+    }
+  },
+  assignServiceIncident: async (id:string,assignedTechnicianId:string,assignedTeam?:string) => {
+    const body={assigned_technician_id:assignedTechnicianId,assigned_team:assignedTeam||null};
+    try { return await api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}/assign`,{method:"POST",body:JSON.stringify(body)}); }
+    catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
+      return api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}`,{method:"PATCH",body:JSON.stringify(body)});
+    }
+  },
   transitionServiceIncident: (id:string,target:string,body:Record<string,unknown>={}) => api<import("./types").ServiceManagementIncident>(`/service-management/incidents/${id}/transition/${target}`,{method:"POST",body:JSON.stringify(body)}),
   addServiceIncidentNote: (id:string,note:string) => api<Record<string,unknown>>(`/service-management/incidents/${id}/notes`,{method:"POST",body:JSON.stringify({note})}),
   assetIncidentHistory: (id:string) => api<import("./types").ServiceManagementIncident[]>(`/service-management/assets/${id}/incidents`),

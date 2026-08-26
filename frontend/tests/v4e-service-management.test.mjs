@@ -22,6 +22,7 @@ test("service management API is separate from alert and legacy incident APIs",()
 test("existing and automatic tickets can be assigned to eligible property technicians",()=>{
   assert.match(page,/Assign technician/);assert.match(page,/Only active IT Technicians with access to this property/);
   assert.match(page,/assignServiceIncident/);assert.match(api,/\/assignees/);assert.match(api,/\/assign/);
+  assert.match(api,/eligible-assignees/);assert.match(api,/error.status !== 404/);
 });
 test("asset details show linked incident history",()=>{
   assert.match(asset,/assetIncidentHistory/);assert.match(asset,/Incident history/);assert.match(asset,/to={`\/incidents\/\${item.id}`}/);
