@@ -39,9 +39,24 @@ services:
       DATABASE_MAX_OVERFLOW: ${DATABASE_MAX_OVERFLOW:-20}
       DATABASE_POOL_RECYCLE_SECONDS: ${DATABASE_POOL_RECYCLE_SECONDS:-1800}
       SCHEDULER_ENABLED: "true"
+      SCHEDULED_BACKUP_ENABLED: ${SCHEDULED_BACKUP_ENABLED:-true}
+      SCHEDULED_BACKUP_HOUR_UTC: ${SCHEDULED_BACKUP_HOUR_UTC:-2}
+      BACKUP_DIR: /var/lib/hiop/backups
+      RESTORE_TEST_DATABASE_URL: ${RESTORE_TEST_DATABASE_URL:-}
+      RESTORE_DRILL_INTERVAL_DAYS: ${RESTORE_DRILL_INTERVAL_DAYS:-30}
       EMAIL_ADDRESS: ${EMAIL_ADDRESS:-}
       EMAIL_PASSWORD: ${EMAIL_PASSWORD:-}
       EMAIL_RECIPIENT: ${EMAIL_RECIPIENT:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-STARTTLS}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-HIOP Notifications}
+      SMTP_SENDER_ADDRESS: ${SMTP_SENDER_ADDRESS:-}
+      REQUIRE_EMAIL_VERIFICATION: ${REQUIRE_EMAIL_VERIFICATION:-true}
+      BASE_DOMAIN: ${BASE_DOMAIN:-localhost}
+      ENABLE_SUBDOMAIN_ROUTING: ${ENABLE_SUBDOMAIN_ROUTING:-false}
     depends_on:
       db:
         condition: service_healthy
@@ -70,6 +85,8 @@ services:
     security_opt: [no-new-privileges:true]
     read_only: true
     tmpfs: [/tmp]
+    volumes:
+      - hiop_backup_data:/var/lib/hiop/backups
 
   frontend:
     build:
@@ -95,3 +112,4 @@ networks:
 
 volumes:
   hiop_postgres_data:
+  hiop_backup_data:

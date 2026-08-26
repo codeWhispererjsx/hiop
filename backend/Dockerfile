@@ -4,8 +4,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid 10001 hiop \
-    && useradd --uid 10001 --gid hiop --create-home --shell /usr/sbin/nologin hiop
+    && useradd --uid 10001 --gid hiop --create-home --shell /usr/sbin/nologin hiop \
+    && mkdir -p /var/lib/hiop/backups \
+    && chown -R hiop:hiop /var/lib/hiop
 
 WORKDIR /app
 COPY requirements.txt ./

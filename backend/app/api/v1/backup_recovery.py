@@ -20,7 +20,7 @@ from app.services.backup_service import (
 )
 
 router = APIRouter(prefix="/backup-recovery", tags=["Backup & Recovery"])
-platform_admin = require_roles(["platformadmin", "admin"])
+platform_admin = require_roles(["platformadmin"])
 
 BackupStatus = Literal["in_progress", "success", "failed", "verification_failed"]
 RestoreStatus = Literal["in_progress", "success", "failed"]
@@ -204,10 +204,10 @@ def list_restore_tests(
 def create_restore_test(
     request: RestoreTestRequest,
     db: Session = Depends(get_db),
-    _: User = Depends(platform_admin),
+    actor: User = Depends(platform_admin),
 ):
     """Record the start of a restore test drill."""
-    performed_by = "platform_admin"  # Would be actual user ID in production
+    performed_by = actor.username
     record = record_restore_test_start(db, request.backup_file, performed_by)
     
     return RestoreTestModel(

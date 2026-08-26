@@ -18,6 +18,7 @@ from app.schemas.user import PasswordReset, UserCreate
 from app.services.audit_service import _csv_safe as audit_csv_safe
 from app.services.report_service import _csv_safe as report_csv_safe
 from app.scanner.routes import scan_device
+from app.services.settings_service import DEFAULTS
 
 
 class SecurityContractTests(unittest.TestCase):
@@ -45,6 +46,22 @@ class SecurityContractTests(unittest.TestCase):
             Settings(debug=False, **(values | {"hiop_ad_secret_key": ""}))
         with self.assertRaises(ValidationError):
             Settings(debug=False, **(values | {"database_url": "sqlite:///production.db"}))
+        with self.assertRaises(ValidationError):
+            Settings(debug=False, **(values | {"snmp_allow_legacy_protocols": True}))
+        with self.assertRaises(ValidationError):
+            Settings(debug=False, **(values | {"enable_subdomain_routing": True, "base_domain": "localhost"}))
+        with self.assertRaises(ValidationError):
+            Settings(debug=False, **(values | {"require_email_verification": True, "smtp_password": ""}))
+        with self.assertRaises(ValidationError):
+            Settings(debug=False, **(values | {"restore_test_database_url": values["database_url"]}))
+
+    def test_fresh_install_discovery_is_deny_by_default(self):
+        self.assertEqual(DEFAULTS["network.approved_network"], "")
+        self.assertEqual(DEFAULTS["network.automatic_scanning"], "false")
+        self.assertEqual(DEFAULTS["network.automatic_alerts"], "false")
+        self.assertEqual(DEFAULTS["network.automatic_offline_tickets"], "false")
+        self.assertEqual(DEFAULTS["discovery.authorized_cidr_ranges"], "")
+        self.assertEqual(DEFAULTS["discovery.enabled"], "false")
 
     def test_access_tokens_have_required_security_claims(self):
         token = create_access_token({"sub": "security@example.com", "role": "admin"})

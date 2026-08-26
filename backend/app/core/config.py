@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     ad_approved_hosts: list[str] = []
 
     # SNMP foundation. Transport, polling, scheduling, and alerts remain disabled.
-    snmp_enabled: bool = True  # Enabled for testing
+    snmp_enabled: bool = False
     snmp_default_port: int = Field(default=161, ge=1, le=65535)
     snmp_default_timeout_seconds: int = Field(default=5, ge=1, le=60)
     snmp_default_retries: int = Field(default=1, ge=0, le=10)
@@ -122,9 +122,9 @@ class Settings(BaseSettings):
     analytics_retention_days: int = Field(default=730, ge=30, le=3650)
     analytics_default_sla_measurement_window: Literal["1_day", "1_week", "1_month"] = "1_month"
     analytics_manual_run_rate_limit_per_hour: int = Field(default=10, ge=1, le=100)
-    snmp_allow_legacy_protocols: bool = True
-    snmp_allow_v1: bool = True
-    snmp_v3_required_in_production: bool = False
+    snmp_allow_legacy_protocols: bool = False
+    snmp_allow_v1: bool = False
+    snmp_v3_required_in_production: bool = True
 
     # Email Settings (Backward compatibility - will be removed)
     email_address: str = ""
@@ -146,7 +146,7 @@ class Settings(BaseSettings):
 
     # Tenant/Multi-tenancy Settings
     base_domain: str = "localhost"
-    enable_subdomain_routing: bool = True  # Enabled for testing
+    enable_subdomain_routing: bool = False
     commercial_enforcement_enabled: bool = False
     require_email_verification: bool = False
     audit_retention_days: int = Field(default=2555, ge=365, le=3650)
@@ -202,6 +202,25 @@ class Settings(BaseSettings):
             raise ValueError("SNMP minimum polling interval cannot exceed its maximum")
         if self.environment == "production" and self.snmp_allow_v1:
             raise ValueError("SNMPv1 cannot be enabled in production")
+        if self.environment == "production" and self.snmp_allow_legacy_protocols:
+            raise ValueError("Legacy SNMP protocols cannot be enabled in production")
+        if self.environment == "production" and self.enable_subdomain_routing and self.base_domain in {"localhost", "127.0.0.1"}:
+            raise ValueError("Production subdomain routing requires a verified non-local base domain")
+        if self.environment == "production" and self.require_email_verification:
+            missing_email = [name for name, value in {
+                "SMTP_HOST": self.smtp_host,
+                "SMTP_SENDER_ADDRESS": self.smtp_sender_address,
+                "SMTP_USERNAME": self.smtp_username,
+                "SMTP_PASSWORD": self.smtp_password,
+            }.items() if not value]
+            if missing_email:
+                raise ValueError(f"Email verification requires production SMTP settings: {', '.join(missing_email)}")
+        if self.environment == "production" and self.restore_test_database_url:
+            restore_name = self.restore_test_database_url.lower()
+            if not any(marker in restore_name for marker in ("restore", "drill")):
+                raise ValueError("RESTORE_TEST_DATABASE_URL must identify an isolated restore/drill database")
+            if self.restore_test_database_url == self.database_url:
+                raise ValueError("RESTORE_TEST_DATABASE_URL must not equal DATABASE_URL")
         return self
 
 

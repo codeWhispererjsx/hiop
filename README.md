@@ -97,6 +97,7 @@ alembic heads
 ```
 
 Production and container commands are documented in [DEPLOYMENT.md](DEPLOYMENT.md). Operational checks, backup, restore, and incident procedures are in [OPERATIONS.md](OPERATIONS.md).
+The Lagos Continental rollout must follow the [controlled pilot runbook](docs/LAGOS_CONTINENTAL_PILOT.md) and pass `scripts/check-production-readiness.py` before network access is enabled.
 
 ## Documentation
 

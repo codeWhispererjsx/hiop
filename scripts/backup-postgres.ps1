@@ -5,13 +5,16 @@ param(
     [string]$PGHOST = "localhost",
     [string]$PGDATABASE = "hiop",
     [string]$PGUSER = "hiop",
-    [string]$PGPASSWORD = "Admin",
+    [string]$DatabasePassword = $env:PGPASSWORD,
     [string]$BACKUP_DIR = "./backups",
     [int]$RETENTION_DAYS = 14
 )
 
 # Set environment variables for pg_dump
-$env:PGPASSWORD = $PGPASSWORD
+if ([string]::IsNullOrWhiteSpace($DatabasePassword)) {
+    throw "Set PGPASSWORD in the protected process environment before running this script."
+}
+$env:PGPASSWORD = $DatabasePassword
 
 # Create backup directory if it doesn't exist
 if (-not (Test-Path $BACKUP_DIR)) {
