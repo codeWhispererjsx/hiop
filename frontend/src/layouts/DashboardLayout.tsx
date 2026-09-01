@@ -43,11 +43,16 @@ export default function DashboardLayout({
     };
   }, [location.pathname]);
   useEffect(() => {
-    void endpoints
-      .me()
-      .then(account=>{setUser(account);return endpoints.propertyContext()})
-      .then(context=>{setPropertyContext(context);if(!window.localStorage.getItem("hiop.active_property_id")&&context.active_property_id)window.localStorage.setItem("hiop.active_property_id",context.active_property_id)})
-      .catch(() => undefined);
+    const refreshContext = () => {
+      void endpoints
+        .me()
+        .then(account=>{setUser(account);return endpoints.propertyContext()})
+        .then(context=>{setPropertyContext(context);if(!window.localStorage.getItem("hiop.active_property_id")&&context.active_property_id)window.localStorage.setItem("hiop.active_property_id",context.active_property_id)})
+        .catch(() => undefined);
+    };
+    refreshContext();
+    window.addEventListener("hiop:organization-updated", refreshContext);
+    return () => window.removeEventListener("hiop:organization-updated", refreshContext);
   }, []);
   useEffect(() => { void endpoints.publicSettings().then(setBranding).catch(() => undefined); }, []);
   useEffect(() => {

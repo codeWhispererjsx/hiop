@@ -43,6 +43,7 @@ backups/
 *.log
 
 # Local diagnostics (may expose tokens or environment details)
+/tmp/
 /check_db.py
 /check_backups.py
 /fix_permissions.py

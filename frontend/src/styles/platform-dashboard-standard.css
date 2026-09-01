@@ -1,0 +1,270 @@
+/* Standard platform-administration dashboard. */
+.platform-dashboard {
+  gap: 1.5rem;
+}
+
+.platform-command-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 320px);
+  gap: 1.5rem;
+  padding: 1.5rem;
+  border-color: var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+}
+
+.platform-command-hero::before {
+  width: 3px;
+  background: var(--color-primary);
+}
+
+.platform-eyebrow {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  letter-spacing: .1em;
+}
+
+.platform-command-copy h2 {
+  margin: .55rem 0 .4rem;
+  font-size: clamp(1.4rem, 2.2vw, 1.8rem);
+  letter-spacing: -.015em;
+}
+
+.platform-command-copy > p {
+  max-width: 720px;
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+}
+
+.platform-command-scope {
+  gap: .55rem;
+  margin-top: 1.2rem;
+}
+
+.platform-command-scope span {
+  padding: .45rem .65rem;
+  border-radius: var(--radius-md);
+  background: var(--surface-soft);
+  font-size: var(--font-size-xs);
+}
+
+.platform-posture {
+  gap: .55rem;
+  padding: 1.2rem;
+  border-radius: var(--radius-lg);
+  box-shadow: none;
+}
+
+.platform-posture > span {
+  font-size: var(--font-size-xs);
+}
+
+.platform-posture > strong {
+  font-size: 1.35rem;
+}
+
+.platform-posture > small {
+  min-height: 0;
+  font-size: var(--font-size-xs);
+  line-height: 1.5;
+}
+
+.platform-posture button,
+.platform-dashboard-section > header button {
+  min-height: 34px;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.platform-dashboard-section {
+  gap: .85rem;
+}
+
+.platform-dashboard-section > header span,
+.platform-control-panel > header span {
+  font-size: var(--font-size-xs);
+}
+
+.platform-dashboard-section > header h3,
+.platform-control-panel > header h3 {
+  font-size: 1rem;
+}
+
+.platform-estate-stats {
+  gap: .9rem;
+}
+
+.platform-estate-stats .stat-card {
+  min-height: 132px;
+  border-top: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+}
+
+.platform-estate-stats .stat-card strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.platform-dashboard-grid {
+  gap: 1rem;
+}
+
+.platform-control-panel {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xs);
+}
+
+.platform-control-panel > header {
+  padding: 1rem 1.1rem;
+  background: var(--surface-soft);
+}
+
+.platform-control-panel > button {
+  gap: .85rem;
+  min-height: 72px;
+  padding: .9rem 1.1rem;
+}
+
+.platform-control-panel > button strong {
+  font-size: var(--font-size-sm);
+}
+
+.platform-control-panel > button small {
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+.platform-control-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+}
+
+.platform-header-actions .primary-action {
+  min-height: 40px;
+}
+
+@media (max-width: 1020px) {
+  .platform-command-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-posture {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .platform-posture > small,
+  .platform-posture > button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .platform-command-hero {
+    padding: 1.15rem;
+  }
+
+  .platform-command-scope {
+    display: grid;
+  }
+
+  .platform-dashboard-section > header {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .platform-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .platform-header-actions .primary-action {
+    flex: 1;
+  }
+}
+.platform-estate-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .9rem;
+}
+
+.platform-estate-card {
+  min-width: 0;
+  min-height: 138px;
+  display: grid;
+  align-content: space-between;
+  gap: .65rem;
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-xs);
+}
+
+.platform-estate-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.platform-estate-card > div > span:first-child {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 650;
+}
+
+.platform-estate-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: var(--radius-md);
+  color: var(--color-primary);
+  background: var(--primary-soft);
+}
+
+.platform-estate-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.platform-estate-card.success .platform-estate-icon {
+  color: var(--color-success);
+  background: var(--success-soft);
+}
+
+.platform-estate-card > strong {
+  align-self: end;
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 720;
+  line-height: 1;
+  letter-spacing: -.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+.platform-estate-card > p {
+  min-height: 2.4em;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+}
+
+@media (max-width: 1100px) {
+  .platform-estate-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .platform-estate-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-estate-card {
+    min-height: 124px;
+  }
+}

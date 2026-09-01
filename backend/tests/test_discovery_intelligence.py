@@ -1,5 +1,11 @@
 from app.models.discovery_intelligence import DiscoveryCredential,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryPolicy,DiscoveryResult,DiscoveryStage
 from app.services.discovery_intelligence_service import DEVICE_FAMILIES,PIPELINE,configuration_checksum,confidence,discovered_description,identify,interpret_hostname,merge_hostnames,review_status,services_from_ports
+from app.api.v1.discovery_intelligence import normalize_network_input
+
+def test_quick_scan_network_shorthand_is_normalized_without_weakening_private_scope():
+    assert str(normalize_network_input("10.50.20")) == "10.50.20.0/24"
+    assert str(normalize_network_input("10.50.20.0/24")) == "10.50.20.0/24"
+    assert str(normalize_network_input("10.50.20.1-254")) == "10.50.20.0/24"
 
 def test_pipeline_has_all_ordered_retryable_stages():
     assert len(PIPELINE)==20 and PIPELINE[0]=="icmp_reachability" and PIPELINE[-1]=="configuration_item_update"

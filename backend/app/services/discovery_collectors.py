@@ -8,7 +8,10 @@ from __future__ import annotations
 import http.client
 import ipaddress
 import json
+import os
 import random
+import re
+import subprocess
 import socket
 import ssl
 import struct
@@ -73,14 +76,16 @@ class DNSCorrelationCollector:
     def collect(self, ip: str):
         result = CollectedObservation(ip)
         try:
+            # SIGALRM is not available on Windows. DNS already uses the host
+            # resolver's bounded retry policy there; use an alarm only on
+            # platforms that support it.
             import signal
-            def timeout_handler(signum, frame):
-                raise TimeoutError("DNS resolution timeout")
-            
-            # Set timeout for DNS operations
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(int(self.timeout))
-            
+            alarm_supported = hasattr(signal, "SIGALRM") and hasattr(signal, "alarm")
+            if alarm_supported:
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("DNS resolution timeout")
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(max(1, int(self.timeout)))
             try:
                 primary, aliases, _addresses = self.reverse(ip)
                 candidates = [primary, *aliases]
@@ -97,16 +102,17 @@ class DNSCorrelationCollector:
                     else:
                         result.warnings.append(f"PTR hostname {normalized} did not resolve back to {ip}.")
             finally:
-                signal.alarm(0)
-                
+                if alarm_supported:
+                    signal.alarm(0)
+
         except TimeoutError:
             result.data["dns_status"] = "timeout"
             result.warnings.append("DNS resolution timed out")
             result.evidence.append(evidence("dns_resolution", "reverse_dns", "timeout", verified=True))
         except (OSError, socket.error):
-            result.data["dns_status"] = "unavailable"
-            result.warnings.append("DNS resolution failed")
-            result.evidence.append(evidence("dns_resolution", "reverse_dns", "unavailable", verified=True))
+            result.data["dns_status"] = "unresolved"
+            result.warnings.append("DNS did not return a hostname")
+            result.evidence.append(evidence("dns_resolution", "reverse_dns", "unresolved", verified=True))
         except Exception as e:
             result.data["dns_status"] = "error"
             result.warnings.append(f"DNS resolution error: {str(e)}")
@@ -116,7 +122,7 @@ class DNSCorrelationCollector:
 
 class NetBIOSNameCollector:
     """One bounded RFC 1002 node-status request; no broadcast and no enumeration."""
-    def __init__(self, socket_factory=lambda: socket.socket(socket.AF_INET,socket.SOCK_DGRAM), timeout=1.0):self.socket_factory=socket_factory;self.timeout=timeout
+    def __init__(self, socket_factory=lambda: socket.socket(socket.AF_INET,socket.SOCK_DGRAM), timeout=1.0, command_runner=None):self.socket_factory=socket_factory;self.timeout=timeout;self.command_runner=command_runner
     @staticmethod
     def _query(transaction_id):
         raw=b"*"+b" "*15;encoded=b"".join(bytes((65+(value>>4),65+(value&15))) for value in raw)
@@ -143,6 +149,29 @@ class NetBIOSNameCollector:
                     if normalized:result.hostnames.append(normalized);result.evidence.append(evidence("hostname_match","netbios_node_status",normalized,verified=True));break
         except OSError:pass
         finally:sock.close()
+        if not result.hostnames and (self.command_runner or os.name=="nt"):
+            try:
+                runner=self.command_runner or subprocess.run
+                completed=runner(["ping","-a","-n","1","-w",str(max(250,int(self.timeout*1000))),ip],capture_output=True,text=True,timeout=max(2.0,self.timeout*2),check=False)
+                match=re.search(r"(?im)^\s*Pinging\s+([^\s\[]+)\s+\["+re.escape(ip)+r"\]",completed.stdout or "")
+                if match:
+                    normalized=normalize_hostname(match.group(1))
+                    try:is_address=ipaddress.ip_address(normalized)==ipaddress.ip_address(ip)
+                    except ValueError:is_address=False
+                    if normalized and not is_address:
+                        result.hostnames.append(normalized);result.evidence.append(evidence("hostname_match","windows_ping_name",normalized,verified=True))
+            except (OSError,subprocess.SubprocessError):pass
+        if not result.hostnames and (self.command_runner or os.name=="nt"):
+            try:
+                runner=self.command_runner or subprocess.run
+                completed=runner(["nbtstat","-A",ip],capture_output=True,text=True,timeout=max(2.0,self.timeout*3),check=False)
+                for line in completed.stdout.splitlines():
+                    match=re.match(r"^\s*([^<\s]{1,15})<(?:(?:00)|(?:20))>\s+UNIQUE",line,re.IGNORECASE)
+                    if match:
+                        normalized=normalize_hostname(match.group(1))
+                        if normalized:
+                            result.hostnames.append(normalized);result.evidence.append(evidence("hostname_match","windows_netbios",normalized,verified=True));break
+            except (OSError,subprocess.SubprocessError):pass
         return result
 
 

@@ -74,10 +74,6 @@ def update_property(property_id:UUID,payload:PropertyPatch,db:Session=Depends(ge
     mapping={"contact_email":"email","contact_phone":"phone"}
     for key,value in payload.model_dump(exclude_unset=True).items():setattr(row,mapping.get(key,key),str(value) if key=="contact_email" and value else value)
     create_audit_log(db,actor.username,"PROPERTY_UPDATED","Property",str(row.id),f"Updated property {row.name}");db.commit();db.refresh(row);return present(db,row,True)
-@router.post("/{property_id}/{action}")
-def status(property_id:UUID,action:str,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
-    if action not in {"activate","deactivate"}:raise HTTPException(404,"Unsupported property action")
-    row=require_prop(db,property_id,org);row.is_active=action=="activate";row.operational_status="active" if row.is_active else "inactive";create_audit_log(db,actor.username,f"PROPERTY_{action.upper()}","Property",str(row.id),f"{action.title()}d property {row.name}");db.commit();return present(db,row,True)
 @router.post("/{property_id}/access")
 def assign_access(property_id:UUID,payload:AccessWrite,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
     require_prop(db,property_id,org);user=db.query(User).filter(User.id==payload.user_id,User.organization_id==org).first()
@@ -85,6 +81,10 @@ def assign_access(property_id:UUID,payload:AccessWrite,db:Session=Depends(get_db
     row=db.query(UserPropertyAccess).filter_by(user_id=user.id,property_id=property_id).first() or UserPropertyAccess(user_id=user.id,property_id=property_id,granted_by=actor.id);row.enabled=True;row.access_level=payload.access_level;row.is_default=payload.is_default
     if payload.is_default:db.query(UserPropertyAccess).filter(UserPropertyAccess.user_id==user.id,UserPropertyAccess.property_id!=property_id).update({"is_default":False})
     db.add(row);create_audit_log(db,actor.username,"PROPERTY_ACCESS_ASSIGNED","Property",str(property_id),f"Granted {user.username} property access");db.commit();return {"user_id":user.id,"property_id":property_id,"access_level":row.access_level,"is_default":row.is_default}
+@router.post("/{property_id}/{action}")
+def status(property_id:UUID,action:str,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    if action not in {"activate","deactivate"}:raise HTTPException(404,"Unsupported property action")
+    row=require_prop(db,property_id,org);row.is_active=action=="activate";row.operational_status="active" if row.is_active else "inactive";create_audit_log(db,actor.username,f"PROPERTY_{action.upper()}","Property",str(row.id),f"{action.title()}d property {row.name}");db.commit();return present(db,row,True)
 @router.delete("/{property_id}/access/{user_id}",status_code=204)
 def remove_access(property_id:UUID,user_id:str,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
     require_prop(db,property_id,org);row=db.query(UserPropertyAccess).filter_by(user_id=user_id,property_id=property_id).first()

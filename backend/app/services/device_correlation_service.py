@@ -59,7 +59,7 @@ class DeviceCorrelationService:
         supporting=["ip_address"] if left["ip"]==right["ip"] else []
         return CorrelationDecision(bool(identifiers),candidate,strength,identifiers,supporting)
     def find_match(self,result):
-        candidates=self.db.scalars(select(DiscoveryResult).where(DiscoveryResult.id!=result.id,DiscoveryResult.canonical_result_id.is_(None))).all();decisions=[self.compare(result,row) for row in candidates];matches=[row for row in decisions if row.matched]
+        candidates=self.db.scalars(select(DiscoveryResult).where(DiscoveryResult.id!=result.id,DiscoveryResult.canonical_result_id.is_(None),DiscoveryResult.property_id==result.property_id)).all();decisions=[self.compare(result,row) for row in candidates];matches=[row for row in decisions if row.matched]
         if not matches:return CorrelationDecision(False,supporting=["ip_address"] if any(result.ip_address==row.ip_address for row in candidates) else [])
         best=max(row.strength for row in matches);strong=[row for row in matches if row.strength==best]
         if len(strong)>1:return CorrelationDecision(False,strength=best,identifiers=sorted({item for row in strong for item in row.identifiers}),ambiguous=True)
@@ -73,7 +73,12 @@ class DeviceCorrelationService:
         if existing:existing.status="open";existing.resolved_at=None;existing.resolved_by=None
         else:self.db.add(DiscoveryIdentityConflict(result_id=root.id,attribute=attribute,left_value=str(left),left_source=left_source,right_value=str(right),right_source=right_source,signature=signature))
     def _merge(self,root,incoming,source):
-        for field in self.DYNAMIC_FIELDS:
+        # Two observations in one job must retain their individual IP/hostname
+        # rows. Linking them to a canonical identity must not rewrite the
+        # canonical row into another observation's job-scoped unique IP.
+        root_job=getattr(root,"job_id",None);incoming_job=getattr(incoming,"job_id",None)
+        dynamic_fields=() if root_job is not None and root_job==incoming_job else self.DYNAMIC_FIELDS
+        for field in dynamic_fields:
             value=getattr(incoming,field,None);previous=getattr(root,field,None)
             if value and value!=previous:self._history(root,field,previous,value,source);setattr(root,field,value)
         for field in self.FILL_FIELDS:

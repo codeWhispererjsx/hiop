@@ -198,6 +198,8 @@ def assign_incident(db, row, technician_id, assigned_team, actor):
     if previous and previous.id != technician.id:
         summary = f"Reassigned from {previous.username} to {technician.username}"
     timeline(db, row, actor, "incident_assigned", "Ticket assignment changed", summary)
+    from app.services.incident_notification_service import notify_incident
+    notify_incident(db, row, "assignment", summary)
     audit(db, actor, "INCIDENT_ASSIGNED", "OperationalIncident", row.id, f"{row.incident_number}: {summary}")
     db.commit(); db.refresh(row)
     return row

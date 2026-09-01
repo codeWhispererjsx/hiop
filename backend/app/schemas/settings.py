@@ -26,7 +26,7 @@ class OrganizationSettings(BaseModel):
 
 
 class NetworkSettings(BaseModel):
-    approved_network: str = Field(min_length=3, max_length=1000)
+    approved_network: str = Field(default="", max_length=1000)
     automatic_scanning: bool
     scan_interval_minutes: int = Field(ge=5, le=1440)
     ping_timeout_seconds: int = Field(ge=1, le=30)
@@ -40,9 +40,14 @@ class NetworkSettings(BaseModel):
     @classmethod
     def validate_private_network(cls, value: str) -> str:
         from app.discovery.network import parse_networks
-        networks = parse_networks(value)
+        networks = parse_networks(value, allow_empty=True)
         return ",".join(str(network) for network in networks)
 
+    @model_validator(mode="after")
+    def require_network_for_automatic_scanning(self):
+        if self.automatic_scanning and not self.approved_network:
+            raise ValueError("Approved network is required when automatic scanning is enabled")
+        return self
 
 class NotificationSettings(BaseModel):
     email_notifications: bool
@@ -58,7 +63,7 @@ class NotificationSettings(BaseModel):
 
 class DiscoverySettings(BaseModel):
     enabled: bool = False
-    authorized_cidr_ranges: str = Field(min_length=3, max_length=1000)
+    authorized_cidr_ranges: str = Field(default="", max_length=1000)
     ignore_ranges: str = Field(default="", max_length=1000)
     interval_minutes: int = Field(ge=15, le=10080)
     ping_timeout_seconds: int = Field(ge=1, le=10)
@@ -70,21 +75,22 @@ class DiscoverySettings(BaseModel):
 
     @field_validator("authorized_cidr_ranges", "ignore_ranges")
     @classmethod
-    def validate_private_ranges(cls, value: str, info) -> str:
+    def validate_private_ranges(cls, value: str) -> str:
         from app.discovery.network import parse_networks
-        networks = parse_networks(value, allow_empty=info.field_name == "ignore_ranges")
+        networks = parse_networks(value, allow_empty=True)
         return ",".join(str(network) for network in networks)
 
     @model_validator(mode="after")
     def validate_scheduled_host_limits(self):
         if self.enabled:
+            if not self.authorized_cidr_ranges:
+                raise ValueError("Authorized CIDR range is required when discovery is enabled")
             from app.discovery.network import parse_networks
             for network in parse_networks(self.authorized_cidr_ranges):
                 usable = network.num_addresses if network.prefixlen >= 31 else network.num_addresses - 2
                 if usable > self.max_hosts_per_run:
                     raise ValueError("Each scheduled authorized range must fit within max_hosts_per_run")
         return self
-
 
 class IncidentSettings(BaseModel):
     enabled: bool = True

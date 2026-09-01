@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from app.services.discovery_collectors import (
     CollectedObservation, CommandFingerprintCollector, DNSCorrelationCollector,
-    SNMPDiscoveryCollector, ServiceFingerprintCollector,
+    NetBIOSNameCollector, SNMPDiscoveryCollector, ServiceFingerprintCollector,
 )
 from app.services.discovery_intelligence_service import confidence
 
@@ -87,3 +87,27 @@ def test_snmp_collector_enriches_system_and_entity_identity():
     assert result.vendor == "Cisco"
     assert result.data["model"] == "C9300-48P"
     assert {item["evidence_type"] for item in result.evidence} == {"snmp", "hostname_match", "vendor_match"}
+
+def test_windows_netbios_fallback_returns_real_technical_hostname():
+    class Socket:
+        def settimeout(self, _value): pass
+        def sendto(self, *_args): pass
+        def recvfrom(self, _size): raise OSError("udp unavailable")
+        def close(self): pass
+    completed = SimpleNamespace(stdout="    HELOSHADTSC1821<20>  UNIQUE      Registered\n    ADLOSHA        <00>  GROUP       Registered\n")
+    result = NetBIOSNameCollector(socket_factory=Socket, command_runner=lambda *_args, **_kwargs: completed).collect("10.50.21.124")
+    assert result.hostnames == ["heloshadtsc1821"]
+    assert result.evidence[0]["source"] == "windows_netbios"
+def test_windows_ping_name_fallback_returns_real_technical_hostname():
+    class Socket:
+        def settimeout(self, _value): pass
+        def sendto(self, *_args): pass
+        def recvfrom(self, _size): raise OSError("udp unavailable")
+        def close(self): pass
+    def runner(command, **_kwargs):
+        if command[0] == "ping":
+            return SimpleNamespace(stdout="Pinging HELOSHADTSC1821 [10.50.21.124] with 32 bytes of data:\n")
+        raise AssertionError("nbtstat should not run after ping resolved the name")
+    result = NetBIOSNameCollector(socket_factory=Socket, command_runner=runner).collect("10.50.21.124")
+    assert result.hostnames == ["heloshadtsc1821"]
+    assert result.evidence[0]["source"] == "windows_ping_name"

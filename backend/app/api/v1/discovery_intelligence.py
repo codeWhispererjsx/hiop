@@ -1,12 +1,14 @@
-import ipaddress,json,re
-from datetime import datetime,timezone
+import ipaddress,json,logging,re
+from concurrent.futures import ThreadPoolExecutor,as_completed
+from datetime import datetime,timedelta,timezone
 from uuid import UUID
-from fastapi import APIRouter,Depends,HTTPException,Query
+from fastapi import APIRouter,BackgroundTasks,Depends,HTTPException,Query
 from pydantic import BaseModel,Field
 from sqlalchemy import func,or_
 from sqlalchemy.orm import Session
 from app.core.security import get_db,require_roles
 from app.core.tenant import organization_context,property_context
+from app.db.database import SessionLocal
 from app.models.hierarchy import Department,Property
 from app.models.cmdb import CIClass,CIIdentifier,CIType,ConfigurationItem
 from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryIdentityConflict,DiscoveryIdentityHistory,DiscoveryIdentityProfile,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask,IdentityRule
@@ -14,6 +16,7 @@ from app.models.topology import Topology,TopologyLink,TopologyNode
 from app.models.snmp import SNMPCredential,SNMPTarget
 from app.models.discovered_device import DiscoveredDevice,DiscoveryStatus
 from app.models.device import Device
+from app.models.user import User
 from app.services.audit_service import create_audit_log
 from app.services.discovery_intelligence_service import DEVICE_FAMILIES,PIPELINE,DiscoveryIntelligenceService,confidence,parse_json,review_status
 from app.services.discovery_collectors import ActiveDirectoryCorrelationCollector,CollectedObservation,CredentialedHostCollector,DHCPLeaseCorrelationCollector,DNSCorrelationCollector,NetBIOSNameCollector,SNMPDiscoveryCollector,ServiceFingerprintCollector,evidence
@@ -28,8 +31,11 @@ from app.services.snmp_target_service import SNMPTargetService
 from app.services.device_correlation_service import DeviceCorrelationService
 from app.services.v1_v2_reconciliation_service import V1V2ReconciliationService
 from app.services.device_identity_service import DeviceIdentityService
+from app.services.asset_intelligence_service import ensure_asset_for_device
+from app.websocket.connection_manager import manager
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
+logger=logging.getLogger(__name__)
 reader=require_roles(["platformadmin","admin","technician","viewer"]);operator=require_roles(["admin","technician"]);admin=require_roles(["admin"]);identity_admin=require_roles(["platformadmin","admin"])
 REVIEW=("needs_review","automatically_identified","partially_identified","manually_verified","rejected","ignored","false_positive","duplicate","retired")
 class PolicyWrite(BaseModel):
@@ -45,6 +51,8 @@ class ApproveWrite(BaseModel):
     category:str|None=Field(default=None,max_length=80)
     department:str=Field(default="Unassigned",max_length=120)
     location:str=Field(default="Unassigned",max_length=160)
+class BulkApproveWrite(BaseModel):
+    result_ids:list[UUID]=Field(min_length=1,max_length=1000)
 class ConfirmIdentityWrite(BaseModel):
     friendly_name:str|None=Field(default=None,max_length=253)
     department:str|None=Field(default=None,max_length=120)
@@ -79,6 +87,25 @@ def get(db,model,id,label):
     if not row:raise HTTPException(404,f"{label} not found")
     return row
 def audit(db,user,action,entity,id,message):create_audit_log(db,user.username,action,entity,str(id),message)
+def normalize_network_input(value:str):
+    raw=value.strip()
+    if re.fullmatch(r"(?:\d{1,3}\.){2}\d{1,3}",raw):raw=f"{raw}.0/24"
+    range_match=re.fullmatch(r"((?:\d{1,3}\.){3})(\d{1,3})-(\d{1,3})",raw)
+    if range_match:
+        prefix,start,end=range_match.groups()
+        if start=="1" and end=="254":raw=f"{prefix}0/24"
+        else:raise ValueError("Address ranges must use CIDR, or the complete 1-254 form")
+    network=ipaddress.ip_network(raw,strict=False)
+    if network.version!=4:raise ValueError("Discovery currently supports private IPv4 ranges only")
+    return network
+def scoped_job(db,id,organization_id,property_id=None):
+    query=db.query(DiscoveryJob).join(Property,DiscoveryJob.property_id==Property.id).filter(DiscoveryJob.id==id,Property.organization_id==organization_id)
+    if property_id is not None:query=query.filter(DiscoveryJob.property_id==property_id)
+    row=query.first()
+    if not row:raise HTTPException(404,"Discovery scan not found")
+    return row
+def job_view(db,row):
+    return {"id":row.id,"policy_id":row.policy_id,"property_id":row.property_id,"job_type":row.job_type,"trigger_type":row.trigger_type,"network_range":row.network_range,"status":row.status,"current_stage":row.current_stage,"hosts_total":row.hosts_total,"hosts_completed":row.hosts_completed,"tasks_failed":row.tasks_failed,"devices_discovered":db.query(DiscoveryResult).filter_by(job_id=row.id).count(),"created_at":row.created_at,"started_at":row.started_at,"completed_at":row.completed_at}
 def scoped_result(db,id,organization_id,property_id=None):
     query=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(DiscoveryResult.id==id,Property.organization_id==organization_id)
     if property_id is not None:query=query.filter(DiscoveryResult.property_id==property_id)
@@ -89,7 +116,7 @@ def credential_view(row):return {"id":row.id,"policy_id":row.policy_id,"name":ro
 def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
     scoped=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(Property.organization_id==organization_id)
     if property_id is not None:scoped=scoped.filter(DiscoveryResult.property_id==property_id)
-    rows=scoped.order_by(DiscoveryResult.confidence_score.desc(),DiscoveryResult.last_seen_at.desc()).limit(10000).all();devices={};mac_index={};name_index={};ip_index={}
+    rows=scoped.order_by(DiscoveryResult.confidence_score.desc(),DiscoveryResult.last_seen_at.desc()).limit(10000).all();devices={};mac_index={};name_index={};ip_index={};row_keys={}
     profiles={row.result_id:row for row in db.query(DiscoveryIdentityProfile).filter(DiscoveryIdentityProfile.organization_id==organization_id).all()}
     by_id={row.id:row for row in rows};canonical_ids={row.canonical_result_id for row in rows if row.canonical_result_id}
     approved_by_result=dict(scoped.with_entities(DiscoveryResult.id,DiscoveredDevice.approved_device_id).join(DiscoveredDevice,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveredDevice.approved_device_id.is_not(None)).all())
@@ -101,6 +128,7 @@ def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
         if not key and name:key=name_index.get(name)
         if not key:key=ip_index.get(row.ip_address)
         if not key:key=f"mac:{mac}" if len(mac)==12 else f"name:{name}" if name else f"ip:{row.ip_address}"
+        row_keys[row.id]=key
         current=devices.get(key)
         if not current:
             # Legacy rows can retain a canonical_result_id after the canonical
@@ -117,33 +145,74 @@ def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
         if len(mac)==12:mac_index[mac]=key
         if name:name_index[name]=key
         ip_index[row.ip_address]=key
+    # A higher-confidence canonical row may be encountered before a newer
+    # observation. Merge missing attributes from every linked observation so
+    # verified technical identity is not hidden by an older empty canonical row.
+    merge_fields=("primary_hostname","fqdn","friendly_name","department","suggested_department","device_number","description","description_source","location","mac_address","vendor","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ad_computer_name","ad_domain","ad_organizational_unit","ad_operating_system","ad_last_enriched_at","ci_id")
+    for row in rows:
+        current=devices.get(row_keys.get(row.id))
+        if not current:continue
+        for field in merge_fields:
+            if not current[field] and getattr(row,field):current[field]=getattr(row,field)
     return sorted(devices.values(),key=lambda x:x["last_seen_at"],reverse=True)[:limit]
 def execute_safe_job(db,job,user):
-    policy=get(db,DiscoveryPolicy,job.policy_id,"Policy");job.status="running";job.started_at=datetime.now(timezone.utc);db.commit()
+    policy=get(db,DiscoveryPolicy,job.policy_id,"Policy");job.status="running";job.current_stage="host_discovery";job.started_at=datetime.now(timezone.utc);db.commit()
     config={"enabled":True,"authorized_cidr_ranges":",".join(parse_json(policy.authorized_ranges,[])),"ignore_ranges":",".join(parse_json(policy.excluded_ranges,[])),"max_hosts_per_run":policy.max_hosts,"concurrency_limit":policy.concurrency,"ping_timeout_seconds":policy.timeout_seconds,"automatic_hostname_lookup":True,"automatic_vendor_lookup":True,"admin_notification_threshold":policy.max_hosts+1}
-    try:run=DiscoveryService(db,config=config).discover_range(job.network_range,trigger_type=job.trigger_type,triggered_by=user.id,audit_actor=user.username)
+    service=DiscoveryIntelligenceService(db)
+    def is_cancelled():
+        db.expire(job,["status"])
+        return job.status=="cancelled"
+    def report_progress(completed,total,device,online):
+        job.hosts_total=total;job.hosts_completed=completed;job.current_stage="host_discovery"
+        if device is not None:
+            observed=CollectedObservation(device.ip_address,hostnames=[device.hostname] if device.hostname else [],mac_address=device.mac_address,vendor=device.vendor,operating_system=device.operating_system_guess)
+            if online:observed.evidence.append(evidence("ping_response","icmp","reachable",verified=True))
+            for key,value,source in (("mac_address",device.mac_address,"arp"),("vendor_match",device.vendor,"oui"),("hostname_match",device.hostname,"reverse_dns")):
+                if value:observed.evidence.append(evidence(key,source,value,verified=source in ("arp","reverse_dns")))
+            result=service.ingest(job,observed.as_dict());result.discovered_device_id=device.id
+        manager.broadcast_from_thread({"type":"discovery_progress","scan_id":str(job.id),"property_id":str(job.property_id),"network":job.network_range,"phase":"host_discovery","hosts_completed":completed,"hosts_total":total,"devices_discovered":db.query(DiscoveryResult).filter_by(job_id=job.id).count()})
+        logger.info("discovery_progress scan_id=%s property_id=%s network=%s phase=host_discovery host=%s status=%s completed=%s total=%s",job.id,job.property_id,job.network_range,getattr(device,"ip_address",None),"discovered" if device else "no_response",completed,total)
+    try:run=DiscoveryService(db,config=config).discover_range(job.network_range,trigger_type=job.trigger_type,triggered_by=user.id,audit_actor=user.username,progress_callback=report_progress,cancel_requested=is_cancelled)
     except Exception as exc:
         job=db.get(DiscoveryJob,job.id);job.status="failed";job.tasks_failed+=1;job.completed_at=datetime.now(timezone.utc);db.commit();raise HTTPException(502,f"Safe discovery failed: {exc}") from exc
+    def cancelled_response():
+        job.current_stage="cancelled";job.completed_at=datetime.now(timezone.utc);audit(db,user,"CANCEL","discovery_job",job.id,f"Cancelled scan after {job.hosts_completed} of {job.hosts_total} addresses");db.commit();return {"job":job,"legacy_run_id":run.id,"results":db.query(DiscoveryResult).filter_by(job_id=job.id).count(),"hosts_responded":run.hosts_responded,"errors":run.error_count,"warnings":[run.error_summary] if run.error_summary else []}
+    db.refresh(job)
+    if job.status=="cancelled":return cancelled_response()
     network=ipaddress.ip_network(job.network_range,strict=False);legacy=[]
     for x in db.query(DiscoveredDevice).all():
         try:
             if x.ip_address and ipaddress.ip_address(x.ip_address) in network and x.last_seen_at>=run.started_at: legacy.append(x)
         except ValueError: pass
-    service=DiscoveryIntelligenceService(db);results=[];stage_errors=[]
+    job.current_stage="enriching";db.commit();results=[];stage_errors=[]
     enabled=set(parse_json(policy.enabled_stages,[]));stage_enabled=lambda key:not enabled or key in enabled
     dns_collector=DNSCorrelationCollector();netbios_collector=NetBIOSNameCollector(timeout=min(float(policy.timeout_seconds),1.0));ad_collector=ActiveDirectoryCorrelationCollector(db);dhcp_collector=DHCPLeaseCorrelationCollector(db)
     service_collector=ServiceFingerprintCollector(timeout=min(float(policy.timeout_seconds),3.0))
     snmp_collector=SNMPDiscoveryCollector(db);host_collector=CredentialedHostCollector(db)
+    network_observations={}
+    def collect_uncredentialed(device):
+        collected=CollectedObservation(device.ip_address)
+        if stage_enabled("hostname_resolution"):collected.merge(dns_collector.collect(device.ip_address))
+        if stage_enabled("netbios_discovery"):collected.merge(netbios_collector.collect(device.ip_address))
+        if stage_enabled("service_fingerprinting") and parse_json(policy.allowed_ports,[]):collected.merge(service_collector.collect(device.ip_address,parse_json(policy.allowed_ports,[])))
+        return collected
+    if legacy:
+        workers=max(1,min(int(policy.concurrency),16,len(legacy)))
+        with ThreadPoolExecutor(max_workers=workers,thread_name_prefix="hiop-enrichment") as executor:
+            futures={executor.submit(collect_uncredentialed,device):device.ip_address for device in legacy}
+            for future in as_completed(futures):
+                if is_cancelled():break
+                try:network_observations[futures[future]]=future.result()
+                except Exception as exc:stage_errors.append(f"Enrichment for {futures[future]}: {type(exc).__name__}")
+    if is_cancelled():return cancelled_response()
     for device in legacy:
+        if is_cancelled():return cancelled_response()
         observed=CollectedObservation(device.ip_address,hostnames=[device.hostname] if device.hostname else [],mac_address=device.mac_address,vendor=device.vendor,operating_system=device.operating_system_guess)
         if device.status==DiscoveryStatus.ONLINE:observed.evidence.append(evidence("ping_response","icmp","reachable",verified=True))
         for key,value,source in (("mac_address",device.mac_address,"arp"),("vendor_match",device.vendor,"oui"),("hostname_match",device.hostname,"reverse_dns"),("operating_system",device.operating_system_guess,"fingerprint")):
             if value:observed.evidence.append(evidence(key,source,value,verified=source in ("arp","reverse_dns")))
-        if stage_enabled("hostname_resolution"):observed.merge(dns_collector.collect(device.ip_address))
-        if stage_enabled("netbios_discovery"):observed.merge(netbios_collector.collect(device.ip_address))
+        if device.ip_address in network_observations:observed.merge(network_observations[device.ip_address])
         if stage_enabled("dhcp_lease_correlation"):observed.merge(dhcp_collector.collect(device.ip_address))
-        if stage_enabled("service_fingerprinting") and parse_json(policy.allowed_ports,[]):
-            observed.merge(service_collector.collect(device.ip_address,parse_json(policy.allowed_ports,[])))
         if stage_enabled("snmp_discovery") and policy.allow_credentialed:
             snmp_observation=snmp_collector.collect(device.ip_address,parse_json(policy.authorized_ranges,[]));observed.merge(snmp_observation);stage_errors.extend(snmp_observation.warnings)
         if policy.allow_credentialed and (stage_enabled("windows_wmi_discovery") or stage_enabled("linux_ssh_fingerprinting")):
@@ -169,29 +238,46 @@ def execute_safe_job(db,job,user):
     for stage in stages:
         stage.status="completed" if stage.stage_key in executed else "skipped";stage.attempts+=int(stage.stage_key in executed);stage.started_at=stage.started_at or job.started_at;stage.completed_at=now_at
         for device in legacy:db.add(DiscoveryTask(job_id=job.id,stage_id=stage.id,target=device.ip_address,status=stage.status,attempts=int(stage.stage_key in executed),started_at=job.started_at,completed_at=now_at))
-    job.status="completed" if run.status.value in ("completed","partial") else "failed";job.current_stage="configuration_item_update";job.hosts_completed=run.hosts_attempted;job.tasks_failed=run.error_count;job.completed_at=now_at;audit(db,user,"EXECUTE","discovery_job",job.id,"Executed bounded ICMP, ARP, DNS, service, SNMP, AD, confidence, and correlation stages");db.commit();db.refresh(job);return {"job":job,"legacy_run_id":run.id,"results":len(results),"hosts_responded":run.hosts_responded,"errors":run.error_count,"warnings":stage_errors[:100]}
+    job.status="completed_with_warnings" if run.error_count or stage_errors else "completed";job.current_stage="completed";job.hosts_completed=run.hosts_attempted;job.tasks_failed=run.error_count+len(stage_errors);job.completed_at=now_at;audit(db,user,"EXECUTE","discovery_job",job.id,"Executed bounded host discovery followed by optional identity enrichment");db.commit();db.refresh(job);manager.broadcast_from_thread({"type":"discovery_completed","scan_id":str(job.id),"property_id":str(job.property_id),"network":job.network_range,"status":job.status,"hosts_completed":job.hosts_completed,"hosts_total":job.hosts_total,"devices_discovered":len(results)});return {"job":job,"legacy_run_id":run.id,"results":len(results),"hosts_responded":run.hosts_responded,"errors":run.error_count,"warnings":stage_errors[:100]}
+
+def execute_job_background(job_id,user_id):
+    db=SessionLocal()
+    try:
+        job=db.get(DiscoveryJob,job_id);user=db.get(User,user_id)
+        if job and user and job.status=="pending":execute_safe_job(db,job,user)
+    except Exception:
+        logger.exception("discovery_failed scan_id=%s",job_id)
+    finally:db.close()
 
 @router.get("/capabilities")
 def capabilities(_=Depends(reader)):return {"pipeline":PIPELINE,"device_families":DEVICE_FAMILIES,"review_statuses":REVIEW,"credentialed_stages_are_opt_in":True,"intrusive_scanning":False}
 @router.post("/quick-scan")
-def quick_scan(body:QuickScanWrite,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+def quick_scan(body:QuickScanWrite,background_tasks:BackgroundTasks,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     if property_id is None:raise HTTPException(400,"Select a property before starting discovery")
-    try:network=ipaddress.ip_network(body.network_range,strict=False)
-    except ValueError as exc:raise HTTPException(422,"Enter a valid private IP address or CIDR range") from exc
+    try:network=normalize_network_input(body.network_range)
+    except ValueError as exc:raise HTTPException(422,f"Invalid network range. {exc}") from exc
     if not network.is_private:raise HTTPException(422,"Quick Scan is limited to private networks")
     if network.num_addresses>1024:raise HTTPException(422,"Quick Scan is limited to 1,024 addresses; scan a smaller subnet")
-    scope=str(network);policy=db.query(DiscoveryPolicy).filter_by(name=f"Quick Scan · {scope}",created_by=user.id,property_id=property_id).first()
+    scope=str(network)
+    now_at=datetime.now(timezone.utc);active_since=now_at-timedelta(minutes=30)
+    stale=db.query(DiscoveryJob).filter(DiscoveryJob.property_id==property_id,DiscoveryJob.status.in_(("pending","running")),DiscoveryJob.created_at<active_since).all()
+    for stale_job in stale:
+        stale_job.status="failed";stale_job.completed_at=now_at;stale_job.tasks_failed=max(1,stale_job.tasks_failed)
+    if stale:db.flush()
+    active=db.query(DiscoveryJob).filter(
+        DiscoveryJob.property_id==property_id,
+        DiscoveryJob.network_range==scope,
+        DiscoveryJob.status.in_(("pending","running")),
+        DiscoveryJob.created_at>=active_since,
+    ).order_by(DiscoveryJob.created_at.desc()).first()
+    if active:raise HTTPException(409,f"A scan of {scope} is already {active.status}. Started {active.started_at or active.created_at}.")
+    policy=db.query(DiscoveryPolicy).filter_by(name=f"Quick Scan · {scope}",created_by=user.id,property_id=property_id).first()
     safe_stages=["icmp_reachability","arp_resolution","reverse_dns","hostname_resolution","mac_collection","mac_vendor_identification","port_discovery","service_fingerprinting","netbios_discovery","http_https_fingerprinting","tls_certificate_inspection","dhcp_lease_correlation","active_directory_correlation","cmdb_correlation","confidence_calculation","configuration_item_update"]
     if not policy:
         policy=DiscoveryPolicy(name=f"Quick Scan · {scope}",property_id=property_id,authorized_ranges=json.dumps([scope]),excluded_ranges="[]",enabled_stages=json.dumps(safe_stages),allowed_ports=json.dumps([22,53,80,135,139,161,443,445,3389,5985,5986]),max_hosts=1024,concurrency=32,timeout_seconds=1,rate_limit_per_second=50,allow_credentialed=False,enabled=True,created_by=user.id);db.add(policy);db.flush()
     job=DiscoveryIntelligenceService(db).create_job(policy,scope,"full","quick_scan",user.id);audit(db,user,"CREATE","discovery_job",job.id,"Started credential-free Quick Network Scan");db.commit();db.refresh(job)
-    execution=execute_safe_job(db,job,user)
-    devices=[]
-    for item in consolidated_device_rows(db,organization_id,property_id):
-        try:
-            if item.get("ip_address") and ipaddress.ip_address(item["ip_address"]) in network: devices.append(item)
-        except ValueError: pass
-    return {"job":execution["job"],"summary":{"found":len(devices),"identified":sum(x["confidence_score"]>=80 for x in devices),"partial":sum(40<=x["confidence_score"]<80 for x in devices),"needs_review":sum(x["confidence_score"]<40 for x in devices)},"devices":devices,"warnings":execution.get("warnings",[])}
+    background_tasks.add_task(execute_job_background,job.id,user.id)
+    return {"scan_id":job.id,"status":"scanning","normalized_network":scope,"job":job,"summary":{"found":0,"identified":0,"partial":0,"needs_review":0},"devices":[],"warnings":[]}
 @router.get("/devices")
 def consolidated_devices(search:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     rows=consolidated_device_rows(db,organization_id,property_id)
@@ -282,8 +368,13 @@ def enable_credential(id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
     if not policy.enabled or not policy.allow_credentialed:raise HTTPException(409,"Credentialed discovery must be enabled by the policy first")
     row.enabled=True;audit(db,user,"ENABLE","discovery_credential",id,"Enabled scoped least-privilege discovery credential");db.commit();return credential_view(row)
 @router.get("/jobs")
-def jobs(status:str|None=None,page_number:int=Query(1,alias="page",ge=1),page_size:int=Query(25,ge=1,le=100),db:Session=Depends(get_db),_=Depends(reader)):
-    q=db.query(DiscoveryJob).order_by(DiscoveryJob.created_at.desc());q=q.filter_by(status=status) if status else q;return page(q,page_number,page_size)
+def jobs(status:str|None=None,active_only:bool=False,trigger_type:str|None=None,page_number:int=Query(1,alias="page",ge=1),page_size:int=Query(25,ge=1,le=100),db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    q=db.query(DiscoveryJob).join(Property,DiscoveryJob.property_id==Property.id).filter(Property.organization_id==organization_id)
+    if property_id is not None:q=q.filter(DiscoveryJob.property_id==property_id)
+    if trigger_type:q=q.filter(DiscoveryJob.trigger_type==trigger_type)
+    if active_only:q=q.filter(DiscoveryJob.status.in_(("pending","running")),DiscoveryJob.created_at>=datetime.now(timezone.utc)-timedelta(minutes=30))
+    elif status:q=q.filter(DiscoveryJob.status==status)
+    q=q.order_by(DiscoveryJob.created_at.desc());total=q.count();rows=q.offset((page_number-1)*page_size).limit(page_size).all();return {"items":[job_view(db,row) for row in rows],"total":total,"page":page_number,"page_size":page_size}
 @router.post("/jobs",status_code=201)
 def create_job(body:JobWrite,db:Session=Depends(get_db),user=Depends(admin)):
     policy=get(db,DiscoveryPolicy,body.policy_id,"Policy")
@@ -292,17 +383,28 @@ def create_job(body:JobWrite,db:Session=Depends(get_db),user=Depends(admin)):
     except ValueError as exc:raise HTTPException(422,str(exc)) from exc
     audit(db,user,"CREATE","discovery_job",row.id,"Created auditable multi-stage discovery job");db.commit();db.refresh(row);return row
 @router.get("/jobs/{id}")
-def job(id:UUID,db:Session=Depends(get_db),_=Depends(reader)):
-    row=get(db,DiscoveryJob,id,"Job");return {"job":row,"stages":db.query(DiscoveryStage).filter_by(job_id=id).order_by(DiscoveryStage.sequence).all(),"tasks":db.query(DiscoveryTask).filter_by(job_id=id).all()}
+def job(id:UUID,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=scoped_job(db,id,organization_id,property_id);return {"job":job_view(db,row),"stages":db.query(DiscoveryStage).filter_by(job_id=id).order_by(DiscoveryStage.sequence).all(),"tasks":db.query(DiscoveryTask).filter_by(job_id=id).all(),"devices_discovered":db.query(DiscoveryResult).filter_by(job_id=id).count()}
+@router.get("/jobs/{id}/results")
+def job_results(id:UUID,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=scoped_job(db,id,organization_id,property_id);job_ips={value for (value,) in db.query(DiscoveryResult.ip_address).filter_by(job_id=id).all()};items=[]
+    for item in consolidated_device_rows(db,organization_id,property_id):
+        if item.get("ip_address") in job_ips:items.append(item)
+    return {"scan_id":row.id,"status":row.status,"phase":row.current_stage,"hosts_completed":row.hosts_completed,"hosts_total":row.hosts_total,"devices_discovered":db.query(DiscoveryResult).filter_by(job_id=id).count(),"items":items}
+@router.post("/jobs/{id}/cancel")
+def cancel_job(id:UUID,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=scoped_job(db,id,organization_id,property_id)
+    if row.status not in ("pending","running"):raise HTTPException(409,"Only a pending or running scan can be cancelled")
+    row.status="cancelled";row.current_stage="cancelling";audit(db,user,"CANCEL_REQUEST","discovery_job",row.id,"Requested cooperative cancellation of the active discovery scan");db.commit();return {"scan_id":row.id,"status":"cancelled","partial_results":db.query(DiscoveryResult).filter_by(job_id=id).count()}
 @router.post("/jobs/{id}/execute")
-def execute_job(id:UUID,db:Session=Depends(get_db),user=Depends(admin)):
-    job=get(db,DiscoveryJob,id,"Job")
-    if job.status=="running":raise HTTPException(409,"Discovery job is already running")
-    if job.status=="completed":raise HTTPException(409,"Discovery job is already complete")
-    return execute_safe_job(db,job,user)
+def execute_job(id:UUID,db:Session=Depends(get_db),user=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    row=scoped_job(db,id,organization_id,property_id)
+    if row.status=="running":raise HTTPException(409,"Discovery job is already running")
+    if row.status in ("completed","completed_with_warnings"):raise HTTPException(409,"Discovery job is already complete")
+    return execute_safe_job(db,row,user)
 @router.post("/jobs/{id}/stages/{stage_key}/run")
-def run_stage(id:UUID,stage_key:str,observations:list[Observation]=[],db:Session=Depends(get_db),user=Depends(admin)):
-    job=get(db,DiscoveryJob,id,"Job");stage=db.query(DiscoveryStage).filter_by(job_id=id,stage_key=stage_key).first()
+def run_stage(id:UUID,stage_key:str,observations:list[Observation]=[],db:Session=Depends(get_db),user=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    job=scoped_job(db,id,organization_id,property_id);stage=db.query(DiscoveryStage).filter_by(job_id=id,stage_key=stage_key).first()
     if not stage:raise HTTPException(404,"Stage not found")
     if stage.status=="skipped":raise HTTPException(409,"Stage is disabled by policy")
     stage.status="running";stage.attempts+=1;stage.started_at=datetime.now(timezone.utc);job.status="running";job.current_stage=stage_key
@@ -395,11 +497,14 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
         if linked:return db.get(Device,linked.approved_device_id)
     normalized_mac=(row.mac_address or "").strip().upper().replace("-",":")
     duplicate=None
-    if normalized_mac: duplicate=db.query(Device).filter(func.lower(Device.mac_address)==normalized_mac.lower()).first()
+    scoped_context=isinstance(organization_id,UUID)
+    device_scope=db.query(Device).join(Property,Device.property_id==Property.id).filter(Property.organization_id==organization_id) if scoped_context else db.query(Device)
+    if scoped_context and isinstance(property_id,UUID):device_scope=device_scope.filter(Device.property_id==property_id)
+    if normalized_mac: duplicate=device_scope.filter(func.lower(Device.mac_address)==normalized_mac.lower()).first()
     if not duplicate:
         names={name.strip().lower() for name in (row.primary_hostname,row.ad_computer_name,row.friendly_name) if name}
-        if names:duplicate=db.query(Device).filter(func.lower(Device.hostname).in_(names)).first()
-    if not duplicate: duplicate=db.query(Device).filter(Device.ip_address==row.ip_address).first()
+        if names:duplicate=device_scope.filter(func.lower(Device.hostname).in_(names)).first()
+    if not duplicate: duplicate=device_scope.filter(Device.ip_address==row.ip_address).first()
     if duplicate:raise HTTPException(409,"This device is already present in managed inventory")
     suffix=str(row.id).replace("-","")[:12].upper()
     device=Device(
@@ -411,12 +516,27 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
         ad_computer_name=row.ad_computer_name,ad_distinguished_name=row.ad_distinguished_name,ad_domain=row.ad_domain,
         ad_organizational_unit=row.ad_organizational_unit,ad_description=row.ad_description,ad_operating_system=row.ad_operating_system,
         ad_operating_system_version=row.ad_operating_system_version,ad_enabled=row.ad_enabled,ad_last_logon_at=row.ad_last_logon_at,
-        inventory_status="Active",network_status="Online",status="Active",
+        property_id=getattr(row,"property_id",None),inventory_status="Active",network_status="Online",status="Active",
     )
     db.add(device);db.flush();row.review_status="manually_verified"
     if discovered:
         discovered.review_status="approved";discovered.approved_device_id=device.id;discovered.reviewed_by=user.id;discovered.reviewed_at=datetime.now(timezone.utc)
+    if scoped_context:
+        asset=ensure_asset_for_device(db,device,user,organization_id);asset.name=row.friendly_name or row.primary_hostname or row.ip_address
     audit(db,user,"APPROVE","discovery_result",id,f"Approved {row.ip_address} into managed inventory");db.commit();db.refresh(device);return device
+@router.post("/results/bulk-approve")
+def bulk_approve_results(body:BulkApproveWrite,db:Session=Depends(get_db),user=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
+    approved=[];already_approved=[];failed=[]
+    rows={item["result_id"]:item for item in consolidated_device_rows(db,organization_id,property_id)}
+    for result_id in dict.fromkeys(body.result_ids):
+        try:
+            row=scoped_result(db,result_id,organization_id,property_id);existing=rows.get(row.id)
+            if existing and existing.get("inventory_device_id"):
+                already_approved.append(str(result_id));continue
+            device=approve_result(result_id,ApproveWrite(),db,user,organization_id,property_id);approved.append({"result_id":str(result_id),"device_id":str(device.id)})
+        except HTTPException as exc:failed.append({"result_id":str(result_id),"reason":str(exc.detail)})
+    create_audit_log(db,user.username,"BULK_APPROVE","discovery_result","multiple",f"Approved {len(approved)} scoped discovery results",organization_id=organization_id,property_id=property_id);db.commit()
+    return {"approved":approved,"already_approved":already_approved,"failed":failed,"approved_count":len(approved)}
 @router.post("/confidence/recalculate")
 def recalculate(db:Session=Depends(get_db),user=Depends(admin)):
     changed=0

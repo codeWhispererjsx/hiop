@@ -17,6 +17,18 @@
   border-radius: 14px;
   background: var(--surface-muted);
 }
+
+.modal:has(> .discovery-detail) {
+  width: min(1180px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.modal > .discovery-detail {
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+}
 .enrichment-status { margin: 0 0 var(--space-5); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); color: var(--text-muted); background: var(--surface-soft); text-transform: capitalize; }
 .enrichment-statuses { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .identity-confidence,.identity-conflicts,.identity-confirmation,.identity-history { margin-top: var(--space-5); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-soft); }

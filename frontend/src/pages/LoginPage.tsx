@@ -4,7 +4,7 @@ import { Icon } from "../components/Icon";
 import BrandLogo from "../components/BrandLogo";
 import ThemeToggle from "../components/ThemeToggle";
 import { endpoints } from "../lib/api";
-import { setAuthToken } from "../lib/auth";
+import { clearAuthToken, setAuthToken } from "../lib/auth";
 import "../App.css";
 import "../styles/product-polish.css";
 
@@ -20,6 +20,7 @@ export default function LoginPage() {
     setMessage("");
     setBusy(true);
     try {
+      clearAuthToken();
       const data = await endpoints.login(email, password);
       setAuthToken(data.access_token);
       const user = await endpoints.me();

@@ -21,6 +21,7 @@ export function clearAuthToken(): void {
   localStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(ORGANIZATION_KEY);
+  localStorage.removeItem("hiop.active_property_id");
 }
 
 export const getOrganizationContext=()=>sessionStorage.getItem(ORGANIZATION_KEY);

@@ -65,7 +65,7 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
       const body: unknown = await response.clone().json();
       if (typeof body === "object" && body !== null && "detail" in body) detail = errorDetailMessage(body.detail);
     } catch { /* non-JSON response */ }
-    if (detail === "Property is outside your permitted scope") {
+    if (["Property is outside your permitted scope", "Property access denied"].includes(detail ?? "")) {
       window.localStorage.removeItem("hiop.active_property_id");
       headers.delete("X-HIOP-Property-ID");
       try { response = await fetch(`${API_URL}${path}`, { ...init, headers }); }
@@ -136,6 +136,7 @@ export const endpoints = {
   platformSummary:()=>api<import("./types").PlatformSummary>("/platform/summary"),
   platformOrganizations:()=>api<import("./types").PlatformOrganization[]>("/platform/organizations"),
   createPlatformOrganization:(body:Record<string,unknown>)=>api<import("./types").PlatformOrganization>("/platform/organizations",{method:"POST",body:JSON.stringify(body)}),
+  updatePlatformOrganization:(id:string,body:{name:string;contact_email:string|null;contact_phone:string|null;notes:string|null})=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}`,{method:"PATCH",body:JSON.stringify(body)}),
   suspendPlatformOrganization:(id:string)=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}/suspend`,{method:"POST"}),
   activatePlatformOrganization:(id:string)=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}/activate`,{method:"POST"}),
   provisionOrganizationAdmin:(id:string,body:Record<string,unknown>)=>api<Record<string,unknown>>(`/platform/organizations/${id}/administrator`,{method:"POST",body:JSON.stringify(body)}),
@@ -177,7 +178,7 @@ export const endpoints = {
   archiveProperty: (id:string) => api<void>(`/properties/${id}`, {method:"DELETE"}),
   dashboard: () => api<import("./types").DashboardData>("/dashboard/"),
   devices: () => api<import("./types").Device[]>("/devices/"),
-  assets: (filters:Record<string,string|undefined>={}) => api<import("./types").ManagedAsset[]>(`/assets${queryString(filters)}`),
+  assets: async (filters:Record<string,string|undefined>={}) => getPaginatedItems(await api<import("./types").ManagedAsset[]|{items:import("./types").ManagedAsset[];total:number;page:number;page_size:number}>(`/assets${queryString(filters)}`)),
   asset: (id:string) => api<import("./types").ManagedAsset>(`/assets/${id}`),
   deviceAsset: (deviceId:string) => api<import("./types").ManagedAsset>(`/assets/device/${deviceId}`),
   createAsset: (body:import("./types").ManagedAssetInput) => api<import("./types").ManagedAsset>("/assets",{method:"POST",body:JSON.stringify(body)}),
@@ -226,7 +227,10 @@ export const endpoints = {
   v3eEvents:()=>api<{items:Array<{id:string;created_at:string;alert_title:string;alert_id:string;action:string;actor:string;reason:string}>}>("/alert-center/events"),
   v3eRules:()=>api<{items:import("./types").V3EAlertRule[]}>("/alert-center/rules"),
   updateV3ERule:(id:string,body:Omit<import("./types").V3EAlertRule,"id"|"rule_type"|"name"|"description">)=>api<import("./types").V3EAlertRule>(`/alert-center/rules/${id}`,{method:"PUT",body:JSON.stringify(body)}),
-  v3eNotifications:()=>api<Array<Record<string,unknown>>>("/alert-center/notifications"),
+  // Property access notifications for technicians
+  propertyAccessNotifications: () => api<Array<Record<string, unknown>>>("/alerts_events/notifications"),
+  // Existing V3E notifications endpoint
+  v3eNotifications: () => api<Array<Record<string,unknown>>>('/alert-center/notifications'),
   auditLogs: (filters: import("./types").AuditFilters = {}, signal?: AbortSignal) => api<import("./types").AuditLogPage>(`/audit-logs${queryString(filters)}`, { signal }),
   auditLog: (id: string) => api<import("./types").AuditLog>(`/audit-logs/${id}`),
   exportAuditLogs: (filters: import("./types").AuditFilters = {}) => download(`/audit-logs/export${queryString(filters)}`),
@@ -761,7 +765,10 @@ export const endpoints = {
   discoveryCapabilities:()=>api<{pipeline:string[];device_families:string[];review_statuses:string[]}>("/discovery-intelligence/capabilities"),
   discoveryPolicies:()=>api<{items:import("./types").DiscoveryPolicy[]}>("/discovery-intelligence/policies"),
   createDiscoveryPolicy:(body:Record<string,unknown>)=>api<import("./types").DiscoveryPolicy>("/discovery-intelligence/policies",{method:"POST",body:JSON.stringify(body)}),
-  discoveryJobs:()=>api<{items:import("./types").DiscoveryJob[];total:number}>("/discovery-intelligence/jobs"),
+  discoveryJobs:(activeOnly=false,triggerType?:string)=>api<{items:import("./types").DiscoveryJob[];total:number}>(`/discovery-intelligence/jobs${queryString({active_only:activeOnly||undefined,trigger_type:triggerType})}`),
+  discoveryJob:(id:string)=>api<{job:import("./types").DiscoveryJob;devices_discovered:number}>(`/discovery-intelligence/jobs/${id}`),
+  discoveryJobResults:(id:string)=>api<import("./types").DiscoveryJobResults>(`/discovery-intelligence/jobs/${id}/results`),
+  cancelDiscoveryJob:(id:string)=>api<{scan_id:string;status:string;partial_results:number}>(`/discovery-intelligence/jobs/${id}/cancel`,{method:"POST"}),
   createDiscoveryJob:(body:Record<string,unknown>)=>api<import("./types").DiscoveryJob>("/discovery-intelligence/jobs",{method:"POST",body:JSON.stringify(body)}),
   executeDiscoveryJob:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/jobs/${id}/execute`,{method:"POST"}),
   discoveryResults:(filters:Record<string,string|number|undefined>={})=>api<{items:import("./types").DiscoveryResult[];total:number}>(`/discovery-intelligence/results${queryString(filters)}`),
@@ -777,6 +784,7 @@ export const endpoints = {
   disableIdentityRule:(id:string)=>api<import("./types").IdentityRule>(`/discovery-intelligence/identity/rules/${id}/disable`,{method:"POST"}),
   previewIdentityRule:(body:Record<string,unknown>)=>api<{matched_rules:Array<{id:string;name:string;priority:number;scope:string}>;suggestion:Record<string,string|null>|null;confidence:number;confidence_level:string;evidence:string[]}>("/discovery-intelligence/identity/rules/preview",{method:"POST",body:JSON.stringify(body)}),
   approveDiscoveryResult:(id:string)=>api<import("./types").Device>(`/discovery-intelligence/results/${id}/approve`,{method:"POST",body:JSON.stringify({})}),
+  bulkApproveDiscoveryResults:(result_ids:string[])=>api<{approved:Array<{result_id:string;device_id:string}>;already_approved:string[];failed:Array<{result_id:string;reason:string}>;approved_count:number}>("/discovery-intelligence/results/bulk-approve",{method:"POST",body:JSON.stringify({result_ids})}),
   enrichDiscoveryResult:(id:string)=>api<{status:string;provider:string;device:import("./types").DiscoveryResult;found:string[];warnings:string[];evidence_added:number;confidence_score:number}>(`/discovery-intelligence/results/${id}/enrich`,{method:"POST"}),
   enrichDiscoveryResultFromAD:(id:string)=>api<{status:string;provider:string;device:import("./types").DiscoveryResult;found:string[];warnings:string[];evidence_added:number;confidence_score:number}>(`/discovery-intelligence/results/${id}/enrich-active-directory`,{method:"POST"}),
   syncDiscoveryResult:(id:string)=>api<Record<string,unknown>>(`/discovery-intelligence/results/${id}/cmdb-sync`,{method:"POST"}),

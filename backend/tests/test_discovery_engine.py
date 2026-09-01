@@ -156,7 +156,48 @@ class DiscoveryServiceTests(unittest.TestCase):
         self.assertEqual(run.hosts_attempted, 1)
         self.assertEqual(run.hosts_responded, 1)
         self.assertEqual(run.new_devices, 1)
-        db.commit.assert_called_once()
+        self.assertGreaterEqual(db.commit.call_count, 1)
+
+    def test_progress_is_reported_and_results_are_persisted_during_scan(self):
+        db = MagicMock()
+        progress = []
+        service = DiscoveryService(
+            db,
+            config={**CONFIG, "authorized_cidr_ranges": "10.20.30.0/30", "ignore_ranges": ""},
+            probe=lambda address, timeout: (address.endswith(".1"), 1.0),
+            arp_reader=lambda: {},
+            resolver=lambda address, timeout: "host-one" if address.endswith(".1") else None,
+        )
+        service.runs = FakeRunRepository()
+        service._record_observation = MagicMock(return_value=(SimpleNamespace(ip_address="10.20.30.1"), True, False))
+        run = service.discover_range(
+            "10.20.30.0/30",
+            progress_callback=lambda completed, total, device, online: progress.append((completed, total, device is not None, online)),
+        )
+        self.assertEqual([item[0] for item in progress], [1, 2])
+        self.assertTrue(any(item[2] for item in progress))
+        self.assertEqual(run.hosts_attempted, 2)
+        self.assertGreaterEqual(db.commit.call_count, 2)
+
+    def test_cooperative_cancellation_retains_partial_results(self):
+        db = MagicMock()
+        checks = {"count": 0}
+        def cancelled():
+            checks["count"] += 1
+            return checks["count"] > 1
+        service = DiscoveryService(
+            db,
+            config={**CONFIG, "authorized_cidr_ranges": "10.20.30.0/29", "ignore_ranges": ""},
+            probe=lambda _address, _timeout: (True, 1.0),
+            arp_reader=lambda: {},
+            resolver=lambda address, _timeout: f"host-{address.rsplit('.',1)[-1]}",
+        )
+        service.runs = FakeRunRepository()
+        service._record_observation = MagicMock(return_value=(SimpleNamespace(ip_address="10.20.30.1"), True, False))
+        run = service.discover_range("10.20.30.0/29", cancel_requested=cancelled)
+        self.assertEqual(run.status, RunStatus.PARTIAL)
+        self.assertIn("Cancelled after checking", run.error_summary)
+        self.assertGreaterEqual(service._record_observation.call_count, 1)
 
 
 if __name__ == "__main__":

@@ -94,6 +94,7 @@ export default function SettingsPage() {
         result = await endpoints.updateGeneralSettings(draft.general);
       } else if (section === "organization") {
         result = await endpoints.updateOrganizationSettings(draft.organization);
+        window.dispatchEvent(new Event("hiop:organization-updated"));
       } else if (section === "network") {
         result = await endpoints.updateNetworkSettings(draft.network);
       } else if (section === "discovery") {

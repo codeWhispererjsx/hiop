@@ -284,6 +284,8 @@ class DiscoveryService:
         trigger_type: str = "manual",
         triggered_by: str | None = None,
         audit_actor: str | None = None,
+        progress_callback: Callable[[int, int, DiscoveredDevice | None, bool], None] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
     ) -> DiscoveryRun:
         settings = self._settings()
         if not settings.get("enabled", False):
@@ -301,35 +303,56 @@ class DiscoveryService:
             hosts = [address for address in network.hosts() if not is_ignored(address, ignored)]
             run.hosts_attempted = len(hosts)
             workers = max(1, min(int(settings["concurrency_limit"]), 32, len(hosts) or 1))
-            observations: list[tuple[Observation, bool]] = []
-            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hiop-discovery") as executor:
-                futures = {
-                    executor.submit(
-                        self._observe_host,
-                        str(address),
-                        str(network),
-                        arp_entries.get(str(address)),
-                        settings,
-                    ): str(address)
-                    for address in hosts
-                }
+            completed = 0
+            cancelled = False
+            executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hiop-discovery")
+            futures = {
+                executor.submit(
+                    self._observe_host,
+                    str(address),
+                    str(network),
+                    arp_entries.get(str(address)),
+                    settings,
+                ): str(address)
+                for address in hosts
+            }
+            try:
                 for future in as_completed(futures):
+                    if cancel_requested and cancel_requested():
+                        cancelled = True
+                        break
+                    discovered_device = None
+                    online = False
                     try:
                         observation, online = future.result()
                         if observation:
-                            observations.append((observation, online))
+                            discovered_device, is_new, inventory_matched = self._record_observation(observation)
+                            run.hosts_responded += int(online)
+                            run.new_devices += int(is_new)
+                            run.updated_devices += int(not is_new)
+                            run.matched_devices += int(inventory_matched)
                     except Exception as exc:
                         errors.append(f"{futures[future]}: {type(exc).__name__}")
+                    completed += 1
+                    if progress_callback:
+                        progress_callback(completed, len(hosts), discovered_device, online)
+                    # Persist bounded batches and every discovery so partial
+                    # results survive browser closure, cancellation, or failure.
+                    if discovered_device is not None or completed % 8 == 0:
+                        self.db.commit()
+            finally:
+                if cancelled:
+                    for future in futures:
+                        future.cancel()
+                    executor.shutdown(wait=False, cancel_futures=True)
+                else:
+                    executor.shutdown(wait=True)
 
-            for observation, online in observations:
-                _, is_new, inventory_matched = self._record_observation(observation)
-                run.hosts_responded += int(online)
-                run.new_devices += int(is_new)
-                run.updated_devices += int(not is_new)
-                run.matched_devices += int(inventory_matched)
+            if cancelled:
+                errors.append(f"Cancelled after checking {completed} of {len(hosts)} addresses")
             run.error_count = len(errors)
             run.error_summary = "; ".join(errors)[:4000] or None
-            run.status = RunStatus.PARTIAL if errors else RunStatus.COMPLETED
+            run.status = RunStatus.PARTIAL if errors or cancelled else RunStatus.COMPLETED
             run.completed_at = datetime.now(timezone.utc)
             run.duration = round(time.monotonic() - started, 3)
             if audit_actor:
