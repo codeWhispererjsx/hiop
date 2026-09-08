@@ -37,7 +37,11 @@ def usage(db: Session, organization_id):
         "devices":db.query(Device).filter(Device.property_id.in_(property_ids)).count(),
         "properties":db.query(Property).filter(Property.organization_id==organization_id,Property.is_active.is_(True)).count(),
         "users":db.query(User).filter(User.organization_id==organization_id,User.is_active.is_(True)).count(),
-        "agents":db.query(LocalAgentRegistration).filter(LocalAgentRegistration.organization_id==organization_id).count(),
+        "agents":db.query(LocalAgentRegistration).filter(
+            LocalAgentRegistration.organization_id==organization_id,
+            LocalAgentRegistration.revoked_at.is_(None),
+            LocalAgentRegistration.retired_at.is_(None),
+        ).count(),
     }
 
 
