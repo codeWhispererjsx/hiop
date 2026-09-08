@@ -100,11 +100,9 @@ export default function DiscoveryIntelligencePage() {
     let hadActiveScan = false;
     const refresh = async () => {
       try {
-        const response = await endpoints.discoveryJobs(true, "quick_scan");
+        const response = await endpoints.discoveryJobs(true);
         if (!active) return;
-        const quickScans = response.items.filter(
-          (job) => job.trigger_type === "quick_scan",
-        );
+        const quickScans = response.items;
         setActiveScans(quickScans);
         setClock(Date.now());
         if (!quickScans.length && !lastScan) {
@@ -246,9 +244,9 @@ export default function DiscoveryIntelligencePage() {
     setError("");
     try {
       const response = await endpoints.cancelDiscoveryJob(job.id);
-      setActiveScans((current) => current.filter((item) => item.id !== job.id));
+      setActiveScans((current) => response.status==="cancelled"?current.filter((item)=>item.id!==job.id):current.map(item=>item.id===job.id?{...item,status:"cancelling",current_stage:"cancelling"}:item));
       setMessage(
-        `Scan cancelled. ${response.partial_results} discovered device${response.partial_results === 1 ? " remains" : "s remain"} available for review.`,
+        `Stop requested (${response.status}). ${response.partial_results} discovered device${response.partial_results === 1 ? " remains" : "s remain"} available for review.`,
       );
       const latest = await endpoints.discoveryJobResults(job.id);
       setDevices(latest.items);
@@ -618,10 +616,10 @@ export default function DiscoveryIntelligencePage() {
                   {canDiscover && (
                     <button
                       type="button"
-                      disabled={cancellingScan === job.id}
+                      disabled={cancellingScan === job.id || job.status === "cancelling"}
                       onClick={() => void cancelScan(job)}
                     >
-                      {cancellingScan === job.id ? "Cancelling…" : "Cancel Scan"}
+                      {cancellingScan === job.id || job.status === "cancelling" ? "Stopping…" : "Terminate scan"}
                     </button>
                   )}
                 </article>
@@ -960,7 +958,9 @@ function normalizeNetworkPreview(value: string): string {
 function phaseLabel(value: string | null): string {
   if (value === "host_discovery") return "Host discovery";
   if (value === "enriching") return "Identity enrichment";
-  if (value === "cancelling") return "Cancelling";
+  if (value === "cancelling") return "Stopping the scan worker";
+  if (value === "waiting_for_agent") return "Waiting for the property’s local agent";
+  if (value === "agent_discovery") return "Scanning from the local agent";
   return value ? value.replaceAll("_", " ") : "Starting";
 }
 
@@ -1057,12 +1057,12 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
         <span className="eyebrow">Administration · Discovery intelligence</span>
         <h2>Naming & classification rules</h2>
         <p>
-          Turn hotel-specific technical identifiers into an explainable Friendly
+          Turn your organisation’s technical identifiers into an explainable Friendly
           Name, Device Type, Suggested Department, and Location. Rules are
           scoped, deterministic, and never replace a manually confirmed
           identity.
         </p>
-        <div className="precedence-note">
+        <details className="feature-guide"><summary>How naming rules work</summary><ol><li>Choose an identifier your devices already use, such as a hostname.</li><li>Add a rule matching your own convention. For example, a hostname beginning with FO- might mean Front Office, if that is how your organisation names devices.</li><li>Set the friendly name, device type, department, or location you want suggested.</li><li>Test the rule against a known device, then run enrichment and review the suggestions.</li></ol><p>Saving a rule does not rename a computer on the network. It helps HIOP interpret its identity. Manually confirmed identities stay in place.</p></details><div className="precedence-note">
           <b>Precedence:</b> Manual confirmation → strong discovery/SNMP →
           Active Directory → configured rule → weak inference.
         </div>

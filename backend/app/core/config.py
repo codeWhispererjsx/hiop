@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     environment: Literal["development", "testing", "production"] = "development"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    public_app_url: str = ""
+    discovery_execution_mode: Literal["auto", "agent", "backend"] = "auto"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     database_pool_size: int = Field(default=10, ge=1, le=50)
     database_max_overflow: int = Field(default=20, ge=0, le=100)
