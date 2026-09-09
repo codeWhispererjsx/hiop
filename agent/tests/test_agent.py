@@ -47,6 +47,14 @@ class AgentTests(unittest.TestCase):
             queue=DurableQueue(Path(root)/"queue.db",max_items=2)
             queue.add("icmp",{"n":1},"same");queue.add("icmp",{"n":2},"same");queue.add("icmp",{"n":3},"third");queue.add("icmp",{"n":4},"fourth")
             self.assertEqual(queue.count(),2);self.assertEqual([x["observation_id"] for x in queue.ready()],["third","fourth"]);queue.close()
+
+    @patch("hiop_agent.collectors.socket.create_connection")
+    @patch("hiop_agent.collectors.ping",return_value={"target":"10.50.21.10","reachable":False,"latency_ms":None,"error":"unreachable"})
+    def test_monitoring_uses_same_tcp_fallback_as_discovery(self,ping,connection):
+        source,result=execute({"type":"MONITORING","payload":{"target":"10.50.21.10","timeout":1}})
+        self.assertEqual(source,"monitoring")
+        self.assertTrue(result["reachable"])
+        self.assertEqual(result["reachability_source"],"tcp")
     def test_arbitrary_commands_are_rejected(self):
         with self.assertRaises(ValueError):execute({"type":"EXECUTE_COMMAND","payload":{"command":"whoami"}})
     @patch("hiop_agent.collectors.ping",return_value={"target":"127.0.0.1","reachable":True})

@@ -189,8 +189,44 @@ def ingest(body:ObservationWrite,request:Request,db:Session=Depends(get_db),agen
     if body.source=="discovery":
         agent.last_discovery=agent.last_seen
         ingest_discovery(db,agent,body.payload)
-    if body.source in {"monitoring","icmp","snmp"}:agent.last_monitoring=agent.last_seen
+    if body.source in {"monitoring","icmp","snmp"}:
+        agent.last_monitoring=agent.last_seen
+        if body.source in {"monitoring","icmp"}:
+            ingest_monitoring(db,agent,body.payload)
     db.commit();db.refresh(row);return {"status":"accepted","id":row.id}
+
+
+def ingest_monitoring(db,agent,payload):
+    from app.models.device import Device
+    from app.models.network_scan import NetworkScan
+    from app.services.alert_event_service import evaluate_scan
+    from app.services.automation_event_outbox_service import process_outbox_batch
+    config=payload.get("result",{})
+    if not isinstance(config,dict):raise HTTPException(422,"Invalid monitoring result")
+    job_id=payload.get("job_id")
+    task=None
+    if job_id:
+        try: task=db.query(AgentJob).filter_by(id=UUID(str(job_id)),agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id).first()
+        except ValueError: raise HTTPException(422,"Invalid monitoring job reference")
+    job_payload=json.loads(task.payload) if task and task.payload else {}
+    device_id=job_payload.get("device_id")
+    device=None
+    if device_id:
+        try: device=db.query(Device).filter_by(id=UUID(str(device_id)),property_id=agent.property_id).first()
+        except ValueError: device=None
+    target=str(config.get("target") or job_payload.get("target") or "")
+    if not device and target:
+        device=db.query(Device).filter_by(ip_address=target,property_id=agent.property_id).first()
+    if not device:return
+    previous=device.network_status
+    scan=NetworkScan(device_id=device.id,ip_address=device.ip_address,status="Online" if config.get("reachable") else "Offline",response_time=config.get("latency_ms"))
+    db.add(scan);db.flush();device.network_status=scan.status;evaluate_scan(db,device,scan)
+    if previous!=scan.status:
+        from app.services.settings_service import read_network
+        from app.services.automation_event_outbox_service import publish_internal_event
+        runtime=read_network(db)
+        publish_internal_event(db,event_type="device_offline" if scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"],"source":"local_agent"},severity="critical" if scan.status=="Offline" else "informational",status=scan.status.lower(),correlation_key=f"device:{device.id}:network")
+        process_outbox_batch(db,25)
 
 
 def ingest_discovery(db,agent,payload):

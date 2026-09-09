@@ -55,10 +55,11 @@ def discover(cidr,max_hosts=1024,concurrency=32,timeout=2,progress=None):
 
 def execute(job,progress=None):
     kind=job["type"];payload=job.get("payload") or {}
-    if kind in {"PING","MONITORING"}:return "monitoring",ping(payload["target"],min(float(payload.get("timeout",3)),10))
+    if kind in {"PING","MONITORING"}:return "monitoring",discover_host(payload["target"],min(float(payload.get("timeout",3)),10))
     if kind=="DNS_LOOKUP":return "dns",dns_lookup(payload["target"])
     if kind=="ARP_SNAPSHOT":return "arp",arp_snapshot()
     if kind=="DISCOVERY":return "discovery",discover(payload["cidr"],min(int(payload.get("max_hosts",1024)),4096),min(int(payload.get("concurrency",32)),64),min(float(payload.get("timeout",2)),10),progress=progress)
     if kind=="SNMP_POLL":raise RuntimeError("SNMP polling requires a configured scoped credential adapter")
     if kind=="AD_ENRICHMENT":raise RuntimeError("Active Directory collection requires a configured scoped connection adapter")
     raise ValueError("Unsupported job type")
+
