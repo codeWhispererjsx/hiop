@@ -15,15 +15,24 @@ try {
         throw 'Install Python 3.12 from python.org/downloads/windows (include the Python launcher), then open Connect HIOP again.'
     }
     New-Item -ItemType Directory -Force -Path $agentRoot,$agentData | Out-Null
-    if (Test-Path (Join-Path $agentData 'credential.dpapi')) {
-        Write-Host 'This Windows account is already connected to HIOP.' -ForegroundColor Green
+    $credentialPath = Join-Path $agentData 'credential.dpapi'
+    if (Test-Path $credentialPath) {
+        Write-Host 'This Windows account already has a saved HIOP connection.' -ForegroundColor Yellow
         Write-Host ''
-        Write-Host 'You do not need to paste another connection code on this computer.'
-        Write-Host 'Return to HIOP > Administration > Local Agents and check that this computer is Online.'
+        Write-Host 'Choose what to do:'
+        Write-Host '  1. Keep the current connection and exit'
+        Write-Host '  2. Replace it with a new HIOP connection code'
         Write-Host ''
-        Write-Host 'If you revoked this computer in HIOP and want to reconnect it, first remove the saved local credential from:'
-        Write-Host (Join-Path $agentData 'credential.dpapi')
-        exit 0
+        $choice = Read-Host 'Type 1 or 2, then press Enter'
+        if ($choice -ne '2') {
+            Write-Host ''
+            Write-Host 'No changes made. Return to HIOP > Administration > Local Agents and check that this computer is Online.' -ForegroundColor Green
+            exit 0
+        }
+        Write-Host ''
+        Write-Host 'Replacing the saved local connection. Use a fresh code from HIOP.' -ForegroundColor Yellow
+        Get-Process -Name pythonw -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $credentialPath -Force
     }
     Write-Host 'Preparing the local agent files...'
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'hiop_agent') -Destination $agentRoot -Recurse -Force
