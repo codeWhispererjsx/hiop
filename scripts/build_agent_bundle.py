@@ -1,4 +1,5 @@
 """Build the credential-free Windows download shipped with the backend."""
+import json
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
@@ -10,4 +11,5 @@ with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
     sources += [root / 'agent/install-user.ps1', root / 'agent/Connect HIOP.cmd']
     for path in sources:
         archive.write(path, str(path.relative_to(root / 'agent')))
+    archive.writestr('setup.json', json.dumps({'backend_url': 'https://hiop-ivory.vercel.app'}))
 print('Built Windows agent download')

@@ -101,8 +101,11 @@ def download_windows_installer(request:Request, actor:User=Depends(manager), org
     bundle=Path(__file__).resolve().parents[2]/"distributions"/"hiop-agent-windows.zip"
     if not bundle.is_file():
         raise HTTPException(503,"The Windows agent download is not available. Contact your HIOP administrator.")
-    output=BytesIO(bundle.read_bytes())
-    with ZipFile(output,"a",ZIP_DEFLATED) as archive:
+    output=BytesIO()
+    with ZipFile(bundle,"r") as source, ZipFile(output,"w",ZIP_DEFLATED) as archive:
+        for entry in source.infolist():
+            if entry.filename!="setup.json":
+                archive.writestr(entry,source.read(entry.filename))
         archive.writestr("setup.json",json.dumps({"backend_url":str(request.base_url).rstrip("/")}))
     return Response(output.getvalue(),media_type="application/zip",headers={"Content-Disposition":'attachment; filename="HIOP-Agent-Windows.zip"',"Cache-Control":"no-store"})
 
