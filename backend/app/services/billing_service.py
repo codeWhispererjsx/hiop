@@ -46,6 +46,11 @@ def usage(db: Session, organization_id):
 
 
 def refresh_status(subscription: OrganizationSubscription, now=None):
+    if getattr(subscription, "billing_exempt", False):
+        subscription.status="active"
+        subscription.payment_status="exempt"
+        subscription.cancel_at_period_end=False
+        return
     now=now or datetime.now(timezone.utc)
     if subscription.status=="trial" and subscription.trial_end and subscription.trial_end<=now:
         subscription.status="expired";subscription.payment_status="not_paid"
@@ -55,7 +60,7 @@ def refresh_status(subscription: OrganizationSubscription, now=None):
 
 def present_subscription(db: Session, row: OrganizationSubscription):
     refresh_status(row);plan=db.get(CommercialPlan,row.plan_id);current=usage(db,row.organization_id);limits=unpack(plan.limits,{}) if plan else {}
-    return {"id":str(row.id),"organization_id":str(row.organization_id),"plan":present_plan(plan) if plan else None,"status":row.status,"billing_interval":row.billing_interval,"start_date":row.start_date,"trial_start":row.trial_start,"trial_end":row.trial_end,"renewal_date":row.renewal_date,"cancellation_date":row.cancellation_date,"cancel_at_period_end":row.cancel_at_period_end,"current_period_start":row.current_period_start,"current_period_end":row.current_period_end,"provider":row.provider,"payment_status":row.payment_status,"usage":current,"limits":limits,"over_limits":{key:{"used":current.get(key,0),"limit":limit} for key,limit in limits.items() if isinstance(limit,int) and current.get(key,0)>limit}}
+    return {"id":str(row.id),"organization_id":str(row.organization_id),"plan":present_plan(plan) if plan else None,"status":row.status,"billing_exempt":getattr(row,"billing_exempt",False),"billing_exemption_reason":getattr(row,"billing_exemption_reason",None),"billing_interval":row.billing_interval,"start_date":row.start_date,"trial_start":row.trial_start,"trial_end":row.trial_end,"renewal_date":row.renewal_date,"cancellation_date":row.cancellation_date,"cancel_at_period_end":row.cancel_at_period_end,"current_period_start":row.current_period_start,"current_period_end":row.current_period_end,"provider":row.provider,"payment_status":row.payment_status,"usage":current,"limits":limits,"over_limits":{key:{"used":current.get(key,0),"limit":limit} for key,limit in limits.items() if isinstance(limit,int) and current.get(key,0)>limit}}
 
 
 def start_trial(db:Session,organization_id,plan_code:str,actor):

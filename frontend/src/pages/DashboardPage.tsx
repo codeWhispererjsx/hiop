@@ -55,40 +55,17 @@ export default function DashboardPage() {
       ) : (
         <>
           <section className="asset-summary-grid" aria-label="Asset metrics">
-            <article className="asset-metric-card">
-              <span>Total assets</span>
-              <strong>{d.devices.total}</strong>
-              <small>Approved inventory records</small>
-            </article>
-            <article className="asset-metric-card">
-              <span>Online now</span>
-              <strong>{d.devices.online}</strong>
-              <small>
-                {d.devices.total
-                  ? `${Math.round((d.devices.online / d.devices.total) * 100)}% available`
-                  : "Waiting for your first discovery"}
-              </small>
-            </article>
-            <article className="asset-metric-card">
-              <span>Offline devices</span>
-              <strong>{d.devices.offline}</strong>
-              <small>Require technician attention</small>
-            </article>
-            <article className="asset-metric-card">
-              <span>Awaiting approval</span>
-              <strong>0</strong>
-              <small>Review in Discover</small>
-            </article>
-            <article className="asset-metric-card">
-              <span>Active incidents</span>
-              <strong>0</strong>
-              <small>Open maintenance records</small>
-            </article>
-            <article className="asset-metric-card">
-              <span>Active alerts</span>
-              <strong>0</strong>
-              <small>Open or acknowledged alerts</small>
-            </article>
+            <MetricLink to="/devices" label="Total assets" value={d.devices.total} detail="Approved inventory records" />
+            <MetricLink
+              to="/network"
+              label="Online now"
+              value={d.devices.online}
+              detail={d.devices.total ? `${Math.round((d.devices.online / d.devices.total) * 100)}% available` : "Waiting for your first discovery"}
+            />
+            <MetricLink to="/network" label="Offline devices" value={d.devices.offline} detail="Require technician attention" />
+            <MetricLink to="/discovery-intelligence" label="Awaiting approval" value="Review" detail="Open Discover" />
+            <MetricLink to="/incidents" label="Active incidents" value="Open" detail="Maintenance records" />
+            <MetricLink to="/alerts" label="Active alerts" value="Open" detail="Open or acknowledged alerts" />
             <article className="asset-insight-card">
               <header>
                 <h2>Types of assets</h2>
@@ -150,6 +127,16 @@ export default function DashboardPage() {
         </>
       )}
     </DashboardLayout>
+  );
+}
+
+function MetricLink({ to, label, value, detail }: { to: string; label: string; value: number | string; detail: string }) {
+  return (
+    <Link className="asset-metric-card asset-metric-link" to={to} aria-label={`Open ${label}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </Link>
   );
 }
 

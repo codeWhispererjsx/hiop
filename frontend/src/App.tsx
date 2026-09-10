@@ -97,6 +97,16 @@ export default function App() {
     <Route path="/accept-invitation" element={<AccountAccessPage mode="invitation" />} />
     <Route path="/app" element={protectedPage(<OnboardingEntryPage />)} />
     <Route path="/dashboard" element={protectedPage(<DashboardPage />)} />
+    <Route path="/discover" element={<Navigate to="/discovery-intelligence" replace />} />
+    <Route path="/discovery" element={<Navigate to="/discovery-intelligence" replace />} />
+    <Route path="/agents" element={<Navigate to="/administration/agents" replace />} />
+    <Route path="/billing" element={<Navigate to="/administration/billing" replace />} />
+    <Route path="/organization" element={<Navigate to="/administration/organization" replace />} />
+    <Route path="/org" element={<Navigate to="/administration/organization" replace />} />
+    <Route path="/admin" element={<Navigate to="/administration" replace />} />
+    <Route path="/audit" element={<Navigate to="/administration/audit" replace />} />
+    <Route path="/platform-control" element={<Navigate to="/platform" replace />} />
+    <Route path="/control-center" element={<Navigate to="/platform" replace />} />
     <Route path="/devices" element={protectedPage(<DevicesPage />)} />
     <Route path="/procurement" element={protectedPage(<ProcurementPage />)} />
     <Route path="/procurement/:id" element={protectedPage(<ProcurementPage />)} />

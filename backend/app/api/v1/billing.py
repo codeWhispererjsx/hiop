@@ -20,6 +20,10 @@ org_admin=require_roles(["admin"]);platform=require_roles(["platformadmin"])
 class TrialWrite(BaseModel):plan_code:str=Field(min_length=2,max_length=40)
 class PlanChange(BaseModel):plan_code:str=Field(min_length=2,max_length=40);billing_interval:str=Field(pattern="^(monthly|yearly)$")
 class CancelWrite(BaseModel):at_period_end:bool=True
+class ExemptionWrite(BaseModel):
+    exempt:bool
+    reason:str|None=Field(default=None,max_length=500)
+
 class PlanPatch(BaseModel):name:str|None=None;description:str|None=None;monthly_price:str|None=None;yearly_price:str|None=None;currency:str|None=Field(default=None,min_length=3,max_length=3);trial_days:int|None=Field(default=None,ge=0,le=90);features:list[str]|None=None;entitlements:list[str]|None=None;limits:dict[str,int]|None=None;is_active:bool|None=None
 
 @router.get("/public/plans")
@@ -42,6 +46,9 @@ def trial(payload:TrialWrite,db:Session=Depends(get_db),actor:User=Depends(org_a
 
 @router.post("/checkout")
 def checkout(payload:PlanChange,db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
+    existing=db.query(OrganizationSubscription).filter_by(organization_id=org).first()
+    if existing and getattr(existing,"billing_exempt",False):
+        raise HTTPException(409,"This organization is manually exempt from billing. No payment is needed right now.")
     plan=db.query(CommercialPlan).filter_by(code=payload.plan_code.lower(),is_active=True).first()
     if not plan:raise HTTPException(404,"Plan not found")
     return provider().checkout(organization_id=org,plan=plan,interval=payload.billing_interval,actor=actor)
@@ -50,6 +57,8 @@ def checkout(payload:PlanChange,db:Session=Depends(get_db),actor:User=Depends(or
 def change_plan(payload:PlanChange,db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
     row=db.query(OrganizationSubscription).filter_by(organization_id=org).first()
     if not row:raise HTTPException(404,"Subscription not found")
+    if getattr(row,"billing_exempt",False):
+        raise HTTPException(409,"This organization is manually exempt from billing. Remove the exemption in Platform Control Center before changing plans.")
     plan=db.query(CommercialPlan).filter_by(code=payload.plan_code.lower(),is_active=True).first()
     if not plan:raise HTTPException(404,"Plan not found")
     new_limits=unpack(plan.limits,{});current_usage=usage(db,org);excess={k:{"used":current_usage.get(k,0),"limit":v} for k,v in new_limits.items() if isinstance(v,int) and current_usage.get(k,0)>v}
@@ -61,6 +70,7 @@ def change_plan(payload:PlanChange,db:Session=Depends(get_db),actor:User=Depends
 def cancel(payload:CancelWrite,db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
     row=db.query(OrganizationSubscription).filter_by(organization_id=org).first()
     if not row:raise HTTPException(404,"Subscription not found")
+    if getattr(row,"billing_exempt",False):raise HTTPException(409,"This organization is manually exempt from billing.")
     if row.provider_subscription_reference:return provider().cancel(subscription=row,at_period_end=payload.at_period_end)
     now=datetime.now(timezone.utc);row.cancel_at_period_end=payload.at_period_end
     if payload.at_period_end:row.cancellation_date=row.current_period_end
@@ -73,6 +83,18 @@ def platform_overview(db:Session=Depends(get_db),_:User=Depends(platform)):
     for row in rows:
         organization=db.get(Organization,row.organization_id);items.append({"organization":{"id":str(organization.id),"name":organization.name},**present_subscription(db,row)})
     db.commit();return {"plans":db.query(CommercialPlan).count(),"subscriptions":len(items),"active":sum(x["status"]=="active" for x in items),"trials":sum(x["status"]=="trial" for x in items),"past_due":sum(x["status"]=="past_due" for x in items),"cancelled":sum(x["status"]=="cancelled" for x in items),"items":items}
+
+@router.post("/platform/organizations/{organization_id}/exemption")
+def set_exemption(organization_id:UUID,payload:ExemptionWrite,db:Session=Depends(get_db),actor:User=Depends(platform)):
+    row=db.query(OrganizationSubscription).filter_by(organization_id=organization_id).first()
+    if not row:raise HTTPException(404,"Subscription not found")
+    if payload.exempt:
+        row.billing_exempt=True;row.billing_exemption_reason=payload.reason or "Manually exempted by platform owner";row.billing_exempted_at=datetime.now(timezone.utc);row.billing_exempted_by=actor.id;row.status="active";row.payment_status="exempt";row.cancel_at_period_end=False;event_type="billing_exempted"
+    else:
+        row.billing_exempt=False;row.billing_exemption_reason=None;row.billing_exempted_at=None;row.billing_exempted_by=None;row.payment_status="not_required" if not row.provider_subscription_reference else row.payment_status;event_type="billing_exemption_removed"
+    db.add(BillingEvent(organization_id=organization_id,subscription_id=row.id,event_type=event_type,safe_details=json.dumps({"reason":payload.reason})))
+    create_audit_log(db,actor.username,"BILLING_EXEMPTION_UPDATED","OrganizationSubscription",str(row.id),"Updated billing exemption")
+    db.commit();db.refresh(row);return present_subscription(db,row)
 
 @router.get("/platform/plans")
 def platform_plans(db:Session=Depends(get_db),_:User=Depends(platform)):return [present_plan(x) for x in db.query(CommercialPlan).order_by(CommercialPlan.sort_order)]
