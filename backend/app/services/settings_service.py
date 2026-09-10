@@ -94,41 +94,20 @@ def _group(values: dict[str, str], prefix: str) -> dict[str, Any]:
 
 def read_bundle(db: Session) -> dict[str, Any]:
     values = _all(db)
-    use_new_config = bool(settings.smtp_host and settings.smtp_sender_address)
-    configured = use_new_config or bool(settings.email_address and settings.email_password)
-    
-    if use_new_config:
+    if settings.smtp_host and settings.smtp_username and settings.smtp_password:
         email_config = {
             "configured": True,
-            "host": settings.smtp_host,
-            "port": settings.smtp_port,
-            "security": settings.smtp_security,
-            "sender_address": settings.smtp_sender_address,
-            "sender_name": settings.smtp_sender_name,
-            "has_credentials": bool(settings.smtp_username and settings.smtp_password),
-            "connection_timeout": settings.smtp_connection_timeout,
-            "max_retries": settings.smtp_max_retries,
-            "configuration_type": "production"
+            "message": "Email delivery is configured for this deployment.",
         }
     elif settings.email_address and settings.email_password:
         email_config = {
             "configured": True,
-            "host": "smtp.gmail.com",
-            "port": 465,
-            "security": "SSL",
-            "sender_address": settings.email_address,
-            "sender_name": "HIOP Notifications",
-            "has_credentials": True,
-            "connection_timeout": 15,
-            "max_retries": 3,
-            "configuration_type": "legacy_gmail",
-            "warning": "Using legacy Gmail configuration - migrate to production SMTP settings"
+            "message": "Email delivery is configured with a legacy provider. Ask the platform owner to move it to the production mail provider before launch.",
         }
     else:
         email_config = {
             "configured": False,
-            "configuration_type": "none",
-            "message": "Email delivery is not configured"
+            "message": "Email delivery is not configured yet.",
         }
     
     return {

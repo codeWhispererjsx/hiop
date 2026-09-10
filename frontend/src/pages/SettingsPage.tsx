@@ -183,20 +183,8 @@ export default function SettingsPage() {
               copy="Global application display and formatting defaults."
             >
               <div className="settings-form-grid">
-                <Field
-                  label="Application display name"
-                  value={g.application_name}
-                  onChange={(value) =>
-                    setDraft({ ...draft, general: { ...g, application_name: value } })
-                  }
-                />
-                <Field
-                  label="Short name"
-                  value={g.short_name}
-                  onChange={(value) =>
-                    setDraft({ ...draft, general: { ...g, short_name: value } })
-                  }
-                />
+                <ReadOnlyValue label="Application display name" value="Hospitality IT Operations Platform" />
+                <ReadOnlyValue label="Short name" value="HIOP" />
                 <Field
                   label="Time zone"
                   value={g.timezone}
@@ -638,12 +626,10 @@ export default function SettingsPage() {
                   }
                 />
               </div>
-              <ReadOnlyGrid data={draft.email} />
-              <p className="settings-note">
-                <Icon name="lock" aria-hidden="true" />
-                SMTP credentials are environment-only. Test email is unavailable until a
-                secure runtime mail provider is configured.
-              </p>
+              <UserStatusCard
+                title={draft.email.configured ? "Email delivery is connected" : "Email delivery is not connected yet"}
+                copy={String(draft.email.message ?? "Your notification choices are saved here. The platform owner configures the mail provider outside this page.")}
+              />
               <SaveButton saving={saving} onClick={save} />
             </SettingsPanel>
           )}
@@ -751,7 +737,7 @@ export default function SettingsPage() {
           {section === "snmp" && (
             <SettingsPanel
               title="SNMP monitoring"
-              copy="Simple Network Management Protocol configuration for device monitoring and polling."
+              copy="SNMP lets HIOP ask network devices for health details, like interface status and traffic counters. It works only when your switches, routers, or firewalls have SNMP enabled and HIOP has the correct read-only credential."
             >
               <div className="settings-toggles">
                 <Toggle
@@ -823,10 +809,16 @@ export default function SettingsPage() {
                   }
                 />
               </div>
-              <p className="settings-note">
-                <Icon name="lock" aria-hidden="true" />
-                SNMPv1 and legacy protocols are disabled by default for security. Enable only if required by your environment.
-              </p>
+              <div className="settings-guide">
+                <h3>How to use SNMP</h3>
+                <ol>
+                  <li>Enable SNMP on the network device you want HIOP to monitor.</li>
+                  <li>Create a read-only SNMP credential on that device.</li>
+                  <li>Add the credential and target on the SNMP page.</li>
+                  <li>Run a poll. If the credential is correct, HIOP starts showing device health and interface data.</li>
+                </ol>
+                <p>SNMP is functional when the device can be reached from your HIOP agent or backend network path. For hosted browser-only use, local network devices still need the local agent path.</p>
+              </div>
               <SaveButton saving={saving} onClick={save} />
             </SettingsPanel>
           )}
@@ -864,15 +856,18 @@ export default function SettingsPage() {
 
           {section === "security" && (
             <SettingsPanel
-              title="Security posture"
-              copy="Read-only facts from the current authentication implementation."
+              title="Security"
+              copy="Account protection information that matters to HIOP users."
             >
-              <ReadOnlyGrid data={draft.security} />
-              <p className="settings-note">
-                <Icon name="lock" aria-hidden="true" />
-                Secret keys, password hashes, tokens and database credentials are never
-                exposed here.
-              </p>
+              <div className="settings-guide">
+                <h3>What HIOP protects</h3>
+                <ul>
+                  <li>Only signed-in users can access the app.</li>
+                  <li>Inactive users are blocked from logging in.</li>
+                  <li>Admin-only pages require an admin role.</li>
+                  <li>Secrets, tokens, database details, and password data are never shown here.</li>
+                </ul>
+              </div>
             </SettingsPanel>
           )}
 
@@ -890,7 +885,12 @@ export default function SettingsPage() {
                 Refresh health
               </button>
               {health ? (
-                <ReadOnlyGrid data={health as unknown as Record<string, unknown>} />
+                <div className="settings-readonly">
+                  <ReadOnlyValue label="Overall status" value={String(health.status ?? "Unknown")} />
+                  <ReadOnlyValue label="Database" value={String(health.database ?? "Unknown")} />
+                  <ReadOnlyValue label="Scheduler" value={String(health.scheduler ?? "Unknown")} />
+                  <ReadOnlyValue label="Last scan" value={String(health.last_scan ?? "No scan yet")} />
+                </div>
               ) : (
                 <Feedback loading />
               )}
@@ -923,7 +923,11 @@ export default function SettingsPage() {
               title="Application information"
               copy="Non-sensitive metadata reported by the running deployment."
             >
-              <ReadOnlyGrid data={draft.application} />
+              <div className="settings-readonly">
+                <ReadOnlyValue label="Product" value="Hospitality IT Operations Platform" />
+                <ReadOnlyValue label="Short name" value="HIOP" />
+                <ReadOnlyValue label="Version" value={String(draft.application.backend_version ?? "Current")} />
+              </div>
               <div className="module-list">
                 <strong>Product pillars</strong>
                 <span>Overview</span>
@@ -963,6 +967,24 @@ function SettingsPanel({
       </header>
       <div className="settings-panel-body">{children}</div>
     </article>
+  );
+}
+
+function ReadOnlyValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function UserStatusCard({ title, copy }: { title: string; copy: string }) {
+  return (
+    <div className="settings-guide">
+      <h3>{title}</h3>
+      <p>{copy}</p>
+    </div>
   );
 }
 
@@ -1068,19 +1090,6 @@ function SaveButton({ saving, onClick }: { saving: boolean; onClick: () => void 
       <button className="primary-action" disabled={saving} onClick={onClick} aria-busy={saving}>
         {saving ? "Saving…" : "Save settings"}
       </button>
-    </div>
-  );
-}
-
-function ReadOnlyGrid({ data }: { data: Record<string, unknown> }) {
-  return (
-    <div className="settings-readonly">
-      {Object.entries(data).map(([key, value]) => (
-        <div key={key}>
-          <dt>{key}</dt>
-          <dd>{String(value)}</dd>
-        </div>
-      ))}
     </div>
   );
 }
