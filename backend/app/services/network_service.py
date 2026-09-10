@@ -8,7 +8,7 @@ from app.models.network_scan import NetworkScan
 from app.network.utils import ping_host
 from app.websocket.connection_manager import manager
 from app.services.settings_service import read_network
-from app.services.automation_event_outbox_service import publish_internal_event
+from app.services.automation_event_outbox_service import publish_internal_event, process_outbox_batch
 
 
 def _online_agent_for_property(db: Session, property_id):
@@ -102,10 +102,12 @@ def scan_single_device(
 
     live_event = None
 
+    should_publish_offline = new_scan.status == "Offline" and runtime["automatic_offline_tickets"]
+    should_publish_restored = status_changed and new_scan.status != "Offline"
+
     if status_changed:
         if alert_result["opened"]:
             publish_internal_event(db,event_type="alert_created",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"opened":alert_result["opened"]},severity="critical" if new_scan.status=="Offline" else "informational",status="open",correlation_key=f"device:{device.id}:network")
-        publish_internal_event(db,event_type="device_offline" if new_scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"]},severity="critical" if new_scan.status=="Offline" else "informational",status=new_scan.status.lower(),correlation_key=f"device:{device.id}:network")
 
         live_event = {
             "event": "device_status_changed",
@@ -120,6 +122,10 @@ def scan_single_device(
         # creates a property-scoped OperationalIncident and deduplicates it by
         # correlation key, so automated work appears in Maintain instead of
         # disappearing into the legacy Ticket table.
+
+    if should_publish_offline or should_publish_restored:
+        publish_internal_event(db,event_type="device_offline" if new_scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"]},severity="critical" if new_scan.status=="Offline" else "informational",status=new_scan.status.lower(),correlation_key=f"device:{device.id}:network")
+        process_outbox_batch(db,25)
 
     try:
         db.commit()

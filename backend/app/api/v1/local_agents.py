@@ -224,10 +224,10 @@ def ingest_monitoring(db,agent,payload):
     previous=device.network_status
     scan=NetworkScan(device_id=device.id,ip_address=device.ip_address,status="Online" if config.get("reachable") else "Offline",response_time=config.get("latency_ms"))
     db.add(scan);db.flush();device.network_status=scan.status;evaluate_scan(db,device,scan)
-    if previous!=scan.status:
-        from app.services.settings_service import read_network
+    from app.services.settings_service import read_network
+    runtime=read_network(db)
+    if (scan.status=="Offline" and runtime["automatic_offline_tickets"]) or (previous!=scan.status and scan.status!="Offline"):
         from app.services.automation_event_outbox_service import publish_internal_event
-        runtime=read_network(db)
         publish_internal_event(db,event_type="device_offline" if scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"],"source":"local_agent"},severity="critical" if scan.status=="Offline" else "informational",status=scan.status.lower(),correlation_key=f"device:{device.id}:network")
         process_outbox_batch(db,25)
 

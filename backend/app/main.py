@@ -255,3 +255,7 @@ app.include_router(backup_recovery_router, prefix=settings.api_prefix)
 app.include_router(email_router, prefix=settings.api_prefix)
 app.include_router(circuit_breakers_router, prefix=settings.api_prefix)
 app.include_router(integration_status_router, prefix=settings.api_prefix)
+
+from app.audit.routes import router as audit_router
+app.include_router(audit_router, prefix=settings.api_prefix)
+

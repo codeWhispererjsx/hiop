@@ -60,23 +60,23 @@ def evaluate_scan(db:Session,device:Device,scan:NetworkScan):
         required=1 if any(word in device.device_type.lower() for word in ("switch","router","firewall")) else offline.consecutive_observations
         if offline_breached(recent,required):
             context=db.query(PortDeviceAssociation).filter(PortDeviceAssociation.switch_device_id==device.id,PortDeviceAssociation.is_current.is_(True)).count()
-            _,created=_open(db,device,offline,"device_offline",f"{device.hostname} unavailable",f"{required} consecutive failed checks",{"failed_checks":required,"potentially_affected_devices":context,"causation_claimed":False});opened+=created
+            _,created=_open(db,device,offline,"device_offline",f"{device.hostname or device.ip_address} unavailable",f"{required} consecutive failed checks",{"failed_checks":required,"potentially_affected_devices":context,"causation_claimed":False});opened+=created
         elif scan.status.lower()=="online":resolved+=_resolve(db,device.id,"device_offline","Device became reachable")
     latency_rule=rules.get("high_latency")
     if latency_rule:
         required=latency_rule.consecutive_observations;points=recent[:required]
         if latency_breached(points,required,latency_rule.threshold_value):
-            average=sum(row.response_time for row in points)/required;_,created=_open(db,device,latency_rule,"high_latency",f"{device.hostname} sustained high latency",f"{required} consecutive checks exceeded {latency_rule.threshold_value} ms",{"observations":required,"average_latency_ms":average},average);opened+=created
+            average=sum(row.response_time for row in points)/required;_,created=_open(db,device,latency_rule,"high_latency",f"{device.hostname or device.ip_address} sustained high latency",f"{required} consecutive checks exceeded {latency_rule.threshold_value} ms",{"observations":required,"average_latency_ms":average},average);opened+=created
         elif scan.response_time is not None and scan.response_time<=latency_rule.threshold_value:resolved+=_resolve(db,device.id,"high_latency","Latency returned below threshold")
     loss_rule=rules.get("packet_loss")
     if loss_rule:
         sample=recent[:loss_rule.consecutive_observations]
         loss=failed_check_percent(sample)
         if loss is not None and loss>loss_rule.threshold_value:
-            _,created=_open(db,device,loss_rule,"packet_loss",f"{device.hostname} packet loss elevated",f"Failed-check rate {loss:.1f}% exceeds {loss_rule.threshold_value}%",{"failed":sum(row.status.lower()=="offline" for row in sample),"probes":len(sample)},loss);opened+=created
+            _,created=_open(db,device,loss_rule,"packet_loss",f"{device.hostname or device.ip_address} packet loss elevated",f"Failed-check rate {loss:.1f}% exceeds {loss_rule.threshold_value}%",{"failed":sum(row.status.lower()=="offline" for row in sample),"probes":len(sample)},loss);opened+=created
         elif loss is not None and loss<=loss_rule.threshold_value:resolved+=_resolve(db,device.id,"packet_loss","Failed-check rate returned below threshold")
     health_rule=rules.get("health_degradation");health=device_health(db,device,"1h")
     if health_rule and health["health"] in {"Degraded","Unhealthy"} and len(recent)>=health_rule.consecutive_observations:
-        _,created=_open(db,device,health_rule,"health_degradation",f"{device.hostname} health is {health['health']}","; ".join(health["reasons"]),{"health":health["health"],"confidence":health["confidence"]});opened+=created
+        _,created=_open(db,device,health_rule,"health_degradation",f"{device.hostname or device.ip_address} health is {health['health']}","; ".join(health["reasons"]),{"health":health["health"],"confidence":health["confidence"]});opened+=created
     elif health_rule and health["health"]=="Healthy":resolved+=_resolve(db,device.id,"health_degradation","Device health returned to Healthy")
     event.processed_at=datetime.now(timezone.utc);return {"event":event,"opened":opened,"resolved":resolved,"duplicate_prevented":False}

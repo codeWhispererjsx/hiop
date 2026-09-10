@@ -147,15 +147,15 @@ def get_log(db: Session, audit_id: str) -> AuditLog:
     return log
 
 
-def export_csv(db: Session, actor=None, action=None, entity_type=None, entity_id=None, start_date=None, end_date=None, search=None, sort_order="desc"):
-    query = _filtered_query(db, actor, action, entity_type, entity_id, start_date, end_date, search)
+def export_csv(db: Session, actor=None, action=None, entity_type=None, entity_id=None, start_date=None, end_date=None, search=None, sort_order="desc", organization_id=None, property_id=None):
+    query = _filtered_query(db, actor, action, entity_type, entity_id, start_date, end_date, search, organization_id, property_id)
     order = AuditLog.created_at.asc() if sort_order == "asc" else AuditLog.created_at.desc()
     output = io.StringIO(newline="")
     writer = csv.writer(output)
     generated_at = datetime.now(timezone.utc)
     writer.writerow(["HIOP Audit Export", generated_at.isoformat()])
     writer.writerow(["ID", "Timestamp", "Actor", "Action", "Entity Type", "Entity ID", "Description"])
-    for log in query.order_by(order, AuditLog.id.desc()).all():
+    for log in query.order_by(order, AuditLog.id.desc()).yield_per(500):
         writer.writerow([_csv_safe(value) for value in [str(log.id), log.created_at.isoformat(), log.actor or "System", log.action, log.entity_type, log.entity_id, log.description]])
     filename = f"hiop-audit-{generated_at.strftime('%Y%m%d-%H%M%S')}.csv"
     return "\ufeff" + output.getvalue(), filename
