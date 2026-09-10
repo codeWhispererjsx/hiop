@@ -1,5 +1,6 @@
 import argparse, logging, time
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from .client import AgentClient
 from .config import AgentConfig
 
@@ -21,6 +22,15 @@ def main():
         token=input("Paste your HIOP connection code: ").strip() if args.enroll_prompt else args.enroll
         if not token:raise RuntimeError("Connection code is required.")
         print("Connecting...")
-        config=AgentConfig.load(args.config);config.data_dir.mkdir(parents=True,exist_ok=True);AgentClient(config).enroll(token);print("Connected.")
+        config=AgentConfig.load(args.config);config.data_dir.mkdir(parents=True,exist_ok=True)
+        try:
+            AgentClient(config).enroll(token)
+        except HTTPError as exc:
+            if exc.code==401:raise RuntimeError("Connection code is invalid, expired, or already used. Create a fresh code in HIOP and try again.") from exc
+            if exc.code==405:raise RuntimeError("HIOP is still updating or the agent endpoint is not available yet. Wait a minute, create a fresh code, and try again.") from exc
+            raise RuntimeError(f"HIOP rejected the connection request with HTTP {exc.code}.") from exc
+        except URLError as exc:
+            raise RuntimeError("This computer could not reach HIOP. Check internet access and try again.") from exc
+        print("Connected.")
     else:run(args.config)
 if __name__=="__main__":main()
