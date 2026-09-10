@@ -18,8 +18,9 @@ def run(config_path:Path,stop_event=None):
 def main():
     parser=argparse.ArgumentParser(description="HIOP Local Agent");parser.add_argument("--config",type=Path,required=True);parser.add_argument("--enroll");parser.add_argument("--enroll-prompt",action="store_true");args=parser.parse_args()
     if args.enroll or args.enroll_prompt:
-        import getpass
-        token=getpass.getpass("Paste your HIOP connection code: ") if args.enroll_prompt else args.enroll
-        config=AgentConfig.load(args.config);config.data_dir.mkdir(parents=True,exist_ok=True);AgentClient(config).enroll(token);print("Agent enrollment completed.")
+        token=input("Paste your HIOP connection code: ").strip() if args.enroll_prompt else args.enroll
+        if not token:raise RuntimeError("Connection code is required.")
+        print("Connecting...")
+        config=AgentConfig.load(args.config);config.data_dir.mkdir(parents=True,exist_ok=True);AgentClient(config).enroll(token);print("Connected.")
     else:run(args.config)
 if __name__=="__main__":main()

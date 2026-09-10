@@ -21,6 +21,7 @@ export default function LocalAgentsPage() {
   const [enrollForm, setEnrollForm] = useState({ name: "", property_id: "", expires_minutes: 15 });
   const [enrolling, setEnrolling] = useState(false);
   const [enrollToken, setEnrollToken] = useState("");
+  const [enrollName, setEnrollName] = useState("");
   const [tokenExpiry, setTokenExpiry] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [enrollError, setEnrollError] = useState("");
@@ -48,6 +49,7 @@ export default function LocalAgentsPage() {
     try {
       const result = await endpoints.createAgentEnrollment({ ...enrollForm, property_id: selectedPropertyId });
       setEnrollToken(result.enrollment_token);
+      setEnrollName(result.name);
       setTokenExpiry(result.expires_at);
       setShowEnrollModal(false);
       setEnrollForm({ name: "", property_id: "", expires_minutes: 15 });
@@ -69,13 +71,31 @@ export default function LocalAgentsPage() {
   };
 
   const copyToken = () => {
-    void navigator.clipboard.writeText(enrollToken).then(()=>setNotice("Enrollment token copied.")).catch(()=>setActionError("Could not copy. Select and copy the token manually."));
+    void navigator.clipboard.writeText(enrollToken).then(()=>setNotice("Connection code copied.")).catch(()=>setActionError("Could not copy. Select and copy the code manually."));
   };
 
   return (
     <DashboardLayout>
       {notice&&<p role="status">{notice}</p>}{actionError&&<p role="alert">{actionError}</p>}
       {revokeId&&<Modal title="Revoke local agent?" onClose={()=>setRevokeId(undefined)}><p>This computer will stop sending observations to HIOP. You will need a new enrollment to reconnect it.</p><div className="modal-actions"><button className="secondary-action" onClick={()=>setRevokeId(undefined)}>Keep agent</button><button className="danger-action" onClick={()=>void handleRevoke(revokeId)}>Revoke agent</button></div></Modal>}
+      {enrollToken&&<Modal title="Connect this computer" onClose={()=>setEnrollToken("")}>
+        <div className="connection-code-modal">
+          <p className="connection-code-lead">Copy this connection code, open <strong>Connect HIOP.cmd</strong> from the extracted Windows agent folder, paste the code when the black window asks for it, then press Enter.</p>
+          <div className="connection-code-box">
+            <span>Connection code</span>
+            <code>{enrollToken}</code>
+            <button className="primary-action" onClick={copyToken}>Copy connection code</button>
+          </div>
+          <ol className="connection-steps">
+            <li>Download and extract the Windows agent ZIP.</li>
+            <li>Open <strong>Connect HIOP.cmd</strong>.</li>
+            <li>Wait for <code>Paste your HIOP connection code:</code>.</li>
+            <li>Paste the code and press Enter.</li>
+            <li>Wait for <code>Connecting...</code> and then <code>Connected.</code></li>
+          </ol>
+          <p className="settings-note">Waiting for {enrollName || "this computer"} to appear Online. This code expires at {formatDateTime(tokenExpiry)} and can only be used once.</p>
+        </div>
+      </Modal>}
 
       <PageTitle
         eyebrow="Administration"
@@ -92,8 +112,8 @@ export default function LocalAgentsPage() {
       />
 
       <section className="operational-guide" aria-label="Connect your network">
-        <div><span>1. Download</span><strong>Use a Windows computer at your property</strong><p>Install Python 3.12 with its launcher, then download and extract the ZIP. Keep this computer awake and signed in to scan.</p><a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer">Get Python for Windows</a><button className="primary-action" disabled={downloading} onClick={()=>void downloadInstaller()}>{downloading?"Preparing download…":"Download Windows agent"}</button></div>
-        <div><span>2. Connect</span><strong>Choose your property</strong><p>Select Connect a computer above to generate a connection code. Open Connect HIOP from the extracted folder and paste the code when asked. The code is hidden while you paste it.</p></div>
+        <div><span>1. Download</span><strong>Use a Windows computer at your property</strong><p>Install Python 3.12 with its launcher, then download and extract the ZIP. Keep this computer awake and signed in to scan.</p><a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer">Get Python for Windows</a><button className="primary-action" disabled={downloading} onClick={()=>void downloadInstaller()}>{downloading?"Preparing download...":"Download Windows agent"}</button></div>
+        <div><span>2. Connect</span><strong>Paste the connection code</strong><p>Select Connect a computer above. Copy the code, open Connect HIOP.cmd, paste it when you see “Paste your HIOP connection code:”, then press Enter.</p></div>
         <div><span>3. Scan</span><strong>Wait for Online below</strong><p>Status refreshes automatically. Once connected, open Network Discovery, select the same property and start a scan. No router port forwarding is needed.</p></div>
       </section>
       <section className="operational-guide" aria-label="How local agents work">
@@ -101,19 +121,7 @@ export default function LocalAgentsPage() {
         <div><span>How to use it</span><strong>Create enrollment, install, verify</strong><p>Create a short-lived token for the correct property, enroll the agent on-site, then confirm its heartbeat and version here.</p></div>
         <div><span>Security</span><strong>Property-bound and read-only by default</strong><p>An agent cannot submit data for another property and does not provide arbitrary remote command execution.</p></div>
       </section>
-
-<FeatureGuide kind="agent"/>
-      {enrollToken && (
-        <div className="enrollment-success">
-          <div className="enrollment-token">
-            <strong>Enrollment Token Generated</strong>
-            <code style={{overflowWrap:"anywhere"}}>{enrollToken}</code>
-            <button onClick={copyToken}>Copy Token</button>
-            <button onClick={() => setEnrollToken("")}>Close</button>
-          </div>
-          <p>Paste this code into Connect HIOP on your property’s computer. It expires at {formatDateTime(tokenExpiry)} and can only be used once.</p>
-        </div>
-      )}
+      <FeatureGuide kind="agent"/>
 
       <section className="agents-layout">
         <div className="agents-list">
@@ -137,7 +145,7 @@ export default function LocalAgentsPage() {
               <thead>
                 <tr>
                   <th>Agent Name</th>
-                  <th>Agent ID</th>
+                  <th>Computer ID</th>
                   <th>Property</th>
                   <th>Status</th>
                   <th>Version</th>
@@ -186,9 +194,8 @@ export default function LocalAgentsPage() {
                 <StatusBadge status={selected.status} />
               </header>
               <dl>
-                <Detail label="Agent ID" value={selected.agent_id} />
-                <Detail label="Organization ID" value={selected.organization_id} />
-                <Detail label="Property ID" value={selected.property_id} />
+                <Detail label="Computer ID" value={selected.agent_id} />
+                <Detail label="Property" value={properties.data?.find(property=>property.id===selected.property_id)?.name ?? "Assigned property"} />
                 <Detail label="Hostname" value={selected.hostname || "Unknown"} />
                 <Detail label="Version" value={selected.version || "Unknown"} />
                 <Detail label="Last Heartbeat" value={selected.last_heartbeat ? formatDateTime(selected.last_heartbeat) : "Never"} />
@@ -214,12 +221,12 @@ export default function LocalAgentsPage() {
         <Modal title="Connect a local agent" onClose={()=>{if(!enrolling)setShowEnrollModal(false)}}><div className="quick-navigation">
             {enrollError && <div className="error-message">{enrollError}</div>}
             <div className="form-group">
-              <label>Agent Name *</label>
+              <label>Computer Name *</label>
               <input
                 type="text"
                 value={enrollForm.name}
                 onChange={(e) => setEnrollForm({ ...enrollForm, name: e.target.value })}
-                placeholder="e.g., Lagos Continental Main Agent"
+                placeholder="e.g., Front Desk Computer"
               />
             </div>
             <div className="form-group">
@@ -238,7 +245,7 @@ export default function LocalAgentsPage() {
               {!properties.loading && !properties.error && !activeProperties.length && <small className="field-error">No active property is available. Activate or create a property first.</small>}
             </div>
             <div className="form-group">
-              <label>Expires In (minutes) *</label>
+              <label>Code Expires In (minutes) *</label>
               <input
                 type="number"
                 min="5"
@@ -246,14 +253,14 @@ export default function LocalAgentsPage() {
                 value={enrollForm.expires_minutes}
                 onChange={(e) => setEnrollForm({ ...enrollForm, expires_minutes: parseInt(e.target.value) })}
               />
-              <small>Enrollment tokens are one-time and expire after this period.</small>
+              <small>Connection codes are one-time and expire after this period.</small>
             </div>
             <div className="modal-footer">
               <button onClick={() => setShowEnrollModal(false)} disabled={enrolling}>
                 Cancel
               </button>
               <button className="primary-action" onClick={handleEnroll} disabled={enrolling || !enrollForm.name || !selectedPropertyId}>
-                {enrolling ? "Creating..." : "Create Enrollment"}
+                {enrolling ? "Creating..." : "Create connection code"}
               </button>
             </div>
           </div>

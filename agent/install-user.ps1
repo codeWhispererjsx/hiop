@@ -17,21 +17,10 @@ try {
     New-Item -ItemType Directory -Force -Path $agentRoot,$agentData | Out-Null
     $credentialPath = Join-Path $agentData 'credential.dpapi'
     if (Test-Path $credentialPath) {
-        Write-Host 'This Windows account already has a saved HIOP connection.' -ForegroundColor Yellow
-        Write-Host ''
-        Write-Host 'Choose what to do:'
-        Write-Host '  1. Keep the current connection and exit'
-        Write-Host '  2. Replace it with a new HIOP connection code'
-        Write-Host ''
-        $choice = Read-Host 'Type 1 or 2, then press Enter'
-        if ($choice -ne '2') {
-            Write-Host ''
-            Write-Host 'No changes made. Return to HIOP > Administration > Local Agents and check that this computer is Online.' -ForegroundColor Green
-            exit 0
-        }
-        Write-Host ''
-        Write-Host 'Replacing the saved local connection. Use a fresh code from HIOP.' -ForegroundColor Yellow
-        Get-Process -Name pythonw -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Write-Host 'Replacing the saved HIOP connection with your new connection code.' -ForegroundColor Yellow
+        Get-CimInstance Win32_Process -Filter "Name = 'pythonw.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -like '*hiop_agent.runner*' } |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
         Remove-Item -LiteralPath $credentialPath -Force
     }
     Write-Host 'Preparing the local agent files...'
@@ -47,7 +36,7 @@ try {
     Push-Location $agentRoot
     try {
         Write-Host ''
-        Write-Host 'Paste the connection code from HIOP when asked below.' -ForegroundColor Yellow
+        Write-Host 'Paste the connection code from HIOP when asked below, then press Enter.' -ForegroundColor Yellow
         & $agentPython -m hiop_agent.runner --config $agentConfig --enroll-prompt
         if ($LASTEXITCODE -ne 0) { throw 'Connection failed. Generate a fresh connection code in HIOP and try again.' }
     } finally { Pop-Location }
@@ -61,7 +50,7 @@ try {
     Start-Process -FilePath $agentPythonw -ArgumentList $agentArguments -WorkingDirectory $agentRoot -WindowStyle Hidden
     Write-Host ''
     Write-Host 'Connected.' -ForegroundColor Green
-    Write-Host 'Return to HIOP Local Agents and wait for Online. Keep this computer awake and signed in. HIOP will start automatically when you sign in to Windows.'
+    Write-Host 'Return to HIOP Local Agents. This computer should show Online automatically. Keep it awake and signed in. HIOP will start automatically when you sign in to Windows.'
 } catch {
     Write-Host ''
     Write-Host $_.Exception.Message -ForegroundColor Red
