@@ -234,6 +234,8 @@ def ingest_monitoring(db,agent,payload):
 
 def ingest_discovery(db,agent,payload):
     from app.models.discovery_intelligence import DiscoveryJob, DiscoveryResult
+    from app.services.discovery_intelligence_service import DiscoveryIntelligenceService
+    from app.services.discovery_collectors import evidence
     try: job_id=UUID(str(payload.get("job_id")))
     except ValueError: raise HTTPException(422,"A discovery job reference is required")
     task=db.query(AgentJob).filter_by(id=job_id,agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id).with_for_update().first()
@@ -247,14 +249,17 @@ def ingest_discovery(db,agent,payload):
     network=ipaddress.ip_network(config["cidr"])
     devices=result.get("devices",[])
     if not isinstance(devices,list) or len(devices)>1024:raise HTTPException(422,"Invalid discovery result size")
+    service=DiscoveryIntelligenceService(db)
     for item in devices:
         if not isinstance(item,dict):raise HTTPException(422,"Invalid discovered device")
         try: address=ipaddress.ip_address(item.get("target",""))
         except ValueError:raise HTTPException(422,"Invalid discovered address")
         if address not in network:raise HTTPException(422,"Discovered address is outside the requested network")
-        existing=db.query(DiscoveryResult).filter_by(job_id=scan.id,ip_address=str(address)).first()
-        if not existing and item.get("reachable"):
-            db.add(DiscoveryResult(job_id=scan.id,property_id=agent.property_id,ip_address=str(address),review_status="needs_review",confidence_score=20,confidence_reason="Local agent confirmed network reachability. Identity needs review."))
+        if item.get("reachable"):
+            observation={"ip_address":str(address),"hostname":item.get("hostname"),"hostnames":[item.get("hostname")] if item.get("hostname") else [],"dns_status":item.get("dns_status"),"evidence":[evidence("ping_response",item.get("reachability_source") or "local_agent","reachable",verified=True)]}
+            if item.get("hostname"):observation["evidence"].append(evidence("hostname_match",item.get("hostname_source") or "local_agent",item.get("hostname"),verified=item.get("hostname_source") in {"reverse_dns","netbios"}))
+            root=service.ingest(scan,observation)
+            root.confidence_reason="Local agent confirmed network reachability and hostname evidence." if item.get("hostname") else "Local agent confirmed network reachability. Hostname was unavailable."
     try: scanned=int(result.get("scanned",0))
     except (ValueError,TypeError):raise HTTPException(422,"Invalid discovery progress")
     scan.hosts_completed=max(scan.hosts_completed or 0,min(max(0,scanned),scan.hosts_total or 1024))

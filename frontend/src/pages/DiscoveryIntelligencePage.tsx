@@ -1427,7 +1427,7 @@ function DeviceTable({
             const bucket = identityBucket(device);
             const approved = Boolean(device.inventory_device_id);
             const hostname =
-              device.primary_hostname || device.fqdn || "Not yet discovered";
+              device.primary_hostname || device.fqdn || "Hostname unavailable";
             return (
               <tr key={device.result_id}>
                 <td data-label="Select">

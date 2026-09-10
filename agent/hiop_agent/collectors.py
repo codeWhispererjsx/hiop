@@ -14,6 +14,26 @@ def dns_lookup(target,timeout=5):
     except (OSError,socket.error) as exc:return {"target":target,"hostname":None,"error":type(exc).__name__}
     finally:socket.setdefaulttimeout(previous)
 
+def netbios_lookup(target,timeout=2):
+    if os.name!="nt":return None
+    try:
+        result=subprocess.run(["nbtstat","-A",str(target)],capture_output=True,text=True,timeout=timeout,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+    except (OSError,subprocess.TimeoutExpired):
+        return None
+    for line in result.stdout.splitlines():
+        match=re.search(r"^\s*([A-Za-z0-9_.-]{1,63})\s+<00>\s+UNIQUE",line,re.I)
+        if match:return match.group(1).strip()
+    return None
+
+def hostname_lookup(target,timeout=2):
+    dns=dns_lookup(str(target),timeout)
+    if dns.get("hostname"):
+        return {"hostname":dns["hostname"],"hostname_source":"reverse_dns","dns_status":"ptr_found"}
+    netbios=netbios_lookup(target,timeout)
+    if netbios:
+        return {"hostname":netbios,"hostname_source":"netbios","dns_status":dns.get("error") or "unresolved"}
+    return {"hostname":None,"hostname_source":None,"dns_status":dns.get("error") or "unresolved"}
+
 def arp_snapshot():
     result=subprocess.run(["arp","-a"],capture_output=True,text=True,timeout=10,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
     entries=[]
@@ -35,6 +55,8 @@ def discover_host(host,timeout):
                     break
             except OSError: pass
     if not observation["reachable"]: observation["error"]="no_response"
+    if observation["reachable"]:
+        observation.update(hostname_lookup(host,min(timeout,2)))
     return observation
 
 def discover(cidr,max_hosts=1024,concurrency=32,timeout=2,progress=None):
