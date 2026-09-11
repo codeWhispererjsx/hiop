@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
 import { Feedback } from "../components/Feedback";
@@ -50,8 +50,34 @@ const sections: Array<{
   { key: "about", label: "Application information", icon: "settings" },
 ];
 
+const sectionAliases: Record<string, Section> = {
+  email: "notifications",
+  notification: "notifications",
+  notifications: "notifications",
+  security: "security",
+  health: "health",
+  "system-health": "health",
+  backup: "maintenance",
+  maintenance: "maintenance",
+  about: "about",
+  app: "about",
+  snmp: "snmp",
+  ad: "active_directory",
+  "active-directory": "active_directory",
+  directory: "active_directory",
+  network: "network",
+  scanner: "network",
+  discovery: "discovery",
+  departments: "departments",
+  locations: "locations",
+  organization: "organization",
+  general: "general",
+};
+
 export default function SettingsPage() {
-  const [section, setSection] = useState<Section>("general");
+  const params = useParams();
+  const routeSection = params.section ? sectionAliases[params.section.toLowerCase()] : undefined;
+  const [section, setSection] = useState<Section>(routeSection ?? "general");
   const [draft, setDraft] = useState<SettingsBundle | null>(null);
   const [hierarchy, setHierarchy] = useState<HierarchyCatalog | null>(null);
   const [health, setHealth] = useState<SystemHealth | null>(null);
@@ -83,6 +109,10 @@ export default function SettingsPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (routeSection) setSection(routeSection);
+  }, [routeSection]);
 
   const save = async () => {
     if (!draft) return;
@@ -1128,3 +1158,4 @@ function HierarchySummary({
     </section>
   );
 }
+

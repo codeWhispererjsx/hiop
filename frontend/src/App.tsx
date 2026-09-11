@@ -148,6 +148,7 @@ export default function App() {
     <Route path="/users/:id/edit" element={roleProtectedPage(<UserFormPage mode="edit" />, ["admin"])} />
     <Route path="/users/:id" element={roleProtectedPage(<UserDetailsPage />, ["admin"])} />
     <Route path="/settings" element={roleProtectedPage(<SettingsPage />, ["admin"])} />
+    <Route path="/settings/:section" element={roleProtectedPage(<SettingsPage />, ["admin"])} />
     <Route path="/administration" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/roles" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
     <Route path="/administration/audit" element={roleProtectedPage(<AdministrationPage />, ["admin"])} />
