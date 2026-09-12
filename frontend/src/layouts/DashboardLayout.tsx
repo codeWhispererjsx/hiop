@@ -66,9 +66,12 @@ export default function DashboardLayout({
         const defaultWebSocketUrl =
           `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
         const configuredWebSocketUrl = import.meta.env.VITE_WS_URL;
-        const websocketUrl = configuredWebSocketUrl?.startsWith("/")
-          ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${configuredWebSocketUrl}`
-          : configuredWebSocketUrl ?? defaultWebSocketUrl;
+        const normalizedConfiguredUrl = configuredWebSocketUrl?.startsWith("http")
+          ? `${configuredWebSocketUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:").replace(/\/api\/v1\/?$/, "")}/ws/dashboard`
+          : configuredWebSocketUrl;
+        const websocketUrl = normalizedConfiguredUrl?.startsWith("/")
+          ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${normalizedConfiguredUrl}`
+          : normalizedConfiguredUrl ?? defaultWebSocketUrl;
         socket = new WebSocket(
           websocketUrl,
           ["hiop", token],
