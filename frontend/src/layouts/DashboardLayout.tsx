@@ -1,3 +1,4 @@
+import { configureTimeZone } from "../lib/dateTime";
 /* eslint-disable react-hooks/refs */
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -54,7 +55,7 @@ export default function DashboardLayout({
     window.addEventListener("hiop:organization-updated", refreshContext);
     return () => window.removeEventListener("hiop:organization-updated", refreshContext);
   }, []);
-  useEffect(() => { void endpoints.publicSettings().then(setBranding).catch(() => undefined); }, []);
+  useEffect(() => { const refresh=()=>void endpoints.publicSettings().then(value=>{setBranding(value);configureTimeZone(value.timezone)}).catch(() => undefined);refresh();window.addEventListener("hiop:organization-updated",refresh);return()=>window.removeEventListener("hiop:organization-updated",refresh); }, []);
   useEffect(() => {
     let closed = false;
     let socket: WebSocket | undefined;
@@ -66,9 +67,12 @@ export default function DashboardLayout({
         const defaultWebSocketUrl =
           `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
         const configuredWebSocketUrl = import.meta.env.VITE_WS_URL;
-        const websocketUrl = configuredWebSocketUrl?.startsWith("/")
-          ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${configuredWebSocketUrl}`
-          : configuredWebSocketUrl ?? defaultWebSocketUrl;
+        const normalizedConfiguredUrl = configuredWebSocketUrl?.startsWith("http")
+          ? `${configuredWebSocketUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:").replace(/\/api\/v1\/?$/, "")}/ws/dashboard`
+          : configuredWebSocketUrl;
+        const websocketUrl = normalizedConfiguredUrl?.startsWith("/")
+          ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${normalizedConfiguredUrl}`
+          : normalizedConfiguredUrl ?? defaultWebSocketUrl;
         socket = new WebSocket(
           websocketUrl,
           ["hiop", token],

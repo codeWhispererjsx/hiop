@@ -33,7 +33,7 @@ function errorDetailMessage(detail: unknown): string | undefined {
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   const token = getAuthToken();
-  const requestKey = method === "GET" && !init.signal ? `${token ?? "anonymous"}:${path}` : "";
+  const requestKey = method === "GET" && !init.signal ? `${token ?? "anonymous"}:${getOrganizationContext() ?? ""}:${window.localStorage.getItem("hiop.active_property_id") ?? ""}:${path}` : "";
   const existing = requestKey ? inFlightGets.get(requestKey) : undefined;
   if (existing) return existing as Promise<T>;
 
@@ -57,8 +57,13 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   let response: Response;
-  try { response = await fetch(`${API_URL}${path}`, { ...init, headers }); }
-  catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  try { response = await fetch(`${API_URL}${path}`, { ...init, headers, signal: init.signal ?? controller.signal }); }
+  catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw new ApiError("The request timed out. Check the connection and try again.", 408);
+    throw new ApiError("HIOP is temporarily unavailable. Check your connection and try again.", 0);
+  } finally { window.clearTimeout(timeout); }
   if (response.status === 403 && activeProperty && ["GET", "HEAD"].includes(method)) {
     let detail: string | undefined;
     try {
@@ -69,7 +74,7 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
       window.localStorage.removeItem("hiop.active_property_id");
       headers.delete("X-HIOP-Property-ID");
       try { response = await fetch(`${API_URL}${path}`, { ...init, headers }); }
-      catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
+      catch { throw new ApiError("HIOP is temporarily unavailable. Check your connection and try again.", 0); }
     }
   }
   if (response.status === 401) { clearAuthToken(); window.dispatchEvent(new Event("hiop:unauthorized")); }
@@ -101,7 +106,7 @@ async function download(path: string) {
   const headers:Record<string,string>={};if(token)headers.Authorization=`Bearer ${token}`;if(organization)headers["X-Organization-ID"]=organization;if(property)headers["X-HIOP-Property-ID"]=property;
   let response: Response;
   try { response = await fetch(`${API_URL}${path}`, { headers }); }
-  catch { throw new ApiError("Cannot reach the HIOP backend. Confirm FastAPI is running.", 0); }
+  catch { throw new ApiError("HIOP is temporarily unavailable. Check your connection and try again.", 0); }
   if (response.status === 401) { clearAuthToken(); window.dispatchEvent(new Event("hiop:unauthorized")); }
   if (!response.ok) throw new ApiError(`Export failed (${response.status})`, response.status);
   const disposition = response.headers.get("Content-Disposition") ?? "";
@@ -109,6 +114,7 @@ async function download(path: string) {
 }
 
 export const endpoints = {
+  downloadAgentInstaller: () => download("/local-agents/installer/windows"),
   requestPasswordRecovery:(email:string)=>api<{message:string}>("/accounts/password-recovery/request",{method:"POST",body:JSON.stringify({email})}),
   confirmPasswordRecovery:(token:string,password:string)=>api<{message:string}>("/accounts/password-recovery/confirm",{method:"POST",body:JSON.stringify({token,password})}),
   requestEmailVerification:(email:string)=>api<{message:string}>("/accounts/verification/request",{method:"POST",body:JSON.stringify({email})}),
@@ -118,7 +124,7 @@ export const endpoints = {
   onboardingProgress:()=>api<{state:string;checklist:{organization_configured:boolean;departments_configured:boolean;locations_configured:boolean;agent_connected:boolean;network_configured:boolean;discovery_run:boolean;devices_reviewed:boolean;devices_approved:boolean;monitoring_configured:boolean};current_step:string;progress_percentage:number;steps_completed:number;total_steps:number;started_at:string|null;completed_at:string|null}>("/onboarding/progress"),
   propertyContext:()=>api<import("./types").PropertyContext>("/property-management/context"),
   billingPlans:()=>api<import("./types").BillingPlan[]>("/billing/public/plans"),
-  currentBilling:()=>api<{subscription:import("./types").OrganizationSubscription|null;usage?:Record<string,number>}>("/billing/current"),
+  currentBilling:()=>api<{subscription:import("./types").OrganizationSubscription|null;billing_exempt:boolean;access_override:string;usage?:Record<string,number>}>("/billing/current"),
   billingDocuments:()=>api<Array<{id:string;type:string;hosted_url:string|null;amount:string|null;currency:string|null;status:string|null;issued_at:string|null}>>("/billing/documents"),
   startBillingTrial:(plan_code:string)=>api<import("./types").OrganizationSubscription>("/billing/trial",{method:"POST",body:JSON.stringify({plan_code})}),
   changeBillingPlan:(plan_code:string,billing_interval:string)=>api<import("./types").OrganizationSubscription>("/billing/change-plan",{method:"POST",body:JSON.stringify({plan_code,billing_interval})}),
@@ -136,7 +142,7 @@ export const endpoints = {
   platformSummary:()=>api<import("./types").PlatformSummary>("/platform/summary"),
   platformOrganizations:()=>api<import("./types").PlatformOrganization[]>("/platform/organizations"),
   createPlatformOrganization:(body:Record<string,unknown>)=>api<import("./types").PlatformOrganization>("/platform/organizations",{method:"POST",body:JSON.stringify(body)}),
-  updatePlatformOrganization:(id:string,body:{name:string;contact_email:string|null;contact_phone:string|null;notes:string|null})=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}`,{method:"PATCH",body:JSON.stringify(body)}),
+  updatePlatformOrganization:(id:string,body:{name?:string;contact_email?:string|null;contact_phone?:string|null;notes?:string|null;billing_exempt?:boolean;access_override?:"subscription"|"keep_active"|"suspended"})=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}`,{method:"PATCH",body:JSON.stringify(body)}),
   suspendPlatformOrganization:(id:string)=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}/suspend`,{method:"POST"}),
   activatePlatformOrganization:(id:string)=>api<import("./types").PlatformOrganization>(`/platform/organizations/${id}/activate`,{method:"POST"}),
   provisionOrganizationAdmin:(id:string,body:Record<string,unknown>)=>api<Record<string,unknown>>(`/platform/organizations/${id}/administrator`,{method:"POST",body:JSON.stringify(body)}),
@@ -202,8 +208,8 @@ export const endpoints = {
   deviceAlerts: (id: string) => api<import("./types").Alert[]>(`/devices/${id}/alerts`),
   deviceTickets: (id: string) => api<import("./types").Ticket[]>(`/devices/${id}/tickets`),
   deviceAuditLogs: (id: string) => api<import("./types").AuditLog[]>(`/devices/${id}/audit-logs`),
-  scanDevice: (device_id: string) => api<import("./types").Scan>("/network/scan", { method: "POST", body: JSON.stringify({ device_id }) }),
-  scanAll: () => api<{total_devices:number;online:number;offline:number;results:import("./types").Scan[]}>("/network/scan-all", { method: "POST" }),
+  scanDevice: (device_id: string) => api<import("./types").Scan | {queued:true;job_id:string;device_id:string;ip_address:string;status:"queued";response_time:null}>("/network/scan", { method: "POST", body: JSON.stringify({ device_id }) }),
+  scanAll: () => api<{total_devices:number;queued?:number;online:number;offline:number;results:Array<import("./types").Scan | {queued?:true;job_id?:string;device_id:string;ip_address:string;status:string;response_time:null}>}>("/network/scan-all", { method: "POST" }),
   scanRange: (network: string) => api<Array<{ip_address:string;status:string;response_time:number|null}>>("/network/scan-range", { method: "POST", body: JSON.stringify({ network }) }),
   scanHistory: (limit = 100) => api<import("./types").Scan[]>(`/network/history?limit=${limit}`),
   monitoringSummary:(window="24h")=>api<import("./types").MonitoringSummary>(`/monitoring/summary?window=${encodeURIComponent(window)}`),
