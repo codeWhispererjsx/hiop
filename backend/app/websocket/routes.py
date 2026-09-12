@@ -10,7 +10,10 @@ router = APIRouter()
 @router.websocket("/ws/dashboard")
 async def dashboard_socket(websocket: WebSocket):
     protocols = websocket.scope.get("subprotocols", [])
-    token = protocols[1] if len(protocols) == 2 and protocols[0] == "hiop" else ""
+    # Some hosted reverse proxies preserve the WebSocket upgrade but strip
+    # subprotocols. Keep the subprotocol path and accept a short-lived query
+    # token as a compatibility fallback for those deployments.
+    token = protocols[1] if len(protocols) == 2 and protocols[0] == "hiop" else websocket.query_params.get("token", "")
     db = SessionLocal()
     try:
         authenticated = bool(token and user_from_token(db, token))

@@ -72,8 +72,9 @@ export default function DashboardLayout({
         const websocketUrl = normalizedConfiguredUrl?.startsWith("/")
           ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${normalizedConfiguredUrl}`
           : normalizedConfiguredUrl ?? defaultWebSocketUrl;
+        const socketUrl = `${websocketUrl}${websocketUrl.includes("?") ? "&" : "?"}token=${encodeURIComponent(token)}`;
         socket = new WebSocket(
-          websocketUrl,
+          socketUrl,
           ["hiop", token],
         );
         socket.onopen = () => { setLive(true); liveStateRef.current?.(true); };
