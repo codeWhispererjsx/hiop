@@ -1,5 +1,5 @@
 import { formatDateTime } from "../lib/dateTime";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
@@ -37,6 +37,13 @@ export default function NetworkPage() {
   const refresh = useCallback(async () => {
     await Promise.all([reloadDevices(), reloadScans(), reloadAlerts(), reloadHealth()]);
   }, [reloadDevices, reloadScans, reloadAlerts, reloadHealth]);
+
+  // Hosted deployments may not be able to keep a WebSocket open. Keep this
+  // page current from the same read APIs while the layout retries realtime.
+  useEffect(() => {
+    const timer = globalThis.setInterval(() => { void refresh(); }, 15000);
+    return () => globalThis.clearInterval(timer);
+  }, [refresh]);
 
   const live = useCallback((event: LiveEvent) => {
     if (event.event === "device_status_changed") {
@@ -149,8 +156,8 @@ export default function NetworkPage() {
         <div className="noc-connection-error" role="alert" aria-live="polite">
           <Icon name="warning" aria-hidden="true" />
           <div>
-            <strong>Live connection interrupted</strong>
-            <span>Status changes may be delayed. HIOP is reconnecting automatically.</span>
+            <strong>Realtime connection unavailable</strong>
+            <span>HIOP is refreshing monitoring data automatically every 15 seconds while it reconnects.</span>
           </div>
         </div>
       )}
