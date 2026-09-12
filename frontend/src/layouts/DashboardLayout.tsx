@@ -59,6 +59,12 @@ export default function DashboardLayout({
     let closed = false;
     let socket: WebSocket | undefined;
     let retry: number | undefined;
+    let poll: number | undefined;
+    const startPollingFallback = () => {
+      if (poll || closed) return;
+      poll = window.setInterval(() => window.dispatchEvent(new Event("hiop:organization-updated")), 15000);
+    };
+    const stopPollingFallback = () => { if (poll) { clearInterval(poll); poll = undefined; } };
     const connect = () => {
       try {
         const token = getAuthToken();
@@ -77,7 +83,7 @@ export default function DashboardLayout({
           socketUrl,
           ["hiop", token],
         );
-        socket.onopen = () => { setLive(true); liveStateRef.current?.(true); };
+        socket.onopen = () => { stopPollingFallback(); setLive(true); liveStateRef.current?.(true); };
         socket.onmessage = (e) => {
           try {
             liveEventRef.current?.(JSON.parse(e.data) as LiveEvent);
@@ -85,15 +91,15 @@ export default function DashboardLayout({
             /* malformed event */
           }
         };
-        socket.onerror = () => { setLive(false); liveStateRef.current?.(false); };
+        socket.onerror = () => { startPollingFallback(); setLive(false); liveStateRef.current?.(false); };
         socket.onclose = () => {
-          setLive(false);
+          startPollingFallback(); setLive(false);
           liveStateRef.current?.(false);
           if (!closed) retry = window.setTimeout(connect, 2500);
         };
       } catch {
         // WebSocket connection failed - don't block UI
-        setLive(false);
+        startPollingFallback(); setLive(false);
         if (!closed) retry = window.setTimeout(connect, 5000);
       }
     };
@@ -101,6 +107,7 @@ export default function DashboardLayout({
     return () => {
       closed = true;
       if (retry) clearTimeout(retry);
+      stopPollingFallback();
       try {
         socket?.close();
       } catch {
