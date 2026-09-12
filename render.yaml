@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: hiop-backend
+    runtime: docker
+    rootDir: backend
+    plan: free
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: APP_NAME
+        value: Hospitality IT Operations Platform
+      - key: APP_VERSION
+        value: 4.0.0
+      - key: DEBUG
+        value: "false"
+      - key: ENVIRONMENT
+        value: production
+      - key: API_PREFIX
+        value: /api/v1
+      - key: DISCOVERY_EXECUTION_MODE
+        value: agent
+      - key: SCHEDULER_ENABLED
+        value: "true"
+      - key: COMMERCIAL_ENFORCEMENT_ENABLED
+        value: "false"
+      - key: REQUIRE_EMAIL_VERIFICATION
+        value: "false"
+      - key: CORS_ORIGINS
+        value: '["https://hiop-ivory.vercel.app"]'
+      - key: PUBLIC_APP_URL
+        value: https://hiop-ivory.vercel.app
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: HIOP_AD_SECRET_KEY
+        generateValue: true
+      - key: HIOP_SNMP_SECRET_KEY
+        generateValue: true
+      - key: HIOP_DISCOVERY_CREDENTIAL_KEY
+        generateValue: true
