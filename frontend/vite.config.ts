@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiTarget = env.VITE_PROXY_TARGET || 'http://127.0.0.1:8000'
   const isVercelBuild = env.VERCEL === '1' || process.env.VERCEL === '1'
-  const apiUrl = env.VITE_API_URL || process.env.VITE_API_URL
+  const apiUrl = env.VITE_API_URL || process.env.VITE_API_URL || (isVercelBuild ? 'https://hiop-backend.onrender.com/api/v1' : undefined)
   const wsUrl = env.VITE_WS_URL || process.env.VITE_WS_URL || apiUrl?.replace(/^https:/, 'wss:').replace(/\/$/, '') + '/ws/dashboard'
   if (isVercelBuild) {
     if (!apiUrl?.startsWith('https://')) {
