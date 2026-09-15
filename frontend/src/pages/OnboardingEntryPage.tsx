@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
-import { getAuthToken } from "../lib/auth";
+import { api } from "../lib/api";
 
 export default function OnboardingEntryPage() {
   const [isSkipping, setIsSkipping] = useState(false);
@@ -9,19 +9,8 @@ export default function OnboardingEntryPage() {
   const handleSkip = async () => {
     setIsSkipping(true);
     try {
-      const response = await fetch("/api/v1/onboarding/skip", { 
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${getAuthToken()}`,
-          "Content-Type": "application/json"
-        }
-      });
-      if (response.ok) {
-        window.location.href = "/dashboard";
-      } else {
-        console.error("Failed to skip onboarding:", response.status);
-        setIsSkipping(false);
-      }
+      await api("/onboarding/skip", { method: "POST" });
+      window.location.href = "/dashboard";
     } catch (error) {
       console.error("Failed to skip onboarding:", error);
       setIsSkipping(false);
