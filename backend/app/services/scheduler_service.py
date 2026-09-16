@@ -1,4 +1,5 @@
 import logging
+from threading import Thread
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 import uuid
@@ -1434,6 +1435,11 @@ def start_scheduler():
         return
 
     scheduler.start()
+    Thread(target=_initialize_scheduler_jobs, name="hiop-scheduler-init", daemon=True).start()
+    logger.info("HIOP scheduler started")
+
+
+def _initialize_scheduler_jobs():
     db = SessionLocal()
     try:
         from app.models.system_setting import SystemSetting
@@ -1458,9 +1464,10 @@ def start_scheduler():
             update_scheduler_health(db, scheduler.running)
         except Exception as e:
             logger.warning(f"Could not update scheduler health (tables may not exist yet): {e}")
+    except Exception:
+        logger.exception("HIOP scheduler job initialization failed")
     finally:
         db.close()
-    logger.info("HIOP scheduler started")
 
 
 def stop_scheduler():
