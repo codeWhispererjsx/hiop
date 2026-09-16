@@ -8,7 +8,6 @@ from app.auth.routes import router as auth_router
 from app.core.config import settings
 from app.core.logging_config import configure_logging
 from app.db.database import SessionLocal
-from app.models.network_scan import NetworkScan
 from app.devices.routes import router as device_router
 from app.scanner.routes import router as scanner_router
 from app.dashboard.routes import router as dashboard_router
@@ -23,8 +22,6 @@ from app.services.scheduler_service import (
 from app.services.health_service import (
     get_platform_health_summary,
     record_health,
-    update_database_health,
-    update_api_health,
 )
 from app.websocket.routes import router as websocket_router
 from app.operations.routes import router as operations_router
@@ -134,7 +131,6 @@ def root():
 def health():
     db = SessionLocal()
     try:
-        # Check database with timing
         import time
         start = time.perf_counter()
         db.execute(text("SELECT 1"))
@@ -143,26 +139,6 @@ def health():
     except Exception:
         database_available = False
         latency_ms = None
-    finally:
-        db.close()
-    
-    # Update health records (gracefully handle if tables don't exist)
-    db = SessionLocal()
-    try:
-        if database_available:
-            update_database_health(db, database_available, latency_ms)
-        else:
-            update_database_health(db, database_available, latency_ms)
-        update_api_health(db)
-        
-        # Get last scan info
-        last_scan = None
-        if database_available:
-            latest = db.query(NetworkScan.scanned_at).order_by(NetworkScan.scanned_at.desc()).first()
-            last_scan = latest[0].isoformat() if latest and latest[0] else None
-    except Exception as e:
-        # Health tables may not exist, log and continue
-        pass
     finally:
         db.close()
 
@@ -179,7 +155,6 @@ def health():
         "scheduler": scheduler_state,
         "websocket": {"status": "available", "active_connections": manager.connection_count},
         "network_scanner": "configured",
-        "last_scan": last_scan,
     }
     return JSONResponse(payload, status_code=200 if healthy else 503)
 
@@ -255,3 +230,6 @@ app.include_router(backup_recovery_router, prefix=settings.api_prefix)
 app.include_router(email_router, prefix=settings.api_prefix)
 app.include_router(circuit_breakers_router, prefix=settings.api_prefix)
 app.include_router(integration_status_router, prefix=settings.api_prefix)
+
+from app.audit.routes import router as audit_router
+app.include_router(audit_router, prefix=settings.api_prefix)
