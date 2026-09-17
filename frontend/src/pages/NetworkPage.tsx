@@ -40,6 +40,7 @@ export default function NetworkPage() {
 
   const live = useCallback((event: LiveEvent) => {
     if (event.event === "device_status_changed") {
+      setScanState("idle");
       setMessage(`${event.hostname ?? "A device"} changed to ${event.current_status ?? "an unknown state"}.`);
       void refresh();
     }
@@ -68,8 +69,10 @@ export default function NetworkPage() {
       setScanState("completed");
       await refresh();
     } catch (error) {
-      setScanState("failed");
-      setMessage(monitoringErrorMessage(error instanceof Error ? error.message : "The scan request failed."));
+      const text = error instanceof Error ? error.message : "The scan request failed.";
+      const timedOut = text.toLowerCase().includes("timed out");
+      setScanState(timedOut ? "idle" : "failed");
+      setMessage(monitoringErrorMessage(text));
     } finally {
       setScanningDevice("");
     }
