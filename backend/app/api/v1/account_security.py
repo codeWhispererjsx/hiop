@@ -59,7 +59,7 @@ def _validate_password(password: str) -> None:
 
 
 def _url(path: str, token: str) -> str:
-    origin = settings.cors_origins[0].rstrip("/") if settings.cors_origins else "http://localhost:5173"
+    origin = (settings.public_app_url or (settings.cors_origins[0] if settings.cors_origins else "http://localhost:5173")).rstrip("/")
     return f"{origin}{path}?token={token}"
 
 
@@ -75,8 +75,10 @@ def invite(payload: InviteRequest, db: Session = Depends(get_db), actor: User = 
     if db.query(User).filter(func.lower(User.email) == email).first():
         raise HTTPException(409, "A user with this email already exists")
     property_row = db.get(Property, payload.property_id) if payload.property_id else None
-    if property_row and property_row.organization_id != actor.organization_id:
+    if payload.property_id and (not property_row or property_row.organization_id != actor.organization_id or not property_row.is_active):
         raise HTTPException(404, "Property not found")
+    if payload.role != "admin" and not property_row:
+        raise HTTPException(422, "Choose a property for viewers and technicians")
     prior = db.query(UserInvitation).filter_by(organization_id=actor.organization_id, email=email, status="pending").first()
     if prior:
         prior.status = "replaced"
@@ -84,6 +86,9 @@ def invite(payload: InviteRequest, db: Session = Depends(get_db), actor: User = 
     row = UserInvitation(organization_id=actor.organization_id, property_id=property_row.id if property_row else None, email=email, role=payload.role, token_hash=_hash(raw), invited_by=actor.id, expires_at=datetime.now(timezone.utc)+timedelta(hours=72))
     db.add(row); db.flush()
     delivery = _safe_delivery("You are invited to HIOP", f"Accept your secure invitation: {_url('/accept-invitation', raw)}\nThis link expires in 72 hours.", email)
+    if delivery != "sent":
+        db.rollback()
+        raise HTTPException(503, "Invitation email could not be sent. Ask the platform owner to check email delivery, then try again.")
     create_audit_log(db, actor.username, "USER_INVITED", "UserInvitation", str(row.id), f"Invited {email}", organization_id=actor.organization_id, property_id=row.property_id, event_category="security")
     db.commit()
     response = {"id": str(row.id), "email": email, "role": row.role, "status": row.status, "expires_at": row.expires_at, "delivery_status": delivery}
@@ -99,6 +104,8 @@ def accept_invitation(payload: AcceptInvitation, request: Request, db: Session =
     row = db.query(UserInvitation).filter_by(token_hash=_hash(payload.token), status="pending").first()
     if not row or row.expires_at <= now: raise HTTPException(400, "Invitation is invalid or expired")
     if db.query(User).filter(func.lower(User.username)==payload.username.lower()).first(): raise HTTPException(409, "Username already exists")
+    enforce_limit(db, row.organization_id, "users")
+    if db.query(User).filter(func.lower(User.email)==row.email.lower()).first(): raise HTTPException(409, "An account with this email already exists")
     user = User(username=payload.username, email=row.email, hashed_password=hash_password(payload.password), role=row.role, organization_id=row.organization_id, is_active=True, email_verified_at=now, invited_at=row.created_at, invitation_accepted_at=now)
     db.add(user); db.flush()
     if row.property_id: db.add(UserPropertyAccess(user_id=user.id, property_id=row.property_id, access_level=f"property_{'admin' if row.role=='admin' else row.role}", enabled=True, is_default=True, granted_by=row.invited_by))

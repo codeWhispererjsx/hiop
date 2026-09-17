@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dateTime";
 import { useDeferredValue, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
@@ -283,7 +284,7 @@ function ProblemDetail({ id }: { id: string }) {
       <PageTitle
         eyebrow={row.problem_number}
         title={row.title}
-        copy={`${title(row.category)} · Created ${new Date(row.created_at).toLocaleString()}`}
+        copy={`${title(row.category)} · Created ${formatDateTime(row.created_at)}`}
         action={
           <Link className="secondary-action" to="/problems">
             Back to Problems

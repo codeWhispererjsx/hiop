@@ -1,3 +1,4 @@
+import { QuickNavigation } from "./QuickNavigation";
 import { Icon } from "./Icon";
 import ThemeToggle from "./ThemeToggle";
 
@@ -49,7 +50,7 @@ export default function Header({
           <strong>{propertyName ?? "Hospitality IT Operations"}</strong>
         )}
       </div>
-      <div className="topbar-actions">
+      <div className="topbar-actions"><QuickNavigation role={user?.role}/>
         <div className={`live-pill ${live ? "connected" : ""}`} aria-live="polite">
           <span aria-hidden="true" />
           {live ? "Live monitoring" : "Reconnecting"}

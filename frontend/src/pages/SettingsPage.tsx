@@ -1,3 +1,4 @@
+import { FeatureGuide } from "../components/FeatureGuide";
 /* eslint-disable react-hooks/set-state-in-effect */
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -7,7 +8,7 @@ import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
 import { Toast } from "../components/Toast";
 import { endpoints } from "../lib/api";
-import type { HierarchyCatalog, SettingsBundle, SystemHealth } from "../lib/types";
+import type { OrganizationDepartment, OrganizationLocation, SettingsBundle, SystemHealth } from "../lib/types";
 import { useTheme, type ThemePreference } from "../theme/ThemeContext";
 import { ActiveDirectorySettings } from "../components/ActiveDirectorySettings";
 
@@ -53,7 +54,8 @@ const sections: Array<{
 export default function SettingsPage() {
   const [section, setSection] = useState<Section>("general");
   const [draft, setDraft] = useState<SettingsBundle | null>(null);
-  const [hierarchy, setHierarchy] = useState<HierarchyCatalog | null>(null);
+  const [departments,setDepartments]=useState<OrganizationDepartment[]>([]);
+  const [locations,setLocations]=useState<OrganizationLocation[]>([]);
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,9 +70,9 @@ export default function SettingsPage() {
       const settings = await endpoints.settings();
       setDraft(settings);
       try {
-        setHierarchy(await endpoints.hierarchy());
+        const [d,l]=await Promise.all([endpoints.organizationDepartments(),endpoints.organizationLocations()]);setDepartments(d);setLocations(l);
       } catch {
-        setHierarchy(null);
+        setDepartments([]);setLocations([]);
         setNotice("Core settings loaded. Location hierarchy is temporarily unavailable.");
       }
     } catch (caught) {
@@ -107,6 +109,7 @@ export default function SettingsPage() {
         result = await endpoints.updateSNMPSettings(draft.snmp);
       }
       setDraft(result);
+      window.dispatchEvent(new Event("hiop:organization-updated"));
       setNotice(`${sections.find((item) => item.key === section)?.label} settings saved.`);
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : "Settings could not be saved.");
@@ -142,7 +145,7 @@ export default function SettingsPage() {
   }
 
   const g = draft.general;
-  const o = draft.organization;
+
   const n = draft.network;
   const d = draft.discovery;
   const notifications = draft.notifications;
@@ -180,23 +183,10 @@ export default function SettingsPage() {
           {section === "general" && (
             <SettingsPanel
               title="General settings"
-              copy="Global application display and formatting defaults."
+              copy="Choose time and display preferences for your organisation."
             >
               <div className="settings-form-grid">
-                <Field
-                  label="Application display name"
-                  value={g.application_name}
-                  onChange={(value) =>
-                    setDraft({ ...draft, general: { ...g, application_name: value } })
-                  }
-                />
-                <Field
-                  label="Short name"
-                  value={g.short_name}
-                  onChange={(value) =>
-                    setDraft({ ...draft, general: { ...g, short_name: value } })
-                  }
-                />
+                <div><span>Application</span><p><strong>HIOP</strong></p><small>Platform branding is managed by HIOP.</small></div>
                 <Field
                   label="Time zone"
                   value={g.timezone}
@@ -272,100 +262,29 @@ export default function SettingsPage() {
             </SettingsPanel>
           )}
 
-          {section === "organization" && (
-            <SettingsPanel
-              title="Organization profile"
-              copy="Shared identity used throughout administration and operational context."
-            >
-              <div className="settings-form-grid">
-                <Field
-                  label="Organization name"
-                  value={o.organization_name}
-                  onChange={(value) =>
-                    setDraft({ ...draft, organization: { ...o, organization_name: value } })
-                  }
-                />
-                <Field
-                  label="Property name"
-                  value={o.property_name}
-                  onChange={(value) =>
-                    setDraft({ ...draft, organization: { ...o, property_name: value } })
-                  }
-                />
-                <Field
-                  label="IT department name"
-                  value={o.it_department_name}
-                  onChange={(value) =>
-                    setDraft({ ...draft, organization: { ...o, it_department_name: value } })
-                  }
-                />
-                <Field
-                  label="Address"
-                  value={o.address}
-                  onChange={(value) =>
-                    setDraft({ ...draft, organization: { ...o, address: value } })
-                  }
-                />
-                <Field
-                  label="City"
-                  value={o.city}
-                  onChange={(value) =>
-                    setDraft({ ...draft, organization: { ...o, city: value } })
-                  }
-                />
-                <Field
-                  label="Country"
-                  value={o.country}
-                  onChange={(value) =>
-                    setDraft({ ...draft, organization: { ...o, country: value } })
-                  }
-                />
-                <Field
-                  label="Support email"
-                  type="email"
-                  value={o.support_email ?? ""}
-                  onChange={(value) =>
-                    setDraft({ ...draft, organization: { ...o, support_email: value || null } })
-                  }
-                />
-                <Field
-                  label="Support phone"
-                  value={o.support_phone}
-                  onChange={(value) =>
-                    setDraft({ ...draft, organization: { ...o, support_phone: value } })
-                  }
-                />
-              </div>
-              <p className="settings-note">
-                <Icon name="warning" aria-hidden="true" />
-                Logo upload is unavailable because secure file storage is not configured.
-              </p>
-              <SaveButton saving={saving} onClick={save} />
-            </SettingsPanel>
-          )}
-
+          {section === "organization" && <SettingsPanel title="Organisation details" copy="Manage the shared information used throughout HIOP."><Link className="primary-action" to="/administration/organization">Edit organisation details</Link></SettingsPanel>}
           {section === "departments" && (
             <HierarchySummary
               title="Departments"
-              copy="Normalized, database-backed departments. No additional names are invented."
-              items={hierarchy?.departments ?? []}
-              link="/hierarchy"
+              copy="Your organisation’s departments. Changes appear here and on the organisation page."
+              items={departments}
+              link="/administration/organization?tab=departments"
             />
           )}
 
           {section === "locations" && (
             <HierarchySummary
               title="Locations"
-              copy="Rooms and locations are managed through the normalized property hierarchy."
-              items={hierarchy?.rooms ?? []}
-              link="/hierarchy"
+              copy="Your organisation’s buildings, floors, rooms, and other locations."
+              items={locations}
+              link="/administration/organization?tab=locations"
             />
           )}
 
           {section === "network" && (
             <SettingsPanel
               title="Network & scanner"
-              copy="Runtime-safe scanner controls. Every approved CIDR must be a private network."
+              copy="Choose approved networks and scanning preferences."
             >
               <div className="settings-form-grid">
                 <Field
@@ -561,7 +480,7 @@ export default function SettingsPage() {
           {section === "notifications" && (
             <SettingsPanel
               title="Notifications & email"
-              copy="Notification policy is persisted; SMTP credentials remain deployment-only and are never returned."
+              copy="Choose which events should send an email to your team."
             >
               <div className="settings-toggles">
                 <Toggle
@@ -638,12 +557,7 @@ export default function SettingsPage() {
                   }
                 />
               </div>
-              <ReadOnlyGrid data={draft.email} />
-              <p className="settings-note">
-                <Icon name="lock" aria-hidden="true" />
-                SMTP credentials are environment-only. Test email is unavailable until a
-                secure runtime mail provider is configured.
-              </p>
+              <p className="settings-note">{draft.email.configured?"Email delivery is configured.":"Email delivery is not available yet. Contact the platform owner."}</p>
               <SaveButton saving={saving} onClick={save} />
             </SettingsPanel>
           )}
@@ -748,6 +662,7 @@ export default function SettingsPage() {
             </SettingsPanel>
           )}
 
+          {section === "snmp" && <FeatureGuide kind="snmp"/>}
           {section === "snmp" && (
             <SettingsPanel
               title="SNMP monitoring"
@@ -865,9 +780,9 @@ export default function SettingsPage() {
           {section === "security" && (
             <SettingsPanel
               title="Security posture"
-              copy="Read-only facts from the current authentication implementation."
+              copy="Manage who can access your organisation."
             >
-              <ReadOnlyGrid data={draft.security} />
+              <Link className="secondary-action" to="/administration/roles">Review roles and access</Link><Link className="secondary-action" to="/users">Manage team members</Link>
               <p className="settings-note">
                 <Icon name="lock" aria-hidden="true" />
                 Secret keys, password hashes, tokens and database credentials are never
@@ -879,7 +794,7 @@ export default function SettingsPage() {
           {section === "health" && (
             <SettingsPanel
               title="System health"
-              copy="A live, secret-safe view of core HIOP services."
+              copy="Check service availability."
             >
               <button
                 className="secondary-action"
@@ -890,7 +805,7 @@ export default function SettingsPage() {
                 Refresh health
               </button>
               {health ? (
-                <ReadOnlyGrid data={health as unknown as Record<string, unknown>} />
+                <ReadOnlyGrid data={{availability:health.status,email:health.email}} />
               ) : (
                 <Feedback loading />
               )}
@@ -900,21 +815,9 @@ export default function SettingsPage() {
           {section === "maintenance" && (
             <SettingsPanel
               title="Backup & maintenance"
-              copy="No application-managed backup engine exists, so destructive or fake controls are intentionally omitted."
+              copy="Get help with data recovery and planned maintenance."
             >
-              <div className="maintenance-guide">
-                <h3>PostgreSQL operational backup</h3>
-                <ol>
-                  <li>Use the deployment host's secured PostgreSQL service account.</li>
-                  <li>Run an encrypted `pg_dump` outside the source tree.</li>
-                  <li>Store backups in access-controlled off-host storage.</li>
-                  <li>Test restores in an isolated environment before relying on them.</li>
-                </ol>
-                <p>
-                  HIOP does not execute restores, arbitrary SQL, shell commands, log
-                  deletion or database resets from this interface.
-                </p>
-              </div>
+              <div className="maintenance-guide"><p>Backups and recovery are managed by the HIOP platform owner. Contact support if you need help recovering data.</p></div>
             </SettingsPanel>
           )}
 
@@ -923,7 +826,7 @@ export default function SettingsPage() {
               title="Application information"
               copy="Non-sensitive metadata reported by the running deployment."
             >
-              <ReadOnlyGrid data={draft.application} />
+              <p><strong>HIOP</strong> helps your team manage devices, network monitoring, and IT operations across your organisation.</p>
               <div className="module-list">
                 <strong>Product pillars</strong>
                 <span>Overview</span>

@@ -13,8 +13,8 @@ test("organization configuration lives under Administration, not a new top-level
   assert.doesNotMatch(sidebar,/label: ?"Local Agent"/);
 });
 test("organization workspace manages general details, departments, locations and secure agents",()=>{
-  for(const value of ["general","departments","locations","agents","Save organization","Add department","Add location","Generate enrollment"])assert.ok(page.includes(value));
-  assert.match(page,/one-time enrollment token/i);
+  for(const value of ["general","departments","locations","agents","Save organization","Add department","Add location","Create connection code"])assert.ok(page.includes(value));
+  assert.match(page,/one-time connection code/i);
 });
 test("frontend uses tenant-aware organization structure APIs",()=>{
   for(const route of ["/organization-structure/organization","/organization-structure/departments","/organization-structure/locations","/local-agents"])assert.ok(api.includes(route));

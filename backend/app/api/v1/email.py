@@ -11,7 +11,7 @@ router = APIRouter(prefix="/email", tags=["Email"])
 
 @router.get("/test-configuration")
 def test_email_config(
-    current_user: User = Depends(require_roles(["admin", "platformadmin"]))
+    current_user: User = Depends(require_roles(["platformadmin"]))
 ):
     """Test email configuration status without sending an email"""
     return test_email_configuration()
@@ -19,7 +19,7 @@ def test_email_config(
 
 @router.post("/send-test")
 def send_test_email(
-    current_user: User = Depends(require_roles(["admin", "platformadmin"])),
+    current_user: User = Depends(require_roles(["platformadmin"])),
     db: Session = Depends(get_db)
 ):
     """Send a test email to verify configuration"""

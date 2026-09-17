@@ -20,8 +20,9 @@ def organization_context(
     organization = db.get(Organization, organization_id)
     if not organization:
         raise HTTPException(404, "Organization not found")
-    if organization.status != "active" and user.role != "platformadmin":
+    if (organization.status != "active" or organization.access_override == "suspended") and user.role != "platformadmin":
         raise HTTPException(403, "This organization is suspended or inactive")
+    db.info["organization_id"] = organization_id
     return organization_id
 
 

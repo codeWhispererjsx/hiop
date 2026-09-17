@@ -31,7 +31,7 @@ def _health(scans: list[NetworkScan]):
     average = mean(latencies) if latencies else None
     latest = scans[-1]
     reasons = []
-    if latest.status.lower() == "offline": reasons.append("Latest ICMP reachability check failed")
+    if latest.status.lower() == "offline": reasons.append("Last local monitoring check got no response")
     if loss >= 50: reasons.append(f"{loss:.0f}% failed checks in the selected window")
     elif loss >= 5: reasons.append(f"{loss:.0f}% failed checks in the selected window")
     if average is not None and average >= 250: reasons.append(f"Average latency is elevated at {average:.1f} ms")
@@ -78,7 +78,7 @@ def device_health(db: Session, device: Device, window: str = "24h"):
         "availability_percent": round(len(online) * 100 / len(known), 2) if known else None,
         "packet_loss_percent": round(len(failed) * 100 / len(known), 2) if len(known) >= 2 else None,
         "latency": None if not latencies else {"current": scans[-1].response_time if scans[-1].status.lower() == "online" else None, "average": round(mean(latencies), 2), "minimum": min(latencies), "maximum": max(latencies)},
-        "observations": [{"id": str(row.id), "timestamp": row.scanned_at, "status": row.status, "latency_ms": row.response_time, "source": "ICMP", "failure_reason": "No ICMP response" if row.status.lower() == "offline" else None} for row in scans],
+        "observations": [{"id": str(row.id), "timestamp": row.scanned_at, "status": row.status, "latency_ms": row.response_time, "source": "Local monitoring", "failure_reason": "No response from this device" if row.status.lower() == "offline" else None} for row in scans],
         "telemetry": telemetry, "interfaces": interfaces,
         "source_status": {"icmp": "available" if scans else "no_data", "snmp": "available" if metric_rows else "unavailable" if targets else "unsupported"},
     }
@@ -94,3 +94,4 @@ def summary(db: Session, window: str = "24h", organization_id=None, property_id=
     devices = query.filter(Device.inventory_status != "Retired").all()
     items = [device_health(db, row, window) for row in devices]
     return {"window": window, "monitored": sum(bool(row["observations"]) for row in items), "online": sum(row["status"].lower() == "online" for row in items), "offline": sum(row["status"].lower() == "offline" for row in items), "degraded": sum(row["health"] == "Degraded" for row in items), "unhealthy": sum(row["health"] == "Unhealthy" for row in items), "unknown": sum(row["health"] == "Unknown" for row in items), "devices": items}
+

@@ -10,6 +10,7 @@ from app.core.tenant import organization_context
 
 
 class DB:
+    info = {}
     def __init__(self,organization):self.organization=organization
     def get(self,_model,ident):return self.organization if ident==self.organization.id else None
 
@@ -22,7 +23,7 @@ def test_platform_role_is_explicit_and_does_not_inherit_organization_admin():
 
 
 def test_organization_context_enforces_membership_and_suspension():
-    org=SimpleNamespace(id=uuid4(),status="active")
+    org=SimpleNamespace(id=uuid4(),status="active",access_override="subscription")
     member=SimpleNamespace(role="viewer",organization_id=org.id)
     assert organization_context(DB(org),member,None)==org.id
     other=uuid4()

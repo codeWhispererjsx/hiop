@@ -3,7 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_db
+from app.core.security import get_db
+from app.core.tenant import organization_context
+from app.models.hierarchy import Organization
 from app.core.security import get_current_user, require_roles
 from app.models.alert import Alert
 from app.models.user import User
@@ -29,40 +31,63 @@ def acknowledge_alert(alert_id: UUID, db: Session = Depends(get_db), current_use
     return {"id": str(alert.id), "acknowledged": True}
 
 
+def user_bundle(db, user):
+    if user.organization_id: db.info["organization_id"]=user.organization_id
+    result=settings_service.read_bundle(db)
+    organization=db.get(Organization,user.organization_id) if user.organization_id else None
+    if organization:
+        result["general"]["timezone"]=organization.timezone
+        result["organization"]["organization_name"]=organization.name
+    return result
+
 @router.get("/settings", response_model=SettingsBundle)
 def get_settings(db: Session = Depends(get_db), _: User = Depends(require_roles(["admin"]))):
-    return settings_service.read_bundle(db)
+    return user_bundle(db, _)
 
 
 @router.get("/settings/public", response_model=PublicSettings)
 def public_settings(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return settings_service.read_public(db)
+    if _.organization_id: db.info["organization_id"]=_.organization_id
+    result=settings_service.read_public(db)
+    organization=db.get(Organization,_.organization_id) if _.organization_id else None
+    if organization:
+        result.update(timezone=organization.timezone,organization_name=organization.name)
+    return result
 
 
 def save_settings_group(db: Session, user: User, group: str, payload):
+    if user.organization_id: db.info["organization_id"]=user.organization_id
     try:
         settings_service.save_group(db, group, payload)
         create_audit_log(db, user.username, f"UPDATE_{group.upper()}_SETTINGS", "Settings", group, f"Updated {group} settings")
         db.commit()
     except Exception:
         db.rollback(); raise
-    return settings_service.read_bundle(db)
+    return user_bundle(db, user)
 
 
 @router.put("/settings/general", response_model=SettingsBundle)
-def update_general(payload: GeneralSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
+def update_general(payload: GeneralSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"])), org=Depends(organization_context)):
+    organization=db.get(Organization,org)
+    organization.timezone=payload.timezone
     return save_settings_group(db, user, "general", payload)
 
 
 @router.put("/settings/organization", response_model=SettingsBundle)
 def update_organization(payload: OrganizationSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
+    organization=db.get(Organization,user.organization_id) if user.organization_id else None
+    if organization:
+        organization.name=payload.organization_name
+        organization.address=payload.address
+        organization.contact_email=str(payload.support_email) if payload.support_email else None
+        organization.contact_phone=payload.support_phone
     return save_settings_group(db, user, "organization", payload)
 
 
 @router.put("/settings/network", response_model=SettingsBundle)
 def update_network(payload: NetworkSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
     result = save_settings_group(db, user, "network", payload)
-    configure_scheduler(payload.automatic_scanning, payload.scan_interval_minutes)
+    if not user.organization_id: configure_scheduler(payload.automatic_scanning, payload.scan_interval_minutes)
     return result
 
 
@@ -74,7 +99,7 @@ def update_notifications(payload: NotificationSettings, db: Session = Depends(ge
 @router.put("/settings/discovery", response_model=SettingsBundle)
 def update_discovery(payload: DiscoverySettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
     result = save_settings_group(db, user, "discovery", payload)
-    configure_discovery_scheduler(payload.enabled, payload.interval_minutes)
+    if not user.organization_id: configure_discovery_scheduler(payload.enabled, payload.interval_minutes)
     return result
 
 
@@ -88,6 +113,7 @@ def update_snmp(payload: SNMPSettings, db: Session = Depends(get_db), user: User
     return save_settings_group(db, user, "snmp", payload)
 
 
-@router.get("/settings/system-health", response_model=SystemHealth)
+@router.get("/settings/system-health")
 def system_health(db: Session = Depends(get_db), _: User = Depends(require_roles(["admin"]))):
-    return settings_service.health(db)
+    result=settings_service.health(db)
+    return {"status":result["status"],"email":result["email"]}

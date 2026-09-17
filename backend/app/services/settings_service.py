@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.network_scan import NetworkScan
-from app.models.system_setting import SystemSetting
+from app.models.system_setting import SystemSetting, OrganizationSetting
 from app.schemas.settings import DiscoverySettings, GeneralSettings, IncidentSettings, NetworkSettings, NotificationSettings, OrganizationSettings
 
 
@@ -72,7 +72,13 @@ DEFAULTS = {
 
 def _all(db: Session) -> dict[str, str]:
     values = DEFAULTS.copy()
-    values.update({row.key: row.value for row in db.query(SystemSetting).all()})
+    org=db.info.get("organization_id")
+    if org:
+        values.update({row.key:row.value for row in db.query(OrganizationSetting).filter_by(organization_id=org).all()})
+    else:
+        values.update({row.key: row.value for row in db.query(SystemSetting).all()})
+    values["general.application_name"] = DEFAULTS["general.application_name"]
+    values["general.short_name"] = "HIOP"
     return values
 
 
@@ -137,9 +143,9 @@ def read_bundle(db: Session) -> dict[str, Any]:
         "discovery": read_discovery(db),
         "incidents": read_incident_settings(db),
         "snmp": read_snmp_settings(db),
-        "email": email_config,
-        "security": {"authentication": "JWT bearer token", "access_token_lifetime": f"{settings.access_token_expire_minutes} minutes", "roles": ["admin", "technician"], "inactive_user_login_blocked": True, "failed_login_auditing": False, "refresh_tokens": False, "mfa": False, "session_revocation": True},
-        "application": {"product_name": "Hospitality IT Operations Platform", "short_name": "HIOP", "frontend_version": "3.0.0-dev", "backend_version": settings.app_version, "api_prefix": settings.api_prefix, "database_type": "PostgreSQL", "environment": settings.environment.title()},
+        "email": {"configured": configured},
+        "security": {"roles": ["admin", "technician", "viewer"]},
+        "application": {"product_name": "HIOP", "short_name": "HIOP"},
     }
 
 
@@ -239,11 +245,18 @@ def read_snmp_settings(db: Session) -> dict[str, Any]:
 
 def save_group(db: Session, prefix: str, payload: GeneralSettings | OrganizationSettings | NetworkSettings | NotificationSettings | DiscoverySettings | IncidentSettings) -> None:
     for key, value in payload.model_dump().items():
+        if prefix == "general" and key in {"application_name", "short_name"}: continue
         setting_key = f"{prefix}.{key}"
         stored = "" if value is None else str(value).lower() if isinstance(value, bool) else str(value)
-        row = db.query(SystemSetting).filter(SystemSetting.key == setting_key).first()
-        if row: row.value = stored
-        else: db.add(SystemSetting(key=setting_key, value=stored))
+        org=db.info.get("organization_id")
+        if org:
+            row=db.query(OrganizationSetting).filter_by(organization_id=org,key=setting_key).first()
+            if row: row.value=stored
+            else: db.add(OrganizationSetting(organization_id=org,key=setting_key,value=stored))
+        else:
+            row = db.query(SystemSetting).filter(SystemSetting.key == setting_key).first()
+            if row: row.value = stored
+            else: db.add(SystemSetting(key=setting_key, value=stored))
 
 
 def health(db: Session) -> dict[str, Any]:
@@ -252,7 +265,7 @@ def health(db: Session) -> dict[str, Any]:
     except Exception: database = "Unavailable"
     from app.services.scheduler_service import scheduler
     last_scan = db.query(NetworkScan).order_by(NetworkScan.scanned_at.desc()).first() if database == "Connected" else None
-    email = "Configured" if settings.email_address and settings.email_password else "Not configured"
+    email = "Configured" if (settings.smtp_host and settings.smtp_sender_address) or (settings.email_address and settings.email_password) else "Not configured"
     status = "Healthy" if database == "Connected" and (scheduler.running or not settings.scheduler_enabled) else "Degraded"
     scheduler_state = "Disabled" if not settings.scheduler_enabled else "Running" if scheduler.running else "Stopped"
     return {"status": status, "api": "Available", "database": database, "scheduler": scheduler_state, "websocket": "Available", "email": email, "last_scan": last_scan.scanned_at.isoformat() if last_scan else None, "application_version": settings.app_version, "environment": settings.environment.title(), "server_time": datetime.now(timezone.utc).isoformat()}

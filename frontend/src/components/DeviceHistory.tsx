@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dateTime";
 import type { ReactNode } from "react";
 import { Feedback } from "./Feedback";
 import { useRequest } from "../hooks/useRequest";
@@ -69,5 +70,5 @@ function formatAction(action: string) {
 }
 
 function formatDate(value: string) {
-  return value ? new Date(value).toLocaleString() : "Not recorded";
+  return value ? formatDateTime(value) : "Not recorded";
 }

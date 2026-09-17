@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dateTime";
 import { useDeferredValue, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -516,7 +517,7 @@ function IncidentDetails({ id }: { id: string }) {
       <PageTitle
         eyebrow={row.incident_number}
         title={row.title}
-        copy={`${title(row.category)} · Created ${new Date(row.created_at).toLocaleString()}`}
+        copy={`${title(row.category)} · Created ${formatDateTime(row.created_at)}`}
         action={
           <Link className="secondary-action" to="/incidents">
             Back to Tickets
@@ -570,7 +571,7 @@ function IncidentDetails({ id }: { id: string }) {
             <header className="section-head"><div><span className="section-kicker">History</span><h2>Activity & notes</h2><p>A chronological record of ticket activity.</p></div></header>
             {operate && <form className="ticket-note-composer" onSubmit={async (event) => { event.preventDefault(); if (!note.trim()) return; await run(() => endpoints.addServiceIncidentNote(id, note)); setNote(""); }}><label htmlFor="incident-note"><span>Add operational note</span><textarea id="incident-note" rows={3} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Record investigation, communication, or work performed." /></label><button type="submit" className="primary-action" disabled={busy || !note.trim()}>Add note</button></form>}
             <div className="incident-timeline">
-              {row.timeline?.length ? row.timeline.slice().reverse().map((event) => <article key={event.id}><time>{new Date(event.timestamp).toLocaleString()}</time><strong>{event.title}</strong><p>{event.summary || "No additional details."}</p><small>{event.author || "System"}</small></article>) : <p className="ticket-empty-copy">No activity has been recorded yet.</p>}
+              {row.timeline?.length ? row.timeline.slice().reverse().map((event) => <article key={event.id}><time>{formatDateTime(event.timestamp)}</time><strong>{event.title}</strong><p>{event.summary || "No additional details."}</p><small>{event.author || "System"}</small></article>) : <p className="ticket-empty-copy">No activity has been recorded yet.</p>}
             </div>
           </article>
         </div>
@@ -584,7 +585,7 @@ function IncidentDetails({ id }: { id: string }) {
             </form> : <p className="ticket-empty-copy">No eligible IT Technicians have access to this property. Add a technician and grant property access in Administration.</p> : <p className="ticket-readonly-note">You can view the assignment, but you cannot change it.</p>}
           </article>
           <article className="panel ticket-context-panel"><header className="section-head"><div><span className="section-kicker">Context</span><h2>Business & technology</h2></div></header><dl className="ticket-side-facts"><Dt label="Category" value={title(row.category)} /><Dt label="Department" value={row.department} /><Dt label="Location" value={row.location} /><Dt label="Support contact" value={row.vendor?.support_contact} /></dl><div className="ticket-related-links">{row.asset && <Link to={`/assets/${row.asset.id}`}><span>Asset</span><strong>{row.asset.asset_number}</strong><small>{row.asset.name}</small></Link>}{row.device && <Link to={`/devices/${row.device.id}`}><span>Device</span><strong>{row.device.hostname}</strong><small>{row.device.ip_address}</small></Link>}{row.vendor && <Link to={`/vendors/${row.vendor.id}`}><span>Vendor</span><strong>{row.vendor.name}</strong><small>{row.vendor.support_contact || "Support contact unavailable"}</small></Link>}{row.procurement && <Link to={`/procurement/${row.procurement.id}`}><span>Procurement</span><strong>{row.procurement.procurement_number}</strong><small>{row.procurement.title}</small></Link>}{!row.asset && !row.device && !row.vendor && !row.procurement && <p className="ticket-empty-copy">No related operational records.</p>}</div></article>
-          <article className="panel ticket-metrics-panel"><header className="section-head"><div><span className="section-kicker">Timing</span><h2>Response metrics</h2></div></header><dl className="ticket-side-facts"><Dt label="Created" value={new Date(row.created_at).toLocaleString()} /><Dt label="Acknowledged" value={row.acknowledged_at ? new Date(row.acknowledged_at).toLocaleString() : "Not yet"} /><Dt label="Time to acknowledge" value={duration(row.time_to_acknowledge_seconds)} /><Dt label="Time to resolve" value={duration(row.time_to_resolve_seconds)} /></dl></article>
+          <article className="panel ticket-metrics-panel"><header className="section-head"><div><span className="section-kicker">Timing</span><h2>Response metrics</h2></div></header><dl className="ticket-side-facts"><Dt label="Created" value={formatDateTime(row.created_at)} /><Dt label="Acknowledged" value={row.acknowledged_at ? formatDateTime(row.acknowledged_at) : "Not yet"} /><Dt label="Time to acknowledge" value={duration(row.time_to_acknowledge_seconds)} /><Dt label="Time to resolve" value={duration(row.time_to_resolve_seconds)} /></dl></article>
           <article className="panel ticket-impact-panel"><header className="section-head"><div><span className="section-kicker">Impact</span><h2>Operational reach</h2></div></header>{row.impact ? <dl className="ticket-impact-grid"><Dt label="Confirmed" value={String(row.impact.confirmed_affected)} /><Dt label="Potential" value={String(row.impact.potentially_affected)} /><Dt label="Confidence" value={`${Math.round(row.impact.confidence_score * 100)}%`} /></dl> : <p className="ticket-empty-copy">Impact evidence is not available for this ticket.</p>}</article>
         </aside>
       </section>

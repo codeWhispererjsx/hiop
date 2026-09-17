@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dateTime";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
@@ -298,7 +299,7 @@ export default function ReportingPage() {
           </section>
           <footer className="settings-note">
             Source: {data.data.source}. Generated{" "}
-            {new Date(data.data.generated_at).toLocaleString()}. Missing
+            {formatDateTime(data.data.generated_at)}. Missing
             observations remain "Insufficient data".
           </footer>
         </>

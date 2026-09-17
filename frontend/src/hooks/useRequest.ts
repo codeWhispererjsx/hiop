@@ -18,5 +18,6 @@ export function useRequest<T>(loader: () => Promise<T>, _deps: unknown[] = []) {
     }
   }, []);
   useEffect(() => { void reload(); return () => { requestVersion.current += 1; }; }, [reload, dependencyKey]);
+  useEffect(()=>{const refresh=()=>void reload();window.addEventListener("hiop:organization-updated",refresh);window.addEventListener("hiop:timezone-updated",refresh);return()=>{window.removeEventListener("hiop:organization-updated",refresh);window.removeEventListener("hiop:timezone-updated",refresh)}},[reload]);
   return { data, setData, loading, error, reload };
 }

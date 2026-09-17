@@ -7,6 +7,14 @@ class GeneralSettings(BaseModel):
     application_name: str = Field(min_length=2, max_length=80)
     short_name: str = Field(min_length=2, max_length=12)
     timezone: str = Field(min_length=3, max_length=64)
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, value):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        try: ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc: raise ValueError("Choose a valid IANA time zone, such as Africa/Lagos") from exc
+        return value
+
     date_format: Literal["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
     time_format: Literal["12-hour", "24-hour"]
     default_page_size: Literal[10, 25, 50, 100]
@@ -144,6 +152,7 @@ class SettingsBundle(BaseModel):
 
 
 class PublicSettings(BaseModel):
+    timezone: str = "Africa/Lagos"
     application_name: str
     short_name: str
     property_name: str

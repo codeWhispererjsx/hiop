@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.asset_intelligence import ManagedAsset
 from app.models.billing import BillingEvent, CommercialPlan, OrganizationSubscription
 from app.models.device import Device
-from app.models.hierarchy import Property
+from app.models.hierarchy import Organization, Property
 from app.models.local_agent import LocalAgentRegistration
 from app.models.user import User
 from app.services.audit_service import create_audit_log
@@ -27,7 +27,7 @@ def money(value):
 
 
 def present_plan(row: CommercialPlan):
-    return {"id":str(row.id),"code":row.code,"name":row.name,"description":row.description,"audience":row.audience,"monthly_price":money(row.monthly_price),"yearly_price":money(row.yearly_price),"currency":row.currency,"trial_days":row.trial_days,"features":unpack(row.features,[]),"entitlements":unpack(row.entitlements,[]),"limits":unpack(row.limits,{}),"is_active":row.is_active,"sort_order":row.sort_order,"checkout_available":bool((row.provider_monthly_price_id or row.provider_yearly_price_id) and os.getenv("HIOP_BILLING_PROVIDER"))}
+    return {"id":str(row.id),"code":row.code,"name":row.name,"description":row.description,"audience":row.audience,"monthly_price":money(row.monthly_price),"yearly_price":money(row.yearly_price),"currency":row.currency,"trial_days":row.trial_days,"features":unpack(row.features,[]),"entitlements":unpack(row.entitlements,[]),"limits":unpack(row.limits,{}),"is_active":row.is_active,"sort_order":row.sort_order,"checkout_available":False}
 
 
 def usage(db: Session, organization_id):
@@ -37,7 +37,11 @@ def usage(db: Session, organization_id):
         "devices":db.query(Device).filter(Device.property_id.in_(property_ids)).count(),
         "properties":db.query(Property).filter(Property.organization_id==organization_id,Property.is_active.is_(True)).count(),
         "users":db.query(User).filter(User.organization_id==organization_id,User.is_active.is_(True)).count(),
-        "agents":db.query(LocalAgentRegistration).filter(LocalAgentRegistration.organization_id==organization_id).count(),
+        "agents":db.query(LocalAgentRegistration).filter(
+            LocalAgentRegistration.organization_id==organization_id,
+            LocalAgentRegistration.revoked_at.is_(None),
+            LocalAgentRegistration.retired_at.is_(None),
+        ).count(),
     }
 
 
@@ -63,7 +67,26 @@ def start_trial(db:Session,organization_id,plan_code:str,actor):
     db.add(row);db.flush();db.add(BillingEvent(organization_id=organization_id,subscription_id=row.id,event_type="trial_started",safe_details=json.dumps({"plan":plan.code,"trial_days":plan.trial_days})));create_audit_log(db,actor.username,"BILLING_TRIAL_STARTED","OrganizationSubscription",str(row.id),f"Started {plan.name} trial");return row
 
 
+def access_policy(db: Session, organization_id):
+    organization = db.get(Organization, organization_id)
+    return {"billing_exempt": bool(organization and organization.billing_exempt),
+            "access_override": organization.access_override if organization else "subscription"}
+
+
+def billing_access(db: Session, organization_id):
+    policy = access_policy(db, organization_id)
+    if policy["access_override"] == "suspended":
+        raise HTTPException(403, "This organization's access has been suspended")
+    return policy["billing_exempt"] or policy["access_override"] == "keep_active"
+
+
+def require_billable(db: Session, organization_id):
+    if access_policy(db, organization_id)["billing_exempt"]:
+        raise HTTPException(409, "This organization is billing-exempt. No payment is required.")
+
+
 def require_entitlement(db:Session,organization_id,entitlement:str):
+    if billing_access(db, organization_id): return None
     subscription=db.query(OrganizationSubscription).filter_by(organization_id=organization_id).first()
     if not subscription:raise HTTPException(402,"An active HIOP plan is required")
     refresh_status(subscription)
@@ -74,6 +97,7 @@ def require_entitlement(db:Session,organization_id,entitlement:str):
 
 
 def enforce_limit(db:Session,organization_id,resource:str,increment:int=1):
+    if billing_access(db, organization_id): return None
     subscription=db.query(OrganizationSubscription).filter_by(organization_id=organization_id).first()
     if not subscription:return
     plan=db.get(CommercialPlan,subscription.plan_id);limit=unpack(plan.limits,{}).get(resource)

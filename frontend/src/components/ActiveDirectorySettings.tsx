@@ -1,3 +1,4 @@
+import { FeatureGuide } from "./FeatureGuide";
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, type FormEvent } from "react";
 import { Feedback } from "./Feedback";
@@ -14,7 +15,7 @@ export function ActiveDirectorySettings(){
   const test=async(row:ADConnection)=>{setBusy(row.id);setError("");try{const response=await endpoints.testADConnection(row.id);setMessage(response.overall_status==="success"?`${row.name} connected successfully.`:`${row.name} connection test failed safely.`);await load()}catch(caught){setError(caught instanceof Error?caught.message:"Connection test failed.")}finally{setBusy("")}};
   const toggle=async(row:ADConnection)=>{setBusy(row.id);try{await endpoints.updateADConnection(row.id,{enabled:!row.enabled});await load()}catch(caught){setError(caught instanceof Error?caught.message:"Connection status could not be changed.")}finally{setBusy("")}};
   if(loading)return <Feedback loading/>;
-  return <div className="settings-panel-body"><p>Configure a bounded, read-only computer-object lookup. LDAPS and certificate verification are enabled by default. Passwords are encrypted and never returned.</p>{error&&<Feedback error={error}/>} {message&&<p role="status" className="settings-note">{message}</p>}
+  return <div className="settings-panel-body"><FeatureGuide kind="ad"/><p>Configure a bounded, read-only computer-object lookup. LDAPS and certificate verification are enabled by default. Passwords are encrypted and never returned.</p>{error&&<Feedback error={error}/>} {message&&<p role="status" className="settings-note">{message}</p>}
     {connections.length>0&&<div className="hierarchy-summary">{connections.map(row=><article key={row.id}><div><strong>{row.name}</strong><span>{row.domain_name} · {row.server_host}:{row.server_port} · {row.use_ssl?"LDAPS":"StartTLS"}</span><small>{row.secret_configured?"Credential securely stored":"Credential not configured"} · {row.last_test_status||"Not tested"}</small></div><div className="row-actions"><button disabled={busy===row.id} onClick={()=>void test(row)}>Test connection</button><button disabled={busy===row.id} onClick={()=>void toggle(row)}>{row.enabled?"Disable":"Enable"}</button></div></article>)}</div>}
     <form className="settings-form-grid" onSubmit={create}>
       <label><span>Connection name</span><input required value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>

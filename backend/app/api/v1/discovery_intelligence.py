@@ -1,3 +1,5 @@
+from app.models.local_agent import AgentJob, LocalAgentRegistration
+from app.core.config import settings as deployment_settings
 import ipaddress,json,logging,re
 from concurrent.futures import ThreadPoolExecutor,as_completed
 from datetime import datetime,timedelta,timezone
@@ -161,7 +163,7 @@ def execute_safe_job(db,job,user):
     service=DiscoveryIntelligenceService(db)
     def is_cancelled():
         db.expire(job,["status"])
-        return job.status=="cancelled"
+        return job.status in {"cancelling","cancelled"}
     def report_progress(completed,total,device,online):
         job.hosts_total=total;job.hosts_completed=completed;job.current_stage="host_discovery"
         if device is not None:
@@ -176,9 +178,9 @@ def execute_safe_job(db,job,user):
     except Exception as exc:
         job=db.get(DiscoveryJob,job.id);job.status="failed";job.tasks_failed+=1;job.completed_at=datetime.now(timezone.utc);db.commit();raise HTTPException(502,f"Safe discovery failed: {exc}") from exc
     def cancelled_response():
-        job.current_stage="cancelled";job.completed_at=datetime.now(timezone.utc);audit(db,user,"CANCEL","discovery_job",job.id,f"Cancelled scan after {job.hosts_completed} of {job.hosts_total} addresses");db.commit();return {"job":job,"legacy_run_id":run.id,"results":db.query(DiscoveryResult).filter_by(job_id=job.id).count(),"hosts_responded":run.hosts_responded,"errors":run.error_count,"warnings":[run.error_summary] if run.error_summary else []}
+        job.status="cancelled";job.current_stage="cancelled";job.completed_at=datetime.now(timezone.utc);audit(db,user,"CANCEL","discovery_job",job.id,f"Cancelled scan after {job.hosts_completed} of {job.hosts_total} addresses");db.commit();return {"job":job,"legacy_run_id":run.id,"results":db.query(DiscoveryResult).filter_by(job_id=job.id).count(),"hosts_responded":run.hosts_responded,"errors":run.error_count,"warnings":[run.error_summary] if run.error_summary else []}
     db.refresh(job)
-    if job.status=="cancelled":return cancelled_response()
+    if job.status in {"cancelling","cancelled"}:return cancelled_response()
     network=ipaddress.ip_network(job.network_range,strict=False);legacy=[]
     for x in db.query(DiscoveredDevice).all():
         try:
@@ -240,14 +242,46 @@ def execute_safe_job(db,job,user):
         for device in legacy:db.add(DiscoveryTask(job_id=job.id,stage_id=stage.id,target=device.ip_address,status=stage.status,attempts=int(stage.stage_key in executed),started_at=job.started_at,completed_at=now_at))
     job.status="completed_with_warnings" if run.error_count or stage_errors else "completed";job.current_stage="completed";job.hosts_completed=run.hosts_attempted;job.tasks_failed=run.error_count+len(stage_errors);job.completed_at=now_at;audit(db,user,"EXECUTE","discovery_job",job.id,"Executed bounded host discovery followed by optional identity enrichment");db.commit();db.refresh(job);manager.broadcast_from_thread({"type":"discovery_completed","scan_id":str(job.id),"property_id":str(job.property_id),"network":job.network_range,"status":job.status,"hosts_completed":job.hosts_completed,"hosts_total":job.hosts_total,"devices_discovered":len(results)});return {"job":job,"legacy_run_id":run.id,"results":len(results),"hosts_responded":run.hosts_responded,"errors":run.error_count,"warnings":stage_errors[:100]}
 
-def execute_job_background(job_id,user_id):
+def _execute_job_worker(job_id,user_id):
+    import os
+    if os.name != "nt": os.setsid()
     db=SessionLocal()
     try:
         job=db.get(DiscoveryJob,job_id);user=db.get(User,user_id)
-        if job and user and job.status=="pending":execute_safe_job(db,job,user)
+        if job and user and job.status=="pending":
+            prop=db.get(Property,job.property_id)
+            if prop: db.info["organization_id"]=prop.organization_id
+            execute_safe_job(db,job,user)
     except Exception:
         logger.exception("discovery_failed scan_id=%s",job_id)
     finally:db.close()
+
+def execute_job_background(job_id,user_id):
+    import multiprocessing, time, os, subprocess
+    from app.services.process_control import terminate_process
+    process=multiprocessing.get_context("spawn").Process(target=_execute_job_worker,args=(job_id,user_id))
+    process.start()
+    deadline=time.monotonic()+1800
+    try:
+        while process.is_alive():
+            with SessionLocal() as monitor:
+                row=monitor.get(DiscoveryJob,job_id)
+                stopping=row and row.status in {"cancelling","cancelled"}
+            if stopping or time.monotonic()>=deadline:
+                terminate_process(process)
+                with SessionLocal() as monitor:
+                    row=monitor.get(DiscoveryJob,job_id)
+                    if row:
+                        row.status="cancelled" if stopping else "failed"
+                        row.current_stage=row.status;row.completed_at=datetime.now(timezone.utc);monitor.commit()
+                break
+            process.join(timeout=0.5)
+        with SessionLocal() as monitor:
+            row=monitor.get(DiscoveryJob,job_id)
+            if row and row.status in {"pending","running","cancelling"}:
+                row.status="failed";row.current_stage="worker_stopped";row.completed_at=datetime.now(timezone.utc);monitor.commit()
+    finally:
+        terminate_process(process)
 
 @router.get("/capabilities")
 def capabilities(_=Depends(reader)):return {"pipeline":PIPELINE,"device_families":DEVICE_FAMILIES,"review_statuses":REVIEW,"credentialed_stages_are_opt_in":True,"intrusive_scanning":False}
@@ -260,14 +294,14 @@ def quick_scan(body:QuickScanWrite,background_tasks:BackgroundTasks,db:Session=D
     if network.num_addresses>1024:raise HTTPException(422,"Quick Scan is limited to 1,024 addresses; scan a smaller subnet")
     scope=str(network)
     now_at=datetime.now(timezone.utc);active_since=now_at-timedelta(minutes=30)
-    stale=db.query(DiscoveryJob).filter(DiscoveryJob.property_id==property_id,DiscoveryJob.status.in_(("pending","running")),DiscoveryJob.created_at<active_since).all()
+    stale=db.query(DiscoveryJob).filter(DiscoveryJob.property_id==property_id,DiscoveryJob.status.in_(("pending","running","cancelling")),DiscoveryJob.created_at<active_since).all()
     for stale_job in stale:
         stale_job.status="failed";stale_job.completed_at=now_at;stale_job.tasks_failed=max(1,stale_job.tasks_failed)
     if stale:db.flush()
     active=db.query(DiscoveryJob).filter(
         DiscoveryJob.property_id==property_id,
         DiscoveryJob.network_range==scope,
-        DiscoveryJob.status.in_(("pending","running")),
+        DiscoveryJob.status.in_(("pending","running","cancelling")),
         DiscoveryJob.created_at>=active_since,
     ).order_by(DiscoveryJob.created_at.desc()).first()
     if active:raise HTTPException(409,f"A scan of {scope} is already {active.status}. Started {active.started_at or active.created_at}.")
@@ -276,7 +310,18 @@ def quick_scan(body:QuickScanWrite,background_tasks:BackgroundTasks,db:Session=D
     if not policy:
         policy=DiscoveryPolicy(name=f"Quick Scan · {scope}",property_id=property_id,authorized_ranges=json.dumps([scope]),excluded_ranges="[]",enabled_stages=json.dumps(safe_stages),allowed_ports=json.dumps([22,53,80,135,139,161,443,445,3389,5985,5986]),max_hosts=1024,concurrency=32,timeout_seconds=1,rate_limit_per_second=50,allow_credentialed=False,enabled=True,created_by=user.id);db.add(policy);db.flush()
     job=DiscoveryIntelligenceService(db).create_job(policy,scope,"full","quick_scan",user.id);audit(db,user,"CREATE","discovery_job",job.id,"Started credential-free Quick Network Scan");db.commit();db.refresh(job)
-    background_tasks.add_task(execute_job_background,job.id,user.id)
+    import os
+    use_agent = deployment_settings.discovery_execution_mode == "agent" or (deployment_settings.discovery_execution_mode == "auto" and (deployment_settings.environment == "production" or bool(os.getenv("RAILWAY_ENVIRONMENT_ID")) or bool(os.getenv("VERCEL"))))
+    if use_agent:
+        agent=db.query(LocalAgentRegistration).filter(LocalAgentRegistration.organization_id==organization_id,LocalAgentRegistration.property_id==property_id,LocalAgentRegistration.revoked_at.is_(None),LocalAgentRegistration.retired_at.is_(None),LocalAgentRegistration.last_heartbeat>=datetime.now(timezone.utc)-timedelta(seconds=120)).order_by(LocalAgentRegistration.last_heartbeat.desc()).first()
+        if not agent:
+            job.status="failed";job.current_stage="agent_unavailable";job.completed_at=datetime.now(timezone.utc);db.commit()
+            raise HTTPException(409,"No local agent is online for this property. Open Local Agents, enroll an on-site Windows computer, and wait for it to show Online before scanning.")
+        job.current_stage="waiting_for_agent"
+        db.add(AgentJob(agent_id=agent.id,organization_id=organization_id,property_id=property_id,job_type="DISCOVERY",payload=json.dumps({"cidr":scope,"discovery_job_id":str(job.id),"max_hosts":1024,"timeout":2,"concurrency":20}),timeout_seconds=300,created_by=user.id))
+        db.commit()
+    else:
+        background_tasks.add_task(execute_job_background,job.id,user.id)
     return {"scan_id":job.id,"status":"scanning","normalized_network":scope,"job":job,"summary":{"found":0,"identified":0,"partial":0,"needs_review":0},"devices":[],"warnings":[]}
 @router.get("/devices")
 def consolidated_devices(search:str|None=None,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
@@ -372,7 +417,7 @@ def jobs(status:str|None=None,active_only:bool=False,trigger_type:str|None=None,
     q=db.query(DiscoveryJob).join(Property,DiscoveryJob.property_id==Property.id).filter(Property.organization_id==organization_id)
     if property_id is not None:q=q.filter(DiscoveryJob.property_id==property_id)
     if trigger_type:q=q.filter(DiscoveryJob.trigger_type==trigger_type)
-    if active_only:q=q.filter(DiscoveryJob.status.in_(("pending","running")),DiscoveryJob.created_at>=datetime.now(timezone.utc)-timedelta(minutes=30))
+    if active_only:q=q.filter(DiscoveryJob.status.in_(("pending","running","cancelling")),DiscoveryJob.created_at>=datetime.now(timezone.utc)-timedelta(minutes=30))
     elif status:q=q.filter(DiscoveryJob.status==status)
     q=q.order_by(DiscoveryJob.created_at.desc());total=q.count();rows=q.offset((page_number-1)*page_size).limit(page_size).all();return {"items":[job_view(db,row) for row in rows],"total":total,"page":page_number,"page_size":page_size}
 @router.post("/jobs",status_code=201)
@@ -394,8 +439,17 @@ def job_results(id:UUID,db:Session=Depends(get_db),_=Depends(reader),organizatio
 @router.post("/jobs/{id}/cancel")
 def cancel_job(id:UUID,db:Session=Depends(get_db),user=Depends(operator),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=scoped_job(db,id,organization_id,property_id)
-    if row.status not in ("pending","running"):raise HTTPException(409,"Only a pending or running scan can be cancelled")
-    row.status="cancelled";row.current_stage="cancelling";audit(db,user,"CANCEL_REQUEST","discovery_job",row.id,"Requested cooperative cancellation of the active discovery scan");db.commit();return {"scan_id":row.id,"status":"cancelled","partial_results":db.query(DiscoveryResult).filter_by(job_id=id).count()}
+    agent_jobs=db.query(AgentJob).filter(AgentJob.property_id==row.property_id,AgentJob.status.in_(("queued","started"))).with_for_update().all()
+    row=db.query(DiscoveryJob).filter_by(id=row.id).populate_existing().with_for_update().one()
+    if row.status not in ("pending","running","cancelling"):raise HTTPException(409,"Only a pending or running scan can be cancelled")
+    queued=row.status=="pending"
+    row.status="cancelled" if queued else "cancelling";row.current_stage=row.status
+    if queued: row.completed_at=datetime.now(timezone.utc)
+    for agent_job in agent_jobs:
+        if json.loads(agent_job.payload).get("discovery_job_id")==str(row.id):
+            agent_job.status="cancelled" if agent_job.status=="queued" else "cancelling"
+    audit(db,user,"CANCEL_REQUEST","discovery_job",row.id,"Requested scan termination")
+    db.commit();return {"scan_id":row.id,"status":row.status,"partial_results":db.query(DiscoveryResult).filter_by(job_id=id).count()}
 @router.post("/jobs/{id}/execute")
 def execute_job(id:UUID,db:Session=Depends(get_db),user=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=scoped_job(db,id,organization_id,property_id)

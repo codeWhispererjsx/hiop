@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dateTime";
 import { useDeferredValue, useMemo, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
@@ -200,7 +201,7 @@ function ChangeList() {
                 </span>
                 <span>
                   {row.planned_start
-                    ? new Date(row.planned_start).toLocaleString()
+                    ? formatDateTime(row.planned_start)
                     : "Not scheduled"}
                   <small>{title(row.type)}</small>
                 </span>
@@ -456,7 +457,7 @@ function ChangeDetail({ id }: { id: string }) {
             label="Planned start"
             value={
               row.planned_start
-                ? new Date(row.planned_start).toLocaleString()
+                ? formatDateTime(row.planned_start)
                 : "Not scheduled"
             }
           />
@@ -464,7 +465,7 @@ function ChangeDetail({ id }: { id: string }) {
             label="Planned end"
             value={
               row.planned_end
-                ? new Date(row.planned_end).toLocaleString()
+                ? formatDateTime(row.planned_end)
                 : "Not scheduled"
             }
           />

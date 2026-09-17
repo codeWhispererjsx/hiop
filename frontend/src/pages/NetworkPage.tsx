@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dateTime";
 import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -12,7 +13,7 @@ import type { Alert, Device, LiveEvent, MonitoringSummary, Scan } from "../lib/t
 
 type ScanState = "idle" | "running" | "completed" | "failed";
 
-const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString() : "Never";
+const formatDate = (value?: string | null) => value ? formatDateTime(value) : "Never";
 const latency = (value?: number | null) => value == null ? "No response" : `${Math.round(value * 100) / 100} ms`;
 
 export default function NetworkPage() {
@@ -51,10 +52,18 @@ export default function NetworkPage() {
     try {
       if (device) {
         const result = await endpoints.scanDevice(device.id);
-        setMessage(`${device.hostname} scan completed: ${result.status}, ${latency(result.response_time)}.`);
+        if ("queued" in result && result.queued) {
+          setMessage(`${device.hostname} monitoring check was sent to the local agent. Refresh the view in a few seconds for the result.`);
+        } else {
+          setMessage(`${device.hostname} scan completed: ${result.status}, ${latency(result.response_time)}.`);
+        }
       } else {
         const result = await endpoints.scanAll();
-        setMessage(`Scan completed for ${result.total_devices} devices: ${result.online} online, ${result.offline} offline.`);
+        if (result.queued) {
+          setMessage(`Monitoring checks sent to the local agent for ${result.queued} of ${result.total_devices} devices. Results will appear as the agent reports back.`);
+        } else {
+          setMessage(`Scan completed for ${result.total_devices} devices: ${result.online} online, ${result.offline} offline.`);
+        }
       }
       setScanState("completed");
       await refresh();
@@ -100,7 +109,7 @@ export default function NetworkPage() {
       <PageTitle
         eyebrow="Advanced monitoring"
         title="Device health intelligence"
-        copy="Historical, explainable health from persisted ICMP and supported SNMP evidence."
+        copy="Historical, explainable health from the local agent and supported SNMP evidence."
         action={
           <div className="noc-actions">
             <select
@@ -173,7 +182,7 @@ export default function NetworkPage() {
             <StatCard
               label="Online"
               value={health.data?.online ?? 0}
-              detail="Latest reachability succeeded"
+              detail="Last local check got a response"
               icon="check"
               tone="success"
               trend="Current"
@@ -181,7 +190,7 @@ export default function NetworkPage() {
             <StatCard
               label="Offline"
               value={health.data?.offline ?? 0}
-              detail="Latest reachability failed"
+              detail="Last local check got no response"
               icon="warning"
               tone="danger"
               trend="Current"
@@ -189,7 +198,7 @@ export default function NetworkPage() {
             <StatCard
               label="Degraded"
               value={health.data?.degraded ?? 0}
-              detail="Latency or failed-check evidence"
+              detail="Latency or missed-check evidence"
               icon="network"
               tone="warning"
               trend="Health"
@@ -236,7 +245,7 @@ export default function NetworkPage() {
             <header className="section-head">
               <div>
                 <h2>Network devices</h2>
-                <p>Current inventory state joined with each device's latest persisted scan.</p>
+                <p>Current inventory state joined with each device's latest local check.</p>
               </div>
               <span className={`live-pill ${socketConnected ? "connected" : ""}`}>
                 {socketConnected ? "Live updates" : "Reconnecting"}
@@ -264,7 +273,7 @@ export default function NetworkPage() {
               <header className="section-head">
                 <div>
                   <h2>Recent scan history</h2>
-                  <p>Latest results persisted by the FastAPI monitoring service.</p>
+                  <p>Latest results reported by local monitoring.</p>
                 </div>
               </header>
               {scans.error || !scans.data?.length ? (
@@ -346,7 +355,7 @@ function HealthEvidence({
       <header className="section-head">
         <div>
           <h2>Explainable device health</h2>
-          <p>Availability, latency and failed-check rate are calculated only from stored observations.</p>
+          <p>Availability, latency and missed-check rate are calculated from saved local checks.</p>
         </div>
       </header>
       {!summary?.devices.length ? (
@@ -372,8 +381,8 @@ function HealthEvidence({
               </span>
               <span>
                 {item.packet_loss_percent == null
-                  ? "Packet loss needs more data"
-                  : `${item.packet_loss_percent}% failed checks`}
+                  ? "More check history needed"
+                  : `${item.packet_loss_percent}% missed checks`}
               </span>
             </button>
           ))}
@@ -386,7 +395,7 @@ function HealthEvidence({
 function ScanProgress({ state }: { state: ScanState }) {
   const content =
     state === "running"
-      ? ["Scan running", "HIOP is checking device reachability. Controls are disabled until the request completes."]
+      ? ["Scan running", "HIOP is sending checks to the local agent. Results appear as the agent reports back."]
       : state === "completed"
       ? ["Scan completed", "Latest device states and history have been refreshed."]
       : ["Scan failed", "The request did not complete. Review the error and try again."];
@@ -508,3 +517,4 @@ function AlertRow({ alert, device, onOpen }: { alert: Alert; device?: Device; on
     </button>
   );
 }
+

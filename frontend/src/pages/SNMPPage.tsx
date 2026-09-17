@@ -1,3 +1,4 @@
+import { FeatureGuide } from "../components/FeatureGuide";
 import { useEffect, useState } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { PageTitle } from "./DashboardPage";
@@ -204,6 +205,7 @@ export default function SNMPPage() {
         <div><span>Setup</span><strong>Credential, then target</strong><p>Add a read-only SNMP credential, add an IP target in the correct property, test it, then enable polling.</p></div>
         <div><span>Real-time use</span><strong>Test and poll safely</strong><p>The Test action verifies connectivity immediately. Polling updates observed facts without applying device configuration.</p></div>
       </section>
+<FeatureGuide kind="snmp"/>
       {error && <Feedback error={error} />}
       {loading ? (
         <Feedback loading />

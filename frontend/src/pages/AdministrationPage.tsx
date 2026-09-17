@@ -1,3 +1,5 @@
+import { formatDateTime } from "../lib/dateTime";
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
@@ -12,10 +14,12 @@ export default function AdministrationPage(){
   const me=useRequest(endpoints.me,[]);
   const users=useRequest(endpoints.users,[]);
   const roles=useRequest(endpoints.roleDefinitions,[]);
+  const [exporting,setExporting]=useState(false);const [exportError,setExportError]=useState("");
   const audit=useRequest(endpoints.administrationAudit,[]);
+  const exportLogs=async()=>{setExporting(true);setExportError("");try{const {blob,filename}=await endpoints.exportAuditLogs();const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(x){setExportError(x instanceof Error?x.message:"Export failed. Please try again.")}finally{setExporting(false)}};
   if(me.loading)return <DashboardLayout><Feedback loading/></DashboardLayout>;
   if(me.data?.role!=="admin")return <DashboardLayout><Feedback error="Administration is restricted to the Organization Administrator."/></DashboardLayout>;
-  return <DashboardLayout><PageTitle eyebrow="V3 operational access checkpoint" title={mode==="roles"?"Roles & access":mode==="audit"?"Audit log":"Administration"} copy={mode==="roles"?"A small, explicit role model for hotel IT operations.":mode==="audit"?"Trace real administrative actions to authenticated users.":"Choose a focused administration workspace instead of searching through one large settings page."}/>
+  return <DashboardLayout><PageTitle eyebrow="Administration" title={mode==="roles"?"Roles & access":mode==="audit"?"Audit log":"Administration"} copy={mode==="roles"?"A small, explicit role model for hotel IT operations.":mode==="audit"?"Trace real administrative actions to authenticated users.":"Choose a focused administration workspace instead of searching through one large settings page."}/>
     {mode==="overview"&&<>
     <section className="admin-access-grid">
       <article className="panel admin-entry"><Icon name="hierarchy"/><div><h2>Organization</h2><p>Manage organization details, departments, locations, services and passive local-agent registrations.</p></div><Link className="primary-action" to="/administration/organization">Open organization</Link></article>
@@ -27,6 +31,6 @@ export default function AdministrationPage(){
       <article className="panel admin-entry"><Icon name="devices"/><div><h2>Billing</h2><p>Review the organization's plan, trial, subscription status, usage and limits.</p></div><Link className="secondary-action" to="/administration/billing">Open billing</Link></article>
     </section></>}
     {mode==="roles"&&<section className="panel admin-roles"><header><div><span>Organization access</span><h2>Roles and permissions</h2><p>Platform authority is private and managed only from the Platform Control Center.</p></div><strong>{roles.data?.length??3} organization roles</strong></header>{roles.loading||roles.error?<Feedback loading={roles.loading} error={roles.error}/>:<div>{roles.data?.map(role=><article key={role.key}><div><strong>{role.name}</strong><span>{role.description}</span></div><ul>{role.permissions.map(permission=><li key={permission}>{permission.replaceAll("_"," ").replaceAll("."," · ")}</li>)}</ul></article>)}</div>}</section>}
-    {mode==="audit"&&<section className="panel admin-audit"><header><div><span>Accountability</span><h2>Administrative audit log</h2></div><strong>{audit.data?.length??0} recent events</strong></header>{audit.loading||audit.error?<Feedback loading={audit.loading} error={audit.error}/>:!audit.data?.length?<Feedback empty="No actual administrative events have been recorded."/>:<div className="admin-audit-list">{audit.data.slice(0,100).map(entry=><article key={entry.id}><div><strong>{entry.action.replaceAll("_"," ")}</strong><span>{entry.actor} · {entry.entity_type} {entry.entity_id}</span><small>{entry.description}</small></div><time>{new Date(entry.created_at).toLocaleString()}</time></article>)}</div>}</section>}
+    {mode==="audit"&&<section className="panel admin-audit"><header><div><span>Accountability</span><h2>Administrative audit log</h2></div><button className="secondary-action" disabled={exporting} onClick={()=>void exportLogs()}>{exporting?"Exporting…":"Export audit log (CSV)"}</button></header>{exportError&&<p role="alert">{exportError}</p>}{audit.loading||audit.error?<Feedback loading={audit.loading} error={audit.error}/>:!audit.data?.length?<Feedback empty="No actual administrative events have been recorded."/>:<div className="admin-audit-list">{audit.data.slice(0,100).map(entry=><article key={entry.id}><div><strong>{entry.action.replaceAll("_"," ")}</strong><span>{entry.actor} · {entry.entity_type} {entry.entity_id}</span><small>{entry.description}</small></div><time>{formatDateTime(entry.created_at)}</time></article>)}</div>}</section>}
   </DashboardLayout>
 }

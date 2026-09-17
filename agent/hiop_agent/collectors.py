@@ -1,9 +1,10 @@
-import ipaddress, re, socket, subprocess, time
-from concurrent.futures import ThreadPoolExecutor
+import ipaddress, os, re, socket, subprocess, time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def ping(target,timeout=3):
     started=time.perf_counter()
-    result=subprocess.run(["ping","-n","1","-w",str(int(timeout*1000)),str(target)],capture_output=True,text=True,timeout=timeout+2,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+    command=["ping","-n","1","-w",str(int(timeout*1000)),str(target)] if os.name=="nt" else ["ping","-c","1","-W",str(max(1,int(timeout))),str(target)]
+    result=subprocess.run(command,capture_output=True,text=True,timeout=timeout+2,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
     latency=round((time.perf_counter()-started)*1000,2)
     return {"target":str(target),"reachable":result.returncode==0,"latency_ms":latency if result.returncode==0 else None,"error":None if result.returncode==0 else "unreachable"}
 
@@ -13,6 +14,26 @@ def dns_lookup(target,timeout=5):
     except (OSError,socket.error) as exc:return {"target":target,"hostname":None,"error":type(exc).__name__}
     finally:socket.setdefaulttimeout(previous)
 
+def netbios_lookup(target,timeout=2):
+    if os.name!="nt":return None
+    try:
+        result=subprocess.run(["nbtstat","-A",str(target)],capture_output=True,text=True,timeout=timeout,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
+    except (OSError,subprocess.TimeoutExpired):
+        return None
+    for line in result.stdout.splitlines():
+        match=re.search(r"^\s*([A-Za-z0-9_.-]{1,63})\s+<00>\s+UNIQUE",line,re.I)
+        if match:return match.group(1).strip()
+    return None
+
+def hostname_lookup(target,timeout=2):
+    dns=dns_lookup(str(target),timeout)
+    if dns.get("hostname"):
+        return {"hostname":dns["hostname"],"hostname_source":"reverse_dns","dns_status":"ptr_found"}
+    netbios=netbios_lookup(target,timeout)
+    if netbios:
+        return {"hostname":netbios,"hostname_source":"netbios","dns_status":dns.get("error") or "unresolved"}
+    return {"hostname":None,"hostname_source":None,"dns_status":dns.get("error") or "unresolved"}
+
 def arp_snapshot():
     result=subprocess.run(["arp","-a"],capture_output=True,text=True,timeout=10,creationflags=getattr(subprocess,"CREATE_NO_WINDOW",0))
     entries=[]
@@ -21,18 +42,46 @@ def arp_snapshot():
         if match:entries.append({"ip":match.group(1),"mac":match.group(2).replace("-",":").lower(),"state":match.group(3)})
     return {"entries":entries,"authoritative":False}
 
-def discover(cidr,max_hosts=1024,concurrency=32,timeout=2):
-    network=ipaddress.ip_network(cidr,strict=False);hosts=list(network.hosts())
-    if len(hosts)>max_hosts:raise ValueError("Discovery range exceeds approved job limit")
-    with ThreadPoolExecutor(max_workers=min(concurrency,64)) as pool:results=list(pool.map(lambda host:ping(host,timeout),hosts))
-    return {"network":str(network),"devices":[x for x in results if x["reachable"]],"scanned":len(results)}
+def discover_host(host,timeout):
+    try: observation=ping(host,timeout)
+    except (OSError,subprocess.TimeoutExpired):
+        observation={"target":str(host),"reachable":False,"latency_ms":None,"error":"no_response"}
+    observation["reachability_source"]="icmp" if observation["reachable"] else None
+    if not observation["reachable"]:
+        for port in (443,80,445):
+            try:
+                with socket.create_connection((str(host),port),timeout=min(timeout,0.5)):
+                    observation.update(reachable=True,error=None,reachability_source="tcp",port=port)
+                    break
+            except OSError: pass
+    if not observation["reachable"]: observation["error"]="no_response"
+    if observation["reachable"]:
+        observation.update(hostname_lookup(host,min(timeout,2)))
+    return observation
 
-def execute(job):
+def discover(cidr,max_hosts=1024,concurrency=32,timeout=2,progress=None):
+    network=ipaddress.ip_network(cidr,strict=False)
+    if network.num_addresses>max_hosts+2:raise ValueError("Discovery range exceeds approved job limit")
+    hosts=list(network.hosts())
+    if len(hosts)>max_hosts:raise ValueError("Discovery range exceeds approved job limit")
+    devices=[];batch=[];completed=0
+    with ThreadPoolExecutor(max_workers=max(1,min(concurrency,64))) as pool:
+        futures=[pool.submit(discover_host,host,timeout) for host in hosts]
+        for future in as_completed(futures):
+            item=future.result();completed+=1
+            if item["reachable"]:devices.append(item);batch.append(item)
+            if progress and (completed%16==0 or completed==len(hosts)):
+                progress({"network":str(network),"devices":batch,"scanned":completed});batch=[]
+    return {"network":str(network),"devices":devices,"scanned":completed,"unresponsive":completed-len(devices)}
+
+
+def execute(job,progress=None):
     kind=job["type"];payload=job.get("payload") or {}
-    if kind in {"PING","MONITORING"}:return "monitoring",ping(payload["target"],min(float(payload.get("timeout",3)),10))
+    if kind in {"PING","MONITORING"}:return "monitoring",discover_host(payload["target"],min(float(payload.get("timeout",3)),10))
     if kind=="DNS_LOOKUP":return "dns",dns_lookup(payload["target"])
     if kind=="ARP_SNAPSHOT":return "arp",arp_snapshot()
-    if kind=="DISCOVERY":return "discovery",discover(payload["cidr"],min(int(payload.get("max_hosts",1024)),4096),min(int(payload.get("concurrency",32)),64),min(float(payload.get("timeout",2)),10))
+    if kind=="DISCOVERY":return "discovery",discover(payload["cidr"],min(int(payload.get("max_hosts",1024)),4096),min(int(payload.get("concurrency",32)),64),min(float(payload.get("timeout",2)),10),progress=progress)
     if kind=="SNMP_POLL":raise RuntimeError("SNMP polling requires a configured scoped credential adapter")
     if kind=="AD_ENRICHMENT":raise RuntimeError("Active Directory collection requires a configured scoped connection adapter")
     raise ValueError("Unsupported job type")
+

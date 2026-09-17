@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dateTime";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -30,7 +31,7 @@ const readable = (value: string) =>
     .toLowerCase()
     .replace(/^./, (letter) => letter.toUpperCase());
 
-const when = (value: string) => new Date(value).toLocaleString();
+const when = (value: string) => formatDateTime(value);
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Topology could not be loaded.";

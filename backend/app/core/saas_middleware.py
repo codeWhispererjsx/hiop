@@ -52,7 +52,7 @@ class SaaSSecurityMiddleware(BaseHTTPMiddleware):
                     response = JSONResponse({"detail":"Could not validate credentials"}, status_code=401)
                     return response
                 organization = db.get(Organization, user.organization_id) if user.organization_id else None
-                if organization and organization.offboarding_status in {"suspended", "erasure_scheduled", "erased"}:
+                if user.role != "platformadmin" and organization and (organization.status != "active" or organization.access_override == "suspended" or organization.offboarding_status in {"suspended", "erasure_scheduled", "erased"}):
                     denied=True;response=JSONResponse({"detail":"Organization access is suspended"},status_code=403);return response
                 if settings.commercial_enforcement_enabled and user.role != "platformadmin" and user.organization_id:
                     entitlement=next((value for prefix,value in ENTITLEMENTS.items() if request.url.path.startswith(prefix)),None)

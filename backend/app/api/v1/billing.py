@@ -12,7 +12,7 @@ from app.models.billing import BillingDocumentReference, BillingEvent, Commercia
 from app.models.hierarchy import Organization
 from app.models.user import User
 from app.services.audit_service import create_audit_log
-from app.services.billing_service import present_plan, present_subscription, provider, start_trial, unpack, usage
+from app.services.billing_service import present_plan, present_subscription, provider, start_trial, unpack, usage, access_policy, require_billable
 
 router=APIRouter(prefix="/billing",tags=["Billing and subscriptions"])
 org_admin=require_roles(["admin"]);platform=require_roles(["platformadmin"])
@@ -29,25 +29,29 @@ def public_plans(db:Session=Depends(get_db)):
 @router.get("/current")
 def current(db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
     row=db.query(OrganizationSubscription).filter_by(organization_id=org).first()
-    if not row:return {"subscription":None,"usage":usage(db,org)}
-    result=present_subscription(db,row);db.commit();return {"subscription":result}
+    if not row:return {"subscription":None,"usage":usage(db,org),**access_policy(db,org)}
+    result=present_subscription(db,row);db.commit();return {"subscription":result,**access_policy(db,org)}
 
 @router.get("/documents")
 def documents(db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
+    if access_policy(db,org)["billing_exempt"]: return []
     return [{"id":str(x.id),"type":x.document_type,"hosted_url":x.hosted_url,"amount":str(x.amount) if x.amount is not None else None,"currency":x.currency,"status":x.status,"issued_at":x.issued_at} for x in db.query(BillingDocumentReference).filter_by(organization_id=org).order_by(BillingDocumentReference.issued_at.desc())]
 
 @router.post("/trial",status_code=201)
 def trial(payload:TrialWrite,db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
+    require_billable(db,org)
     row=start_trial(db,org,payload.plan_code,actor);db.commit();db.refresh(row);return present_subscription(db,row)
 
 @router.post("/checkout")
 def checkout(payload:PlanChange,db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
+    require_billable(db,org)
     plan=db.query(CommercialPlan).filter_by(code=payload.plan_code.lower(),is_active=True).first()
     if not plan:raise HTTPException(404,"Plan not found")
     return provider().checkout(organization_id=org,plan=plan,interval=payload.billing_interval,actor=actor)
 
 @router.post("/change-plan")
 def change_plan(payload:PlanChange,db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
+    require_billable(db,org)
     row=db.query(OrganizationSubscription).filter_by(organization_id=org).first()
     if not row:raise HTTPException(404,"Subscription not found")
     plan=db.query(CommercialPlan).filter_by(code=payload.plan_code.lower(),is_active=True).first()
@@ -59,6 +63,7 @@ def change_plan(payload:PlanChange,db:Session=Depends(get_db),actor:User=Depends
 
 @router.post("/cancel")
 def cancel(payload:CancelWrite,db:Session=Depends(get_db),actor:User=Depends(org_admin),org=Depends(organization_context)):
+    require_billable(db,org)
     row=db.query(OrganizationSubscription).filter_by(organization_id=org).first()
     if not row:raise HTTPException(404,"Subscription not found")
     if row.provider_subscription_reference:return provider().cancel(subscription=row,at_period_end=payload.at_period_end)

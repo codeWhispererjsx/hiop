@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
 from app.core.security import get_current_user, require_roles
+from app.core.tenant import property_context
 from app.models.device import Device
 from app.models.network_scan import NetworkScan
 from app.models.user import User
@@ -10,7 +11,7 @@ from app.schemas.network_scan import NetworkScanCreate, NetworkScanResponse, Net
 from app.network.utils import scan_range
 from typing import List
 from ipaddress import ip_address, ip_network
-from app.services.network_service import scan_all_devices, scan_single_device
+from app.services.network_service import queue_agent_scan_all_devices, scan_single_device
 from app.services.settings_service import read_network
 from app.discovery.network import parse_networks
 
@@ -21,16 +22,18 @@ router = APIRouter(
 )
 
 
-@router.post("/scan", response_model=NetworkScanResponse)
+@router.post("/scan")
 def scan_device(
     scan_data: NetworkScanCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(
         require_roles(["admin", "technician"])
-    )
+    ),
+    property_id=Depends(property_context),
 ):
     device = db.query(Device).filter(
-        Device.id == scan_data.device_id
+        Device.id == scan_data.device_id,
+        Device.property_id == property_id if property_id else True,
     ).first()
 
     if not device:
@@ -46,7 +49,7 @@ def scan_device(
             detail="Device IP address is outside the approved private network",
         )
 
-    return scan_single_device(db, device)
+    return scan_single_device(db, device, prefer_agent=True, actor_id=current_user.id)
 
 @router.post("/scan-range")
 def scan_network(
@@ -70,14 +73,13 @@ def scan_network(
 def get_scan_history(
     limit: int = Query(50, ge=1, le=500),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    property_id=Depends(property_context),
 ):
-    scans = (
-        db.query(NetworkScan)
-        .order_by(NetworkScan.scanned_at.desc())
-        .limit(limit)
-        .all()
-    )
+    query = db.query(NetworkScan).join(Device, NetworkScan.device_id == Device.id)
+    if property_id:
+        query = query.filter(Device.property_id == property_id)
+    scans = query.order_by(NetworkScan.scanned_at.desc()).limit(limit).all()
 
     return scans
 
@@ -87,6 +89,7 @@ def scan_all(
     db: Session = Depends(get_db),
     current_user: User = Depends(
         require_roles(["admin", "technician"])
-    )
+    ),
+    property_id=Depends(property_context),
 ):
-    return scan_all_devices(db)
+    return queue_agent_scan_all_devices(db, property_id=property_id, actor_id=current_user.id)

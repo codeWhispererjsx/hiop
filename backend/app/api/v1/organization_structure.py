@@ -3,7 +3,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -29,6 +29,14 @@ class OrganizationPatch(BaseModel):
     contact_email: str | None = Field(None, max_length=255)
     contact_phone: str | None = Field(None, max_length=40)
     timezone: str | None = Field(None, max_length=64)
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls,value):
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        if value is not None:
+            try: ZoneInfo(value)
+            except (ZoneInfoNotFoundError,ValueError) as exc: raise ValueError("Choose a valid IANA time zone") from exc
+        return value
     address: str | None = Field(None, max_length=500)
     description: str | None = Field(None, max_length=4000)
 
@@ -153,6 +161,7 @@ def list_locations(db: Session = Depends(get_db), _=Depends(reader), organizatio
 def create_location(payload: LocationWrite, db: Session = Depends(get_db), actor=Depends(manager), organization_id=Depends(organization_context)):
     kind = "room" if payload.type in {"room", "area", "server_room", "other"} else payload.type
     model = LOCATION_MODELS[kind]
+    if kind != "building" and not payload.parent_id: raise HTTPException(422,"Choose a parent location")
     if db.query(model).filter(model.organization_id == organization_id, func.lower(model.name) == payload.name.strip().lower()).first(): raise HTTPException(409, "Location already exists")
     values={"organization_id": organization_id, "name": payload.name.strip(), "is_active": True, "description": payload.description, "status": "active"}
     if kind == "building":
@@ -167,6 +176,9 @@ def create_location(payload: LocationWrite, db: Session = Depends(get_db), actor
 
 @router.patch("/locations/{kind}/{location_id}")
 def update_location(kind: Literal["building", "floor", "room"], location_id: UUID, payload: LocationWrite, db: Session = Depends(get_db), actor=Depends(manager), organization_id=Depends(organization_context)):
+    expected_kind = "room" if payload.type in {"room", "area", "server_room", "other"} else payload.type
+    if expected_kind != kind: raise HTTPException(422,"A building, floor, or room cannot change hierarchy level")
+    if kind != "building" and not payload.parent_id: raise HTTPException(422,"Choose a parent location")
     row=_location(db, kind, location_id, organization_id)
     row.name=payload.name.strip(); row.description=payload.description
     if hasattr(row, "code"): row.code=payload.code
@@ -224,7 +236,8 @@ def suggest_department(asset_id: UUID, db: Session = Depends(get_db), _=Depends(
 @router.get("/agents")
 def list_agents(db: Session = Depends(get_db), _=Depends(reader), organization_id=Depends(organization_context)):
     allowed=allowed_property_ids(db, _, organization_id)
-    return db.query(LocalAgentRegistration).filter(LocalAgentRegistration.organization_id==organization_id,LocalAgentRegistration.property_id.in_(allowed)).order_by(LocalAgentRegistration.name).all()
+    from app.api.v1.local_agents import agent_view
+    return [agent_view(row) for row in db.query(LocalAgentRegistration).filter(LocalAgentRegistration.organization_id==organization_id,LocalAgentRegistration.property_id.in_(allowed)).order_by(LocalAgentRegistration.name).all()]
 
 
 @router.post("/agents", status_code=201)

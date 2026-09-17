@@ -47,14 +47,14 @@ export default function BillingPage() {
         copy="Review your organization's plan, trial, renewal, usage and commercial limits."
       />
       {error && <Feedback error={error} />}
-      <section className="billing-intro" aria-label="Billing account overview">
+      {!current.data?.billing_exempt && <section className="billing-intro" aria-label="Billing account overview">
         <div><span>Commercial account</span><strong>One subscription for the organization</strong><small>Property users inherit access from the organization plan.</small></div>
         <div><span>Secure payments</span><strong>Card details never enter HIOP</strong><small>Checkout and billing documents use the configured provider.</small></div>
         <div><span>Safe limits</span><strong>Existing records are preserved</strong><small>Reaching a limit blocks new usage; it never deletes operational data.</small></div>
-      </section>
+      </section>}
       {current.loading || current.error ? (
         <Feedback loading={current.loading} error={current.error} />
-      ) : subscription ? (
+      ) : current.data?.billing_exempt ? (<section className="panel billing-current"><h2>Your organisation is billing-exempt</h2><p>No payment is required. Your access remains active unless the platform owner suspends it.</p><p>This arrangement remains in place until the platform owner changes it.</p></section>) : subscription ? (
         <SubscriptionView
           row={subscription}
           plans={getPaginatedItems(plans.data)}
@@ -78,7 +78,7 @@ export default function BillingPage() {
           />
         </section>
       )}
-      <section className="panel" aria-label="Billing documents">
+      {!current.data?.billing_exempt && <section className="panel" aria-label="Billing documents">
         <h2>Billing documents</h2>
         {documents.loading || documents.error ? (
           <Feedback loading={documents.loading} error={documents.error} />
@@ -105,7 +105,7 @@ export default function BillingPage() {
         ) : (
           <p>No invoices or receipts are available.</p>
         )}
-      </section>
+      </section>}
     </DashboardLayout>
   );
 }

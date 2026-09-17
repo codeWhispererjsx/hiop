@@ -55,12 +55,12 @@ export default function DashboardPage() {
       ) : (
         <>
           <section className="asset-summary-grid" aria-label="Asset metrics">
-            <article className="asset-metric-card">
+            <Link className="asset-metric-card" to="/devices">
               <span>Total assets</span>
               <strong>{d.devices.total}</strong>
               <small>Approved inventory records</small>
-            </article>
-            <article className="asset-metric-card">
+            </Link>
+            <Link className="asset-metric-card" to="/network">
               <span>Online now</span>
               <strong>{d.devices.online}</strong>
               <small>
@@ -68,27 +68,27 @@ export default function DashboardPage() {
                   ? `${Math.round((d.devices.online / d.devices.total) * 100)}% available`
                   : "Waiting for your first discovery"}
               </small>
-            </article>
-            <article className="asset-metric-card">
+            </Link>
+            <Link className="asset-metric-card" to="/network">
               <span>Offline devices</span>
               <strong>{d.devices.offline}</strong>
               <small>Require technician attention</small>
-            </article>
-            <article className="asset-metric-card">
+            </Link>
+            <Link className="asset-metric-card" to="/discovery-intelligence">
               <span>Awaiting approval</span>
-              <strong>0</strong>
+              <strong>View</strong>
               <small>Review in Discover</small>
-            </article>
-            <article className="asset-metric-card">
+            </Link>
+            <Link className="asset-metric-card" to="/incidents">
               <span>Active incidents</span>
-              <strong>0</strong>
+              <strong>View</strong>
               <small>Open maintenance records</small>
-            </article>
-            <article className="asset-metric-card">
+            </Link>
+            <Link className="asset-metric-card" to="/alerts">
               <span>Active alerts</span>
-              <strong>0</strong>
+              <strong>View</strong>
               <small>Open or acknowledged alerts</small>
-            </article>
+            </Link>
             <article className="asset-insight-card">
               <header>
                 <h2>Types of assets</h2>

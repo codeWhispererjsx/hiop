@@ -1,3 +1,4 @@
+import { formatDateTime } from "../lib/dateTime";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -188,7 +189,7 @@ export default function AlertsPage() {
                           <strong>{row.device_name}</strong>
                           <small>{row.ip_address ?? "IP unavailable"}</small>
                         </td>
-                        <td>{new Date(row.triggered_at).toLocaleString()}</td>
+                        <td>{formatDateTime(row.triggered_at)}</td>
                         <td>
                           <StatusBadge status={row.status} />
                         </td>
@@ -236,7 +237,7 @@ export default function AlertsPage() {
                   <tbody>
                     {(events.data?.items ?? []).map((row) => (
                       <tr key={row.id}>
-                        <td>{new Date(row.created_at).toLocaleString()}</td>
+                        <td>{formatDateTime(row.created_at)}</td>
                         <td>
                           <strong>{row.alert_title}</strong>
                           <small>{row.alert_id}</small>
@@ -320,7 +321,7 @@ function AlertDetails({
           </div>
           <div>
             <dt>Triggered</dt>
-            <dd>{new Date(row.triggered_at).toLocaleString()}</dd>
+            <dd>{formatDateTime(row.triggered_at)}</dd>
           </div>
           <div>
             <dt>Reason</dt>
@@ -337,7 +338,7 @@ function AlertDetails({
             <dt>Acknowledged</dt>
             <dd>
               {row.acknowledged_at
-                ? new Date(row.acknowledged_at).toLocaleString()
+                ? formatDateTime(row.acknowledged_at)
                 : "Not acknowledged"}
             </dd>
           </div>
@@ -363,7 +364,7 @@ function AlertDetails({
             {row.history?.length ? (
               row.history.map((x, index) => (
                 <article key={index}>
-                  <time>{new Date(x.created_at).toLocaleString()}</time>
+                  <time>{formatDateTime(x.created_at)}</time>
                   <strong>{x.action}</strong>
                   <span>
                     {x.actor} · {x.reason}
