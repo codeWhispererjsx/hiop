@@ -34,7 +34,7 @@ class HeartbeatRequest(BaseModel):
 class JobCreate(BaseModel):
     job_type:str;payload:dict=Field(default_factory=dict);timeout_seconds:int=Field(default=120,ge=5,le=3600)
 class JobUpdate(BaseModel):
-    status:Literal["started","completed","failed","timed_out"];error:str|None=Field(default=None,max_length=1000)
+    status:Literal["started","completed","failed","timed_out","cancelled"];error:str|None=Field(default=None,max_length=1000)
 class ObservationWrite(BaseModel):
     observation_id:str=Field(min_length=8,max_length=80);source:str;observed_at:datetime;schema_version:int=Field(default=1,ge=1,le=1);payload:dict;organization_id:UUID|None=None;property_id:UUID|None=None
 
@@ -92,6 +92,23 @@ def list_agents(db:Session=Depends(get_db),user:User=Depends(reader),org=Depends
     allowed=allowed_property_ids(db,user,org)
     return [agent_view(x) for x in db.query(LocalAgentRegistration).filter(LocalAgentRegistration.organization_id==org,LocalAgentRegistration.property_id.in_(allowed)).order_by(LocalAgentRegistration.name).all()]
 
+@admin_router.get("/installer/windows")
+def download_windows_installer(request:Request, actor:User=Depends(manager), org=Depends(organization_context)):
+    from io import BytesIO
+    from pathlib import Path
+    from zipfile import ZipFile, ZIP_DEFLATED
+    from fastapi.responses import Response
+    bundle=Path(__file__).resolve().parents[2]/"distributions"/"hiop-agent-windows.zip"
+    if not bundle.is_file():
+        raise HTTPException(503,"The Windows agent download is not available. Contact your HIOP administrator.")
+    output=BytesIO()
+    with ZipFile(bundle,"r") as source, ZipFile(output,"w",ZIP_DEFLATED) as archive:
+        for entry in source.infolist():
+            if entry.filename!="setup.json":
+                archive.writestr(entry,source.read(entry.filename))
+        archive.writestr("setup.json",json.dumps({"backend_url":str(request.base_url).rstrip("/")}))
+    return Response(output.getvalue(),media_type="application/zip",headers={"Content-Disposition":'attachment; filename="HIOP-Agent-Windows.zip"',"Cache-Control":"no-store"})
+
 @admin_router.post("/enrollments",status_code=201)
 def create_enrollment(body:EnrollmentCreate,request:Request,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
     enrollment_limiter.check(f"enroll:{request.client.host if request.client else 'unknown'}:{actor.id}");_property(db,actor,org,body.property_id);enforce_limit(db,org,"agents")
@@ -109,6 +126,7 @@ def revoke_agent(agent_id:UUID,db:Session=Depends(get_db),actor:User=Depends(man
 def create_job(agent_id:UUID,body:JobCreate,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
     kind=body.job_type.strip().upper()
     if kind not in ALLOWED_JOBS:raise HTTPException(422,"Unsupported agent job type")
+    if kind in {"SNMP_POLL","AD_ENRICHMENT"}:raise HTTPException(409,"This agent version does not yet support SNMP or Active Directory collection")
     agent=db.query(LocalAgentRegistration).filter_by(id=agent_id,organization_id=org).first()
     if not agent or agent.property_id not in allowed_property_ids(db,actor,org) or agent.revoked_at:raise HTTPException(404,"Active agent not found")
     _validate_network_job(db,agent,kind,body.payload)
@@ -134,11 +152,28 @@ def jobs(db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
     rows=db.query(AgentJob).filter_by(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,status="queued").filter(AgentJob.available_at<=datetime.now(timezone.utc)).order_by(AgentJob.created_at).limit(20).all()
     return [{"id":x.id,"type":x.job_type,"payload":json.loads(x.payload),"timeout_seconds":x.timeout_seconds} for x in rows]
 
-@agent_router.post("/jobs/{job_id}")
-def update_job(job_id:UUID,body:JobUpdate,db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
+@agent_router.get("/jobs/{job_id}")
+def job_state(job_id:UUID,db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
     row=db.query(AgentJob).filter_by(id=job_id,agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id).first()
     if not row:raise HTTPException(404,"Job not found")
+    return {"status":row.status}
+
+@agent_router.post("/jobs/{job_id}")
+def update_job(job_id:UUID,body:JobUpdate,db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
+    row=db.query(AgentJob).filter_by(id=job_id,agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id).with_for_update().first()
+    if not row:raise HTTPException(404,"Job not found")
+    from app.models.discovery_intelligence import DiscoveryJob
+    linked=json.loads(row.payload).get("discovery_job_id")
+    discovery=db.query(DiscoveryJob).filter_by(id=UUID(linked),property_id=agent.property_id).with_for_update().first() if linked else None
+    if row.status in {"cancelled","cancelling"} and body.status!="cancelled":
+        return {"status":row.status}
+    if row.status in {"completed","failed","timed_out"}: return {"status":row.status}
     now=datetime.now(timezone.utc);row.status=body.status;row.error=body.error
+    if discovery:
+        discovery.status={"started":"running","completed":"completed","cancelled":"cancelled"}.get(body.status,"failed")
+        discovery.current_stage={"started":"agent_discovery","completed":"completed"}.get(body.status,body.status)
+        if body.status=="started": discovery.started_at=now
+        else: discovery.completed_at=now
     if body.status=="started":row.started_at=now
     else:row.completed_at=now
     db.commit();return {"status":row.status}
@@ -154,6 +189,77 @@ def ingest(body:ObservationWrite,request:Request,db:Session=Depends(get_db),agen
     existing=db.query(AgentObservation).filter_by(agent_id=agent.id,observation_id=body.observation_id).first()
     if existing:return {"status":"duplicate","id":existing.id}
     row=AgentObservation(observation_id=body.observation_id,agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,source=body.source,schema_version=body.schema_version,observed_at=body.observed_at,payload=encoded);db.add(row);agent.last_seen=datetime.now(timezone.utc)
-    if body.source=="discovery":agent.last_discovery=agent.last_seen
-    if body.source in {"monitoring","icmp","snmp"}:agent.last_monitoring=agent.last_seen
+    if body.source=="discovery":
+        agent.last_discovery=agent.last_seen
+        ingest_discovery(db,agent,body.payload)
+    if body.source in {"monitoring","icmp","snmp"}:
+        agent.last_monitoring=agent.last_seen
+        if body.source in {"monitoring","icmp"}:
+            ingest_monitoring(db,agent,body.payload)
     db.commit();db.refresh(row);return {"status":"accepted","id":row.id}
+
+
+def ingest_monitoring(db,agent,payload):
+    from app.models.device import Device
+    from app.models.network_scan import NetworkScan
+    from app.services.alert_event_service import evaluate_scan
+    from app.services.automation_event_outbox_service import process_outbox_batch
+    config=payload.get("result",{})
+    if not isinstance(config,dict):raise HTTPException(422,"Invalid monitoring result")
+    job_id=payload.get("job_id")
+    task=None
+    if job_id:
+        try: task=db.query(AgentJob).filter_by(id=UUID(str(job_id)),agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id).first()
+        except ValueError: raise HTTPException(422,"Invalid monitoring job reference")
+    job_payload=json.loads(task.payload) if task and task.payload else {}
+    device_id=job_payload.get("device_id")
+    device=None
+    if device_id:
+        try: device=db.query(Device).filter_by(id=UUID(str(device_id)),property_id=agent.property_id).first()
+        except ValueError: device=None
+    target=str(config.get("target") or job_payload.get("target") or "")
+    if not device and target:
+        device=db.query(Device).filter_by(ip_address=target,property_id=agent.property_id).first()
+    if not device:return
+    previous=device.network_status
+    scan=NetworkScan(device_id=device.id,ip_address=device.ip_address,status="Online" if config.get("reachable") else "Offline",response_time=config.get("latency_ms"))
+    db.add(scan);db.flush();device.network_status=scan.status;evaluate_scan(db,device,scan)
+    if previous!=scan.status:
+        from app.services.settings_service import read_network
+        from app.services.automation_event_outbox_service import publish_internal_event
+        runtime=read_network(db)
+        publish_internal_event(db,event_type="device_offline" if scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"],"source":"local_agent"},severity="critical" if scan.status=="Offline" else "informational",status=scan.status.lower(),correlation_key=f"device:{device.id}:network")
+        process_outbox_batch(db,25)
+
+
+def ingest_discovery(db,agent,payload):
+    from app.models.discovery_intelligence import DiscoveryJob, DiscoveryResult
+    from app.services.discovery_intelligence_service import DiscoveryIntelligenceService
+    from app.services.discovery_collectors import evidence
+    try: job_id=UUID(str(payload.get("job_id")))
+    except ValueError: raise HTTPException(422,"A discovery job reference is required")
+    task=db.query(AgentJob).filter_by(id=job_id,agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id).with_for_update().first()
+    if not task:raise HTTPException(403,"Observation does not belong to this agent's job")
+    config=json.loads(task.payload)
+    if not config.get("discovery_job_id"):return
+    scan=db.query(DiscoveryJob).filter_by(id=UUID(config["discovery_job_id"]),property_id=agent.property_id).with_for_update().first()
+    if not scan or scan.status in {"cancelled","cancelling","failed"}:return
+    result=payload.get("result",{})
+    if not isinstance(result,dict):raise HTTPException(422,"Invalid discovery result")
+    network=ipaddress.ip_network(config["cidr"])
+    devices=result.get("devices",[])
+    if not isinstance(devices,list) or len(devices)>1024:raise HTTPException(422,"Invalid discovery result size")
+    service=DiscoveryIntelligenceService(db)
+    for item in devices:
+        if not isinstance(item,dict):raise HTTPException(422,"Invalid discovered device")
+        try: address=ipaddress.ip_address(item.get("target",""))
+        except ValueError:raise HTTPException(422,"Invalid discovered address")
+        if address not in network:raise HTTPException(422,"Discovered address is outside the requested network")
+        if item.get("reachable"):
+            observation={"ip_address":str(address),"hostname":item.get("hostname"),"hostnames":[item.get("hostname")] if item.get("hostname") else [],"dns_status":item.get("dns_status"),"evidence":[evidence("ping_response",item.get("reachability_source") or "local_agent","reachable",verified=True)]}
+            if item.get("hostname"):observation["evidence"].append(evidence("hostname_match",item.get("hostname_source") or "local_agent",item.get("hostname"),verified=item.get("hostname_source") in {"reverse_dns","netbios"}))
+            root=service.ingest(scan,observation)
+            root.confidence_reason="Local agent confirmed network reachability and hostname evidence." if item.get("hostname") else "Local agent confirmed network reachability. Hostname was unavailable."
+    try: scanned=int(result.get("scanned",0))
+    except (ValueError,TypeError):raise HTTPException(422,"Invalid discovery progress")
+    scan.hosts_completed=max(scan.hosts_completed or 0,min(max(0,scanned),scan.hosts_total or 1024))
