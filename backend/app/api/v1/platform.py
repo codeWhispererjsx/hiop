@@ -15,17 +15,25 @@ from app.models.device import Device
 from app.models.hierarchy import Organization, Property
 from app.models.incidents import OperationalIncident
 from app.models.user import User
-from app.schemas.platform import OrganizationAdminCreate, OrganizationCreate, OrganizationUpdate, PlatformAdminCreate
+from app.schemas.platform import OrganizationAdminCreate, OrganizationCreate, OrganizationUpdate, PlatformAdminCreate, PlatformBootstrapCreate
 from app.services.audit_service import create_audit_log
 
 router=APIRouter(prefix="/platform",tags=["Platform Control Center"])
 platform=require_roles(["platformadmin"])
 
+@router.post("/bootstrap",status_code=201)
+def bootstrap_platform_owner(payload:PlatformBootstrapCreate,db:Session=Depends(get_db)):
+    if db.query(User.id).filter(User.role=="platformadmin").first():raise HTTPException(409,"Platform owner already exists. Sign in with a platform administrator account.")
+    if db.query(User.id).filter((func.lower(User.email)==str(payload.email).lower())|(func.lower(User.username)==payload.username.lower())).first():raise HTTPException(409,"Username or email already exists")
+    user=User(username=payload.username.strip(),email=str(payload.email).lower(),hashed_password=hash_password(payload.password),role="platformadmin",is_active=True,organization_id=None,email_verified_at=datetime.now(timezone.utc),must_change_password=False)
+    db.add(user);db.flush();create_audit_log(db,user.username,"PLATFORM_BOOTSTRAP_COMPLETED","User",str(user.id),"Created the first platform owner for this HIOP installation");db.commit();db.refresh(user)
+    return {"id":user.id,"username":user.username,"email":user.email,"role":user.role,"is_active":user.is_active}
+
 def counts(db,org):
     properties=db.query(Property.id).filter(Property.organization_id==org.id).subquery()
     device_ids=db.query(Device.id).filter(Device.property_id.in_(properties)).subquery()
     return {"users":db.query(User).filter(User.organization_id==org.id).count(),"assets":db.query(ManagedAsset).filter(ManagedAsset.organization_id==org.id).count(),"devices":db.query(Device).filter(Device.id.in_(device_ids)).count(),"active_alerts":db.query(Alert).filter(Alert.device_id.in_(device_ids),Alert.lifecycle_status.in_(("open","acknowledged"))).count(),"open_incidents":db.query(OperationalIncident).filter(OperationalIncident.organization_id==org.id,OperationalIncident.status.notin_(("resolved","closed"))).count()}
-def present(db,row):return {"id":row.id,"name":row.name,"code":row.code,"status":row.status,"contact_email":row.contact_email,"contact_phone":row.contact_phone,"notes":row.notes,"administrator_id":row.administrator_id,"hiop_version":row.hiop_version,"created_at":row.created_at,"updated_at":row.updated_at,"last_activity_at":row.last_activity_at,**counts(db,row)}
+def present(db,row):return {"id":row.id,"name":row.name,"code":row.code,"status":row.status,"contact_email":row.contact_email,"contact_phone":row.contact_phone,"notes":row.notes,"billing_exempt":row.billing_exempt,"access_override":row.access_override,"administrator_id":row.administrator_id,"hiop_version":row.hiop_version,"created_at":row.created_at,"updated_at":row.updated_at,"last_activity_at":row.last_activity_at,**counts(db,row)}
 
 @router.get("/organizations")
 def organizations(db:Session=Depends(get_db),_:User=Depends(platform)):return [present(db,x) for x in db.query(Organization).order_by(Organization.name)]
@@ -43,7 +51,9 @@ def create_organization(payload:OrganizationCreate,db:Session=Depends(get_db),ac
 def update_organization(organization_id:UUID,payload:OrganizationUpdate,db:Session=Depends(get_db),actor:User=Depends(platform)):
     row=db.get(Organization,organization_id)
     if not row:raise HTTPException(404,"Organization not found")
-    for key,value in payload.model_dump(exclude_unset=True).items():setattr(row,key,str(value) if key=="contact_email" and value else value)
+    for key,value in payload.model_dump(exclude_unset=True).items():
+        if key in {"billing_exempt", "access_override"} and value is None: raise HTTPException(422,"Billing and access choices cannot be empty")
+        setattr(row,key,str(value) if key=="contact_email" and value else value)
     row.last_activity_at=datetime.now(timezone.utc);create_audit_log(db,actor.username,"ORGANIZATION_UPDATED","Organization",str(row.id),f"Updated organization {row.name}");db.commit();return present(db,row)
 @router.post("/organizations/{organization_id}/suspend")
 def suspend(organization_id:UUID,db:Session=Depends(get_db),actor:User=Depends(platform)):return set_status(db,actor,organization_id,"suspended")
