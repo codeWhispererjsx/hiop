@@ -35,7 +35,7 @@ export default function NetworkPage() {
   const [socketConnected, setSocketConnected] = useState<boolean | null>(null);
 
   const refresh = useCallback(async () => {
-    await Promise.all([reloadDevices(), reloadScans(), reloadAlerts(), reloadHealth()]);
+    await Promise.allSettled([reloadDevices(), reloadScans(), reloadAlerts(), reloadHealth()]);
   }, [reloadDevices, reloadScans, reloadAlerts, reloadHealth]);
 
   const live = useCallback((event: LiveEvent) => {
@@ -69,7 +69,7 @@ export default function NetworkPage() {
       await refresh();
     } catch (error) {
       setScanState("failed");
-      setMessage(error instanceof Error ? error.message : "The scan request failed.");
+      setMessage(monitoringErrorMessage(error instanceof Error ? error.message : "The scan request failed."));
     } finally {
       setScanningDevice("");
     }
@@ -95,8 +95,8 @@ export default function NetworkPage() {
   const lastScan = scans.data?.[0]?.scanned_at ?? null;
   const activeAlerts = getPaginatedItems(alerts.data).filter((alert) => !alert.acknowledged);
   const running = scanState === "running";
-  const initialLoading = devices.loading || scans.loading || alerts.loading || health.loading;
-  const initialError = devices.error || scans.error || alerts.error || health.error;
+  const initialLoading = devices.loading || scans.loading || alerts.loading;
+  const initialError = devices.error || scans.error || alerts.error;
 
   return (
     <DashboardLayout onLiveEvent={live} onLiveStateChange={setSocketConnected}>
@@ -166,6 +166,7 @@ export default function NetworkPage() {
       )}
       
       {scanState !== "idle" && <ScanProgress state={scanState} />}
+      {!initialLoading && <MonitoringEvidenceNotice error={health.error} loading={health.loading} hasSummary={Boolean(health.data)} />}
 
       {initialLoading || initialError ? (
         <Feedback loading={initialLoading} error={initialError} onRetry={refresh} />
@@ -174,7 +175,7 @@ export default function NetworkPage() {
           <section className="noc-summary" aria-label="Network monitoring statistics">
             <StatCard
               label="Monitored devices"
-              value={health.data?.monitored ?? 0}
+              value={health.data?.monitored ?? activeDevices.length}
               detail="Devices with observations in this window"
               icon="devices"
               trend={window}
@@ -205,7 +206,7 @@ export default function NetworkPage() {
             />
             <StatCard
               label="Unknown"
-              value={health.data?.unknown ?? 0}
+              value={health.data?.unknown ?? activeDevices.length}
               detail="Insufficient monitoring evidence"
               icon="wifi"
               tone="warning"
@@ -392,13 +393,31 @@ function HealthEvidence({
   );
 }
 
+function monitoringErrorMessage(text: string) {
+  if (text.toLowerCase().includes("timed out")) return "Monitoring request timed out. This usually means the hosted backend is waiting for local-agent evidence or the backend/database is slow. Existing device history is still preserved.";
+  return text || "Monitoring request failed. Existing device history is still preserved.";
+}
+
+function MonitoringEvidenceNotice({ error, loading, hasSummary }: { error: string; loading: boolean; hasSummary: boolean }) {
+  if (loading || (!error && hasSummary)) return null;
+  const timedOut = error.toLowerCase().includes("timed out");
+  return <section className={`monitoring-evidence-notice ${error ? "attention" : ""}`} role={error ? "alert" : "status"}>
+    <Icon name={error ? "warning" : "clock"} aria-hidden="true" />
+    <div>
+      <strong>{error ? timedOut ? "Monitoring evidence is taking too long" : "Monitoring summary is unavailable" : "No monitoring evidence yet"}</strong>
+      <p>{error ? monitoringErrorMessage(error) : "Run monitoring after a local agent is connected. HIOP will show online, offline, latency, and missed-check evidence after the agent reports observations."}</p>
+      <small>Discovery finds devices. Monitoring needs approved devices plus local-agent or supported SNMP observations.</small>
+    </div>
+  </section>;
+}
+
 function ScanProgress({ state }: { state: ScanState }) {
   const content =
     state === "running"
       ? ["Scan running", "HIOP is sending checks to the local agent. Results appear as the agent reports back."]
       : state === "completed"
       ? ["Scan completed", "Latest device states and history have been refreshed."]
-      : ["Scan failed", "The request did not complete. Review the error and try again."];
+      : ["Monitoring did not complete", "The request timed out before HIOP received fresh monitoring evidence. Check the local agent, then refresh the view."];
       
   return (
     <section className={`scan-progress ${state}`} aria-live="polite">

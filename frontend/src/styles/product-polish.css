@@ -203,3 +203,9 @@ a.asset-metric-card:focus-visible { outline:3px solid #3977df; outline-offset:3p
 .discovery-guidance-card button{white-space:nowrap}
 .unknown-context{display:inline-flex;align-items:center;border-radius:999px;padding:.35rem .6rem;background:var(--surface-soft);color:var(--text-muted);font-size:.78rem;font-weight:700}
 @media(max-width:760px){.discovery-guidance-card{align-items:flex-start;flex-direction:column}.discovery-guidance-card button{width:100%}}
+
+.monitoring-evidence-notice{display:flex;align-items:flex-start;gap:1rem;margin:0 0 1rem;padding:1rem;border:1px solid color-mix(in srgb,var(--color-warning) 38%,transparent);border-radius:var(--radius-lg);background:color-mix(in srgb,var(--color-warning) 10%,var(--surface));color:var(--text)}
+.monitoring-evidence-notice svg{flex:0 0 auto;color:var(--color-warning)}
+.monitoring-evidence-notice strong{display:block;margin-bottom:.25rem}
+.monitoring-evidence-notice p{margin:0;color:var(--text-muted);line-height:1.55}
+.monitoring-evidence-notice small{display:block;margin-top:.45rem;color:var(--text-muted)}
