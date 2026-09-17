@@ -765,11 +765,18 @@ export default function DiscoveryIntelligencePage() {
               </p>
             </div>
           </header>
+          <div className="discovery-guidance-card">
+            <div>
+              <strong>Why department or location can show Unknown</strong>
+              <p>Network scans discover technical facts first: IP address, hostname, MAC address, and reachability. HIOP fills department and location after you review the device, approve it into inventory, import an asset list, or create a naming rule that matches your hostname pattern.</p>
+            </div>
+            <button type="button" onClick={() => navigate("/discovery-intelligence/identity-rules")}>Set naming rules</button>
+          </div>
           <div className="discovery-bulk-bar">
             <div>
               <b>{selected.size} selected</b>
               <span>
-                Select devices with discovered hostnames, then approve them together.
+                Select devices, review Unknown values, then approve them into managed inventory.
               </span>
             </div>
             {canApprove && (
@@ -1457,9 +1464,9 @@ function DeviceTable({
                   {device.device_type || device.classification || "Unknown"}
                 </td>
                 <td data-label="Department">
-                  {device.department || "Unknown"}
+                  {device.department ? device.department : <span className="unknown-context">Unknown until reviewed</span>}
                 </td>
-                <td data-label="Location">{device.location || "Unknown"}</td>
+                <td data-label="Location">{device.location ? device.location : <span className="unknown-context">Unknown until reviewed</span>}</td>
                 <td data-label="Status">
                   <StatusBadge
                     status={

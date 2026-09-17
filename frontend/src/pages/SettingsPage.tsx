@@ -996,7 +996,7 @@ function HierarchySummary({
 }: {
   title: string;
   copy: string;
-  items: Array<{ id: string; name: string }>;
+  items: Array<{ id: string; name: string; code?: string | null; type?: string | null; kind?: string | null; is_active?: boolean }>;
   link: string;
 }) {
   return (
@@ -1006,16 +1006,21 @@ function HierarchySummary({
           <h2>{title}</h2>
           <p>{copy}</p>
         </div>
+        <Link className="primary-action" to={link}>Manage {title.toLowerCase()}</Link>
       </header>
+      <p className="settings-note">Departments and locations created here are shared across HIOP. Discovered devices stay Unknown until you approve or assign them, or a naming rule matches them.</p>
       {!items.length ? (
         <Feedback empty="No items have been configured." />
       ) : (
-        <div className="hierarchy-list">
+        <div className="hierarchy-list clean-hierarchy-list">
           {items.map((item) => (
-            <Link key={item.id} to={`${link}/${item.id}`}>
-              <strong>{item.name}</strong>
-              <small>{item.id}</small>
-            </Link>
+            <article key={item.id} className="hierarchy-card">
+              <div>
+                <strong>{item.name}</strong>
+                <small>{item.code || item.type?.replaceAll("_", " ") || item.kind?.replaceAll("_", " ") || "Configured"}</small>
+              </div>
+              <span className={`status-pill ${item.is_active === false ? "neutral" : "success"}`}>{item.is_active === false ? "Inactive" : "Active"}</span>
+            </article>
           ))}
         </div>
       )}
