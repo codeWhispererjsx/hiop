@@ -53,3 +53,7 @@ backups/
 
 # Docker
 .docker/
+desktop/node_modules/
+desktop/build-resources/
+desktop/release/
+buildcheck-*/

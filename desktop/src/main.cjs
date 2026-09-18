@@ -1,21 +1,37 @@
 const { app, BrowserWindow, dialog, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
+const fs = require("fs");
 
 const isDev = Boolean(process.env.HIOP_DESKTOP_URL);
-const frontendUrl = process.env.HIOP_DESKTOP_URL || `file://${path.join(__dirname, "..", "..", "frontend", "dist", "index.html")}`;
+const resourcesRoot = process.resourcesPath || path.join(__dirname, "..", "..");
+const repoRoot = path.join(__dirname, "..", "..");
+const packagedFrontend = path.join(resourcesRoot, "frontend", "index.html");
+const devFrontend = path.join(repoRoot, "frontend", "dist", "index.html");
+const frontendUrl = process.env.HIOP_DESKTOP_URL || `file://${fs.existsSync(packagedFrontend) ? packagedFrontend : devFrontend}`;
 let backendProcess;
+
+function runtimeScriptPath() {
+  const packagedScript = path.join(resourcesRoot, "runtime", "start-local-backend.ps1");
+  if (fs.existsSync(packagedScript)) return packagedScript;
+  return path.join(repoRoot, "desktop", "runtime", "start-local-backend.ps1");
+}
+
+function runtimeWorkingDirectory() {
+  const packagedBackend = path.join(resourcesRoot, "backend");
+  if (fs.existsSync(packagedBackend)) return resourcesRoot;
+  return repoRoot;
+}
 
 function startBackend() {
   if (process.env.HIOP_DESKTOP_NO_BACKEND === "1") return;
 
-  const repoRoot = path.join(__dirname, "..", "..");
-  const script = path.join(repoRoot, "desktop", "runtime", "start-local-backend.ps1");
-  backendProcess = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script], {
-    cwd: repoRoot,
+  backendProcess = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", runtimeScriptPath()], {
+    cwd: runtimeWorkingDirectory(),
     env: {
       ...process.env,
       HIOP_DESKTOP_PORT: process.env.HIOP_DESKTOP_PORT || "8765",
+      HIOP_DESKTOP_RESOURCES: resourcesRoot,
     },
     windowsHide: true,
     stdio: isDev ? "inherit" : "ignore",
@@ -74,4 +90,3 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
-

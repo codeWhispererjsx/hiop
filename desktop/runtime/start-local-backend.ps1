@@ -5,8 +5,11 @@ if ($Port -le 0) {
   if ($env:HIOP_DESKTOP_PORT) { $Port = [int]$env:HIOP_DESKTOP_PORT } else { $Port = 8765 }
 }
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$backendRoot = Join-Path $repoRoot "backend"
+$scriptRoot = Resolve-Path $PSScriptRoot
+$resourceRoot = if ($env:HIOP_DESKTOP_RESOURCES) { Resolve-Path $env:HIOP_DESKTOP_RESOURCES } else { Resolve-Path (Join-Path $scriptRoot "..\..") }
+$packagedBackend = Join-Path $resourceRoot "backend"
+$repoBackend = Join-Path (Resolve-Path (Join-Path $scriptRoot "..\..")) "backend"
+$backendRoot = if (Test-Path $packagedBackend) { $packagedBackend } else { $repoBackend }
 $desktopData = Join-Path $env:LOCALAPPDATA "HIOP Desktop"
 $logRoot = Join-Path $desktopData "logs"
 New-Item -ItemType Directory -Force $logRoot | Out-Null
@@ -20,6 +23,7 @@ function Write-HIOPLog([string]$Message) {
 }
 
 Write-HIOPLog "Starting HIOP Desktop backend on 127.0.0.1:$Port"
+Write-HIOPLog "Backend root: $backendRoot"
 
 if (-not $env:APP_NAME) { $env:APP_NAME = "HIOP Desktop" }
 if (-not $env:APP_VERSION) { $env:APP_VERSION = "desktop-dev" }
@@ -51,4 +55,3 @@ catch {
 finally {
   Pop-Location
 }
-

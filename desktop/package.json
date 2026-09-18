@@ -2,14 +2,53 @@
   "name": "hiop-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "HIOP Windows desktop shell for local hotel IT operations.",
+  "description": "HIOP Windows desktop app for local hotel IT operations.",
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",
+    "dev": "set HIOP_DESKTOP_URL=http://127.0.0.1:5173&& electron .",
+    "stage": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stage-desktop-package.ps1",
     "build:frontend": "cd ../frontend && npm run build:desktop",
-    "dev": "set HIOP_DESKTOP_URL=http://127.0.0.1:5173&& electron ."
+    "dist:win": "npm run build:frontend && npm run stage && electron-builder --win nsis --x64",
+    "dist:unpacked": "npm run build:frontend && npm run stage && electron-builder --win dir --x64"
+  },
+  "build": {
+    "appId": "com.hiop.desktop",
+    "productName": "HIOP Desktop",
+    "artifactName": "HIOP-Desktop-${version}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build-resources/frontend",
+        "to": "frontend"
+      },
+      {
+        "from": "build-resources/backend",
+        "to": "backend"
+      },
+      {
+        "from": "runtime",
+        "to": "runtime"
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HIOP Desktop"
+    }
   },
   "devDependencies": {
-    "electron": "^39.2.7"
-  }
+    "electron": "^39.2.7",
+    "electron-builder": "^26.0.12"
+  },
+  "author": "Hospitality IT Ops"
 }
