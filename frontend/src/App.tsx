@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Feedback } from "./components/Feedback";
 import { hasUsableToken } from "./lib/auth";
+import { isDesktopMode } from "./lib/appMode";
 import { endpoints } from "./lib/api";
 import type { User } from "./lib/types";
 
@@ -86,10 +87,10 @@ export default function App() {
   const roleProtectedPage = (page: ReactNode, roles: User["role"][]) =>
     <Protected><RoleProtected roles={roles}>{page}</RoleProtected></Protected>;
   return <Suspense fallback={<Feedback loading />}><ScrollToRouteTop /><Routes>
-    <Route path="/" element={<PublicHomePage />} />
-    <Route path="/features" element={<FeaturesPage />} />
-    <Route path="/pricing" element={<PricingPage />} />
-    <Route path="/get-started" element={<GetStartedPage />} />
+    <Route path="/" element={isDesktopMode ? <Navigate to={hasUsableToken() ? "/dashboard" : "/login"} replace /> : <PublicHomePage />} />
+    {!isDesktopMode && <Route path="/features" element={<FeaturesPage />} />}
+    {!isDesktopMode && <Route path="/pricing" element={<PricingPage />} />}
+    {!isDesktopMode && <Route path="/get-started" element={<GetStartedPage />} />}
     <Route path="/login" element={<LoginPage />} />
     <Route path="/forgot-password" element={<AccountAccessPage mode="forgot" />} />
     <Route path="/reset-password" element={<AccountAccessPage mode="reset" />} />
@@ -150,3 +151,4 @@ export default function App() {
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></Suspense>;
 }
+

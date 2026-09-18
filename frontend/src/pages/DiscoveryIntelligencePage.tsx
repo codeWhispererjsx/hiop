@@ -619,7 +619,7 @@ export default function DiscoveryIntelligencePage() {
                       disabled={cancellingScan === job.id || job.status === "cancelling"}
                       onClick={() => void cancelScan(job)}
                     >
-                      {cancellingScan === job.id || job.status === "cancelling" ? "Stopping…" : "Terminate scan"}
+                      {cancellingScan === job.id || job.status === "cancelling" ? "Stopping…" : "Cancel Scan"}
                     </button>
                   )}
                 </article>
@@ -1434,7 +1434,7 @@ function DeviceTable({
             const bucket = identityBucket(device);
             const approved = Boolean(device.inventory_device_id);
             const hostname =
-              device.primary_hostname || device.fqdn || "Hostname unavailable";
+              device.primary_hostname || device.fqdn || "Not yet discovered";
             return (
               <tr key={device.result_id}>
                 <td data-label="Select">
@@ -2024,3 +2024,4 @@ function dnsMessage(
     ? "DNS information available."
     : "DNS information unavailable.";
 }
+

@@ -1,0 +1,15 @@
+{
+  "name": "hiop-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HIOP Windows desktop shell for local hotel IT operations.",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build:frontend": "cd ../frontend && npm run build:desktop",
+    "dev": "set HIOP_DESKTOP_URL=http://127.0.0.1:5173&& electron ."
+  },
+  "devDependencies": {
+    "electron": "^39.2.7"
+  }
+}

@@ -93,7 +93,7 @@ export default function Sidebar({
   };
   
   const isAdmin = role === "admin";
-  const visiblePrimary = [...(role === "platformadmin" ? [{label:"Platform Control Center",to:"/platform",icon:"lock" as IconName}] : []), ...primaryLinks.filter((link) => !link.adminOnly || isAdmin)];
+  const visiblePrimary = primaryLinks.filter((link) => !link.adminOnly || isAdmin);
   
   return (
     <aside 
@@ -185,3 +185,4 @@ export default function Sidebar({
     </aside>
   );
 }
+
