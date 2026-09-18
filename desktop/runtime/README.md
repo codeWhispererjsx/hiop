@@ -18,3 +18,6 @@ The runtime script applies database migrations before starting the backend.
 ## Production packaging still needed
 
 This is not yet the final customer installer. The installer still needs to bundle or install PostgreSQL, Python runtime/backend, the desktop app, startup shortcuts, upgrade handling, backup paths, and activation/licensing from the web Platform Control Center.
+## Troubleshooting
+
+If the desktop window opens but HIOP cannot connect, check `%LOCALAPPDATA%\HIOP Desktop\logs\backend.log`. The app writes migration and backend startup errors there, including missing PostgreSQL, bad database credentials, or Python dependency problems.

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, dialog, shell } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 
@@ -21,8 +21,14 @@ function startBackend() {
     stdio: isDev ? "inherit" : "ignore",
   });
 
-  backendProcess.on("exit", () => {
+  backendProcess.on("exit", (code) => {
     backendProcess = undefined;
+    if (code && code !== 0) {
+      dialog.showErrorBox(
+        "HIOP backend did not start",
+        "The local HIOP service stopped before the desktop app could connect. Check %LOCALAPPDATA%\\HIOP Desktop\\logs\\backend.log."
+      );
+    }
   });
 }
 
@@ -68,3 +74,4 @@ app.on("window-all-closed", () => {
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
+
