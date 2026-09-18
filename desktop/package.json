@@ -9,9 +9,10 @@
     "dev": "set HIOP_DESKTOP_URL=http://127.0.0.1:5173&& electron .",
     "stage": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stage-desktop-package.ps1",
     "build:frontend": "cd ../frontend && npm run build:desktop",
-    "dist:win": "npm run build:frontend && npm run build:backend-runtime && npm run stage && electron-builder --win nsis --x64",
-    "dist:unpacked": "npm run build:frontend && npm run build:backend-runtime && npm run stage && electron-builder --win dir --x64",
-    "build:backend-runtime": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-backend-runtime.ps1"
+    "dist:win": "npm run build:frontend && npm run build:backend-runtime && npm run build:postgres-runtime && npm run stage && electron-builder --win nsis --x64",
+    "dist:unpacked": "npm run build:frontend && npm run build:backend-runtime && npm run build:postgres-runtime && npm run stage && electron-builder --win dir --x64",
+    "build:backend-runtime": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-backend-runtime.ps1",
+    "build:postgres-runtime": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-postgres-runtime.ps1"
   },
   "build": {
     "appId": "com.hiop.desktop",
@@ -40,6 +41,10 @@
       {
         "from": "build-resources/python",
         "to": "python"
+      },
+      {
+        "from": "build-resources/postgres",
+        "to": "postgres"
       }
     ],
     "nsis": {

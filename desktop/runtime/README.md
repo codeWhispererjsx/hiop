@@ -4,18 +4,16 @@ This folder contains the Windows desktop runtime for HIOP.
 
 The Electron shell loads the desktop build of the current React interface and starts a local FastAPI backend on `127.0.0.1:8765`.
 
-The packaged desktop build now includes the backend Python runtime and installed backend dependencies, so the Windows app no longer depends on the user's global Python installation.
-
-For this development packaging version, the backend still expects a local PostgreSQL database named `hiop_desktop` with user `postgres` and password `postgres`, unless `DATABASE_URL` is already set before launch.
+The packaged desktop build includes the backend Python runtime, installed backend dependencies, and a bundled PostgreSQL runtime. On first launch, HIOP initializes its private local database under `%LOCALAPPDATA%\HIOP Desktop\postgres-data`, starts it on localhost, applies migrations, and then starts the API.
 
 ## Local development flow
 
-1. Create a local PostgreSQL database called `hiop_desktop`.
-2. Install backend dependencies in the Python environment for development.
-3. Build the frontend desktop bundle with `npm --prefix frontend run build:desktop`.
+1. Build the frontend desktop bundle with `npm --prefix frontend run build:desktop`.
+2. Build the backend Python runtime with `npm --prefix desktop run build:backend-runtime`.
+3. Build the PostgreSQL runtime with `npm --prefix desktop run build:postgres-runtime`.
 4. Start the desktop shell from the `desktop` folder with `npm start`.
 
-The runtime script applies database migrations before starting the backend.
+The runtime script starts the private local database and applies database migrations before starting the backend.
 
 ## Windows packaging flow
 
@@ -30,13 +28,14 @@ The packaging step stages these resources into the app:
 - Desktop frontend bundle
 - Backend source and migrations
 - Bundled backend Python runtime
+- Bundled PostgreSQL runtime
 - Runtime startup scripts
 - Electron shell
 
 ## Troubleshooting
 
-If the desktop window opens but HIOP cannot connect, check `%LOCALAPPDATA%\HIOP Desktop\logs\backend.log`. The app writes migration and backend startup errors there, including missing PostgreSQL, bad database credentials, dependency problems, and backend import errors.
+If the desktop window opens but HIOP cannot connect, check `%LOCALAPPDATA%\HIOP Desktop\logs\backend.log`. PostgreSQL startup output is written to `%LOCALAPPDATA%\HIOP Desktop\logs\postgres.log` and `%LOCALAPPDATA%\HIOP Desktop\logs\postgres-error.log`.
 
 ## Production packaging still needed
 
-This is close to a Windows installable development build, but it is not yet the final customer installer. The installer still needs to bundle or install PostgreSQL, set secure per-install secrets, manage upgrades, configure backups, and connect activation/licensing to the web Platform Control Center.
+This is now a self-contained Windows desktop development package for local operation. The remaining production work is installer polish: secure per-install secret generation, icon/signing, upgrade handling, backups, restore flow, and activation/licensing with the web Platform Control Center.

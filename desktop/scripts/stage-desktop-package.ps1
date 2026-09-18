@@ -9,6 +9,8 @@ $frontendTarget = Join-Path $resourcesRoot "frontend"
 $backendTarget = Join-Path $resourcesRoot "backend"
 $pythonRuntimeSource = Join-Path $desktopRoot "build-runtime\python"
 $pythonRuntimeTarget = Join-Path $resourcesRoot "python"
+$postgresRuntimeSource = Join-Path $desktopRoot "build-runtime\postgres"
+$postgresRuntimeTarget = Join-Path $resourcesRoot "postgres"
 
 if (-not (Test-Path $frontendSource)) {
   throw "Frontend desktop build not found. Run npm --prefix frontend run build:desktop first."
@@ -21,6 +23,9 @@ New-Item -ItemType Directory -Force $frontendTarget | Out-Null
 New-Item -ItemType Directory -Force $backendTarget | Out-Null
 if (Test-Path $pythonRuntimeSource) {
   New-Item -ItemType Directory -Force $pythonRuntimeTarget | Out-Null
+}
+if (Test-Path $postgresRuntimeSource) {
+  New-Item -ItemType Directory -Force $postgresRuntimeTarget | Out-Null
 }
 
 Copy-Item -Path (Join-Path $frontendSource "*") -Destination $frontendTarget -Recurse -Force
@@ -51,6 +56,9 @@ function Copy-CleanDirectory($Source, $Destination) {
 Copy-CleanDirectory $backendSource $backendTarget
 if (Test-Path $pythonRuntimeSource) {
   Copy-CleanDirectory $pythonRuntimeSource $pythonRuntimeTarget
+}
+if (Test-Path $postgresRuntimeSource) {
+  Copy-CleanDirectory $postgresRuntimeSource $postgresRuntimeTarget
 }
 
 Write-Host "Staged HIOP Desktop resources in $resourcesRoot"
