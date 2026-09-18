@@ -7,6 +7,8 @@ $frontendSource = Join-Path $repoRoot "frontend\dist"
 $backendSource = Join-Path $repoRoot "backend"
 $frontendTarget = Join-Path $resourcesRoot "frontend"
 $backendTarget = Join-Path $resourcesRoot "backend"
+$pythonRuntimeSource = Join-Path $desktopRoot "build-runtime\python"
+$pythonRuntimeTarget = Join-Path $resourcesRoot "python"
 
 if (-not (Test-Path $frontendSource)) {
   throw "Frontend desktop build not found. Run npm --prefix frontend run build:desktop first."
@@ -17,6 +19,9 @@ if (Test-Path $resourcesRoot) {
 }
 New-Item -ItemType Directory -Force $frontendTarget | Out-Null
 New-Item -ItemType Directory -Force $backendTarget | Out-Null
+if (Test-Path $pythonRuntimeSource) {
+  New-Item -ItemType Directory -Force $pythonRuntimeTarget | Out-Null
+}
 
 Copy-Item -Path (Join-Path $frontendSource "*") -Destination $frontendTarget -Recurse -Force
 
@@ -44,6 +49,8 @@ function Copy-CleanDirectory($Source, $Destination) {
 }
 
 Copy-CleanDirectory $backendSource $backendTarget
+if (Test-Path $pythonRuntimeSource) {
+  Copy-CleanDirectory $pythonRuntimeSource $pythonRuntimeTarget
+}
 
 Write-Host "Staged HIOP Desktop resources in $resourcesRoot"
-

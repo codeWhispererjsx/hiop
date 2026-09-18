@@ -15,7 +15,11 @@ $logRoot = Join-Path $desktopData "logs"
 New-Item -ItemType Directory -Force $logRoot | Out-Null
 $logFile = Join-Path $logRoot "backend.log"
 $python = $env:HIOP_DESKTOP_PYTHON
-if (-not $python) { $python = "python" }
+$packagedPython = Join-Path $resourceRoot "python\Scripts\python.exe"
+$repoPython = Join-Path (Resolve-Path (Join-Path $scriptRoot "..\..")) "backend\.venv\Scripts\python.exe"
+if (-not $python -and (Test-Path $packagedPython)) { $python = $packagedPython }
+if (-not $python -and (Test-Path $repoPython)) { $python = $repoPython }
+if (-not $python) { $python = "py" }
 
 function Write-HIOPLog([string]$Message) {
   $line = "{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
@@ -24,6 +28,7 @@ function Write-HIOPLog([string]$Message) {
 
 Write-HIOPLog "Starting HIOP Desktop backend on 127.0.0.1:$Port"
 Write-HIOPLog "Backend root: $backendRoot"
+Write-HIOPLog "Python runtime: $python"
 
 if (-not $env:APP_NAME) { $env:APP_NAME = "HIOP Desktop" }
 if (-not $env:APP_VERSION) { $env:APP_VERSION = "desktop-dev" }
