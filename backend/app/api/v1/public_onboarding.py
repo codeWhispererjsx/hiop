@@ -50,6 +50,18 @@ def normalized_code(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
 
 
+
+
+@router.get("/desktop-status")
+def desktop_status(db: Session = Depends(get_db)):
+    return {
+        "platform_owner_required": not db.query(User.id).filter(User.role == "platformadmin").first(),
+        "organization_required": not db.query(Organization.id).first(),
+        "platform_owner_count": db.query(User.id).filter(User.role == "platformadmin").count(),
+        "organization_count": db.query(Organization.id).count(),
+    }
+
+
 @router.post("/register", status_code=201)
 def register_customer(payload: PublicOnboardingRequest, db: Session = Depends(get_db)):
     organization_code = normalized_code(payload.organization_code)
@@ -135,3 +147,19 @@ def register_customer(payload: PublicOnboardingRequest, db: Session = Depends(ge
         "administrator": {"id": administrator.id, "username": administrator.username, "email": administrator.email, "role": "admin"},
         "subscription": present_subscription(db, subscription),
     }
+
+
+@router.get("/desktop-activation-status")
+def desktop_activation_status():
+    import json
+    import os
+    from pathlib import Path
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    config_path = Path(local_app_data or ".") / "HIOP Desktop" / "activation.json"
+    if not config_path.exists():
+        return {"status": "local_only", "configured": False, "activation_url": None, "organization_code": None}
+    try:
+        data = json.loads(config_path.read_text())
+    except Exception:
+        return {"status": "invalid", "configured": False, "activation_url": None, "organization_code": None}
+    return {"status": data.get("status") or "configured", "configured": bool(data.get("license_key")), "activation_url": data.get("activation_url"), "organization_code": data.get("organization_code")}

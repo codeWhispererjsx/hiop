@@ -145,6 +145,12 @@ if (-not $env:SCHEDULER_ENABLED) { $env:SCHEDULER_ENABLED = "true" }
 if (-not $env:HIOP_AD_SECRET_KEY) { $env:HIOP_AD_SECRET_KEY = "desktop-local-ad-secret-change-before-release" }
 if (-not $env:HIOP_SNMP_SECRET_KEY) { $env:HIOP_SNMP_SECRET_KEY = "desktop-local-snmp-secret-change-release" }
 if (-not $env:HIOP_DISCOVERY_CREDENTIAL_KEY) { $env:HIOP_DISCOVERY_CREDENTIAL_KEY = "desktop-local-discovery-secret-change" }
+if ($postgresRoot) {
+  if (-not $env:PG_DUMP_PATH) { $env:PG_DUMP_PATH = Join-Path $postgresRoot "bin\pg_dump.exe" }
+  if (-not $env:PG_RESTORE_PATH) { $env:PG_RESTORE_PATH = Join-Path $postgresRoot "bin\pg_restore.exe" }
+  if (-not $env:BACKUP_DIR) { $env:BACKUP_DIR = Join-Path $desktopData "backups" }
+}
+
 
 Push-Location $backendRoot
 try {

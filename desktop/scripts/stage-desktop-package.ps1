@@ -32,9 +32,9 @@ Copy-Item -Path (Join-Path $frontendSource "*") -Destination $frontendTarget -Re
 
 $excludedDirectories = @(
   ".git", ".pytest_cache", "__pycache__", ".mypy_cache", ".ruff_cache", "htmlcov",
-  ".venv", "venv", ".verify-venv", "node_modules", "dist", "build", "release", "tests", "backups"
+  ".venv", "venv", ".verify-venv", "node_modules", "dist", "build", "release", "tests", "backups", "pgAdmin 4", "StackBuilder", "doc"
 )
-$excludedFilePatterns = @("*.pyc", "*.pyo", "*.sqlite", "*.db", "*.log", ".env", ".env.*")
+$excludedFilePatterns = @("*.pyc", "*.pyo", "*.sqlite", "*.db", "*.log", ".env", ".env.*", "stackbuilder.exe")
 
 function Copy-CleanDirectory($Source, $Destination) {
   Get-ChildItem -LiteralPath $Source -Force | ForEach-Object {

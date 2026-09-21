@@ -53,8 +53,13 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "HIOP Desktop"
-    }
+      "shortcutName": "HIOP Desktop",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "installerHeaderIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false
+    },
+    "icon": "assets/icon.png"
   },
   "devDependencies": {
     "electron": "^39.2.7",
