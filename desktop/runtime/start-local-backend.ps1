@@ -157,12 +157,24 @@ try {
   Start-HIOPPostgres
 
   Write-HIOPLog "Applying database migrations"
+  # Alembic writes normal progress messages to stderr. With this script's
+  # strict PowerShell error policy, PowerShell can mistake those messages for
+  # a failed command even when Alembic returns success. Keep the native
+  # command output in the log and decide success solely from its exit code.
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   & $python -m alembic upgrade head *>> $logFile
-  if ($LASTEXITCODE -ne 0) { throw "Database migration failed. Check $logFile" }
+  $migrationExitCode = $LASTEXITCODE
+  $ErrorActionPreference = $previousErrorActionPreference
+  if ($migrationExitCode -ne 0) { throw "Database migration failed. Check $logFile" }
 
   Write-HIOPLog "Launching API process"
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
   & $python -m uvicorn app.main:app --host 127.0.0.1 --port $Port *>> $logFile
-  if ($LASTEXITCODE -ne 0) { throw "API process exited with code $LASTEXITCODE. Check $logFile" }
+  $apiExitCode = $LASTEXITCODE
+  $ErrorActionPreference = $previousErrorActionPreference
+  if ($apiExitCode -ne 0) { throw "API process exited with code $apiExitCode. Check $logFile" }
 }
 catch {
   Write-HIOPLog "ERROR: $($_.Exception.Message)"
