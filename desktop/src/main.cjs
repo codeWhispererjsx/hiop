@@ -10,6 +10,14 @@ const packagedFrontend = path.join(resourcesRoot, "frontend", "index.html");
 const devFrontend = path.join(repoRoot, "frontend", "dist", "index.html");
 const frontendUrl = process.env.HIOP_DESKTOP_URL || `file://${fs.existsSync(packagedFrontend) ? packagedFrontend : devFrontend}`;
 let backendProcess;
+let mainWindow;
+
+// HIOP owns one private local API port. A second desktop process must bring
+// the existing window forward instead of attempting to launch another API.
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+  app.quit();
+}
 
 function runtimeScriptPath() {
   const packagedScript = path.join(resourcesRoot, "runtime", "start-local-backend.ps1");
@@ -72,12 +80,25 @@ function createWindow() {
 
   void win.loadURL(frontendUrl);
   if (isDev) win.webContents.openDevTools({ mode: "detach" });
+  mainWindow = win;
+  win.on("closed", () => {
+    if (mainWindow === win) mainWindow = undefined;
+  });
+  return win;
 }
 
-app.whenReady().then(() => {
-  startBackend();
-  createWindow();
-});
+if (hasSingleInstanceLock) {
+  app.on("second-instance", () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  });
+
+  app.whenReady().then(() => {
+    startBackend();
+    createWindow();
+  });
+}
 
 app.on("before-quit", () => {
   if (backendProcess && !backendProcess.killed) backendProcess.kill();

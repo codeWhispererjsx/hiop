@@ -140,6 +140,20 @@ Write-HIOPLog "Backend root: $backendRoot"
 Write-HIOPLog "Python runtime: $python"
 Write-HIOPLog "PostgreSQL runtime: $postgresRoot"
 
+# The desktop app may be reopened while its private service is already
+# running. Reusing that healthy service is correct; starting a second API on
+# the same port is not. This avoids a false "backend did not start" popup.
+try {
+  $existingHealth = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 3
+  if ($existingHealth.status -eq "healthy") {
+    Write-HIOPLog "A healthy HIOP Desktop backend is already running; reusing it."
+    exit 0
+  }
+}
+catch {
+  # No healthy local API is running yet, so continue with normal startup.
+}
+
 if (-not $env:APP_NAME) { $env:APP_NAME = "HIOP Desktop" }
 if (-not $env:APP_VERSION) { $env:APP_VERSION = "desktop-dev" }
 if (-not $env:DEBUG) { $env:DEBUG = "true" }
