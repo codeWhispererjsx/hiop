@@ -1,6 +1,6 @@
 {
   "name": "hiop-desktop",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "HIOP Windows desktop app for local hotel IT operations.",
   "main": "src/main.cjs",

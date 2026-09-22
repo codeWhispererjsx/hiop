@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
     if (!wsUrl?.startsWith('wss://')) throw new Error('Vercel requires a public secure WebSocket URL.')
   }
   return {
+    base: mode === 'desktop' ? './' : '/',
     plugins: [react()],
     server: {
       proxy: {
