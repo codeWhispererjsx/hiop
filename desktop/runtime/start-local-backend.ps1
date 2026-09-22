@@ -54,10 +54,13 @@ function Invoke-HIOPProcess([string]$FilePath, [string[]]$Arguments, [string]$Fa
 }
 
 function Start-HIOPPostgres {
-  if ($env:DATABASE_URL) {
-    Write-HIOPLog "Using externally supplied DATABASE_URL"
+  if ($env:HIOP_DESKTOP_DATABASE_URL) {
+    $env:DATABASE_URL = $env:HIOP_DESKTOP_DATABASE_URL
+    Write-HIOPLog "Using the HIOP Desktop database override"
     return
   }
+  # Do not inherit a developer or hosted database setting from Windows.
+  Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
   if (-not $postgresRoot) {
     throw "Bundled PostgreSQL runtime was not found. Rebuild the desktop app with npm --prefix desktop run build:postgres-runtime."
   }
