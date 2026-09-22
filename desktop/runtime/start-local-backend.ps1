@@ -33,7 +33,9 @@ if (-not $python) { $python = "py" }
 
 function Write-HIOPLog([string]$Message) {
   $line = "{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
-  Add-Content -Path $logFile -Value $line
+  # A running API process can temporarily retain the shared log. Logging must
+  # never prevent the launcher from discovering and reusing that API.
+  try { Add-Content -Path $logFile -Value $line -ErrorAction Stop } catch { }
 }
 
 function Invoke-HIOPProcess([string]$FilePath, [string[]]$Arguments, [string]$FailureMessage, [hashtable]$ExtraEnvironment = @{}) {
