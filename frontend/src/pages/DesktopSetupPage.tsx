@@ -31,13 +31,29 @@ export default function DesktopSetupPage() {
 
   useEffect(() => {
     let active = true;
-    void getDesktopStatus().then(result => {
-      if (!active) return;
-      setStatus(result);
-      if (!result.platform_owner_required && result.organization_required) setStep(2);
-      if (!result.platform_owner_required && !result.organization_required) navigate("/login", { replace: true });
-    }).catch(error => setError(error instanceof Error ? error.message : "Unable to read desktop setup status."));
-    return () => { active = false; };
+    let timer: number | undefined;
+    let attempts = 0;
+    const readStatus = async () => {
+      try {
+        const result = await getDesktopStatus();
+        if (!active) return;
+        setError("");
+        setStatus(result);
+        if (!result.platform_owner_required && result.organization_required) setStep(2);
+        if (!result.platform_owner_required && !result.organization_required) navigate("/login", { replace: true });
+      } catch (caught) {
+        if (!active) return;
+        attempts += 1;
+        if (attempts < 90) {
+          setError("Starting HIOP's private local service…");
+          timer = window.setTimeout(readStatus, 1500);
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : "Unable to start the local HIOP service.");
+      }
+    };
+    void readStatus();
+    return () => { active = false; if (timer) window.clearTimeout(timer); };
   }, [navigate]);
 
   const createPlatformOwner = async (event: FormEvent) => {

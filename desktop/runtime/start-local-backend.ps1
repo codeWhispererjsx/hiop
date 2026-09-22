@@ -98,7 +98,10 @@ function Start-HIOPPostgres {
         $postgresExe = Join-Path $bin "postgres.exe"
     $script:postgresProcess = Start-Process -FilePath $postgresExe -ArgumentList @("-D", "`"$postgresData`"", "-h", "127.0.0.1", "-p", "$postgresPort") -WindowStyle Hidden -PassThru -RedirectStandardOutput $serverLog -RedirectStandardError $serverErrorLog
     $readyAfterStart = $false
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    # A database that is recovering after an unexpected Windows shutdown can
+    # need longer than the normal startup time. Keep the setup screen waiting
+    # instead of giving up while PostgreSQL is still doing its safety checks.
+    for ($attempt = 0; $attempt -lt 240; $attempt++) {
       Start-Sleep -Milliseconds 500
       & $pgIsReady "-h" "127.0.0.1" "-p" "$postgresPort" "-U" $postgresUser *> $null
       if ($LASTEXITCODE -eq 0) { $readyAfterStart = $true; break }
