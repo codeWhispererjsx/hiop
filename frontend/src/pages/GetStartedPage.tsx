@@ -27,7 +27,7 @@ export default function GetStartedPage(){
           <div><p className="public-eyebrow">Desktop application</p><h2>Download HIOP Desktop</h2></div>
         </div>
         <p className="desktop-download-copy">Install HIOP on a Windows computer at the hotel or office. Your data and operational tools run locally on that computer.</p>
-        <div className="desktop-download-meta"><span>Windows 10 or later</span><span>Local database included</span><span>Version 0.1.0</span></div>
+        <div className="desktop-download-meta"><span>Windows 10 or later</span><span>Local database included</span><span>Version 0.1.1</span></div>
         <a className="public-button desktop-download-button" href={installerUrl}>Download for Windows <span aria-hidden="true">→</span></a>
         <p className="onboarding-note">Windows may ask for permission before installation. Choose a computer that stays available for monitoring and network discovery.</p>
         <div className="desktop-download-links"><Link to="/features">Explore features</Link><Link to="/pricing">View plans</Link></div>
