@@ -12,12 +12,6 @@ $pythonRuntimeTarget = Join-Path $resourcesRoot "python"
 $postgresRuntimeSource = Join-Path $desktopRoot "build-runtime\postgres"
 $postgresRuntimeTarget = Join-Path $resourcesRoot "postgres"
 
-$alreadyStaged = (Test-Path $frontendTarget) -and (Test-Path $backendTarget) -and (Test-Path $pythonRuntimeTarget) -and (Test-Path $postgresRuntimeTarget)
-if ($alreadyStaged) {
-  Write-Host "Reusing staged desktop runtime resources."
-  exit 0
-}
-
 if (-not (Test-Path $frontendSource)) {
   throw "Frontend desktop build not found. Run npm --prefix frontend run build:desktop first."
 }
@@ -61,10 +55,10 @@ function Copy-CleanDirectory($Source, $Destination) {
 }
 
 Copy-CleanDirectory $backendSource $backendTarget
-if ((Test-Path $pythonRuntimeSource) -and -not (Test-Path $pythonRuntimeTarget)) {
+if (Test-Path $pythonRuntimeSource) {
   Copy-CleanDirectory $pythonRuntimeSource $pythonRuntimeTarget
 }
-if ((Test-Path $postgresRuntimeSource) -and -not (Test-Path $postgresRuntimeTarget)) {
+if (Test-Path $postgresRuntimeSource) {
   Copy-CleanDirectory $postgresRuntimeSource $postgresRuntimeTarget
 }
 
