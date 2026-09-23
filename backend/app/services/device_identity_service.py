@@ -13,7 +13,7 @@ from app.services.audit_service import create_audit_log
 
 UNKNOWN = {"", "unknown", "unknown device", "other", "n/a", "not available"}
 VALID_TYPES = {
-    "Printer", "POS Terminal", "Desktop", "Laptop", "Server", "Switch", "Router",
+    "Printer", "POS Terminal", "Desktop", "Laptop", "Windows Computer", "Server", "Switch", "Router",
     "Firewall", "Access Point", "UPS", "Phone", "Other", "Unknown Device",
 }
 SOURCE_RANK = {"MANUAL": 100, "DISCOVERY": 90, "ACTIVE_DIRECTORY": 80, "RULE": 70, "INFERENCE": 40}

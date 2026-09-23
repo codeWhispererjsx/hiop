@@ -1435,6 +1435,23 @@ function DeviceTable({
             const approved = Boolean(device.inventory_device_id);
             const hostname =
               device.primary_hostname || device.fqdn || "Not yet discovered";
+            const displayName =
+              device.friendly_name ||
+              device.primary_hostname ||
+              device.fqdn ||
+              "Unidentified device";
+            const deviceType =
+              device.device_type &&
+              !["unknown", "unknown device"].includes(
+                device.device_type.toLowerCase(),
+              )
+                ? device.device_type
+                : device.classification &&
+                    !["unknown", "unknown device"].includes(
+                      device.classification.toLowerCase(),
+                    )
+                  ? device.classification
+                  : "Needs identification";
             return (
               <tr key={device.result_id}>
                 <td data-label="Select">
@@ -1447,9 +1464,11 @@ function DeviceTable({
                   />
                 </td>
                 <td data-label="Device">
-                  <strong>{device.friendly_name || "Unknown Device"}</strong>
+                  <strong>{displayName}</strong>
                   <small>
-                    {device.mac_address || "MAC not available"} ·{" "}
+                    {device.friendly_name
+                      ? device.primary_hostname || device.fqdn || "No technical hostname"
+                      : "Technical hostname"} ·{" "}
                     {device.confidence_level?.replaceAll("_", " ") || "low"}{" "}
                     confidence
                   </small>
@@ -1461,7 +1480,7 @@ function DeviceTable({
                   <code>{device.ip_address}</code>
                 </td>
                 <td data-label="Type">
-                  {device.device_type || device.classification || "Unknown"}
+                  {deviceType}
                 </td>
                 <td data-label="Department">
                   {device.department ? device.department : <span className="unknown-context">Unknown until reviewed</span>}

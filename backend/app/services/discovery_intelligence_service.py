@@ -12,13 +12,25 @@ WEIGHTS={"ping_response":15,"mac_address":15,"vendor_match":10,"hostname_match":
 # scoped IdentityRule records and are never global application defaults.
 DEPARTMENT_RULES={}
 SERVICE_PORTS={21:"FTP",22:"SSH/SFTP",53:"DNS",67:"DHCP",80:"HTTP",123:"NTP",135:"WMI",139:"NetBIOS",161:"SNMP",389:"LDAP",443:"HTTPS",445:"SMB",636:"LDAPS",1433:"SQL Server",1521:"Oracle",2375:"Docker",2376:"Docker TLS",3306:"MySQL",3389:"RDP",5432:"PostgreSQL",5985:"WinRM",5986:"WinRM TLS",6379:"Redis",6443:"Kubernetes API",9200:"Elasticsearch",27017:"MongoDB"}
-DEVICE_FAMILIES=("Server","Windows","Linux","VMware ESXi","Hyper-V","Docker Host","Kubernetes Node","Switch","Router","Firewall","Wireless Controller","Access Point","Printer","Scanner","UPS","IP Phone","VoIP Gateway","POS Terminal","PMS Server","IPTV System","Door Lock Controller","CCTV Camera","Biometric Device","IoT Device","Storage Array","Virtual Machine","Unknown Device")
+DEVICE_FAMILIES=("Server","Windows Computer","Windows","Linux","VMware ESXi","Hyper-V","Docker Host","Kubernetes Node","Switch","Router","Firewall","Wireless Controller","Access Point","Printer","Scanner","UPS","IP Phone","VoIP Gateway","POS Terminal","PMS Server","IPTV System","Door Lock Controller","CCTV Camera","Biometric Device","IoT Device","Storage Array","Virtual Machine","Unknown Device")
 
 def normalize_hostname(value):
     if not value:return None
     text=str(value).strip().rstrip(".").lower();return text[:255] if re.fullmatch(r"[a-z0-9][a-z0-9._-]*",text) else None
 def merge_hostnames(values):
     normalized=sorted({x for x in (normalize_hostname(v) for v in values) if x},key=lambda x:(x.count("."),len(x),x),reverse=True);return {"primary":normalized[0] if normalized else None,"aliases":normalized[1:]}
+def hostname_evidence(values):
+    """Promote confirmed DNS, NetBIOS, AD, and SNMP names into device identity."""
+    candidates=[]
+    for row in values or []:
+        if not isinstance(row,dict) or not row.get("verified"):
+            continue
+        if row.get("evidence_type") not in {"dns_resolution","hostname_match","ad_match","sys_name"}:
+            continue
+        value=normalize_hostname(row.get("value") or row.get("normalized_value"))
+        if value:
+            candidates.append(value)
+    return candidates
 def confidence(evidence_types):
     seen=set(evidence_types);parts=[{"evidence":key,"weight":weight} for key,weight in WEIGHTS.items() if key in seen];return {"score":min(100,sum(x["weight"] for x in parts)),"contributions":parts,"maximum":100}
 def interpret_hostname(hostname, type_rules=None, department_rules=None):
@@ -41,6 +53,7 @@ def identify(observation):
     rules=(("VMware ESXi",("esxi","vmware")),("Hyper-V",("hyper-v","hyperv")),("Kubernetes Node",("kubernetes","kubelet")),("Docker Host",("docker",)),("Domain Controller",("domain controller","active directory")),("Firewall",("fortigate","firewall","palo alto")),("Wireless AP",("access point","unifi","aruba ap")),("Core Switch",("core-sw","core switch")),("Distribution Switch",("distribution switch","dist-sw")),("Access Switch",("catalyst","access switch","switch")),("CCTV Camera",("hikvision","axis","camera")),("Door Controller",("door lock","door controller")),("POS Terminal",("pos terminal","pos-")),("Restaurant Printer",("epson","brother","printer")),("PMS Server",("property management system","pms server")),("Database Server",("postgres","mysql","sql server","oracle")),("Application Server",("application server","server","srv-")))
     classification=next((label for label,markers in rules if any(marker in text for marker in markers)),"Unknown Device")
     if classification=="Unknown Device" and 3389 in ports:classification="Windows Server"
+    if classification=="Unknown Device" and 445 in ports and ({135,139}&ports):classification="Windows Computer"
     if classification=="Unknown Device" and 22 in ports:classification="Linux Server"
     family="Unknown Device"
     for name in DEVICE_FAMILIES:
@@ -68,7 +81,7 @@ class DiscoveryIntelligenceService:
     def ingest(self,job,observation):
         ip=str(observation["ip_address"]);item=self.db.query(DiscoveryResult).filter_by(job_id=job.id,ip_address=ip).first()
         if not item:item=DiscoveryResult(job_id=job.id,property_id=job.property_id,ip_address=ip);self.db.add(item);self.db.flush()
-        names=merge_hostnames(observation.get("hostnames",[])+[observation.get("hostname")]);identified=identify(observation)
+        names=merge_hostnames(observation.get("hostnames",[])+[observation.get("hostname")]+hostname_evidence(observation.get("evidence",[])));identified=identify(observation)
         item.primary_hostname=names["primary"] or item.primary_hostname;item.fqdn=observation.get("fqdn") or item.fqdn;item.dns_status=observation.get("dns_status") or item.dns_status;item.mac_address=observation.get("mac_address") or item.mac_address;item.vendor=observation.get("vendor") or item.vendor;item.device_type=identified["device_family"] if identified["device_family"]!="Unknown Device" else item.device_type;item.classification=identified["classification"] if identified["classification"]!="Unknown Device" else item.classification;item.operating_system=observation.get("operating_system") or item.operating_system
         # Hotel naming conventions are tenant configuration, never global code.
         # Scoped rules are evaluated after evidence is persisted below.

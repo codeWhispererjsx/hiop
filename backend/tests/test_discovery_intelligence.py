@@ -1,5 +1,5 @@
 from app.models.discovery_intelligence import DiscoveryCredential,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryPolicy,DiscoveryResult,DiscoveryStage
-from app.services.discovery_intelligence_service import DEVICE_FAMILIES,PIPELINE,configuration_checksum,confidence,discovered_description,identify,interpret_hostname,merge_hostnames,review_status,services_from_ports
+from app.services.discovery_intelligence_service import DEVICE_FAMILIES,PIPELINE,configuration_checksum,confidence,discovered_description,hostname_evidence,identify,interpret_hostname,merge_hostnames,review_status,services_from_ports
 from app.api.v1.discovery_intelligence import normalize_network_input
 
 def test_quick_scan_network_shorthand_is_normalized_without_weakening_private_scope():
@@ -21,6 +21,10 @@ def test_discovered_description_preserves_manual_or_inventory_text():
 def test_hostname_merge_is_normalized_and_deterministic():assert merge_hostnames(["HOST01.","host01.example.com","bad host"])=={"primary":"host01.example.com","aliases":["host01"]}
 def test_service_and_device_fingerprints_are_deterministic():
     assert services_from_ports([443,22,443])==[{"port":22,"service":"SSH/SFTP"},{"port":443,"service":"HTTPS"}];assert identify({"vendor":"Hikvision","open_ports":[80]})["classification"]=="CCTV Camera";assert "Unknown Device" in DEVICE_FAMILIES
+def test_confirmed_hostname_evidence_and_windows_services_are_promoted():
+    assert hostname_evidence([{"evidence_type":"dns_resolution","value":"HELOSHALTHR1408","verified":True}])==["heloshalthr1408"]
+    identified=identify({"open_ports":[135,139,445]})
+    assert identified["device_family"]=="Windows Computer" and identified["classification"]=="Windows Computer"
 def test_review_thresholds_and_checksum():assert [review_status(x) for x in (0,40,80)]==["needs_review","partially_identified","automatically_identified"] and configuration_checksum({"b":2,"a":1})==configuration_checksum({"a":1,"b":2})
 def test_enterprise_discovery_schema_is_auditable_and_secret_safe():
     assert [x.__tablename__ for x in (DiscoveryPolicy,DiscoveryCredential,DiscoveryJob,DiscoveryStage,DiscoveryResult,DiscoveryEvidence,DiscoveryFingerprint)]==["enterprise_discovery_policies","enterprise_discovery_credentials","enterprise_discovery_jobs","enterprise_discovery_stages","enterprise_discovery_results","enterprise_discovery_evidence","enterprise_discovery_fingerprints"]
