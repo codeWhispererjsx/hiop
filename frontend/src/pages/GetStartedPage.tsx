@@ -1,7 +1,7 @@
 import {Link, useSearchParams} from "react-router-dom";
 import {PublicLayout} from "../components/PublicLayout";
 
-const installerUrl="https://github.com/codeWhispererjsx/hiop/releases/download/v0.1.4/HIOP-Desktop-0.1.4-x64.exe";
+const installerUrl="https://github.com/codeWhispererjsx/hiop/releases/download/v0.1.7/HIOP-Desktop-0.1.7-x64.exe";
 
 export default function GetStartedPage(){
   const [params]=useSearchParams();
@@ -35,3 +35,4 @@ export default function GetStartedPage(){
     </section>
   </PublicLayout>;
 }
+
