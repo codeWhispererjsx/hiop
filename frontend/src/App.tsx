@@ -47,6 +47,7 @@ const SNMPPage = lazy(() => import("./pages/SNMPPage"));
 const LocalAgentsPage = lazy(() => import("./pages/LocalAgentsPage"));
 const AccountAccessPage = lazy(() => import("./pages/AccountAccessPage"));
 const DesktopSetupPage = lazy(() => import("./pages/DesktopSetupPage"));
+const DesktopLaunchPage = lazy(() => import("./pages/DesktopLaunchPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -88,7 +89,8 @@ export default function App() {
   const roleProtectedPage = (page: ReactNode, roles: User["role"][]) =>
     <Protected><RoleProtected roles={roles}>{page}</RoleProtected></Protected>;
   return <Suspense fallback={<Feedback loading />}><ScrollToRouteTop /><Routes>
-    <Route path="/" element={isDesktopMode ? <Navigate to={hasUsableToken() ? "/dashboard" : "/desktop-setup"} replace /> : <PublicHomePage />} />
+    <Route path="/" element={isDesktopMode ? <Navigate to={hasUsableToken() ? "/dashboard" : "/desktop-launch"} replace /> : <PublicHomePage />} />
+    {isDesktopMode && <Route path="/desktop-launch" element={<DesktopLaunchPage />} />}
     {isDesktopMode && <Route path="/desktop-setup" element={<DesktopSetupPage />} />}
     {!isDesktopMode && <Route path="/features" element={<FeaturesPage />} />}
     {!isDesktopMode && <Route path="/pricing" element={<PricingPage />} />}
