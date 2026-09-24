@@ -33,7 +33,11 @@ Copy-Item -Path (Join-Path $frontendSource "*") -Destination $frontendTarget -Re
 
 $excludedDirectories = @(
   ".git", ".pytest_cache", "__pycache__", ".mypy_cache", ".ruff_cache", "htmlcov",
-  ".venv", "venv", ".verify-venv", "node_modules", "dist", "build", "release", "tests", "backups", "pgAdmin 4", "StackBuilder", "doc"
+  ".venv", "venv", ".verify-venv", "node_modules", "dist", "build", "release", "tests", "backups", "pgAdmin 4", "StackBuilder", "doc",
+  # The database is created in %LOCALAPPDATA% on first launch. Shipping the
+  # installer-owned PostgreSQL data directory would make every installation
+  # share test data and needlessly inflate the installer.
+  "data", "installer", "include", "scripts"
 )
 $excludedFilePatterns = @("*.pyc", "*.pyo", "*.sqlite", "*.db", "*.log", ".env", ".env.*", "stackbuilder.exe")
 
