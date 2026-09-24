@@ -37,7 +37,7 @@ $excludedDirectories = @(
   # The database is created in %LOCALAPPDATA% on first launch. Shipping the
   # installer-owned PostgreSQL data directory would make every installation
   # share test data and needlessly inflate the installer.
-  "data", "installer", "include", "scripts"
+  "data", "installer", "include"
 )
 $excludedFilePatterns = @("*.pyc", "*.pyo", "*.sqlite", "*.db", "*.log", ".env", ".env.*", "stackbuilder.exe")
 
