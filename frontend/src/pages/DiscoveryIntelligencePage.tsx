@@ -1340,13 +1340,18 @@ function Metric({
 function identityBucket(
   device: ConsolidatedDiscoveryDevice,
 ): "identified" | "review" | "unknown" {
+  const hasTechnicalEvidence = Boolean(
+    usableDiscoveryValue(device.primary_hostname || device.fqdn) ||
+      usableDiscoveryValue(device.device_type) ||
+      usableDiscoveryValue(device.classification),
+  );
   if (
     device.conflict_status === "open" ||
     (device.confidence_score >= 40 && device.confidence_score < 80)
   )
     return "review";
   if (
-    device.confidence_score < 40 ||
+    (device.confidence_score < 40 && !hasTechnicalEvidence) ||
     (!device.friendly_name &&
       (device.device_type || device.classification || "")
         .toLowerCase()
@@ -1356,16 +1361,15 @@ function identityBucket(
   return "identified";
 }
 
+function usableDiscoveryValue(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized && !["unknown", "unknown device", "not yet discovered", "not available", "n/a"].includes(normalized.toLowerCase())
+    ? normalized
+    : null;
+}
+
 function hasDiscoveredHostname(device: ConsolidatedDiscoveryDevice): boolean {
-  const hostname = (device.primary_hostname || device.fqdn || "")
-    .trim()
-    .toLowerCase();
-  return Boolean(
-    hostname &&
-    hostname !== "not yet discovered" &&
-    hostname !== "unknown" &&
-    hostname !== "unknown device",
-  );
+  return Boolean(usableDiscoveryValue(device.primary_hostname || device.fqdn));
 }
 
 function discoveryClearKey(): string {
@@ -1434,24 +1438,15 @@ function DeviceTable({
             const bucket = identityBucket(device);
             const approved = Boolean(device.inventory_device_id);
             const hostname =
-              device.primary_hostname || device.fqdn || "Not yet discovered";
+              usableDiscoveryValue(device.primary_hostname || device.fqdn) || "No hostname observed";
             const displayName =
               device.friendly_name ||
-              device.primary_hostname ||
-              device.fqdn ||
+              usableDiscoveryValue(device.primary_hostname || device.fqdn) ||
               "Unidentified device";
             const deviceType =
-              device.device_type &&
-              !["unknown", "unknown device"].includes(
-                device.device_type.toLowerCase(),
-              )
-                ? device.device_type
-                : device.classification &&
-                    !["unknown", "unknown device"].includes(
-                      device.classification.toLowerCase(),
-                    )
-                  ? device.classification
-                  : "Needs identification";
+              usableDiscoveryValue(device.device_type) ||
+              usableDiscoveryValue(device.classification) ||
+              "Type not determined";
             return (
               <tr key={device.result_id}>
                 <td data-label="Select">

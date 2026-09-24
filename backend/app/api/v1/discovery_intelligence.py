@@ -115,6 +115,11 @@ def scoped_result(db,id,organization_id,property_id=None):
     if not row:raise HTTPException(404,"Result not found")
     return row
 def credential_view(row):return {"id":row.id,"policy_id":row.policy_id,"name":row.name,"credential_type":row.credential_type,"username":row.username,"scope_cidr":row.scope_cidr,"least_privilege_notes":row.least_privilege_notes,"enabled":row.enabled,"last_used_at":row.last_used_at,"created_at":row.created_at,"secret_configured":True}
+def usable_discovery_value(value):
+    if value is None:
+        return None
+    text=str(value).strip().casefold()
+    return None if text in {"", "unknown", "unknown device", "not yet discovered", "not available", "n/a"} else value
 def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
     scoped=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(Property.organization_id==organization_id)
     if property_id is not None:scoped=scoped.filter(DiscoveryResult.property_id==property_id)
@@ -142,20 +147,22 @@ def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
         else:
             current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)
             current["inventory_device_id"]=current["inventory_device_id"] or approved_by_result.get(row.id)
-            for field in ("primary_hostname","fqdn","friendly_name","department","suggested_department","device_number","description","description_source","location","mac_address","vendor","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ad_computer_name","ad_domain","ad_organizational_unit","ad_operating_system","ad_last_enriched_at","ci_id"):
-                if not current[field] and getattr(row,field):current[field]=getattr(row,field)
+            for field in ("primary_hostname","fqdn","friendly_name","department","suggested_department","device_number","description","description_source","location","mac_address","vendor","device_type","classification","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ad_computer_name","ad_domain","ad_organizational_unit","ad_operating_system","ad_last_enriched_at","ci_id"):
+                value=usable_discovery_value(getattr(row,field))
+                if (not current[field] or current[field] in {"Unknown Device", "Not yet discovered"}) and value:current[field]=value
         if len(mac)==12:mac_index[mac]=key
         if name:name_index[name]=key
         ip_index[row.ip_address]=key
     # A higher-confidence canonical row may be encountered before a newer
     # observation. Merge missing attributes from every linked observation so
     # verified technical identity is not hidden by an older empty canonical row.
-    merge_fields=("primary_hostname","fqdn","friendly_name","department","suggested_department","device_number","description","description_source","location","mac_address","vendor","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ad_computer_name","ad_domain","ad_organizational_unit","ad_operating_system","ad_last_enriched_at","ci_id")
+    merge_fields=("primary_hostname","fqdn","friendly_name","department","suggested_department","device_number","description","description_source","location","mac_address","vendor","device_type","classification","operating_system","model","serial_number","firmware","uptime_seconds","interface_count","last_enriched_at","ad_computer_name","ad_domain","ad_organizational_unit","ad_operating_system","ad_last_enriched_at","ci_id")
     for row in rows:
         current=devices.get(row_keys.get(row.id))
         if not current:continue
         for field in merge_fields:
-            if not current[field] and getattr(row,field):current[field]=getattr(row,field)
+            value=usable_discovery_value(getattr(row,field))
+            if (not current[field] or current[field] in {"Unknown Device", "Not yet discovered"}) and value:current[field]=value
     return sorted(devices.values(),key=lambda x:x["last_seen_at"],reverse=True)[:limit]
 def execute_safe_job(db,job,user):
     policy=get(db,DiscoveryPolicy,job.policy_id,"Policy");job.status="running";job.current_stage="host_discovery";job.started_at=datetime.now(timezone.utc);db.commit()
