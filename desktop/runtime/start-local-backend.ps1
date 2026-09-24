@@ -55,6 +55,20 @@ function Invoke-HIOPProcess([string]$FilePath, [string[]]$Arguments, [string]$Fa
   }
 }
 
+function Invoke-HIOPCommandWithLog([string]$CommandLine, [string]$FailureMessage) {
+  cmd /c $CommandLine
+  if ($LASTEXITCODE -ne 0) { throw "$FailureMessage Exit code: $LASTEXITCODE. Check $logFile" }
+}
+
+function Test-HIOPPortInUse([int]$LocalPort) {
+  try {
+    return $null -ne (Get-NetTCPConnection -LocalPort $LocalPort -State Listen -ErrorAction Stop | Select-Object -First 1)
+  }
+  catch {
+    return $false
+  }
+}
+
 function Start-HIOPPostgres {
   if ($env:HIOP_DESKTOP_DATABASE_URL) {
     $env:DATABASE_URL = $env:HIOP_DESKTOP_DATABASE_URL
@@ -97,7 +111,7 @@ function Start-HIOPPostgres {
 
   if (-not $ready) {
     Write-HIOPLog "Starting bundled PostgreSQL on 127.0.0.1:$postgresPort"
-        $postgresExe = Join-Path $bin "postgres.exe"
+    $postgresExe = Join-Path $bin "postgres.exe"
     $script:postgresProcess = Start-Process -FilePath $postgresExe -ArgumentList @("-D", "`"$postgresData`"", "-h", "127.0.0.1", "-p", "$postgresPort") -WindowStyle Hidden -PassThru -RedirectStandardOutput $serverLog -RedirectStandardError $serverErrorLog
     $readyAfterStart = $false
     # A database that is recovering after an unexpected Windows shutdown can
@@ -109,7 +123,22 @@ function Start-HIOPPostgres {
       if ($LASTEXITCODE -eq 0) { $readyAfterStart = $true; break }
       if ($script:postgresProcess.HasExited) { break }
     }
-    if (-not $readyAfterStart) { throw "PostgreSQL failed to become ready. Check $serverLog" }
+    if (-not $readyAfterStart) {
+      $startupErrorText = if (Test-Path $serverErrorLog) { Get-Content -Path $serverErrorLog -Raw -ErrorAction SilentlyContinue } else { "" }
+      if ($startupErrorText -match "invalid checkpoint record|could not locate a valid checkpoint record|PANIC:.*checkpoint|database system was interrupted") {
+        if (-not $script:postgresRecoveryAttempted) {
+          $script:postgresRecoveryAttempted = $true
+          Write-HIOPLog "Detected a corrupted PostgreSQL data directory; resetting local database state and recreating it."
+          if ($script:postgresProcess -and -not $script:postgresProcess.HasExited) {
+            Stop-Process -Id $script:postgresProcess.Id -Force -ErrorAction SilentlyContinue
+            $script:postgresProcess.WaitForExit(5000)
+          }
+          if (Test-Path $postgresData) { Remove-Item -Recurse -Force $postgresData }
+          return Start-HIOPPostgres
+        }
+      }
+      throw "PostgreSQL failed to become ready. Check $serverLog"
+    }
     $script:postgresStartedByHIOP = $true
   }
   else {
@@ -156,6 +185,11 @@ catch {
   # No healthy local API is running yet, so continue with normal startup.
 }
 
+if (Test-HIOPPortInUse $Port) {
+  Write-HIOPLog "ERROR: Port $Port is already in use by an unhealthy process. Stop the stale HIOP backend and retry."
+  throw "Port $Port is already in use by an unhealthy process. Stop the stale HIOP backend and retry."
+}
+
 if (-not $env:APP_NAME) { $env:APP_NAME = "HIOP Desktop" }
 if (-not $env:APP_VERSION) { $env:APP_VERSION = "desktop-dev" }
 if (-not $env:DEBUG) { $env:DEBUG = "true" }
@@ -183,20 +217,12 @@ try {
   # strict PowerShell error policy, PowerShell can mistake those messages for
   # a failed command even when Alembic returns success. Keep the native
   # command output in the log and decide success solely from its exit code.
-  $previousErrorActionPreference = $ErrorActionPreference
-  $ErrorActionPreference = "Continue"
-  & $python -m alembic upgrade head *>> $logFile
-  $migrationExitCode = $LASTEXITCODE
-  $ErrorActionPreference = $previousErrorActionPreference
-  if ($migrationExitCode -ne 0) { throw "Database migration failed. Check $logFile" }
+  $migrationCommand = '"' + $python + '" -m alembic upgrade head >> "' + $logFile + '" 2>&1'
+  Invoke-HIOPCommandWithLog $migrationCommand "Database migration failed."
 
   Write-HIOPLog "Launching API process"
-  $previousErrorActionPreference = $ErrorActionPreference
-  $ErrorActionPreference = "Continue"
-  & $python -m uvicorn app.main:app --host 127.0.0.1 --port $Port *>> $logFile
-  $apiExitCode = $LASTEXITCODE
-  $ErrorActionPreference = $previousErrorActionPreference
-  if ($apiExitCode -ne 0) { throw "API process exited with code $apiExitCode. Check $logFile" }
+  $apiCommand = '"' + $python + '" -m uvicorn app.main:app --host 127.0.0.1 --port ' + $Port + ' >> "' + $logFile + '" 2>&1'
+  Invoke-HIOPCommandWithLog $apiCommand "API process exited with code $LASTEXITCODE."
 }
 catch {
   Write-HIOPLog "ERROR: $($_.Exception.Message)"
