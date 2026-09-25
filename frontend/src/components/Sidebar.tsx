@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import { NavLink } from "react-router-dom";
 import { Icon, type IconName } from "./Icon";
 import BrandLogo from "./BrandLogo";
+import { isDesktopMode } from "../lib/appMode";
 
 const primaryLinks: { label: string; to: string; icon: IconName; adminOnly?: boolean }[] = [
   { label: "Overview", to: "/dashboard", icon: "dashboard" },
@@ -33,8 +34,8 @@ const administrationLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Users", to: "/users", icon: "users" },
   { label: "Roles & access", to: "/administration/roles", icon: "lock" },
   { label: "Audit log", to: "/administration/audit", icon: "audit" },
-  { label: "Billing", to: "/administration/billing", icon: "devices" },
-  { label: "Local Agents", to: "/administration/agents", icon: "network" },
+  ...(!isDesktopMode ? [{ label: "Billing", to: "/administration/billing", icon: "devices" as IconName }] : []),
+  { label: isDesktopMode ? "This Computer" : "Local Agents", to: "/administration/agents", icon: "network" },
   { label: "Settings", to: "/settings", icon: "server" },
 ];
 

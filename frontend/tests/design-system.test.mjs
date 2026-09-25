@@ -80,7 +80,7 @@ test("final product polish keeps shared states, context, and platform authority 
   assert.match(status, /aria-label={`Status:/);
   assert.match(pageTitle, /<header className="page-title">/);
   assert.match(platform, /platform-context-banner/);
-  assert.match(platform, /PLATFORM ADMINISTRATION/);
+  assert.match(platform, /HIOP OWNER ADMINISTRATION/);
 });
 
 test("theme switching remains instant, system-aware, and persisted", () => {

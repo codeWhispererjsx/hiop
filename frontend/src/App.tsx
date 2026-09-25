@@ -45,6 +45,7 @@ const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
 const BillingPage = lazy(() => import("./pages/BillingPage"));
 const SNMPPage = lazy(() => import("./pages/SNMPPage"));
 const LocalAgentsPage = lazy(() => import("./pages/LocalAgentsPage"));
+const ThisComputerPage = lazy(() => import("./pages/ThisComputerPage"));
 const AccountAccessPage = lazy(() => import("./pages/AccountAccessPage"));
 const DesktopSetupPage = lazy(() => import("./pages/DesktopSetupPage"));
 const DesktopLaunchPage = lazy(() => import("./pages/DesktopLaunchPage"));
@@ -149,8 +150,8 @@ export default function App() {
     <Route path="/administration/integrations" element={roleProtectedPage(<IntegrationsPage />, ["admin"])} />
     <Route path="/administration/organization" element={roleProtectedPage(<OrganizationStructurePage />, ["admin"])} />
     <Route path="/administration/properties" element={roleProtectedPage(<PropertiesPage />, ["admin"])} />
-    <Route path="/administration/billing" element={roleProtectedPage(<BillingPage />, ["admin"])} />
-    <Route path="/administration/agents" element={roleProtectedPage(<LocalAgentsPage />, ["admin"])} />
+    {!isDesktopMode && <Route path="/administration/billing" element={roleProtectedPage(<BillingPage />, ["admin"])} />}
+    <Route path="/administration/agents" element={roleProtectedPage(isDesktopMode ? <ThisComputerPage /> : <LocalAgentsPage />, ["admin"])} />
     <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></Suspense>;
