@@ -41,7 +41,7 @@ class Organization(Base):
     type: Mapped[str] = mapped_column(String(40), default="hospitality_group", server_default="hospitality_group", nullable=False)
     country: Mapped[str | None] = mapped_column(String(120))
     timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC", nullable=False)
-    logo: Mapped[str | None] = mapped_column(String(500))
+    logo: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active", server_default="active", nullable=False)
     billing_exempt: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     access_override: Mapped[str] = mapped_column(String(20), default="subscription", server_default="subscription", nullable=False)

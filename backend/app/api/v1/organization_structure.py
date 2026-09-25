@@ -39,6 +39,14 @@ class OrganizationPatch(BaseModel):
         return value
     address: str | None = Field(None, max_length=500)
     description: str | None = Field(None, max_length=4000)
+    logo: str | None = Field(None, max_length=700_000)
+
+    @field_validator("logo")
+    @classmethod
+    def valid_logo(cls, value):
+        if value is not None and not value.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,", "data:image/svg+xml;base64,")):
+            raise ValueError("Logo must be a PNG, JPEG, WebP, or SVG image")
+        return value
 
 
 class DepartmentWrite(BaseModel):
@@ -93,7 +101,7 @@ def _location(db, kind, row_id, organization_id):
 
 
 def _org_view(row):
-    return {key: getattr(row, key) for key in ("id", "name", "code", "status", "contact_email", "contact_phone", "timezone", "address", "description", "updated_at")}
+    return {key: getattr(row, key) for key in ("id", "name", "code", "status", "contact_email", "contact_phone", "timezone", "address", "description", "logo", "updated_at")}
 
 
 @router.get("/organization")

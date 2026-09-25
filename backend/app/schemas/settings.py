@@ -158,6 +158,7 @@ class PublicSettings(BaseModel):
     property_name: str
     organization_name: str
     support_email: str | None
+    logo: str | None = None
 
 
 class SystemHealth(BaseModel):

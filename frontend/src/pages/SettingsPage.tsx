@@ -186,7 +186,7 @@ export default function SettingsPage() {
               copy="Choose time and display preferences for your organisation."
             >
               <div className="settings-form-grid">
-                <div><span>Application</span><p><strong>HIOP</strong></p><small>Platform branding is managed by HIOP.</small></div>
+                <div><span>Application</span><p><strong>HIOP</strong></p><small>Application name, version, and core identity are platform-owned and read-only.</small></div>
                 <Field
                   label="Time zone"
                   value={g.timezone}
@@ -826,7 +826,7 @@ export default function SettingsPage() {
               title="Application information"
               copy="Non-sensitive metadata reported by the running deployment."
             >
-              <p><strong>HIOP</strong> helps your team manage devices, network monitoring, and IT operations across your organisation.</p>
+              <p><strong>HIOP</strong> helps your team manage devices, network monitoring, and IT operations across your organisation.</p><p className="settings-note">Application identity, version, and vendor metadata are read-only. Customer logo and organization details are managed under Administration → Organization.</p>
               <div className="module-list">
                 <strong>Product pillars</strong>
                 <span>Overview</span>

@@ -50,11 +50,15 @@ export default function Sidebar({
   onClose,
   role,
   live,
+  logo,
+  organizationName,
 }: {
   open: boolean;
   onClose: () => void;
   role?: string;
   live: boolean;
+  logo?: string | null;
+  organizationName?: string;
 }) {
   const navRef = useRef<HTMLElement>(null);
   
@@ -106,7 +110,7 @@ export default function Sidebar({
       aria-label="Main navigation"
     >
       <div className="sidebar-brand">
-        <BrandLogo compact />
+        <BrandLogo compact logo={logo} organizationName={organizationName} />
         <button
           className="icon-button sidebar-close"
           onClick={onClose}

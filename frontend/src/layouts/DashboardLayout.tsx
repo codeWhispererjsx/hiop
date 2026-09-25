@@ -115,7 +115,7 @@ export default function DashboardLayout({
   };
   return (
     <div className="app-shell">
-      <Sidebar open={open} onClose={() => setOpen(false)} role={user?.role} live={live} />
+      <Sidebar open={open} onClose={() => setOpen(false)} role={user?.role} live={live} logo={branding?.logo} organizationName={branding?.organization_name} />
       {open && (
         <button
           className="sidebar-scrim"

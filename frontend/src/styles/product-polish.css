@@ -51,6 +51,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .operations-guide span { color: var(--color-primary); font-size: var(--font-size-xs); font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
 .operations-guide strong { margin: .3rem 0; color: var(--text); font-size: var(--font-size-md); }
 .operations-guide p { margin: 0; color: var(--text-muted); font-size: var(--font-size-xs); line-height: 1.5; }
+.branding-upload img { width: 220px; height: 88px; object-fit: contain; padding: .75rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-soft); }
+.branding-upload input[type="file"] { min-height: auto; padding: .55rem; }
 .report-guide { margin-bottom: var(--space-5); }
 .admin-guide { margin-bottom: var(--space-5); }
 input:not([type="checkbox"]):not([type="radio"]), select, textarea { min-height: var(--control-height); padding: .625rem .75rem; }

@@ -51,7 +51,7 @@ def public_settings(db: Session = Depends(get_db), _: User = Depends(get_current
     result=settings_service.read_public(db)
     organization=db.get(Organization,_.organization_id) if _.organization_id else None
     if organization:
-        result.update(timezone=organization.timezone,organization_name=organization.name)
+        result.update(timezone=organization.timezone,organization_name=organization.name,logo=organization.logo)
     return result
 
 
