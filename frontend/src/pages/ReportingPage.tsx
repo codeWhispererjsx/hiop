@@ -52,6 +52,8 @@ export default function ReportingPage() {
   const [vendorId, setVendorId] = useState("");
   const [deviceType, setDeviceType] = useState("");
   const [status, setStatus] = useState("");
+  const reportFilterCount = [period !== "30d" ? period : "", start, end, departmentId, locationId, serviceId, vendorId, deviceType, status].filter(Boolean).length;
+  const clearReportFilters = () => { setPeriod("30d"); setStart(""); setEnd(""); setDepartmentId(""); setLocationId(""); setServiceId(""); setVendorId(""); setDeviceType(""); setStatus(""); };
 
   const filters = {
     period,
@@ -125,6 +127,7 @@ export default function ReportingPage() {
           </button>
         ))}
       </nav>
+      <section className="operations-guide report-guide" aria-label="Reporting guide"><div><span>Choose</span><strong>{title(report)} report</strong><p>Select the question you need answered from the report types above.</p></div><div><span>Filter</span><strong>Keep scope explicit</strong><p>Use a time period and optional organization fields to narrow the evidence.</p></div><div><span>Act</span><strong>Drill down or export</strong><p>Open underlying records from linked metrics or export the current view as CSV.</p></div></section>
       <section className="toolbar-panel" aria-label="Report filters">
         <div className="filter-row">
           <label htmlFor="report-period">
@@ -217,7 +220,9 @@ export default function ReportingPage() {
               placeholder="Optional"
             />
           </label>
+          {reportFilterCount > 0 && <button className="filter-reset" type="button" onClick={clearReportFilters}>Reset filters <span>{reportFilterCount}</span></button>}
         </div>
+        <p className="toolbar-summary">Report scope: <strong>{title(report)}</strong> · {periods.find((item) => item.id === period)?.label}</p>
       </section>
       {data.loading || data.error || !data.data ? (
         <Feedback loading={data.loading} error={data.error} />

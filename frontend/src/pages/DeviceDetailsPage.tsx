@@ -122,6 +122,18 @@ export default function DeviceDetailsPage() {
       ) : (
         <>
           {isRetired && <div className="retired-banner"><StatusBadge status="Retired" /><span>This asset is retired. Its details and operational history remain available.</span></div>}
+          <section className="identity-summary" aria-label="Device identity summary">
+            <header>
+              <div><span className="section-kicker">At a glance</span><h2>{device.hostname || "Device identity needs review"}</h2><p>Use this summary to decide what needs attention before opening the detailed evidence below.</p></div>
+              <StatusBadge status={device.network_status || "unknown"} />
+            </header>
+            <div className="identity-summary-grid">
+              <div><span>Technical identity</span><strong>{device.hostname || "Not recorded"}</strong><small>{device.ip_address || "IP address not recorded"}</small></div>
+              <div><span>Device type</span><strong>{device.device_type || "Not classified"}</strong><small>{device.brand || "Manufacturer not recorded"}{device.model ? ` · ${device.model}` : ""}</small></div>
+              <div><span>Operational state</span><strong>{device.inventory_status || "Not recorded"}</strong><small>{device.network_status || "Network status not recorded"}</small></div>
+              <div><span>Ownership & location</span><strong>{device.department || "Department not assigned"}</strong><small>{device.location || "Location not assigned"}</small></div>
+            </div>
+          </section>
           {asset&&<section className="panel"><header className="section-head"><div><span>Managed asset</span><h2>{asset.asset_number}</h2><p>{asset.asset_tag||"No human-readable asset tag assigned"} · {asset.ci_category}</p></div>{currentUser.data?.role==="admin"&&<Link className="secondary-action" to={`/assets/${asset.id}/edit`}>Edit asset metadata</Link>}</header><dl className="settings-readonly"><div><dt>Lifecycle status</dt><dd>{asset.status.replace("_"," ")}</dd></div><div><dt>Business owner</dt><dd>{asset.business_owner||"Unknown"}</dd></div><div><dt>Technical owner</dt><dd>{asset.technical_owner||"Unknown"}</dd></div><div><dt>Metadata source</dt><dd>{asset.source}</dd></div></dl></section>}
           <nav className="detail-tabs" aria-label="Device detail sections">
             {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}

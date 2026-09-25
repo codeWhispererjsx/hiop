@@ -38,6 +38,10 @@ const administrationLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Settings", to: "/settings", icon: "server" },
 ];
 
+const platformLinks: { label: string; to: string; icon: IconName }[] = [
+  { label: "Platform control", to: "/platform", icon: "dashboard" },
+];
+
 const SIDEBAR_SCROLL_KEY = "hiop.sidebar.scroll";
 let lastSidebarScroll = 0;
 
@@ -93,6 +97,7 @@ export default function Sidebar({
   };
   
   const isAdmin = role === "admin";
+  const isPlatformAdmin = role === "platformadmin";
   const visiblePrimary = primaryLinks.filter((link) => !link.adminOnly || isAdmin);
   
   return (
@@ -153,6 +158,22 @@ export default function Sidebar({
           <>
             <p className="nav-label nav-label-spaced">Administration tools</p>
             {administrationLinks.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                onClick={handleNavigation}
+                className={({ isActive }) => `nav-link nav-sublink ${isActive ? "active" : ""}`}
+              >
+                <Icon name={link.icon} aria-hidden="true" />
+                <span>{link.label}</span>
+              </NavLink>
+            ))}
+          </>
+        )}
+        {isPlatformAdmin && (
+          <>
+            <p className="nav-label nav-label-spaced">Platform administration</p>
+            {platformLinks.map((link) => (
               <NavLink
                 key={link.to}
                 to={link.to}

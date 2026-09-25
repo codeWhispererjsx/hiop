@@ -42,7 +42,8 @@ export default function DashboardLayout({
       cancelAnimationFrame(frame);
       clearTimeout(timer);
     };
-  }, [location.pathname]);
+    if (location.hash) return;
+  }, [location.pathname, location.hash]);
   useEffect(() => {
     const refreshContext = () => {
       void endpoints

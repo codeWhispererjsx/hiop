@@ -32,6 +32,8 @@
   --surface: #ffffff;
   --surface-soft: #f1f5f9;
   --surface-subtle: #e2e8f0;
+  --surface-muted: #eef2f7;
+  --surface-strong: #e2e8f0;
   --surface-raised: #ffffff;
   --sidebar-bg: #ffffff;
   --sidebar-hover: #f1f5f9;
@@ -39,12 +41,17 @@
   --border-strong: #cbd5e1;
   --text: #111827;
   --text-muted: #6b7280;
+  --text-subtle: #64748b;
   --text-disabled: #9ca3af;
   --text-inverse: #f8fafc;
   --input-bg: #ffffff;
+  --input-background: var(--input-bg);
+  --border-subtle: #eef2f7;
+  --color-border: var(--border);
   --overlay: rgb(15 23 42 / 62%);
 
   --primary-soft: rgb(37 99 235 / 10%);
+  --color-primary-soft: var(--primary-soft);
   --primary-soft-strong: rgb(37 99 235 / 18%);
   --success-soft: rgb(34 197 94 / 11%);
   --warning-soft: rgb(245 158 11 / 12%);
@@ -123,6 +130,8 @@
   --surface: #111827;
   --surface-soft: #172033;
   --surface-subtle: #1e293b;
+  --surface-muted: #141d2d;
+  --surface-strong: #263348;
   --surface-raised: #162033;
   --sidebar-bg: #020617;
   --sidebar-hover: #111827;
@@ -130,9 +139,13 @@
   --border-strong: #334155;
   --text: #f8fafc;
   --text-muted: #a8b3c5;
+  --text-subtle: #94a3b8;
   --text-disabled: #64748b;
   --text-inverse: #f8fafc;
   --input-bg: #0f172a;
+  --input-background: var(--input-bg);
+  --border-subtle: #1e293b;
+  --color-border: var(--border);
   --status-success-text: #4ade80;
   --status-warning-text: #fbbf24;
   --status-danger-text: #f87171;
@@ -142,6 +155,7 @@
   --overlay: rgb(2 6 23 / 78%);
   --surface-translucent: rgb(11 18 32 / 88%);
   --surface-hover: rgb(59 130 246 / 9%);
+  --color-primary-soft: var(--primary-soft);
   --grid-line: rgb(148 163 184 / 13%);
   --shadow-xs: 0 1px 2px rgb(0 0 0 / 20%);
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 22%);

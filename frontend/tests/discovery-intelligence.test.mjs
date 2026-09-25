@@ -78,8 +78,8 @@ test("production acceptance keeps confidence bands and device roles consistent",
 });
 
 test("friendly identity never hides the technical hostname", () => {
-  assert.match(page, /device\.friendly_name\s*\|\|\s*"Unknown Device"/);
-  assert.match(page, /device\.primary_hostname\s*\|\|\s*device\.fqdn\s*\|\|\s*"Not yet discovered"/);
+  assert.match(page, /usableDiscoveryValue\(device\.primary_hostname\s*\|\|\s*device\.fqdn\)/);
+  assert.match(page, /No hostname observed/);
   assert.match(page, /<th>Device<\/th>[\s\S]*<th>Hostname<\/th>/);
   assert.match(page, /device\.friendly_name,[\s\S]*device\.primary_hostname,[\s\S]*device\.ip_address,[\s\S]*device\.mac_address/);
   const example = { friendly_name: "Front Office Printer 1", primary_hostname: "heloshadtsc1821" };
@@ -99,7 +99,7 @@ test("bulk approval is explicit, confirmed, and uses the scoped API", () => {
 test("bulk selection can target only devices with discovered hostnames", () => {
   assert.match(page, /Select with hostname/);
   assert.match(page, /hasDiscoveredHostname\(item\)/);
-  assert.match(page, /hostname !== "not yet discovered"/);
+  assert.match(page, /usableDiscoveryValue\(device\.primary_hostname\s*\|\|\s*device\.fqdn\)/);
   assert.match(page, /!item\.inventory_device_id/);
 });
 

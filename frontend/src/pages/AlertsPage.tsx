@@ -34,6 +34,8 @@ export default function AlertsPage() {
   const rules = useRequest(endpoints.v3eRules, []);
   const me = useRequest(endpoints.me, []);
   const canEditRules = me.data?.role === "admin";
+  const alertFilterCount = [search, status, severity].filter(Boolean).length;
+  const clearAlertFilters = () => { setSearch(""); setStatus(""); setSeverity(""); };
 
   const counts = useMemo(
     () => ({
@@ -91,6 +93,7 @@ export default function AlertsPage() {
           </button>
         ))}
       </div>
+      {mode === "alerts" && <section className="operations-guide" aria-label="Alert response guide"><div><span>1 · Triage</span><strong>Open</strong><p>Review the evidence and decide whether the condition needs action.</p></div><div><span>2 · Own</span><strong>Acknowledge</strong><p>Record that someone is investigating. Monitoring continues.</p></div><div><span>3 · Close</span><strong>Resolve</strong><p>Capture the reason when the operational condition is no longer active.</p></div></section>}
 
       {mode === "alerts" && (
         <>
@@ -158,12 +161,14 @@ export default function AlertsPage() {
                 <option value="acknowledged">Acknowledged</option>
                 <option value="resolved">Resolved</option>
               </select>
+              {alertFilterCount > 0 && <button className="filter-reset" type="button" onClick={clearAlertFilters}>Clear filters <span>{alertFilterCount}</span></button>}
+              <span className="queue-result-count" aria-live="polite">{alerts.data?.items.length ?? 0} alerts shown</span>
             </div>
 
             {alerts.loading || alerts.error ? (
               <Feedback loading={alerts.loading} error={alerts.error} />
             ) : (
-              <div className="noc-table-wrap">
+              (alerts.data?.items ?? []).length === 0 ? <Feedback emptyTitle="No alerts match these filters" empty="Try clearing a filter or wait for the next monitored condition." /> : <div className="noc-table-wrap">
                 <table className="noc-table">
                   <thead>
                     <tr>

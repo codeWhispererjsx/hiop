@@ -56,6 +56,11 @@ export default function DevicesPage() {
     [all, query, status, type, department, location, health, vendor, condition, warranty]
   );
   const admin = me.data?.role === "admin";
+  const activeFilters = [status, type, department, location, health, vendor, condition, warranty].filter((item) => item !== "All").length;
+  const clearFilters = () => {
+    setStatus("All"); setType("All"); setDepartment("All"); setLocation("All");
+    setHealth("All"); setVendor("All"); setCondition("All"); setWarranty("All");
+  };
 
   return (
     <DashboardLayout>
@@ -99,7 +104,9 @@ export default function DevicesPage() {
               <Filter label="location" value={location} set={setLocation} rows={unique(all, (x) => x.location)} />
               <Filter label="health" value={health} set={setHealth} rows={unique(all, (x) => x.health)} />
               <Filter label="vendor" value={vendor} set={setVendor} rows={unique(all, (x) => x.vendor)} />
+              {activeFilters > 0 && <button className="filter-reset" type="button" onClick={clearFilters}>Clear filters <span>{activeFilters}</span></button>}
             </div>
+            <p className="toolbar-summary" aria-live="polite">Showing <strong>{rows.length}</strong> of <strong>{all.length}</strong> managed assets{query ? ` matching “${search}”` : ""}.</p>
           </section>
           {!rows.length ? (
             <Feedback 

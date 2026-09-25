@@ -112,6 +112,8 @@ function IncidentList() {
   const [priority, setPriority] = useState("all");
 
   const q = useDeferredValue(search).toLowerCase();
+  const incidentFilterCount = [search, status !== "all" ? status : "", priority !== "all" ? priority : ""].filter(Boolean).length;
+  const clearIncidentFilters = () => { setSearch(""); setStatus("all"); setPriority("all"); };
 
   const filtered = useMemo(
     () =>
@@ -148,6 +150,7 @@ function IncidentList() {
           ) : undefined
         }
       />
+      <section className="operations-guide" aria-label="Ticket workflow"><div><span>1 · Capture</span><strong>Create a ticket</strong><p>Record the impact, related asset, and service context.</p></div><div><span>2 · Assign</span><strong>Give it an owner</strong><p>Make responsibility visible to the right technician or team.</p></div><div><span>3 · Resolve</span><strong>Close with evidence</strong><p>Preserve the resolution and timeline for future operations.</p></div></section>
 
       {summary.data && (
         <section className="stats-grid" aria-label="Incident statistics">
@@ -219,6 +222,8 @@ function IncidentList() {
               </option>
             ))}
           </select>
+          {incidentFilterCount > 0 && <button className="filter-reset" type="button" onClick={clearIncidentFilters}>Clear filters <span>{incidentFilterCount}</span></button>}
+          <span className="queue-result-count" aria-live="polite">{filtered.length} shown · {getPaginatedItems(rows.data).length} total</span>
         </div>
       </section>
 

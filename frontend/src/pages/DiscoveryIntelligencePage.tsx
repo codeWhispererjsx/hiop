@@ -64,6 +64,10 @@ export default function DiscoveryIntelligencePage() {
   const canApprove =
     currentUser.data?.role === "admin" ||
     currentUser.data?.role === "platformadmin";
+  const discoveryFilterCount = [query, identityFilter !== "all" ? identityFilter : "", departmentFilter, typeFilter, vendorFilter].filter(Boolean).length;
+  const clearDiscoveryFilters = () => {
+    setQuery(""); setIdentityFilter("all"); setDepartmentFilter(""); setTypeFilter(""); setVendorFilter("");
+  };
 
   useEffect(() => {
     let active = true;
@@ -504,6 +508,11 @@ export default function DiscoveryIntelligencePage() {
           </button>
         ))}
       </nav>
+      <ol className="discovery-workflow" aria-label="Discovery workflow">
+        <li className={mode === "scan" ? "active" : "complete"}><span>1</span><div><strong>Scan</strong><small>Find reachable devices</small></div></li>
+        <li className={mode === "devices" || mode === "review" ? "active" : mode === "rules" ? "complete" : ""}><span>2</span><div><strong>Review</strong><small>Check identity and evidence</small></div></li>
+        <li className={mode === "rules" ? "active" : ""}><span>3</span><div><strong>Approve</strong><small>Add trusted devices to inventory</small></div></li>
+      </ol>
       {error && <Feedback error={error} />}
       {mode === "rules" && <IdentityRulesPanel canManage={canApprove} />}
       {mode === "scan" && (
@@ -522,11 +531,14 @@ export default function DiscoveryIntelligencePage() {
                 <label>
                   Network address or range
                   <input
+                    id="discovery-network-range"
+                    aria-describedby="discovery-network-help"
                     value={range}
                     onChange={(event) => setRange(event.target.value)}
                     placeholder="192.168.1.0/24"
                     required
                   />
+                  <small id="discovery-network-help">Examples: 192.168.1.0/24, 10.50.21.0/24, or 192.168.1.1-254</small>
                 </label>
                 <button
                   className="primary-action"
@@ -764,6 +776,7 @@ export default function DiscoveryIntelligencePage() {
                   : "Discovered devices from your network."}
               </p>
             </div>
+              <span className="discovery-result-count" aria-live="polite">{visible.length} shown · {devices.length} total</span>
           </header>
           <div className="discovery-guidance-card">
             <div>
@@ -899,6 +912,7 @@ export default function DiscoveryIntelligencePage() {
                 ))}
               </select>
             </label>
+            {discoveryFilterCount > 0 && <button className="discovery-filter-reset" type="button" onClick={clearDiscoveryFilters}>Clear filters <span>{discoveryFilterCount}</span></button>}
           </div>
           {loading ? (
             <Feedback loading />

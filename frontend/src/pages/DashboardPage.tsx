@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
+import { PageTitle } from "../components/PageTitle";
+import { StatusBadge } from "../components/StatusBadge";
 import { useRequest } from "../hooks/useRequest";
 import { endpoints, getPaginatedItems } from "../lib/api";
 import type { Device } from "../lib/types";
@@ -31,20 +33,18 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="asset-dashboard-title">
-        <div>
-          <p className="page-kicker">Infrastructure inventory</p>
-          <h1>Assets</h1>
-          <p>Discover, identify, and manage every device from one workspace.</p>
-        </div>
-        <div className="asset-dashboard-actions">
+      <PageTitle
+        eyebrow="Infrastructure inventory"
+        title="Assets"
+        copy="Discover, identify, and manage every device from one workspace."
+        action={<div className="asset-dashboard-actions">
           <Link className="secondary-action" to="/devices">View inventory</Link>
           <Link className="primary-action" to="/discovery-intelligence">
             <Icon name="discovery" aria-hidden="true" />
             Discover devices
           </Link>
-        </div>
-      </div>
+        </div>}
+      />
 
       {dashboard.loading || inventory.loading ? (
         <Feedback loading={true} />
@@ -111,7 +111,7 @@ export default function DashboardPage() {
                 <h2>Asset inventory</h2>
                 <p>
                   {devices.length
-                    ? `${devices.length} managed devices`
+                    ? `${devices.length} managed devices${devices.length > 10 ? " · showing 10" : ""}`
                     : "Your inventory is clean and ready."}
                 </p>
               </div>
@@ -205,7 +205,7 @@ function AssetTable({ devices }: { devices: Device[] }) {
           <div>{device.ip_address}</div>
           <div>{device.device_type || "Unknown"}</div>
           <div>
-            <span className="status-badge">Active</span>
+            <StatusBadge status={device.network_status || device.status || "unknown"} />
           </div>
         </div>
       ))}
