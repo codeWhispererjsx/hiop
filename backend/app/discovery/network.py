@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+import socket
 import subprocess
 from collections.abc import Iterable
 
@@ -117,3 +118,23 @@ def reverse_dns(ip_address: str, timeout_seconds: float = 1.0) -> str | None:
 def icmp_probe(ip_address: str, timeout_seconds: int) -> tuple[bool, float | None]:
     result = ping_host(ip_address, timeout=timeout_seconds)
     return result["status"].lower() == "online", result["response_time"]
+
+
+def tcp_reachability_probe(
+    ip_address: str,
+    timeout_seconds: int,
+    ports: tuple[int, ...] = (445, 135, 139, 443, 80, 22, 3389, 9100),
+) -> tuple[bool, int | None]:
+    """Detect live hosts that deliberately ignore ICMP echo requests.
+
+    A successful TCP connection is enough to prove that the host is reachable;
+    no credentials are sent and no protocol payload is exchanged.
+    """
+    timeout = max(0.15, min(float(timeout_seconds), 0.5))
+    for port in ports:
+        try:
+            with socket.create_connection((ip_address, port), timeout=timeout):
+                return True, port
+        except (OSError, ValueError):
+            continue
+    return False, None

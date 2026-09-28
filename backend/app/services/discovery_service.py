@@ -22,6 +22,7 @@ from app.discovery.network import (
     is_ignored,
     normalize_mac,
     reverse_dns,
+    tcp_reachability_probe,
 )
 from app.models.discovered_device import (
     DiscoveredDevice,
@@ -45,6 +46,7 @@ from app.websocket.connection_manager import manager
 
 Observation = dict[str, Any]
 Probe = Callable[[str, int], tuple[bool, float | None]]
+TcpProbe = Callable[[str, int], tuple[bool, int | None]]
 logger = logging.getLogger(__name__)
 
 
@@ -72,6 +74,7 @@ class DiscoveryService:
         *,
         config: dict[str, Any] | None = None,
         probe: Probe = icmp_probe,
+        tcp_probe: TcpProbe = tcp_reachability_probe,
         arp_reader: Callable[[], dict[str, str]] = inspect_arp_table,
         resolver: Callable[[str, float], str | None] = reverse_dns,
         publisher: Callable[[dict[str, Any]], None] = manager.broadcast_from_thread,
@@ -82,6 +85,7 @@ class DiscoveryService:
         self.runs = DiscoveryRunRepository(db)
         self.config = config
         self.probe = probe
+        self.tcp_probe = tcp_probe
         self.arp_reader = arp_reader
         self.resolver = resolver
         self.publisher = publisher
@@ -255,6 +259,9 @@ class DiscoveryService:
         settings: dict[str, Any],
     ) -> tuple[Observation | None, bool]:
         online, response_time = self.probe(address, settings["ping_timeout_seconds"])
+        tcp_port = None
+        if not online:
+            online, tcp_port = self.tcp_probe(address, settings["ping_timeout_seconds"])
         if not online and not mac_address:
             return None, False
         hostname = None
@@ -262,7 +269,12 @@ class DiscoveryService:
             hostname = self.resolver(address, float(settings["ping_timeout_seconds"]))
         vendor = lookup_vendor(mac_address) if settings.get("automatic_vendor_lookup", True) else None
         identity = fingerprint(hostname, vendor)
-        method = "icmp+arp" if online and mac_address else "icmp" if online else "arp-cache"
+        method = (
+            "icmp+arp" if online and mac_address and tcp_port is None
+            else "icmp" if online and tcp_port is None
+            else f"tcp:{tcp_port}" if online
+            else "arp-cache"
+        )
         return {
             "ip_address": address,
             "mac_address": mac_address,

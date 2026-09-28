@@ -179,6 +179,20 @@ class DiscoveryServiceTests(unittest.TestCase):
         self.assertEqual(run.hosts_attempted, 2)
         self.assertGreaterEqual(db.commit.call_count, 2)
 
+    def test_tcp_fallback_records_host_that_blocks_ping(self):
+        db = MagicMock()
+        service = DiscoveryService(
+            db,
+            config=CONFIG,
+            probe=lambda _address, _timeout: (False, None),
+            tcp_probe=lambda _address, _timeout: (True, 445),
+            arp_reader=lambda: {},
+            resolver=lambda _address, _timeout: None,
+        )
+        observation, online = service._observe_host("10.20.30.9", "10.20.30.0/24", None, CONFIG)
+        self.assertTrue(online)
+        self.assertEqual(observation["discovery_method"], "tcp:445")
+
     def test_cooperative_cancellation_retains_partial_results(self):
         db = MagicMock()
         checks = {"count": 0}
