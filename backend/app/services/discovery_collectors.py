@@ -243,7 +243,7 @@ class ServiceFingerprintCollector:
 
     def collect(self, ip: str, ports: list[int]):
         result = CollectedObservation(ip)
-        banners, certificates, http_headers = {}, [], {}
+        banners, certificates, http_headers, http_titles = {}, [], {}, {}
         approved=[port for port in sorted(set(ports))[:32] if port in SERVICE_PORTS]
         def probe(port):
             try:
@@ -271,7 +271,15 @@ class ServiceFingerprintCollector:
                 connection_class=http.client.HTTPSConnection if port==443 else http.client.HTTPConnection
                 try:
                     connection=connection_class(ip,port,timeout=self.timeout,context=ssl._create_unverified_context()) if port==443 else connection_class(ip,port,timeout=self.timeout)
-                    connection.request("HEAD","/");response=connection.getresponse();http_headers[str(port)]={key.lower():value[:500] for key,value in response.getheaders()};connection.close()
+                    connection.request("GET","/",headers={"User-Agent":"HIOP Discovery/1.0","Range":"bytes=0-8191"})
+                    response=connection.getresponse()
+                    http_headers[str(port)]={key.lower():value[:500] for key,value in response.getheaders()}
+                    body=response.read(8192).decode("utf-8","replace")
+                    title=re.search(r"<title[^>]*>\s*(.*?)\s*</title>",body,re.IGNORECASE|re.DOTALL)
+                    if title:
+                        value=re.sub(r"\s+"," ",title.group(1)).strip()[:255]
+                        if value:http_titles[str(port)]=value
+                    connection.close()
                 except (OSError,http.client.HTTPException,ssl.SSLError):pass
         if result.open_ports:
             result.evidence.append(evidence("service_fingerprint", "tcp_banner", result.open_ports, verified=True))
@@ -283,6 +291,13 @@ class ServiceFingerprintCollector:
         if http_headers:
             result.data["http_headers"]=http_headers
             result.data["http_server"]=next((headers.get("server") for headers in http_headers.values() if headers.get("server")),None)
+        if http_titles:
+            title=next(iter(http_titles.values()))
+            result.data["http_titles"]=http_titles
+            result.data["http_title"]=title
+            result.data["description"]=title
+            result.data["description_source"]="HTTP fingerprint"
+            result.evidence.append(evidence("description","http_title",title,verified=True))
         return result
 
 

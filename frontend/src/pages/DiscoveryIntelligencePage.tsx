@@ -1471,6 +1471,7 @@ function DeviceTable({
               usableDiscoveryValue(device.primary_hostname || device.fqdn) || "No hostname observed";
             const displayName =
               device.friendly_name ||
+              device.description ||
               usableDiscoveryValue(device.primary_hostname || device.fqdn) ||
               "Unidentified device";
             const deviceType =
@@ -1493,6 +1494,8 @@ function DeviceTable({
                   <small>
                     {device.friendly_name
                       ? device.primary_hostname || device.fqdn || "No technical hostname"
+                      : device.description
+                        ? "Service identity"
                       : "Technical hostname"} ·{" "}
                     {device.confidence_level?.replaceAll("_", " ") || "low"}{" "}
                     confidence

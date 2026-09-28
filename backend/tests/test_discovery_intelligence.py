@@ -21,6 +21,8 @@ def test_discovered_description_preserves_manual_or_inventory_text():
 def test_hostname_merge_is_normalized_and_deterministic():assert merge_hostnames(["HOST01.","host01.example.com","bad host"])=={"primary":"host01.example.com","aliases":["host01"]}
 def test_service_and_device_fingerprints_are_deterministic():
     assert services_from_ports([443,22,443])==[{"port":22,"service":"SSH/SFTP"},{"port":443,"service":"HTTPS"}];assert identify({"vendor":"Hikvision","open_ports":[80]})["classification"]=="CCTV Camera";assert "Unknown Device" in DEVICE_FAMILIES
+    assert identify({"http_title":"SecurePrint","open_ports":[80,9100]})["device_family"]=="Printer"
+    assert identify({"http_server":"Oracle HTTP Server","open_ports":[80]})["classification"]=="Application Server";assert identify({"http_title":"Oracle OPERA (WWW)","open_ports":[80]})["classification"]=="PMS Server"
 def test_confirmed_hostname_evidence_and_windows_services_are_promoted():
     assert hostname_evidence([{"evidence_type":"dns_resolution","value":"HELOSHALTHR1408","verified":True}])==["heloshalthr1408"]
     identified=identify({"open_ports":[135,139,445]})
