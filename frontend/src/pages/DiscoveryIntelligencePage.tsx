@@ -842,6 +842,13 @@ export default function DiscoveryIntelligencePage() {
                   Select All
                 </button>
                 <button
+                  type="button"
+                  disabled={!selected.size || bulkApproving}
+                  onClick={() => setSelected(new Set())}
+                >
+                  Clear selection
+                </button>
+                <button
                   className="primary-action"
                   disabled={!selected.size || bulkApproving}
                   onClick={() => setConfirmBulkApproval(true)}
