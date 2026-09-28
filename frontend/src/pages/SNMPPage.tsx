@@ -267,8 +267,6 @@ export default function SNMPPage() {
                         )}
                       </div>
                       <div className="snmp-item-actions">
-                        <button className="secondary-action" disabled>Edit</button>
-                        <button className="secondary-action" disabled>Test</button>
                         <button 
                           className="secondary-action" 
                           onClick={() => handleDisableCredential(cred.id)}
@@ -339,10 +337,6 @@ export default function SNMPPage() {
                           disabled={creating}
                         >
                           Test Connection
-                        </button>
-                        <button className="secondary-action" disabled>Edit</button>
-                        <button className="secondary-action" disabled>
-                          {target.polling_enabled ? "Stop Polling" : "Start Polling"}
                         </button>
                         <button 
                           className="secondary-action"

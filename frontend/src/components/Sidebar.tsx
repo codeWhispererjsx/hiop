@@ -175,7 +175,7 @@ export default function Sidebar({
             ))}
           </>
         )}
-        {isPlatformAdmin && (
+        {isPlatformAdmin && !isDesktopMode && (
           <>
             <p className="nav-label nav-label-spaced">Platform administration</p>
             {platformLinks.map((link) => (
