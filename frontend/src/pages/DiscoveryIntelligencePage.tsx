@@ -1377,7 +1377,16 @@ function identityBucket(
 
 function usableDiscoveryValue(value: string | null | undefined): string | null {
   const normalized = value?.trim();
-  return normalized && !["unknown", "unknown device", "not yet discovered", "not available", "n/a"].includes(normalized.toLowerCase())
+  const placeholderValues = new Set([
+    "unknown",
+    "unknown device",
+    "unresolved",
+    "unresolved device",
+    "not yet discovered",
+    "not available",
+    "n/a",
+  ]);
+  return normalized && !placeholderValues.has(normalized.toLowerCase())
     ? normalized
     : null;
 }
