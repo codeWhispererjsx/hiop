@@ -1076,14 +1076,14 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
     <section className="identity-rules-workspace">
       <header className="discovery-panel">
         <span className="eyebrow">Administration · Discovery intelligence</span>
-        <h2>Naming & classification rules</h2>
+        <h2>Hostname rules</h2>
         <p>
           Turn your organisation’s technical identifiers into an explainable Friendly
           Name, Device Type, Suggested Department, and Location. Rules are
           scoped, deterministic, and never replace a manually confirmed
           identity.
         </p>
-        <details className="feature-guide"><summary>How naming rules work</summary><ol><li>Choose an identifier your devices already use, such as a hostname.</li><li>Add a rule matching your own convention. For example, a hostname beginning with FO- might mean Front Office, if that is how your organisation names devices.</li><li>Set the friendly name, device type, department, or location you want suggested.</li><li>Test the rule against a known device, then run enrichment and review the suggestions.</li></ol><p>Saving a rule does not rename a computer on the network. It helps HIOP interpret its identity. Manually confirmed identities stay in place.</p></details><div className="precedence-note">
+        <details className="feature-guide"><summary>How hostname rules work</summary><ol><li>Choose an identifier your devices already use, such as a hostname.</li><li>Add a rule matching your own convention. For example, a hostname beginning with FO- might mean Front Office, if that is how your organisation names devices.</li><li>Set the friendly name, device type, department, or location you want suggested.</li><li>Test the rule against a known device, then run enrichment and review the suggestions.</li></ol><p>Saving a rule does not rename a computer on the network. It helps HIOP interpret its identity. Manually confirmed identities stay in place.</p></details><div className="precedence-note">
           <b>Precedence:</b> Manual confirmation → strong discovery/SNMP →
           Active Directory → configured rule → weak inference.
         </div>
@@ -1099,7 +1099,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
           <h3>Configured rules</h3>
           {!rules.length ? (
             <Feedback
-              emptyTitle="No naming rules yet."
+              emptyTitle="No hostname rules yet."
               empty="Add a confirmed organization or property naming convention. HIOP will not guess one."
             />
           ) : (
@@ -1141,7 +1141,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
         <section className="discovery-panel">
           {canManage ? (
             <form className="identity-rule-form" onSubmit={submit}>
-              <h3>Add rule</h3>
+              <h3>Add hostname rule</h3>
               <label>
                 Rule name
                 <input
@@ -1300,7 +1300,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
                 </small>
               </label>
               <button className="primary-action" disabled={busy}>
-                {busy ? "Saving…" : "Add rule"}
+                {busy ? "Saving…" : "Add hostname rule"}
               </button>
             </form>
           ) : (
@@ -2052,4 +2052,5 @@ function dnsMessage(
     ? "DNS information available."
     : "DNS information unavailable.";
 }
+
 

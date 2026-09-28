@@ -1,0 +1,9 @@
+project_id = "hiop-owner-console"
+
+[api]
+enabled = true
+schemas = ["public"]
+
+[auth]
+site_url = "https://hiop-ivory.vercel.app"
+additional_redirect_urls = ["https://hiop-ivory.vercel.app/reset-password"]

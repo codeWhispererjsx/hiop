@@ -152,7 +152,7 @@ export default function App() {
     <Route path="/administration/properties" element={roleProtectedPage(<PropertiesPage />, ["admin"])} />
     {!isDesktopMode && <Route path="/administration/billing" element={roleProtectedPage(<BillingPage />, ["admin"])} />}
     <Route path="/administration/agents" element={roleProtectedPage(isDesktopMode ? <ThisComputerPage /> : <LocalAgentsPage />, ["admin"])} />
-    <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />
+    {!isDesktopMode && <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />}
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></Suspense>;
 }

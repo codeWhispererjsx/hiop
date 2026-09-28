@@ -168,8 +168,8 @@ class Settings(BaseSettings):
     def validate_production_security(self):
         if not self.debug and len(self.secret_key) < 32:
             raise ValueError("SECRET_KEY must contain at least 32 characters outside development")
-        if not 5 <= self.access_token_expire_minutes <= 1440:
-            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be between 5 and 1440")
+        if not 5 <= self.access_token_expire_minutes <= 43200:
+            raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be between 5 and 43200")
         if self.environment == "production" and self.debug:
             raise ValueError("DEBUG must be false in production")
         if any(not origin.startswith(("http://", "https://")) for origin in self.cors_origins):
@@ -228,3 +228,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

@@ -195,6 +195,10 @@ if (-not $env:APP_VERSION) { $env:APP_VERSION = "desktop-dev" }
 if (-not $env:DEBUG) { $env:DEBUG = "true" }
 if (-not $env:ENVIRONMENT) { $env:ENVIRONMENT = "development" }
 if (-not $env:SECRET_KEY) { $env:SECRET_KEY = "desktop-local-development-secret-change-before-release" }
+# A desktop installation is a trusted local workspace. Keep the signed-in
+# session for 30 days so closing and reopening HIOP does not force a daily
+# login, while still giving administrators a bounded expiry.
+if (-not $env:ACCESS_TOKEN_EXPIRE_MINUTES) { $env:ACCESS_TOKEN_EXPIRE_MINUTES = "43200" }
 if (-not $env:CORS_ORIGINS) { $env:CORS_ORIGINS = '["http://127.0.0.1:5173","http://localhost:5173"]' }
 if (-not $env:DISCOVERY_EXECUTION_MODE) { $env:DISCOVERY_EXECUTION_MODE = "backend" }
 if (-not $env:SCHEDULER_ENABLED) { $env:SCHEDULER_ENABLED = "true" }

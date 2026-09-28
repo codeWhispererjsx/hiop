@@ -230,7 +230,7 @@ export default function SNMPPage() {
             <section className="snmp-section">
               <div className="section-header">
                 <h2>SNMP Credentials</h2>
-                <button className="primary-action" onClick={() => setShowCredentialModal(true)}>+ Add Credential</button>
+                <div className="page-actions">{targets.length===0 && <button className="secondary-action" onClick={() => setActiveTab("targets")}>Next: add target</button>}<button className="primary-action" onClick={() => setShowCredentialModal(true)}>+ Add Credential</button></div>
               </div>
               {credentials.length === 0 ? (
                 <Feedback empty="No SNMP credentials configured." />
@@ -291,7 +291,7 @@ export default function SNMPPage() {
                 <button className="primary-action" onClick={() => setShowTargetModal(true)}>+ Add Target</button>
               </div>
               {targets.length === 0 ? (
-                <Feedback empty="No SNMP targets configured." />
+                <Feedback emptyTitle="No SNMP targets configured." empty="Credentials alone cannot collect network information. Add the IP address of a switch, router, printer, or access point, select its credential, then use Test before enabling polling." />
               ) : (
                 <div className="snmp-list">
                   {targets.map((target) => (
@@ -589,3 +589,4 @@ export default function SNMPPage() {
     </DashboardLayout>
   );
 }
+

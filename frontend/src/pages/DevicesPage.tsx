@@ -57,7 +57,13 @@ export default function DevicesPage() {
   );
   const admin = me.data?.role === "admin";
   const activeFilters = [status, type, department, location, health, vendor, condition, warranty].filter((item) => item !== "All").length;
-  const clearFilters = () => {
+  const exportWord = () => {
+    const escape = (text: unknown) => String(text ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const rowsHtml = rows.map((row) => `<tr><td>${escape(row.name)}</td><td>${escape(row.hostname || "Unknown")}</td><td>${escape(row.ip_address || "")}</td><td>${escape(row.device_type)}</td><td>${escape(row.department || "Unknown")}</td><td>${escape(row.location || "Unknown")}</td><td>${escape(row.health)}</td></tr>`).join("");
+    const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>HIOP device inventory</title><style>body{font-family:Calibri,Arial,sans-serif;}h1{}table{border-collapse:collapse;width:100%;font-size:10pt}th,td{border:1px solid;padding:6px;text-align:left}th{}</style></head><body><h1>HIOP device inventory</h1><p>Exported ${new Date().toLocaleString()} · ${rows.length} device${rows.length===1?"":"s"}</p><table><thead><tr><th>Name</th><th>Hostname</th><th>IP address</th><th>Type</th><th>Department</th><th>Location</th><th>Health</th></tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`;
+    const blob = new Blob([documentHtml], { type: "application/msword" });
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `HIOP-device-inventory-${new Date().toISOString().slice(0,10)}.doc`; link.click(); URL.revokeObjectURL(link.href);
+  };  const clearFilters = () => {
     setStatus("All"); setType("All"); setDepartment("All"); setLocation("All");
     setHealth("All"); setVendor("All"); setCondition("All"); setWarranty("All");
   };
@@ -68,12 +74,12 @@ export default function DevicesPage() {
         eyebrow="CMDB & asset intelligence" 
         title="Managed assets" 
         copy="Organizational asset identity joined to authoritative device, health, and network evidence." 
-        action={admin ? (
+        action={<div className="page-actions"><button className="secondary-action" type="button" onClick={exportWord} disabled={!rows.length}>Export Word</button>{admin ? (
           <Link className="primary-action" to="/assets/new">
             <Icon name="devices" aria-hidden="true" />
             Add Asset
           </Link>
-        ) : undefined}
+        ) : null}</div>}
       />
       {assets.loading || assets.error ? (
         <Feedback 
@@ -193,3 +199,8 @@ function Filter({
     </select>
   );
 }
+
+
+
+
+
