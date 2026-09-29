@@ -40,7 +40,10 @@ def assets(
     health:str|None=None,
     vendor:str|None=None,
     page:int=Query(1,ge=1),
-    page_size:int=Query(50,ge=1,le=100),
+    # Asset inventory is commonly reviewed as one complete hotel list.  Keep a
+    # sensible guardrail while allowing the desktop and web clients to request
+    # the full current inventory in one view.
+    page_size:int=Query(50,ge=1,le=5000),
     db:Session=Depends(get_db),
     _=Depends(reader),
     organization_id=Depends(organization_context),

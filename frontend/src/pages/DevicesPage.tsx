@@ -14,7 +14,11 @@ const unique = (rows: ManagedAsset[], key: (row: ManagedAsset) => string | null)
   [...new Set(rows.map(key).filter(Boolean) as string[])].sort();
 
 export default function DevicesPage() {
-  const assets = useRequest(() => endpoints.assets({}), []);
+  const [pageSize, setPageSize] = useState("all");
+  const assets = useRequest(
+    () => endpoints.assets({ page_size: pageSize === "all" ? "5000" : pageSize }),
+    [pageSize]
+  );
   const me = useRequest(endpoints.me, []);
   const [search, setSearch] = useState("");
   const query = useDeferredValue(search).trim().toLowerCase();
@@ -59,11 +63,45 @@ export default function DevicesPage() {
   const activeFilters = [status, type, department, location, health, vendor, condition, warranty].filter((item) => item !== "All").length;
   const exportWord = () => {
     const escape = (text: unknown) => String(text ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    const rowsHtml = rows.map((row) => `<tr><td>${escape(row.name)}</td><td>${escape(row.hostname || "Unknown")}</td><td>${escape(row.ip_address || "")}</td><td>${escape(row.device_type)}</td><td>${escape(row.department || "Unknown")}</td><td>${escape(row.location || "Unknown")}</td><td>${escape(row.health)}</td></tr>`).join("");
-    const documentHtml = `<!doctype html><html><head><meta charset="utf-8"><title>HIOP device inventory</title><style>body{font-family:Calibri,Arial,sans-serif;}h1{}table{border-collapse:collapse;width:100%;font-size:10pt}th,td{border:1px solid;padding:6px;text-align:left}th{}</style></head><body><h1>HIOP device inventory</h1><p>Exported ${new Date().toLocaleString()} · ${rows.length} device${rows.length===1?"":"s"}</p><table><thead><tr><th>Name</th><th>Hostname</th><th>IP address</th><th>Type</th><th>Department</th><th>Location</th><th>Health</th></tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`;
-    const blob = new Blob([documentHtml], { type: "application/msword" });
-    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `HIOP-device-inventory-${new Date().toISOString().slice(0,10)}.doc`; link.click(); URL.revokeObjectURL(link.href);
-  };  const clearFilters = () => {
+    const rowsHtml = rows.map((row) => `<tr>
+      <td><strong>${escape(row.name)}</strong><br><span>${escape(row.asset_number || "No asset number")}</span></td>
+      <td>${escape(row.hostname || "No hostname")}</td>
+      <td>${escape(row.ip_address || "Not available")}</td>
+      <td>${escape(row.device_type || "Unknown")}</td>
+      <td>${escape(row.department || "Unassigned")}<br><span>${escape(row.location || "No location")}</span></td>
+      <td>${escape(row.status || "Unknown")}<br><span>${escape(row.health || "Unknown")}</span></td>
+    </tr>`).join("");
+    const exportedAt = escape(new Date().toLocaleString());
+    const documentHtml = `<!doctype html>
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+      <head><meta charset="utf-8"><title>HIOP device inventory</title>
+      <style>
+        @page Section1 { size: 11in 8.5in; mso-page-orientation: landscape; margin: .42in .35in .48in .35in; }
+        div.Section1 { page: Section1; }
+        body { margin: 0; color: #172033; font-family: Calibri, Arial, sans-serif; font-size: 9pt; }
+        h1 { margin: 0 0 4pt; color: #123e91; font-size: 19pt; }
+        .meta { margin: 0 0 15pt; color: #526174; font-size: 9pt; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        thead { display: table-header-group; }
+        tr { page-break-inside: avoid; }
+        th { padding: 7pt 6pt; background: #123e91; color: #ffffff; border: 1px solid #123e91; font-size: 8pt; font-weight: 700; text-align: left; text-transform: uppercase; }
+        td { padding: 7pt 6pt; border: 1px solid #cbd5e1; line-height: 1.25; vertical-align: top; overflow-wrap: anywhere; word-wrap: break-word; }
+        td strong { color: #172033; } td span { color: #5c6b7d; font-size: 8pt; }
+        th:nth-child(1) { width: 20%; } th:nth-child(2) { width: 19%; } th:nth-child(3) { width: 13%; }
+        th:nth-child(4) { width: 14%; } th:nth-child(5) { width: 19%; } th:nth-child(6) { width: 15%; }
+      </style></head><body><div class="Section1">
+      <h1>HIOP Device Inventory</h1>
+      <p class="meta">Exported ${exportedAt} · ${rows.length} managed asset${rows.length === 1 ? "" : "s"}</p>
+      <table><thead><tr><th>Asset</th><th>Hostname</th><th>IP address</th><th>Type</th><th>Department / location</th><th>Lifecycle / health</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+      </div></body></html>`;
+    const blob = new Blob(["\ufeff", documentHtml], { type: "application/msword;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `HIOP-device-inventory-${new Date().toISOString().slice(0,10)}.doc`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  };
+  const clearFilters = () => {
     setStatus("All"); setType("All"); setDepartment("All"); setLocation("All");
     setHealth("All"); setVendor("All"); setCondition("All"); setWarranty("All");
   };
@@ -74,7 +112,7 @@ export default function DevicesPage() {
         eyebrow="CMDB & asset intelligence" 
         title="Managed assets" 
         copy="Organizational asset identity joined to authoritative device, health, and network evidence." 
-        action={<div className="page-actions"><button className="secondary-action" type="button" onClick={exportWord} disabled={!rows.length}>Export Word</button>{admin ? (
+        action={<div className="page-actions"><button className="secondary-action" type="button" onClick={exportWord} disabled={!rows.length}>Export Word report</button>{admin ? (
           <Link className="primary-action" to="/assets/new">
             <Icon name="devices" aria-hidden="true" />
             Add Asset
@@ -112,7 +150,15 @@ export default function DevicesPage() {
               <Filter label="vendor" value={vendor} set={setVendor} rows={unique(all, (x) => x.vendor)} />
               {activeFilters > 0 && <button className="filter-reset" type="button" onClick={clearFilters}>Clear filters <span>{activeFilters}</span></button>}
             </div>
-            <p className="toolbar-summary" aria-live="polite">Showing <strong>{rows.length}</strong> of <strong>{all.length}</strong> managed assets{query ? ` matching “${search}”` : ""}.</p>
+            <label className="asset-page-size">
+              Show
+              <select value={pageSize} onChange={(event) => setPageSize(event.target.value)} aria-label="Number of managed assets to load">
+                <option value="50">50 devices</option>
+                <option value="100">100 devices</option>
+                <option value="all">All devices</option>
+              </select>
+            </label>
+            <p className="toolbar-summary" aria-live="polite">Showing <strong>{rows.length}</strong> of <strong>{all.length}</strong> loaded managed assets{query ? ` matching “${search}”` : ""}{pageSize === "all" ? ". All devices are loaded." : "."}</p>
           </section>
           {!rows.length ? (
             <Feedback 
