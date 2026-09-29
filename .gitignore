@@ -58,3 +58,4 @@ desktop/build-resources/
 desktop/release/
 buildcheck-*/
 desktop/build-runtime/
+.vercel
