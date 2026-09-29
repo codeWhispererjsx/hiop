@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, dialog, shell, ipcMain } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -11,6 +11,30 @@ const devFrontend = path.join(repoRoot, "frontend", "dist", "index.html");
 const frontendUrl = process.env.HIOP_DESKTOP_URL || `file://${fs.existsSync(packagedFrontend) ? packagedFrontend : devFrontend}`;
 let backendProcess;
 let mainWindow;
+
+function validNetworkTarget(value) {
+  const target = String(value || "").trim();
+  return /^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$/.test(target) && !target.includes("..");
+}
+
+function openCommandWindow(title, command, target) {
+  const process = spawn("cmd.exe", ["/c", "start", `\"${title}\"`, "cmd.exe", "/k", `${command} ${target}`], {
+    detached: true, stdio: "ignore", windowsHide: false,
+  });
+  process.unref();
+}
+
+ipcMain.handle("hiop:device-action", async (_event, action, rawTarget) => {
+  if (!validNetworkTarget(rawTarget)) throw new Error("This device does not have a usable hostname or IP address.");
+  const target = String(rawTarget).trim();
+  if (action === "ping") openCommandWindow("HIOP Ping", "ping", target);
+  else if (action === "trace") openCommandWindow("HIOP Trace Route", "tracert", target);
+  else if (action === "ssh") openCommandWindow("HIOP SSH", "ssh", target);
+  else if (action === "rdp") { const process = spawn("mstsc.exe", [`/v:${target}`], { detached: true, stdio: "ignore", windowsHide: false }); process.unref(); }
+  else if (action === "http" || action === "https") await shell.openExternal(`${action}://${target}`);
+  else throw new Error("Unsupported device action.");
+  return { ok: true };
+});
 
 // HIOP owns one private local API port. A second desktop process must bring
 // the existing window forward instead of attempting to launch another API.

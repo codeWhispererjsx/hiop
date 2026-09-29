@@ -64,6 +64,7 @@ export default function DeviceDetailsPage() {
   const [retiring, setRetiring] = useState(false);
   const [retireError, setRetireError] = useState("");
   const [retireNotice, setRetireNotice] = useState("");
+  const [actionNotice, setActionNotice] = useState("");
 
   const handleLiveEvent = (event: LiveEvent) => {
     if (event.event === "device_status_changed" && event.device_id === id) void reload();
@@ -106,6 +107,10 @@ export default function DeviceDetailsPage() {
         copy="Complete device information and operational history from HIOP."
         action={<div className="page-actions">
           <Link className="secondary-action" to="/devices">Back to devices</Link>
+          {device && <DeviceActions device={device} onNotice={setActionNotice} onRescan={async () => {
+            await endpoints.scanDevice(device.id);
+            setActionNotice("Connectivity rescan started. HIOP will update this device when the check completes.");
+          }} />}
           {device && !isRetired && currentUser.data?.role === "admin" && <>
             <Link className="primary-action" to={`/devices/${id}/edit`}>Edit device</Link>
             {currentUser.data?.role === "admin" && <button className="danger-action" onClick={() => { setRetireError(""); setConfirmingRetirement(true); }}>Retire device</button>}
@@ -113,7 +118,7 @@ export default function DeviceDetailsPage() {
         </div>}
       />
 
-      {(retireNotice || successNotice) && <Toast message={retireNotice || successNotice || "Device updated successfully."} />}
+      {(retireNotice || successNotice || actionNotice) && <Toast message={retireNotice || successNotice || actionNotice || "Device updated successfully."} />}
 
       {loading || error ? (
         <Feedback loading={loading} error={error} onRetry={reload} />
@@ -157,6 +162,49 @@ export default function DeviceDetailsPage() {
       </ConfirmationModal>}
     </DashboardLayout>
   );
+}
+
+type DesktopDeviceAction = "ping" | "trace" | "http" | "https" | "rdp" | "ssh";
+
+function DeviceActions({ device, onNotice, onRescan }: { device: Device; onNotice: (message: string) => void; onRescan: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const target = device.ip_address || device.hostname;
+  const run = async (action: DesktopDeviceAction, label: string) => {
+    if (!target) { onNotice("This device has no hostname or IP address to use."); return; }
+    setBusy(true);
+    try {
+      const desktop = (window as Window & { hiopDesktop?: { runDeviceAction?: (action: DesktopDeviceAction, target: string) => Promise<{ ok: boolean }> } }).hiopDesktop;
+      if (desktop?.runDeviceAction) await desktop.runDeviceAction(action, target);
+      else if (action === "http" || action === "https") window.open(`${action}://${target}`, "_blank", "noopener,noreferrer");
+      else throw new Error("This action is available in HIOP Desktop on Windows.");
+      onNotice(`${label} opened for ${target}.`); setOpen(false);
+    } catch (error) { onNotice(error instanceof Error ? error.message : "The device action could not be started."); }
+    finally { setBusy(false); }
+  };
+  const copy = async (label: string, value?: string | null) => {
+    if (!value) { onNotice(`No ${label.toLowerCase()} is recorded for this device.`); return; }
+    try { await navigator.clipboard.writeText(value); onNotice(`${label} copied.`); setOpen(false); }
+    catch { onNotice(`Could not copy the ${label.toLowerCase()}.`); }
+  };
+  const rescan = async () => {
+    setBusy(true);
+    try { await onRescan(); setOpen(false); }
+    catch (error) { onNotice(error instanceof Error ? error.message : "The rescan could not be started."); }
+    finally { setBusy(false); }
+  };
+  return <div className="device-actions-menu">
+    <button className="secondary-action" type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu">Device actions</button>
+    {open && <div className="device-actions-popover" role="menu" aria-label={`Actions for ${device.hostname || "device"}`}>
+      <p>Network tools</p>
+      <div><button type="button" role="menuitem" onClick={() => void run("ping", "Ping")}>Ping</button><button type="button" role="menuitem" onClick={() => void run("trace", "Trace route")}>Trace route</button></div>
+      <div><button type="button" role="menuitem" onClick={() => void run("http", "HTTP")}>Open HTTP</button><button type="button" role="menuitem" onClick={() => void run("https", "HTTPS")}>Open HTTPS</button></div>
+      <div><button type="button" role="menuitem" onClick={() => void run("rdp", "Remote Desktop")}>RDP</button><button type="button" role="menuitem" onClick={() => void run("ssh", "SSH")}>SSH</button></div>
+      <button type="button" role="menuitem" onClick={() => void rescan()} disabled={busy}>Rescan connectivity</button>
+      <p>Copy identity</p>
+      <div><button type="button" role="menuitem" onClick={() => void copy("IP address", device.ip_address)}>Copy IP</button><button type="button" role="menuitem" onClick={() => void copy("Hostname", device.hostname)}>Copy hostname</button><button type="button" role="menuitem" onClick={() => void copy("MAC address", device.mac_address)}>Copy MAC</button></div>
+    </div>}
+  </div>;
 }
 
 function DeviceOverview({ device, health, networkZone, discoveryIdentity, topologyNeighbors, portConnection, switchInterfaces, segmentation, switchVlans, canRefreshPorts, refreshingPorts, portNotice, onRefreshPorts }: { device: Device; health?:DeviceHealth; networkZone: string; discoveryIdentity?: Record<string, unknown>; topologyNeighbors?: V3ATopologyNeighbors; portConnection?:V3BDeviceConnection; switchInterfaces?:V3BSwitchInterfaces; segmentation?:V3CDeviceVlan; switchVlans:V3CVlan[]; canRefreshPorts:boolean; refreshingPorts:boolean; portNotice:string; onRefreshPorts:()=>void }) {
