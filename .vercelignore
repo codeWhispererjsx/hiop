@@ -1,0 +1,20 @@
+# Local-only caches, runtimes, and installer artifacts are never part of the web deployment.
+.pytest_cache
+.pnpm-store
+node_modules
+frontend/node_modules
+desktop/node_modules
+desktop/build-resources
+desktop/build-runtime
+desktop/release
+desktop/release-*
+backups
+buildcheck-*
+backend/.venv
+backend/__pycache__
+**/__pycache__
+*.pyc
+*.log
+.env
+backend/.env
+.pgpass
