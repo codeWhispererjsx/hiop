@@ -1,7 +1,7 @@
 import {Link} from "react-router-dom";
 import {PublicLayout} from "../components/PublicLayout";
 
-const installerUrl="https://github.com/codeWhispererjsx/hiop/releases/download/v2.0.0/HIOP-Desktop-2.0.0-x64.exe";
+const installerUrl="https://github.com/codeWhispererjsx/hiop/releases/download/v2.0.4/HIOP-Desktop-2.0.4-x64.exe";
 
 export default function GetStartedPage(){
   return <PublicLayout>
@@ -23,7 +23,7 @@ export default function GetStartedPage(){
           <div><p className="public-eyebrow">Desktop application</p><h2>Download HIOP Desktop</h2></div>
         </div>
         <p className="desktop-download-copy">Install HIOP on a Windows computer at the hotel or office. Your data and operational tools run locally on that computer.</p>
-        <div className="desktop-download-meta"><span>Windows 10 or later</span><span>Local database included</span><span>Version 2.0</span></div>
+        <div className="desktop-download-meta"><span>Windows 10 or later</span><span>Local database included</span><span>Version 2.0.4</span></div>
         <a className="public-button desktop-download-button" href={installerUrl}>Download for Windows <span aria-hidden="true">â†’</span></a>
         <p className="onboarding-note">Windows may ask for permission before installation. Choose a computer that stays available for monitoring and network discovery.</p>
         <div className="desktop-download-links"><Link to="/features">Explore features</Link></div>
