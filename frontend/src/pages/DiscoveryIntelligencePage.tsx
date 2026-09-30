@@ -1006,6 +1006,13 @@ const EMPTY_RULE = {
   confidence: 70,
 };
 
+const HOSTNAME_CODE_PRESETS = [
+  { code: "dt", label: "Desktop PCs", type: "Desktop" },
+  { code: "lt", label: "Laptops", type: "Laptop" },
+  { code: "pos", label: "POS terminals", type: "POS Terminal" },
+  { code: "sc", label: "Security devices", type: "Security Device" },
+] as const;
+
 function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
   const [rules, setRules] = useState<IdentityRule[]>([]);
   const [departments, setDepartments] = useState<OrganizationDepartment[]>([]);
@@ -1041,6 +1048,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
     try {
       await endpoints.createIdentityRule({
         ...form,
+        name: form.name.trim() || `Hostname code ${form.pattern} · ${form.output_device_type}`,
         property_id:
           form.scope === "property"
             ? window.localStorage.getItem("hiop.active_property_id")
@@ -1057,6 +1065,31 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
       setError(
         caught instanceof Error ? caught.message : "Rule could not be created.",
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addHostnameCode = async (preset: (typeof HOSTNAME_CODE_PRESETS)[number]) => {
+    if (rules.some((rule) => rule.enabled && rule.match_field === "hostname" && rule.match_operator === "contains" && rule.pattern.toLowerCase() === preset.code)) {
+      setMessage(`The ${preset.code.toUpperCase()} hostname code is already configured.`);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      await endpoints.createIdentityRule({
+        ...EMPTY_RULE,
+        name: `Hostname code ${preset.code.toUpperCase()} · ${preset.label}`,
+        property_id: window.localStorage.getItem("hiop.active_property_id"),
+        pattern: preset.code,
+        output_device_type: preset.type,
+        friendly_name_template: "{device_type} {hostname}",
+        confidence: 75,
+      });
+      setMessage(`${preset.label} will now be recognised when the hostname contains “${preset.code}”.`);
+      await load();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Hostname code could not be added.");
     } finally {
       setBusy(false);
     }
@@ -1148,11 +1181,24 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
         <section className="discovery-panel">
           {canManage ? (
             <form className="identity-rule-form" onSubmit={submit}>
-              <h3>Add hostname rule</h3>
+              <div className="hostname-code-presets">
+                <div>
+                  <h3>Use your hostname codes</h3>
+                  <p>Choose the codes your hotel already uses. One click creates the matching rule.</p>
+                </div>
+                <div className="hostname-code-buttons">
+                  {HOSTNAME_CODE_PRESETS.map((preset) => (
+                    <button key={preset.code} type="button" disabled={busy} onClick={() => void addHostnameCode(preset)}>
+                      <strong>{preset.code.toUpperCase()}</strong>
+                      <span>{preset.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <h3>Add another hostname rule</h3>
               <label>
-                Rule name
+                Rule name <small>Optional</small>
                 <input
-                  required
                   value={form.name}
                   onChange={(event) =>
                     setForm({ ...form, name: event.target.value })
@@ -1237,6 +1283,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
                       "Access Point",
                       "UPS",
                       "Phone",
+                      "Security Device",
                       "Other",
                     ].map((value) => (
                       <option key={value}>{value}</option>

@@ -183,7 +183,18 @@ def execute_safe_job(db,job,user):
         logger.info("discovery_progress scan_id=%s property_id=%s network=%s phase=host_discovery host=%s status=%s completed=%s total=%s",job.id,job.property_id,job.network_range,getattr(device,"ip_address",None),"discovered" if device else "no_response",completed,total)
     try:run=DiscoveryService(db,config=config).discover_range(job.network_range,trigger_type=job.trigger_type,triggered_by=user.id,audit_actor=user.username,progress_callback=report_progress,cancel_requested=is_cancelled)
     except Exception as exc:
-        job=db.get(DiscoveryJob,job.id);job.status="failed";job.tasks_failed+=1;job.completed_at=datetime.now(timezone.utc);db.commit();raise HTTPException(502,f"Safe discovery failed: {exc}") from exc
+        # Preserve hosts that were already observed. A later enrichment failure
+        # must not make useful partial scan data appear as zero devices.
+        job=db.get(DiscoveryJob,job.id)
+        job.status="completed_with_warnings" if job.hosts_completed else "failed"
+        job.current_stage=f"failed: {type(exc).__name__}"[:60]
+        job.tasks_failed+=1
+        job.completed_at=datetime.now(timezone.utc)
+        db.commit()
+        logger.exception("Quick discovery failed after %s hosts for %s", job.hosts_completed, job.network_range)
+        if job.hosts_completed:
+            return {"job":job,"legacy_run_id":None,"results":db.query(DiscoveryResult).filter_by(job_id=job.id).count(),"hosts_responded":0,"errors":1,"warnings":[f"{type(exc).__name__}: {exc}"]}
+        raise HTTPException(502,f"Safe discovery failed: {exc}") from exc
     def cancelled_response():
         job.status="cancelled";job.current_stage="cancelled";job.completed_at=datetime.now(timezone.utc);audit(db,user,"CANCEL","discovery_job",job.id,f"Cancelled scan after {job.hosts_completed} of {job.hosts_total} addresses");db.commit();return {"job":job,"legacy_run_id":run.id,"results":db.query(DiscoveryResult).filter_by(job_id=job.id).count(),"hosts_responded":run.hosts_responded,"errors":run.error_count,"warnings":[run.error_summary] if run.error_summary else []}
     db.refresh(job)

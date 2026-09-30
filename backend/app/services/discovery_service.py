@@ -317,6 +317,7 @@ class DiscoveryService:
             workers = max(1, min(int(settings["concurrency_limit"]), 32, len(hosts) or 1))
             completed = 0
             cancelled = False
+            observed_addresses: set[str] = set()
             executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="hiop-discovery")
             futures = {
                 executor.submit(
@@ -338,6 +339,7 @@ class DiscoveryService:
                     try:
                         observation, online = future.result()
                         if observation:
+                            observed_addresses.add(observation["ip_address"])
                             discovered_device, is_new, inventory_matched = self._record_observation(observation)
                             run.hosts_responded += int(online)
                             run.new_devices += int(is_new)
@@ -359,6 +361,44 @@ class DiscoveryService:
                     executor.shutdown(wait=False, cancel_futures=True)
                 else:
                     executor.shutdown(wait=True)
+
+            # Printers, cameras, POS terminals, and security appliances often
+            # block ICMP and common TCP ports. Windows can still learn their
+            # MAC address while probing the subnet, so use the refreshed ARP
+            # cache before declaring them absent.
+            if not cancelled:
+                refreshed_arp = {
+                    address: normalize_mac(mac)
+                    for address, mac in self.arp_reader().items()
+                    if ipaddress.ip_address(address) in network
+                }
+                for address, mac_address in refreshed_arp.items():
+                    if address in observed_addresses or not mac_address:
+                        continue
+                    hostname = self.resolver(address, float(settings["ping_timeout_seconds"])) if settings.get("automatic_hostname_lookup", True) else None
+                    vendor = lookup_vendor(mac_address) if settings.get("automatic_vendor_lookup", True) else None
+                    identity = fingerprint(hostname, vendor)
+                    observation = {
+                        "ip_address": address,
+                        "mac_address": mac_address,
+                        "hostname": hostname,
+                        "vendor": vendor,
+                        "operating_system_guess": identity.operating_system_guess,
+                        "device_type_guess": identity.device_type_guess,
+                        "subnet": str(network),
+                        "discovery_method": "arp-cache",
+                        "response_time": None,
+                        "status": DiscoveryStatus.UNKNOWN,
+                        "confidence_score": identity.confidence_score,
+                    }
+                    discovered_device, is_new, inventory_matched = self._record_observation(observation)
+                    observed_addresses.add(address)
+                    run.new_devices += int(is_new)
+                    run.updated_devices += int(not is_new)
+                    run.matched_devices += int(inventory_matched)
+                    if progress_callback:
+                        progress_callback(completed, len(hosts), discovered_device, False)
+                self.db.commit()
 
             if cancelled:
                 errors.append(f"Cancelled after checking {completed} of {len(hosts)} addresses")
