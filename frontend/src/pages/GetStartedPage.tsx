@@ -22,8 +22,8 @@ export default function GetStartedPage(){
           <span className="desktop-download-icon">â†“</span>
           <div><p className="public-eyebrow">Desktop application</p><h2>Download HIOP Desktop</h2></div>
         </div>
-        <p className="desktop-download-copy">Install HIOP on a Windows computer at the hotel or office. Your data and operational tools run locally on that computer.</p>
-        <div className="desktop-download-meta"><span>Windows 10 or later</span><span>Local database included</span><span>Version 2.0.4</span></div>
+        <p className="desktop-download-copy">Install HIOP on a Windows computer at the hotel or office. The bundled Python runtime and local database let HIOP run there without a separate Python installation.</p>
+        <div className="desktop-download-meta"><span>Windows 10 or later</span><span>Python 3.12 included</span><span>Local database included</span><span>Version 2.0.4</span></div>
         <a className="public-button desktop-download-button" href={installerUrl}>Download for Windows <span aria-hidden="true">â†’</span></a>
         <p className="onboarding-note">Windows may ask for permission before installation. Choose a computer that stays available for monitoring and network discovery.</p>
         <div className="desktop-download-links"><Link to="/features">Explore features</Link></div>
