@@ -4,7 +4,7 @@ This folder contains the Windows desktop runtime for HIOP.
 
 The Electron shell loads the desktop build of the current React interface and starts a local FastAPI backend on `127.0.0.1:8765`.
 
-The packaged desktop build includes the backend Python runtime, installed backend dependencies, and a bundled PostgreSQL runtime. On first launch, HIOP initializes its private local database under `%LOCALAPPDATA%\HIOP Desktop\postgres-data`, starts it on localhost, applies migrations, and then starts the API.
+The packaged desktop build includes a copied, portable Python 3.12 runtime with the backend dependencies installed, and a bundled PostgreSQL runtime. It does not rely on the Python installation or filesystem paths of the computer that built the installer. On first launch, HIOP initializes its private local database under `%LOCALAPPDATA%\HIOP Desktop\postgres-data`, starts it on localhost, applies migrations, and then starts the API.
 
 ## Local development flow
 
@@ -23,7 +23,7 @@ From the repository root:
 2. Build the unpacked Windows app with `npm --prefix desktop run dist:unpacked`.
 3. The runnable app is created at `desktop/release/win-unpacked/HIOP Desktop.exe`.
 
-The packaging step stages these resources into the app:
+The packaging step stages these resources into the app. The backend runtime build copies the Python 3.12 base runtime and installs the backend requirements into its local `Lib\site-packages`, rather than creating a virtual environment that points back to the builder's Python installation.
 
 - Desktop frontend bundle
 - Backend source and migrations

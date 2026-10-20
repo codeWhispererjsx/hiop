@@ -60,6 +60,10 @@ function Copy-CleanDirectory($Source, $Destination) {
 
 Copy-CleanDirectory $backendSource $backendTarget
 if (Test-Path $pythonRuntimeSource) {
+  if (Test-Path $pythonRuntimeTarget) {
+    Remove-Item -LiteralPath $pythonRuntimeTarget -Recurse -Force
+  }
+  New-Item -ItemType Directory -Force $pythonRuntimeTarget | Out-Null
   Copy-CleanDirectory $pythonRuntimeSource $pythonRuntimeTarget
 }
 if (Test-Path $postgresRuntimeSource) {

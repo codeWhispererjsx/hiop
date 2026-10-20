@@ -4,6 +4,9 @@ const path = require("path");
 const fs = require("fs");
 
 const isDev = Boolean(process.env.HIOP_DESKTOP_URL);
+if (isDev) {
+  app.setPath("userData", path.join(app.getPath("appData"), "HIOP Desktop Dev"));
+}
 const resourcesRoot = process.resourcesPath || path.join(__dirname, "..", "..");
 const repoRoot = path.join(__dirname, "..", "..");
 const packagedFrontend = path.join(resourcesRoot, "frontend", "index.html");

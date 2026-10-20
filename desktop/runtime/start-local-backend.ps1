@@ -25,9 +25,11 @@ $packagedPostgres = Join-Path $resourceRoot "postgres"
 $repoPostgres = Join-Path (Resolve-Path (Join-Path $scriptRoot "..\..")) "desktop\build-runtime\postgres"
 $postgresRoot = if (Test-Path (Join-Path $packagedPostgres "bin\pg_ctl.exe")) { $packagedPostgres } elseif (Test-Path (Join-Path $repoPostgres "bin\pg_ctl.exe")) { $repoPostgres } else { "" }
 $python = $env:HIOP_DESKTOP_PYTHON
-$packagedPython = Join-Path $resourceRoot "python\Scripts\python.exe"
+$packagedPython = Join-Path $resourceRoot "python\python.exe"
+$legacyPackagedPython = Join-Path $resourceRoot "python\Scripts\python.exe"
 $repoPython = Join-Path (Resolve-Path (Join-Path $scriptRoot "..\..")) "backend\.venv\Scripts\python.exe"
 if (-not $python -and (Test-Path $packagedPython)) { $python = $packagedPython }
+if (-not $python -and (Test-Path $legacyPackagedPython)) { $python = $legacyPackagedPython }
 if (-not $python -and (Test-Path $repoPython)) { $python = $repoPython }
 if (-not $python) { $python = "py" }
 
@@ -236,4 +238,3 @@ finally {
   Pop-Location
   Stop-HIOPPostgres
 }
-
