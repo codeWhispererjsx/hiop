@@ -234,11 +234,12 @@ class ActiveDirectoryReconciliationService:
                         "Complete valid inventory fields are required for device onboarding.",
                     ) from exc
                 values = resolve_device_hierarchy(self.db, payload.model_dump(exclude={"status"}))
-                if self.db.scalar(select(Device.id).where(or_(
-                    func.lower(Device.asset_tag) == payload.asset_tag.casefold(),
-                    func.lower(Device.mac_address) == payload.mac_address.casefold(),
-                    func.lower(Device.serial_number) == payload.serial_number.casefold(),
-                )).limit(1)):
+                identity_filters = [func.lower(Device.asset_tag) == payload.asset_tag.casefold()]
+                if payload.mac_address:
+                    identity_filters.append(func.lower(Device.mac_address) == payload.mac_address.casefold())
+                if payload.serial_number:
+                    identity_filters.append(func.lower(Device.serial_number) == payload.serial_number.casefold())
+                if self.db.scalar(select(Device.id).where(or_(*identity_filters)).limit(1)):
                     raise HTTPException(status.HTTP_409_CONFLICT, "Device identifiers already exist.")
                 device = Device(**values, status=values["inventory_status"], network_status="Unknown")
                 self.db.add(device); self.db.flush()

@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.models.system_health import HealthEvent, JobExecution, NotificationDelivery, SystemHealthSnapshot
 from app.models.local_agent import LocalAgentRegistration
 from app.models.discovery_intelligence import DiscoveryJob, DiscoveryResult
-from app.models.snmp import SNMPPollRun
 from app.models.network_scan import NetworkScan
 
 logger = logging.getLogger(__name__)

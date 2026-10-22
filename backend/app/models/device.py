@@ -48,10 +48,10 @@ class Device(Base):
         nullable=False
     )
 
-    serial_number: Mapped[str] = mapped_column(
+    serial_number: Mapped[str | None] = mapped_column(
         String,
         unique=True,
-        nullable=False
+        nullable=True
     )
 
     department: Mapped[str] = mapped_column(

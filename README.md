@@ -101,6 +101,7 @@ The Lagos Continental rollout must follow the [controlled pilot runbook](docs/LA
 
 ## Documentation
 
+- [HIOP Architecture and Deployment Guide](docs/HIOP_ARCHITECTURE_AND_DEPLOYMENT_GUIDE.md)
 - [Architecture](docs/Architecture.md)
 - [API contract](docs/API.md)
 - [Database design](docs/Database.md)

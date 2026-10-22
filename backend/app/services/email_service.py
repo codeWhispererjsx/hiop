@@ -1,11 +1,13 @@
 import smtplib
 import time
+import logging
 from email.message import EmailMessage
 from email.utils import formataddr
 from enum import Enum
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
 
 class EmailDeliveryStatus(str, Enum):
     PENDING = "pending"
@@ -170,7 +172,7 @@ def _send_email_raw(
     }
 
 
-def send_email(subject: str, body: str, recipient: str | None = None, max_retries: int = None) -> dict:
+def send_email(subject: str, body: str, recipient: str | None = None, max_retries: int = None, notification_type: str = "email", organization_id=None) -> dict:
     """Deliver email and persist provider-neutral delivery health metadata."""
     result = _send_email_raw(subject, body, recipient, max_retries)
     try:
@@ -181,11 +183,11 @@ def send_email(subject: str, body: str, recipient: str | None = None, max_retrie
         status_value = getattr(result.get("status"), "value", result.get("status", "failed"))
         db = SessionLocal()
         try:
-            db.add(NotificationDelivery(notification_type="email", recipient=destination or "unconfigured", status=status_value, attempted_at=datetime.now(timezone.utc), delivered_at=datetime.now(timezone.utc) if status_value == "sent" else None, retry_count=max(0, int(result.get("attempts", 1))-1), error=None if status_value == "sent" else str(result.get("safe_message", "Delivery failed"))[:500]))
+            db.add(NotificationDelivery(notification_type=notification_type, recipient=destination or "unconfigured", status=status_value, attempted_at=datetime.now(timezone.utc), delivered_at=datetime.now(timezone.utc) if status_value == "sent" else None, retry_count=max(0, int(result.get("attempts", 1))-1), error=None if status_value == "sent" else str(result.get("safe_message", "Delivery failed"))[:500], organization_id=organization_id))
             db.commit()
         finally: db.close()
     except Exception:
-        pass
+        logger.exception("Unable to persist email delivery status notification_type=%s", notification_type)
     return result
 
 

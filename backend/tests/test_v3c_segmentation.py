@@ -50,13 +50,10 @@ def test_membership_history_supports_current_and_stale_without_deletion():
     assert not row.is_current and row.stale_at and row.first_observed_at < row.last_observed_at
 
 
-def test_v3c_api_is_read_only_with_explicit_admin_refresh():
+def test_v3c_api_is_not_mounted():
     from app.main import app
     paths=app.openapi()["paths"]
-    assert set(paths["/api/v1/segmentation/vlans"])=={"get"}
-    assert set(paths["/api/v1/segmentation/devices/{device_id}"])=={"get"}
-    assert set(paths["/api/v1/segmentation/subnets"])=={"get"}
-    assert set(paths["/api/v1/segmentation/switches/{device_id}/refresh"])=={"post"}
+    assert not any(path.startswith("/api/v1/segmentation") for path in paths)
     source=Path(__file__).parents[1].joinpath("app/services/segmentation_service.py").read_text(encoding="utf-8").lower()
     for forbidden in ("snmp set","create_vlan","delete_vlan","assign_vlan","configure_trunk","change_firewall"):
         assert forbidden not in source

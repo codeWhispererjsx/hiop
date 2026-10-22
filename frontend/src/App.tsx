@@ -25,8 +25,6 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AutomationPage = lazy(() => import("./pages/AutomationPage"));
 const IncidentsPage = lazy(() => import("./pages/IncidentsPage"));
 const DiscoveryIntelligencePage = lazy(() => import("./pages/DiscoveryIntelligencePage"));
-const TopologyPage = lazy(() => import("./pages/TopologyPage"));
-const SegmentationPage = lazy(() => import("./pages/SegmentationPage"));
 const NetworkPerformancePage = lazy(() => import("./pages/NetworkPerformancePage"));
 const AdministrationPage = lazy(() => import("./pages/AdministrationPage"));
 const IntegrationsPage = lazy(() => import("./pages/IntegrationsPage"));
@@ -34,6 +32,7 @@ const AlertsPage = lazy(() => import("./pages/AlertsPage"));
 const AssetFormPage = lazy(() => import("./pages/AssetFormPage"));
 const AssetDetailsPage = lazy(() => import("./pages/AssetDetailsPage"));
 const PlatformControlCenterPage = lazy(() => import("./pages/PlatformControlCenterPage"));
+const PlatformBillingPage = lazy(() => import("./pages/PlatformBillingPage"));
 const ProcurementPage = lazy(() => import("./pages/ProcurementPage"));
 const VendorsPage = lazy(() => import("./pages/VendorsPage"));
 const OrganizationStructurePage = lazy(() => import("./pages/OrganizationStructurePage"));
@@ -41,9 +40,9 @@ const ProblemsPage = lazy(() => import("./pages/ProblemsPage"));
 const ChangesPage = lazy(() => import("./pages/ChangesPage"));
 const KnowledgePage = lazy(() => import("./pages/KnowledgePage"));
 const ReportingPage = lazy(() => import("./pages/ReportingPage"));
+const InventoryImportsPage = lazy(() => import("./pages/InventoryImportsPage"));
 const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
 const BillingPage = lazy(() => import("./pages/BillingPage"));
-const SNMPPage = lazy(() => import("./pages/SNMPPage"));
 const LocalAgentsPage = lazy(() => import("./pages/LocalAgentsPage"));
 const ThisComputerPage = lazy(() => import("./pages/ThisComputerPage"));
 const AccountAccessPage = lazy(() => import("./pages/AccountAccessPage"));
@@ -116,9 +115,6 @@ export default function App() {
     <Route path="/devices/:id" element={protectedPage(<DeviceDetailsPage />)} />
     <Route path="/network" element={protectedPage(<NetworkPage />)} />
     <Route path="/alerts" element={protectedPage(<AlertsPage />)} />
-    <Route path="/snmp" element={protectedPage(<SNMPPage />)} />
-    <Route path="/topology" element={protectedPage(<TopologyPage />)} />
-    <Route path="/segmentation" element={protectedPage(<SegmentationPage />)} />
     <Route path="/network-performance" element={protectedPage(<NetworkPerformancePage />)} />
     <Route path="/discovery-intelligence/*" element={protectedPage(<DiscoveryIntelligencePage />)} />
     <Route path="/automation/*" element={protectedPage(<AutomationPage />)} />
@@ -138,6 +134,7 @@ export default function App() {
     <Route path="/knowledge/new" element={roleProtectedPage(<KnowledgePage />, ["admin", "technician"])} />
     <Route path="/knowledge/:id" element={protectedPage(<KnowledgePage />)} />
     <Route path="/reports" element={protectedPage(<ReportingPage />)} />
+    <Route path="/imports" element={roleProtectedPage(<InventoryImportsPage />, ["admin"])} />
     <Route path="/hierarchy" element={protectedPage(<HierarchyPage />)} />
     <Route path="/users" element={roleProtectedPage(<UsersPage />, ["admin"])} />
     <Route path="/users/new" element={roleProtectedPage(<UserFormPage mode="create" />, ["admin"])} />
@@ -152,8 +149,8 @@ export default function App() {
     <Route path="/administration/properties" element={roleProtectedPage(<PropertiesPage />, ["admin"])} />
     {!isDesktopMode && <Route path="/administration/billing" element={roleProtectedPage(<BillingPage />, ["admin"])} />}
     <Route path="/administration/agents" element={roleProtectedPage(isDesktopMode ? <ThisComputerPage /> : <LocalAgentsPage />, ["admin"])} />
+    {!isDesktopMode && <Route path="/platform/billing" element={roleProtectedPage(<PlatformBillingPage />, ["platformadmin"])} />}
     {!isDesktopMode && <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />}
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes></Suspense>;
 }
-

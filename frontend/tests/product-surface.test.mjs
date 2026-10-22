@@ -9,11 +9,12 @@ test("the sidebar keeps seven primary pillars and exposes focused submenus", () 
   for (const label of ["Overview", "Discover", "Monitor", "Manage", "Automate", "Maintain", "Administration"]) {
     assert.match(sidebar, new RegExp(`label: "${label}"`));
   }
-  for (const label of ["Alerts", "Topology", "Segments", "Users", "Roles & access", "Audit log", "Settings"]) {
+  for (const label of ["Alerts", "Users", "Roles & access", "Audit log", "Settings"]) {
     assert.match(sidebar, new RegExp(`label: ?"${label}"`));
   }
+  assert.doesNotMatch(sidebar, /label: ?"Topology"/);
   assert.match(sidebar, /nav-sublink/);
-  assert.match(app, /path="\/topology"/);
+  assert.doesNotMatch(app, /path="\/topology"/);
   for (const route of ["analytics", "business-intelligence", "cmdb", "tickets"]) {
     assert.doesNotMatch(app, new RegExp(`path="/${route}`));
   }

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.device import Device
 from app.models.discovered_device import DiscoveredDevice, ReviewStatus
-from app.models.hierarchy import Building, Department, Floor, NetworkZone, Room
+from app.models.hierarchy import Building, Department, Floor, NetworkZone, Property, Room
 from app.models.inventory_import import (
     ImportExecutionResult,
     ImportExecutionStatus,
@@ -85,6 +85,26 @@ class ImportFinalizationService:
         if not session:
             raise FinalizationNotFoundError("Import session not found")
         return session
+
+    def _hierarchy_query(self, model):
+        query = select(model).where(model.is_active.is_(True))
+        organization_id = self.db.info.get("organization_id")
+        if organization_id is None:
+            return query
+        properties = select(Property.id).where(Property.organization_id == organization_id)
+        property_id = self.db.info.get("property_id")
+        if property_id is not None:
+            properties = properties.where(Property.id == property_id)
+        if model in (Department, Building, NetworkZone):
+            return query.where(model.property_id.in_(properties))
+        buildings = select(Building.id).where(Building.property_id.in_(properties))
+        if model is Floor:
+            return query.where(Floor.organization_id == organization_id, Floor.building_id.in_(buildings))
+        floors = select(Floor.id).where(
+            Floor.organization_id == organization_id,
+            Floor.building_id.in_(buildings),
+        )
+        return query.where(Room.organization_id == organization_id, Room.floor_id.in_(floors))
 
     def _rows(self, session_id: UUID) -> list[ImportedDevice]:
         return list(
@@ -238,11 +258,11 @@ class ImportFinalizationService:
         department_name = row.department_name
         room_name = row.room_name
         if approved_location and approved_location.department_id:
-            department = self.db.get(Department, approved_location.department_id)
+            department = self.db.scalar(self._hierarchy_query(Department).where(Department.id == approved_location.department_id))
             if department:
                 department_name = department.name
         if approved_location and approved_location.room_id:
-            room = self.db.get(Room, approved_location.room_id)
+            room = self.db.scalar(self._hierarchy_query(Room).where(Room.id == approved_location.room_id))
             if room:
                 room_name = room.name
         values = {
@@ -297,7 +317,7 @@ class ImportFinalizationService:
             value = ids.get(field)
             if value:
                 loaded[field] = self.db.scalar(
-                    select(model).where(model.id == UUID(value), model.is_active.is_(True))
+                    self._hierarchy_query(model).where(model.id == UUID(value))
                 )
                 if not loaded[field]:
                     blockers.append({"code": "hierarchy_unavailable", "row": plan["source_row_number"], "message": f"Selected {field.removesuffix('_id')} is unavailable"})
@@ -355,6 +375,23 @@ class ImportFinalizationService:
             if self.db.scalar(select(func.count(Device.id)).where((Device.asset_tag.in_(assets)) | (Device.mac_address.in_(macs)) | (Device.serial_number.in_(serials)))):
                 blockers.append({"code": "inventory_identifier_conflict", "message": "A planned identifier now exists in inventory"})
         counts = Counter(plan["disposition"] for plan in plans)
+        raw_property_id = session.mapping_metadata.get("tenant_property_id")
+        try:
+            import_property_id = UUID(raw_property_id) if raw_property_id else None
+        except ValueError:
+            import_property_id = None
+        organization_id = self.db.info.get("organization_id")
+        if import_property_id is None or organization_id is None or not self.db.scalar(
+            select(Property.id).where(
+                Property.id == import_property_id,
+                Property.organization_id == organization_id,
+                Property.is_active.is_(True),
+            )
+        ):
+            blockers.append({
+                "code": "missing_import_property",
+                "message": "Select an active property in this organization before final inventory changes",
+            })
         return {
             "ready": not blockers,
             "status": session.status.value,
@@ -405,8 +442,24 @@ class ImportFinalizationService:
     def _create_device(self, result: ImportExecutionResult, row: ImportedDevice, actor: User) -> Device:
         payload = DeviceCreate(**result.plan["values"])
         values = payload.model_dump(exclude={"status"})
+        session = self._session(row.import_session_id)
+        raw_property_id = session.mapping_metadata.get("tenant_property_id")
+        try:
+            property_id = UUID(raw_property_id) if raw_property_id else None
+        except ValueError as error:
+            raise FinalizationValidationError("Import property is invalid; re-review the session") from error
+        organization_id = self.db.info.get("organization_id")
+        if property_id is None or not self.db.scalar(
+            select(Property.id).where(
+                Property.id == property_id,
+                Property.organization_id == organization_id,
+                Property.is_active.is_(True),
+            )
+        ):
+            raise FinalizationValidationError("Import property is no longer active in this organization")
         device = Device(
             **values,
+            property_id=property_id,
             status=values["inventory_status"],
             network_status="Unknown",
         )

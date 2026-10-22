@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Icon } from "../components/Icon";
 import BrandLogo from "../components/BrandLogo";
@@ -12,17 +12,29 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(() => {
+    const warning = sessionStorage.getItem("hiop.auth_restore_warning") ?? "";
+    sessionStorage.removeItem("hiop.auth_restore_warning");
+    return warning;
+  });
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const handleStorageError = () => {
+      setMessage(sessionStorage.getItem("hiop.auth_restore_warning") ?? "HIOP could not securely clear the saved sign-in.");
+    };
+    window.addEventListener("hiop:auth-storage-error", handleStorageError);
+    return () => window.removeEventListener("hiop:auth-storage-error", handleStorageError);
+  }, []);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setMessage("");
     setBusy(true);
     try {
-      clearAuthToken();
+      await clearAuthToken();
       const data = await endpoints.login(email, password);
-      setAuthToken(data.access_token);
+      await setAuthToken(data.access_token);
       const user = await endpoints.me();
       setPassword("");
       navigate(user.role === "platformadmin" ? "/platform" : "/dashboard");

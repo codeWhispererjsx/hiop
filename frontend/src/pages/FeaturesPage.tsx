@@ -1,8 +1,8 @@
 import {PublicLayout} from "../components/PublicLayout";
 const sections=[
  ["Network discovery","Find reachable technology using bounded, property-scoped discovery. Review evidence before devices enter managed inventory."],
- ["Device intelligence","Correlate DNS, DHCP, SNMP, Active Directory, and observed identity without pretending uncertain evidence is fact."],
- ["Network operations","Understand topology, switch ports, VLAN segmentation, health, alerts, and potential operational impact."],
+ ["Device intelligence","Correlate DNS, DHCP, Active Directory, and observed identity without pretending uncertain evidence is fact."],
+ ["Network operations","Monitor device availability, review alerts, and understand potential operational impact."],
  ["Asset management","Track ownership, lifecycle, warranties, acquisition, vendors, departments, and locations in one managed record."],
  ["IT service operations","Connect incidents to services and assets, manage recurring problems, govern changes, and preserve operational knowledge."],
  ["Multi-property management","Give hotel groups centralized visibility while users and operational records remain property scoped."],

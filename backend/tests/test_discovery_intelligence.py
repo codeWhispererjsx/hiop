@@ -1,5 +1,5 @@
 from app.models.discovery_intelligence import DiscoveryCredential,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryPolicy,DiscoveryResult,DiscoveryStage
-from app.services.discovery_intelligence_service import DEVICE_FAMILIES,PIPELINE,configuration_checksum,confidence,discovered_description,hostname_evidence,identify,interpret_hostname,merge_hostnames,review_status,services_from_ports
+from app.services.discovery_intelligence_service import DEVICE_FAMILIES,PIPELINE,configuration_checksum,confidence,discovered_description,hostname_evidence,identify,merge_hostnames,review_status,services_from_ports
 from app.api.v1.discovery_intelligence import normalize_network_input
 
 def test_quick_scan_network_shorthand_is_normalized_without_weakening_private_scope():
@@ -8,13 +8,17 @@ def test_quick_scan_network_shorthand_is_normalized_without_weakening_private_sc
     assert str(normalize_network_input("10.50.20.1-254")) == "10.50.20.0/24"
 
 def test_pipeline_has_all_ordered_retryable_stages():
-    assert len(PIPELINE)==20 and PIPELINE[0]=="icmp_reachability" and PIPELINE[-1]=="configuration_item_update"
-    assert {"snmp_discovery","lldp_cdp_topology","active_directory_correlation","confidence_calculation"}<=set(PIPELINE)
+    assert len(PIPELINE)==18 and PIPELINE[0]=="icmp_reachability" and PIPELINE[-1]=="configuration_item_update"
+    assert {"active_directory_correlation","confidence_calculation"}<=set(PIPELINE)
+    assert not {"snmp_discovery","lldp_cdp_topology"}&set(PIPELINE)
 def test_confidence_is_explainable_and_capped():
-    result=confidence(["ping_response","mac_address","vendor_match","hostname_match","snmp","ad_match","cmdb_match","lldp","service_fingerprint","operating_system"]);assert result["score"]==100 and sum(x["weight"] for x in result["contributions"])==115;assert confidence(["ping_response","ping_response"])["score"]==15
-def test_hostname_rules_are_suggestions_and_unknown_names_stay_unknown():
-    assert interpret_hostname("heloshaposbqt01", {"POS":"Point of Sale"}, {"BQT":"Banquet"}) == {"original_hostname":"heloshaposbqt01","device_type":"Point of Sale","department":"Banquet","device_number":"01","friendly_name":"POS Terminal 01"}
-    assert interpret_hostname("ordinary-host") is None
+    result=confidence(["ping_response","mac_address","vendor_match","hostname_match","ad_match","cmdb_match","service_fingerprint","operating_system"]);assert result["score"]==90 and sum(x["weight"] for x in result["contributions"])==90;assert confidence(["ping_response","ping_response"])["score"]==15
+
+def test_removed_network_intelligence_apis_are_not_mounted():
+    from app.main import app
+    paths={route.path for route in app.routes if hasattr(route,"path")}
+    assert not any("/snmp" in path or "/topology" in path or "port-intelligence" in path or "/segmentation" in path for path in paths)
+    assert not any("/discovery-intelligence/snmp" in path or path.endswith("/discovery-intelligence/topology") for path in paths)
 def test_discovered_description_preserves_manual_or_inventory_text():
     assert discovered_description("Front desk terminal", "Manual", "DHCP text", "DHCP") == ("Front desk terminal", "Manual")
     assert discovered_description(None, None, "DHCP text", "DHCP") == ("DHCP text", "DHCP")

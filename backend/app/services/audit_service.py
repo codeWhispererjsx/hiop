@@ -8,6 +8,7 @@ from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Query, Session
 
 from app.models.audit_log import AuditLog
+from app.models.hierarchy import Property
 from app.models.user import User
 
 
@@ -62,6 +63,7 @@ def _filtered_query(
     search: str | None,
     organization_id=None,
     property_id=None,
+    outcome: str | None = None,
     include_archived: bool = False,
 ) -> Query:
     if start_date and end_date and start_date > end_date:
@@ -71,6 +73,17 @@ def _filtered_query(
         query = query.filter(AuditLog.organization_id == organization_id)
     if property_id is not None:
         query = query.filter(AuditLog.property_id == property_id)
+    failure = or_(
+        AuditLog.response_status >= 400,
+        func.lower(AuditLog.action).like("%failed%"),
+        func.lower(AuditLog.action).like("%failure%"),
+        func.lower(AuditLog.action).like("%denied%"),
+        func.lower(AuditLog.action).like("%error%"),
+    )
+    if outcome == "failure":
+        query = query.filter(failure)
+    elif outcome == "success":
+        query = query.filter(~failure)
     if not include_archived:
         query = query.filter(AuditLog.archived_at.is_(None))
     if actor:
@@ -122,21 +135,53 @@ def _summary(db: Session, organization_id=None, property_id=None, include_archiv
     }
 
 
-def _options(db: Session, organization_id=None, property_id=None, include_archived=False) -> dict[str, list[str]]:
+def _options(db: Session, organization_id=None, property_id=None, include_archived=False) -> dict:
     def values(column):
         query = _scoped(db, organization_id, property_id, include_archived).with_entities(column)
         return [value for value, in query.filter(column.isnot(None), column != "").distinct().order_by(column).all()]
-    return {"actors": values(AuditLog.actor), "actions": values(AuditLog.action), "entity_types": values(AuditLog.entity_type)}
+    properties = db.query(Property.id, Property.name)
+    if organization_id is not None:
+        properties = properties.filter(Property.organization_id == organization_id)
+    if property_id is not None:
+        properties = properties.filter(Property.id == property_id)
+    return {
+        "actors": values(AuditLog.actor),
+        "actions": values(AuditLog.action),
+        "entity_types": values(AuditLog.entity_type),
+        "properties": [{"id": str(row.id), "name": row.name} for row in properties.order_by(Property.name).all()],
+    }
 
 
-def list_logs(db: Session, actor=None, action=None, entity_type=None, entity_id=None, start_date=None, end_date=None, search=None, page=1, page_size=25, sort_order="desc", organization_id=None, property_id=None, include_archived=False):
-    query = _filtered_query(db, actor, action, entity_type, entity_id, start_date, end_date, search, organization_id, property_id, include_archived)
+def _outcome(log: AuditLog) -> str:
+    action = log.action.casefold()
+    if (log.response_status is not None and log.response_status >= 400) or any(
+        marker in action for marker in ("failed", "failure", "denied", "error")
+    ):
+        return "failure"
+    return "success"
+
+
+def list_logs(db: Session, actor=None, action=None, entity_type=None, entity_id=None, start_date=None, end_date=None, search=None, page=1, page_size=25, sort_order="desc", organization_id=None, property_id=None, outcome=None, include_archived=False):
+    query = _filtered_query(db, actor, action, entity_type, entity_id, start_date, end_date, search, organization_id, property_id, outcome, include_archived)
     total = query.count()
     pages = max(1, math.ceil(total / page_size))
     if total and page > pages:
         raise HTTPException(400, "Requested page is outside the filtered result set")
     order = AuditLog.created_at.asc() if sort_order == "asc" else AuditLog.created_at.desc()
-    items = query.order_by(order, AuditLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    rows = query.order_by(order, AuditLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    items = [
+        {
+            "id": row.id,
+            "actor": row.actor,
+            "action": row.action,
+            "entity_type": row.entity_type,
+            "entity_id": row.entity_id,
+            "description": row.description,
+            "created_at": row.created_at,
+            "outcome": _outcome(row),
+        }
+        for row in rows
+    ]
     return {"items": items, "total": total, "page": page, "page_size": page_size, "pages": pages, "summary": _summary(db, organization_id, property_id, include_archived), "options": _options(db, organization_id, property_id, include_archived)}
 
 
@@ -147,15 +192,15 @@ def get_log(db: Session, audit_id: str) -> AuditLog:
     return log
 
 
-def export_csv(db: Session, actor=None, action=None, entity_type=None, entity_id=None, start_date=None, end_date=None, search=None, sort_order="desc", organization_id=None, property_id=None):
-    query = _filtered_query(db, actor, action, entity_type, entity_id, start_date, end_date, search, organization_id, property_id)
+def export_csv(db: Session, actor=None, action=None, entity_type=None, entity_id=None, start_date=None, end_date=None, search=None, sort_order="desc", organization_id=None, property_id=None, outcome=None):
+    query = _filtered_query(db, actor, action, entity_type, entity_id, start_date, end_date, search, organization_id, property_id, outcome)
     order = AuditLog.created_at.asc() if sort_order == "asc" else AuditLog.created_at.desc()
     output = io.StringIO(newline="")
     writer = csv.writer(output)
     generated_at = datetime.now(timezone.utc)
     writer.writerow(["HIOP Audit Export", generated_at.isoformat()])
-    writer.writerow(["ID", "Timestamp", "Actor", "Action", "Entity Type", "Entity ID", "Description"])
+    writer.writerow(["ID", "Timestamp", "Actor", "Action", "Entity Type", "Entity ID", "Outcome", "Description"])
     for log in query.order_by(order, AuditLog.id.desc()).yield_per(500):
-        writer.writerow([_csv_safe(value) for value in [str(log.id), log.created_at.isoformat(), log.actor or "System", log.action, log.entity_type, log.entity_id, log.description]])
+        writer.writerow([_csv_safe(value) for value in [str(log.id), log.created_at.isoformat(), log.actor or "System", log.action, log.entity_type, log.entity_id, _outcome(log), log.description]])
     filename = f"hiop-audit-{generated_at.strftime('%Y%m%d-%H%M%S')}.csv"
     return "\ufeff" + output.getvalue(), filename

@@ -14,5 +14,6 @@ test("V3D exposes read-only time-window health intelligence",()=>{
 });
 
 test("device details explain unknown and supported health evidence",()=>{
-  for(const label of ["Current health","Availability (24h)","Packet loss","Hardware / system telemetry","Not enough historical data yet"]) assert.ok(device.includes(label));
+  for(const label of ["Health","Availability (24h)","Packet loss","Evidence confidence","Not enough historical data yet"]) assert.ok(device.includes(label));
+  assert.doesNotMatch(device,/SNMP source|Hardware \/ system telemetry/);
 });

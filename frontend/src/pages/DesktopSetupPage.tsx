@@ -45,11 +45,11 @@ export default function DesktopSetupPage() {
         if (!active) return;
         attempts += 1;
         if (attempts < 90) {
-          setError("Starting HIOP's private local service…");
+          setError("Starting the hotel's HIOP Site Server…");
           timer = window.setTimeout(readStatus, 1500);
           return;
         }
-        setError(caught instanceof Error ? caught.message : "Unable to start the local HIOP service.");
+        setError(caught instanceof Error ? caught.message : "Unable to start the HIOP Site Server.");
       }
     };
     void readStatus();
@@ -79,7 +79,7 @@ export default function DesktopSetupPage() {
         property_name: data.property_name, property_code: data.property_code, property_city: data.property_city,
         admin_username: data.admin_username, admin_email: data.admin_email, admin_password: data.admin_password,
       });
-      setAuthToken(result.access_token);
+      await setAuthToken(result.access_token);
       setOrganizationContext(result.organization.id);
       window.localStorage.setItem("hiop.active_property_id", result.property.id);
       navigate("/dashboard", { replace: true });
@@ -91,9 +91,9 @@ export default function DesktopSetupPage() {
     <ThemeToggle className="public-theme-toggle" aria-label="Toggle theme" />
     <section className="first-run desktop-setup-card">
       <BrandLogo className="login-logo" />
-      <p className="public-eyebrow">HIOP Desktop first run</p>
-      <h1>Set up this Windows installation.</h1>
-      <p>Create the local control owner, first organization, first property, and first organization administrator. This data stays in the private local database on this computer.</p>
+      <p className="public-eyebrow">HIOP Site Server first run</p>
+      <h1>Set up this Site Server.</h1>
+      <p>Create the local control owner, first organization, first property, and first organization administrator. This data stays in the private local database on this Site Server.</p>
       <div className="first-run-context">
         <div><span>Local API</span><strong>127.0.0.1:8765</strong></div>
         <div><span>Database</span><strong>Private bundled PostgreSQL</strong></div>

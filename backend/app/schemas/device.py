@@ -15,7 +15,7 @@ class DeviceCreate(BaseModel):
     device_type: str = Field(min_length=1, max_length=80)
     brand: str = Field(min_length=1, max_length=80)
     model: str = Field(min_length=1, max_length=120)
-    serial_number: str = Field(min_length=1, max_length=120)
+    serial_number: str | None = Field(default=None, max_length=120)
     department: str = Field(min_length=1, max_length=120)
     location: str = Field(min_length=1, max_length=160)
     ip_address: str = Field(min_length=3, max_length=45)
@@ -29,7 +29,9 @@ class DeviceCreate(BaseModel):
 
     @field_validator("asset_tag", "hostname", "device_type", "brand", "model", "serial_number", "department", "location")
     @classmethod
-    def strip_text(cls, value: str) -> str:
+    def strip_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         value = value.strip()
         if not value:
             raise ValueError("Value cannot be blank")
@@ -57,7 +59,7 @@ class DeviceUpdate(BaseModel):
     device_type: str | None = Field(default=None, min_length=1, max_length=80)
     brand: str | None = Field(default=None, min_length=1, max_length=80)
     model: str | None = Field(default=None, min_length=1, max_length=120)
-    serial_number: str | None = Field(default=None, min_length=1, max_length=120)
+    serial_number: str | None = Field(default=None, max_length=120)
     department: str | None = Field(default=None, min_length=1, max_length=120)
     location: str | None = Field(default=None, min_length=1, max_length=160)
     ip_address: str | None = Field(default=None, min_length=3, max_length=45)
@@ -102,7 +104,7 @@ class DeviceResponse(BaseModel):
     device_type: str
     brand: str
     model: str
-    serial_number: str
+    serial_number: str | None
     department: str
     location: str
     ip_address: str

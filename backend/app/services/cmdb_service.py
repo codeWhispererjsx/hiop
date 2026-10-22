@@ -169,7 +169,9 @@ def reconciliation_candidates(db, property_id=None, limit=500, source_types=None
     device_query=db.query(Device)
     if property_id:device_query=device_query.filter(Device.property_id==property_id)
     for device in (device_query.limit(limit) if "device" in source_types else []):
-        existing=db.query(ConfigurationItem).filter(or_(ConfigurationItem.asset_id==device.id,ConfigurationItem.serial_number==device.serial_number)).first()
+        identity_filters=[ConfigurationItem.asset_id==device.id]
+        if device.serial_number:identity_filters.append(ConfigurationItem.serial_number==device.serial_number)
+        existing=db.query(ConfigurationItem).filter(or_(*identity_filters)).first()
         score=100 if existing and existing.asset_id==device.id else 95 if existing else 0; level="exact" if score>=95 else "none"; action="link" if existing else "create"
         row=db.query(CIReconciliationCandidate).filter_by(source_type="device",source_id=device.id).first()
         values={"name":device.hostname,"serial_number":device.serial_number,"manufacturer":device.brand,"model":device.model,"property_id":str(device.property_id) if device.property_id else None,"asset_id":str(device.id)}

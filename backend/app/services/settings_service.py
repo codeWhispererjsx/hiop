@@ -64,9 +64,6 @@ DEFAULTS = {
     "incidents.external_communications_enabled": "false", "incidents.life_safety_confirmation_required": "true",
     "incidents.remediation_recommendations_enabled": "true", "incidents.automatic_remediation_enabled": "false",
     "incidents.incident_merge_enabled": "true", "incidents.incident_reopen_enabled": "true",
-    "snmp.enabled": "false", "snmp.allow_v1": "false", "snmp.allow_legacy_protocols": "false",
-    "snmp.default_timeout_seconds": "5", "snmp.default_retries": "1", "snmp.maximum_concurrent_polls": "5",
-    "snmp.metric_retention_days": "90", "snmp.interface_retention_days": "365",
 }
 
 
@@ -142,7 +139,6 @@ def read_bundle(db: Session) -> dict[str, Any]:
         "network": _group(values, "network"), "notifications": _group(values, "notifications"),
         "discovery": read_discovery(db),
         "incidents": read_incident_settings(db),
-        "snmp": read_snmp_settings(db),
         "email": {"configured": configured},
         "security": {"roles": ["admin", "technician", "viewer"]},
         "application": {"product_name": "HIOP", "short_name": "HIOP"},
@@ -225,17 +221,6 @@ def read_incident_settings(db: Session) -> dict[str, Any]:
         "p2_acknowledgement_minutes", "p2_containment_minutes", "p2_recovery_minutes",
         "incident_retention_days", "evidence_retention_days",
     )
-    for key in booleans:
-        values[key] = _bool(values[key])
-    for key in integers:
-        values[key] = int(values[key])
-    return values
-
-
-def read_snmp_settings(db: Session) -> dict[str, Any]:
-    values = _group(_all(db), "snmp")
-    booleans = ("enabled", "allow_v1", "allow_legacy_protocols")
-    integers = ("default_timeout_seconds", "default_retries", "maximum_concurrent_polls", "metric_retention_days", "interface_retention_days")
     for key in booleans:
         values[key] = _bool(values[key])
     for key in integers:

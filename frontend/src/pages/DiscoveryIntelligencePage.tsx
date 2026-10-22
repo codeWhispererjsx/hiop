@@ -9,7 +9,6 @@ import type {
   ConsolidatedDiscoveryDevice,
   DiscoveryJob,
   IdentityRule,
-  OrganizationDepartment,
 } from "../lib/types";
 import "../styles/discovery-intelligence.css";
 import "../styles/discovery-evidence.css";
@@ -43,7 +42,6 @@ export default function DiscoveryIntelligencePage() {
   const [error, setError] = useState("");
   const [detail, setDetail] = useState<Record<string, unknown>>();
   const [approving, setApproving] = useState("");
-  const [enriching, setEnriching] = useState(false);
   const [adEnriching, setAdEnriching] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [query, setQuery] = useState("");
@@ -64,6 +62,12 @@ export default function DiscoveryIntelligencePage() {
   const canApprove =
     currentUser.data?.role === "admin" ||
     currentUser.data?.role === "platformadmin";
+  const eligibleSelectedCount = devices.filter(
+    (item) =>
+      selected.has(item.result_id) &&
+      !item.inventory_device_id &&
+      !approvalBlockReason(item),
+  ).length;
   const discoveryFilterCount = [query, identityFilter !== "all" ? identityFilter : "", departmentFilter, typeFilter, vendorFilter].filter(Boolean).length;
   const clearDiscoveryFilters = () => {
     setQuery(""); setIdentityFilter("all"); setDepartmentFilter(""); setTypeFilter(""); setVendorFilter("");
@@ -300,7 +304,12 @@ export default function DiscoveryIntelligencePage() {
   const bulkApprove = async () => {
     const ids = [...selected].filter(
       (id) =>
-        !devices.find((item) => item.result_id === id)?.inventory_device_id,
+        devices.some(
+          (item) =>
+            item.result_id === id &&
+            !item.inventory_device_id &&
+            !approvalBlockReason(item),
+        ),
     );
     if (!ids.length) return;
     setBulkApproving(true);
@@ -357,34 +366,6 @@ export default function DiscoveryIntelligencePage() {
           inventory_device_id: null,
         } as ConsolidatedDiscoveryDevice),
     );
-  };
-  const enrich = async () => {
-    const result = (detail?.result || {}) as Record<string, unknown>;
-    if (!result.id) return;
-    setEnriching(true);
-    setError("");
-    try {
-      const response = await endpoints.enrichDiscoveryResult(String(result.id));
-      setDetail(await endpoints.discoveryResult(String(result.id)));
-      setMessage(
-        response.status === "unavailable"
-          ? `SNMP unavailable: ${response.warnings[0] || "No response."}`
-          : `Enrichment ${response.status.replaceAll("_", " ")}. ${response.found.length} attributes found.`,
-      );
-      setDevices((current) =>
-        current.map((item) =>
-          item.result_id === String(result.id)
-            ? { ...item, ...response.device }
-            : item,
-        ),
-      );
-    } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "Device enrichment failed.",
-      );
-    } finally {
-      setEnriching(false);
-    }
   };
   const enrichFromAD = async () => {
     const result = (detail?.result || {}) as Record<string, unknown>;
@@ -733,7 +714,7 @@ export default function DiscoveryIntelligencePage() {
           )}
           {confirmBulkApproval && (
             <Modal
-              title={`Approve ${selected.size} selected device${selected.size === 1 ? "" : "s"}?`}
+              title={`Approve ${eligibleSelectedCount} selected device${eligibleSelectedCount === 1 ? "" : "s"}?`}
               onClose={() => setConfirmBulkApproval(false)}
             >
               <section className="discovery-confirm-modal">
@@ -802,7 +783,8 @@ export default function DiscoveryIntelligencePage() {
                           .filter(
                             (item) =>
                               hasDiscoveredHostname(item) &&
-                              !item.inventory_device_id,
+                              !item.inventory_device_id &&
+                              !approvalBlockReason(item),
                           )
                           .map((item) => item.result_id),
                       ),
@@ -819,7 +801,8 @@ export default function DiscoveryIntelligencePage() {
                           .filter(
                             (item) =>
                               identityBucket(item) === "identified" &&
-                              !item.inventory_device_id,
+                              !item.inventory_device_id &&
+                              !approvalBlockReason(item),
                           )
                           .map((item) => item.result_id),
                       ),
@@ -833,7 +816,11 @@ export default function DiscoveryIntelligencePage() {
                     setSelected(
                       new Set(
                         visible
-                          .filter((item) => !item.inventory_device_id)
+                          .filter(
+                            (item) =>
+                              !item.inventory_device_id &&
+                              !approvalBlockReason(item),
+                          )
                           .map((item) => item.result_id),
                       ),
                     )
@@ -843,7 +830,10 @@ export default function DiscoveryIntelligencePage() {
                 </button>
                 <button
                   type="button"
-                  disabled={!selected.size || bulkApproving}
+                  disabled={
+                    bulkApproving ||
+                    !eligibleSelectedCount
+                  }
                   onClick={() => setSelected(new Set())}
                 >
                   Clear selection
@@ -855,7 +845,7 @@ export default function DiscoveryIntelligencePage() {
                 >
                   {bulkApproving
                     ? "Approving…"
-                    : `Approve Selected (${selected.size})`}
+                    : `Approve Selected (${eligibleSelectedCount})`}
                 </button>
               </div>
             )}
@@ -948,8 +938,6 @@ export default function DiscoveryIntelligencePage() {
           <Evidence
             data={detail}
             close={() => setDetail(undefined)}
-            enrich={enrich}
-            enriching={enriching}
             enrichFromAD={enrichFromAD}
             adEnriching={adEnriching}
             confirmIdentity={confirmIdentity}
@@ -1006,30 +994,20 @@ const EMPTY_RULE = {
   confidence: 70,
 };
 
-const HOSTNAME_CODE_PRESETS = [
-  { code: "dt", label: "Desktop PCs", type: "Desktop" },
-  { code: "lt", label: "Laptops", type: "Laptop" },
-  { code: "pos", label: "POS terminals", type: "POS Terminal" },
-  { code: "sc", label: "Security devices", type: "Security Device" },
-] as const;
-
 function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
   const [rules, setRules] = useState<IdentityRule[]>([]);
-  const [departments, setDepartments] = useState<OrganizationDepartment[]>([]);
   const [form, setForm] = useState({ ...EMPTY_RULE });
+  const [editingRule, setEditingRule] = useState<IdentityRule | null>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<string | null>(null);
   const [previewInput, setPreviewInput] = useState("");
   const [preview, setPreview] = useState<Record<string, unknown>>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const load = () =>
-    Promise.all([
-      endpoints.identityRules(true),
-      endpoints.organizationDepartments(),
-    ])
-      .then(([ruleData, departmentData]) => {
+    endpoints.identityRules(true)
+      .then((ruleData) => {
         setRules(ruleData.items);
-        setDepartments(departmentData);
       })
       .catch((caught) =>
         setError(
@@ -1045,21 +1023,31 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
     event.preventDefault();
     setBusy(true);
     setError("");
+    setMessage("");
     try {
-      await endpoints.createIdentityRule({
+      const activePropertyId = window.localStorage.getItem("hiop.active_property_id");
+      if (form.scope === "property" && !activePropertyId) {
+        throw new Error("Select a property before creating a property-specific naming rule.");
+      }
+      const body = {
+        ...(editingRule ?? {}),
         ...form,
-        name: form.name.trim() || `Hostname code ${form.pattern} · ${form.output_device_type}`,
-        property_id:
-          form.scope === "property"
-            ? window.localStorage.getItem("hiop.active_property_id")
-            : null,
-        output_department_id: form.output_department_id || null,
-        output_location: form.output_location || null,
-      });
+        name: `Hostname contains ${form.pattern.trim()} = ${form.output_device_type}`,
+        match_field: "hostname",
+        match_operator: "contains",
+        pattern: form.pattern.trim(),
+        property_id: form.scope === "property" ? activePropertyId : null,
+        output_department_id: editingRule?.output_department_id ?? null,
+        output_location: editingRule?.output_location ?? null,
+      };
+      if (editingRule) {
+        await endpoints.updateIdentityRule(editingRule.id, body);
+      } else {
+        await endpoints.createIdentityRule(body);
+      }
+      setEditingRule(null);
       setForm({ ...EMPTY_RULE });
-      setMessage(
-        "Naming rule created. It will apply during the next enrichment.",
-      );
+      setMessage(editingRule ? "Naming rule updated." : "Naming rule created.");
       await load();
     } catch (caught) {
       setError(
@@ -1069,27 +1057,40 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
       setBusy(false);
     }
   };
-  const addHostnameCode = async (preset: (typeof HOSTNAME_CODE_PRESETS)[number]) => {
-    if (rules.some((rule) => rule.enabled && rule.match_field === "hostname" && rule.match_operator === "contains" && rule.pattern.toLowerCase() === preset.code)) {
-      setMessage(`The ${preset.code.toUpperCase()} hostname code is already configured.`);
-      return;
-    }
+  const edit = (rule: IdentityRule) => {
+    setEditingRule(rule);
+    setDeleteConfirmation(null);
+    setForm({
+      ...EMPTY_RULE,
+      scope: rule.property_id ? "property" : "organization",
+      pattern: rule.pattern,
+      output_device_type: rule.output_device_type || "Other",
+      match_field: rule.match_field,
+      match_operator: rule.match_operator,
+      output_department_id: rule.output_department_id || "",
+      output_location: rule.output_location || "",
+      friendly_name_template: rule.friendly_name_template,
+      priority: rule.priority,
+      confidence: rule.confidence,
+    });
+    setError("");
+    setMessage("");
+  };
+  const remove = async (rule: IdentityRule) => {
     setBusy(true);
     setError("");
+    setMessage("");
     try {
-      await endpoints.createIdentityRule({
-        ...EMPTY_RULE,
-        name: `Hostname code ${preset.code.toUpperCase()} · ${preset.label}`,
-        property_id: window.localStorage.getItem("hiop.active_property_id"),
-        pattern: preset.code,
-        output_device_type: preset.type,
-        friendly_name_template: "{device_type} {hostname}",
-        confidence: 75,
-      });
-      setMessage(`${preset.label} will now be recognised when the hostname contains “${preset.code}”.`);
+      await endpoints.deleteIdentityRule(rule.id);
+      setDeleteConfirmation(null);
+      if (editingRule?.id === rule.id) {
+        setEditingRule(null);
+        setForm({ ...EMPTY_RULE });
+      }
+      setMessage("Naming rule deleted.");
       await load();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Hostname code could not be added.");
+      setError(caught instanceof Error ? caught.message : "Naming rule could not be deleted.");
     } finally {
       setBusy(false);
     }
@@ -1118,15 +1119,18 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
         <span className="eyebrow">Administration · Discovery intelligence</span>
         <h2>Hostname rules</h2>
         <p>
-          Turn your organisation’s technical identifiers into an explainable Friendly
-          Name, Device Type, Suggested Department, and Location. Rules are
-          scoped, deterministic, and never replace a manually confirmed
-          identity.
+          Define the hostname codes your organization uses. For example,
+          “Where LT = Laptop”. Matching is case-insensitive; HIOP does not
+          classify a device when none of your rules match.
         </p>
-        <details className="feature-guide"><summary>How hostname rules work</summary><ol><li>Choose an identifier your devices already use, such as a hostname.</li><li>Add a rule matching your own convention. For example, a hostname beginning with FO- might mean Front Office, if that is how your organisation names devices.</li><li>Set the friendly name, device type, department, or location you want suggested.</li><li>Test the rule against a known device, then run enrichment and review the suggestions.</li></ol><p>Saving a rule does not rename a computer on the network. It helps HIOP interpret its identity. Manually confirmed identities stay in place.</p></details><div className="precedence-note">
-          <b>Precedence:</b> Manual confirmation → strong discovery/SNMP →
-          Active Directory → configured rule → weak inference.
-        </div>
+        <p>
+          Naming rules suggest device type only. Other reviewed sources, such
+          as Active Directory enrichment, may provide a Suggested Department.
+        </p>
+        <p className="precedence-note">
+          A match is a classification suggestion only. It does not approve the
+          device, add it to inventory, or change a manually confirmed identity.
+        </p>
       </header>
       {error && <Feedback error={error} />}{" "}
       {message && (
@@ -1147,31 +1151,26 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
               {rules.map((rule) => (
                 <article key={rule.id}>
                   <div>
-                    <strong>{rule.name}</strong>
+                    <strong>Where hostname contains “{rule.pattern}” = {rule.output_device_type || "Unspecified"}</strong>
                     <small>
-                      {rule.scope} · Priority {rule.priority} ·{" "}
-                      {rule.confidence}% confidence
+                      {rule.property_id ? "Current property" : "Organization-wide"} ·{" "}
+                      {rule.enabled ? "Active" : "Inactive"}
                     </small>
                   </div>
-                  <p>
-                    <code>
-                      {rule.match_field} {rule.match_operator} “{rule.pattern}”
-                    </code>
-                  </p>
-                  <p>
-                    {rule.department_name || "No department"} ·{" "}
-                    {rule.output_device_type || "No device type"} ·{" "}
-                    {rule.output_location || "No location"}
-                  </p>
-                  <StatusBadge status={rule.enabled ? "Active" : "Inactive"} />
-                  {canManage && rule.enabled && (
-                    <button
-                      onClick={() =>
-                        void endpoints.disableIdentityRule(rule.id).then(load)
-                      }
-                    >
-                      Disable
-                    </button>
+                  <p><code>Case-insensitive hostname match</code></p>
+                  {canManage && (
+                    <div className="identity-review-actions">
+                      <button type="button" disabled={busy} onClick={() => edit(rule)}>Edit</button>
+                      {deleteConfirmation === rule.id ? (
+                        <>
+                          <span>Delete this rule?</span>
+                          <button type="button" disabled={busy} onClick={() => void remove(rule)}>Confirm delete</button>
+                          <button type="button" disabled={busy} onClick={() => setDeleteConfirmation(null)}>Cancel</button>
+                        </>
+                      ) : (
+                        <button type="button" disabled={busy} onClick={() => setDeleteConfirmation(rule.id)}>Delete</button>
+                      )}
+                    </div>
                   )}
                 </article>
               ))}
@@ -1181,34 +1180,41 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
         <section className="discovery-panel">
           {canManage ? (
             <form className="identity-rule-form" onSubmit={submit}>
-              <div className="hostname-code-presets">
-                <div>
-                  <h3>Use your hostname codes</h3>
-                  <p>Choose the codes your hotel already uses. One click creates the matching rule.</p>
-                </div>
-                <div className="hostname-code-buttons">
-                  {HOSTNAME_CODE_PRESETS.map((preset) => (
-                    <button key={preset.code} type="button" disabled={busy} onClick={() => void addHostnameCode(preset)}>
-                      <strong>{preset.code.toUpperCase()}</strong>
-                      <span>{preset.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <h3>Add another hostname rule</h3>
-              <label>
-                Rule name <small>Optional</small>
-                <input
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm({ ...form, name: event.target.value })
-                  }
-                  placeholder="Front Office printer hostname"
-                />
-              </label>
+              <h3>{editingRule ? "Edit naming rule" : "Add naming rule"}</h3>
               <div className="form-grid">
                 <label>
-                  Scope
+                  Where hostname contains
+                  <input
+                    required
+                    maxLength={120}
+                    value={form.pattern}
+                    onChange={(event) =>
+                      setForm({ ...form, pattern: event.target.value })
+                    }
+                    placeholder="LT"
+                  />
+                </label>
+                <label>
+                  Classify as
+                  <select
+                    required
+                    value={form.output_device_type}
+                    onChange={(event) =>
+                      setForm({ ...form, output_device_type: event.target.value })
+                    }
+                  >
+                    {[
+                      "Desktop", "Windows Computer", "Laptop", "POS Terminal",
+                      "Printer", "Camera", "CCTV Camera",
+                      "Server", "Switch", "Router", "Firewall", "Access Point",
+                      "UPS", "Phone", "Security Device", "Other",
+                    ].map((value) => (
+                      <option key={value}>{value}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Apply to
                   <select
                     value={form.scope}
                     onChange={(event) =>
@@ -1219,143 +1225,11 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
                     <option value="organization">Organization-wide</option>
                   </select>
                 </label>
-                <label>
-                  Evidence field
-                  <select
-                    value={form.match_field}
-                    onChange={(event) =>
-                      setForm({ ...form, match_field: event.target.value })
-                    }
-                  >
-                    <option value="hostname">Hostname</option>
-                    <option value="fqdn">FQDN</option>
-                    <option value="vendor">Vendor</option>
-                    <option value="snmp">SNMP description</option>
-                    <option value="ad_ou">Active Directory OU</option>
-                    <option value="device_type">Existing device type</option>
-                  </select>
-                </label>
-                <label>
-                  Match
-                  <select
-                    value={form.match_operator}
-                    onChange={(event) =>
-                      setForm({ ...form, match_operator: event.target.value })
-                    }
-                  >
-                    <option value="contains">Contains</option>
-                    <option value="starts_with">Starts with</option>
-                    <option value="ends_with">Ends with</option>
-                    <option value="equals">Equals</option>
-                  </select>
-                </label>
-                <label>
-                  Pattern
-                  <input
-                    required
-                    value={form.pattern}
-                    onChange={(event) =>
-                      setForm({ ...form, pattern: event.target.value })
-                    }
-                    placeholder="Confirmed token"
-                  />
-                </label>
-                <label>
-                  Device type
-                  <select
-                    value={form.output_device_type}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        output_device_type: event.target.value,
-                      })
-                    }
-                  >
-                    {[
-                      "Printer",
-                      "POS Terminal",
-                      "Desktop",
-                      "Laptop",
-                      "Server",
-                      "Switch",
-                      "Router",
-                      "Firewall",
-                      "Access Point",
-                      "UPS",
-                      "Phone",
-                      "Security Device",
-                      "Other",
-                    ].map((value) => (
-                      <option key={value}>{value}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Department
-                  <select
-                    value={form.output_department_id}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        output_department_id: event.target.value,
-                      })
-                    }
-                  >
-                    <option value="">No department</option>
-                    {departments
-                      .filter((item) => item.is_active)
-                      .map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-                <label>
-                  Location (optional)
-                  <input
-                    value={form.output_location}
-                    onChange={(event) =>
-                      setForm({ ...form, output_location: event.target.value })
-                    }
-                    placeholder="Only with reliable evidence"
-                  />
-                </label>
-                <label>
-                  Confidence
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={form.confidence}
-                    onChange={(event) =>
-                      setForm({
-                        ...form,
-                        confidence: Number(event.target.value),
-                      })
-                    }
-                  />
-                </label>
               </div>
-              <label>
-                Friendly name template
-                <input
-                  value={form.friendly_name_template}
-                  onChange={(event) =>
-                    setForm({
-                      ...form,
-                      friendly_name_template: event.target.value,
-                    })
-                  }
-                />
-                <small>
-                  Available: department, device_type, location, sequence,
-                  hostname.
-                </small>
-              </label>
               <button className="primary-action" disabled={busy}>
-                {busy ? "Saving…" : "Add hostname rule"}
+                {busy ? "Saving…" : editingRule ? "Save changes" : "Add rule"}
               </button>
+              {editingRule && <button type="button" disabled={busy} onClick={() => { setEditingRule(null); setForm({ ...EMPTY_RULE }); }}>Cancel edit</button>}
             </form>
           ) : (
             <p>
@@ -1379,7 +1253,15 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
             >
               Test rules
             </button>
-            {preview && <pre>{JSON.stringify(preview, null, 2)}</pre>}
+            {preview && (
+              <div className="rule-preview-result" role="status">
+                <strong>{Array.isArray(preview.matched_rules) && preview.matched_rules.length ? "Matching rule found" : "No configured rule matched"}</strong>
+                {Array.isArray(preview.evidence) && preview.evidence.map((item) => <p key={String(item)}>{String(item)}</p>)}
+                {typeof preview.suggestion === "object" && preview.suggestion !== null && (
+                  <p>Suggested device type: {String((preview.suggestion as Record<string, unknown>).device_type || "Not classified")}</p>
+                )}
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -1449,6 +1331,43 @@ function hasDiscoveredHostname(device: ConsolidatedDiscoveryDevice): boolean {
   return Boolean(usableDiscoveryValue(device.primary_hostname || device.fqdn));
 }
 
+function approvalBlockReason(
+  device: Pick<
+    ConsolidatedDiscoveryDevice,
+    "ip_address" | "conflict_status" | "identity_confirmed" | "confidence_score"
+  >,
+  hasOpenConflict = device.conflict_status === "open",
+): string | null {
+  if (!isValidIpAddress(device.ip_address))
+    return "A valid IP address is required before this device can be approved.";
+  if (hasOpenConflict)
+    return "Resolve the identity conflicts before approving this device.";
+  if (!device.identity_confirmed && device.confidence_score < 60)
+    return "Confirm the device identity or reach at least 60% confidence before approval.";
+  return null;
+}
+
+function isValidIpAddress(value: string): boolean {
+  if (value.includes(":")) {
+    try {
+      new URL(`http://[${value}]/`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  const parts = value.split(".");
+  return (
+    parts.length === 4 &&
+    parts.every(
+      (part) =>
+        /^\d{1,3}$/.test(part) &&
+        String(Number(part)) === part &&
+        Number(part) <= 255,
+    )
+  );
+}
+
 function discoveryClearKey(): string {
   const propertyId = window.localStorage.getItem("hiop.active_property_id") || "organization";
   return `hiop.discovery.cleared_scan.${propertyId}`;
@@ -1514,6 +1433,7 @@ function DeviceTable({
           {rows.map((device) => {
             const bucket = identityBucket(device);
             const approved = Boolean(device.inventory_device_id);
+            const approvalReason = approvalBlockReason(device);
             const hostname =
               usableDiscoveryValue(device.primary_hostname || device.fqdn) || "No hostname observed";
             const displayName =
@@ -1532,7 +1452,8 @@ function DeviceTable({
                     type="checkbox"
                     aria-label={`Select ${device.friendly_name || hostname || device.ip_address}`}
                     checked={selected.has(device.result_id)}
-                    disabled={approved || !canApprove}
+                    disabled={approved || !canApprove || Boolean(approvalReason)}
+                    title={approvalReason || undefined}
                     onChange={() => toggle(device.result_id)}
                   />
                 </td>
@@ -1583,7 +1504,8 @@ function DeviceTable({
                     </button>
                     {canApprove && !approved && bucket === "identified" && (
                       <button
-                        disabled={approving === device.result_id}
+                        title={approvalReason || undefined}
+                        disabled={Boolean(approvalReason) || approving === device.result_id}
                         onClick={() => void approve(device)}
                       >
                         {approving === device.result_id
@@ -1605,8 +1527,6 @@ function DeviceTable({
 function Evidence({
   data,
   close,
-  enrich,
-  enriching,
   enrichFromAD,
   adEnriching,
   confirmIdentity,
@@ -1619,8 +1539,6 @@ function Evidence({
 }: {
   data: Record<string, unknown>;
   close: () => void;
-  enrich: () => void;
-  enriching: boolean;
   enrichFromAD: () => void;
   adEnriching: boolean;
   confirmIdentity: (values: {
@@ -1665,8 +1583,16 @@ function Evidence({
     : "Not available";
   const openConflicts = conflicts.filter((item) => item.status === "open");
   const approved = Boolean(data.inventory_device_id);
-  const strong =
-    Number(result.confidence_score || 0) >= 60 && !openConflicts.length;
+  const approvalReason = approvalBlockReason(
+    {
+      ip_address: String(result.ip_address || ""),
+      conflict_status: openConflicts.length ? "open" : "none",
+      identity_confirmed: Boolean(result.identity_confirmed),
+      confidence_score: Number(result.confidence_score || 0),
+    },
+    openConflicts.length > 0,
+  );
+  const strong = !approvalReason;
   const explanations = [
     ...new Set(
       evidence.map((item) =>
@@ -1693,21 +1619,12 @@ function Evidence({
         </div>
         <div className="row-actions">
           {canDiscover && (
-            <>
-              <button
-                className="primary-action"
-                disabled={enriching}
-                onClick={() => void enrich()}
-              >
-                {enriching ? "Enriching…" : "Enrich Device"}
-              </button>
-              <button
-                disabled={adEnriching}
-                onClick={() => void enrichFromAD()}
-              >
-                {adEnriching ? "Checking AD…" : "Enrich from Active Directory"}
-              </button>
-            </>
+            <button
+              disabled={adEnriching}
+              onClick={() => void enrichFromAD()}
+            >
+              {adEnriching ? "Checking AD…" : "Enrich from Active Directory"}
+            </button>
           )}
           <button onClick={close}>Close</button>
         </div>
@@ -1722,16 +1639,8 @@ function Evidence({
           )}
         </p>
         <p className="enrichment-status">
-          <b>SNMP:</b>{" "}
-          {enrichmentMessage(
-            "SNMP",
-            String(result.snmp_enrichment_status || "not_attempted"),
-          )}
-        </p>
-        <p className="enrichment-status">
           <b>Active Directory:</b>{" "}
           {enrichmentMessage(
-            "Active Directory",
             String(result.ad_enrichment_status || "not_attempted"),
           )}
         </p>
@@ -2057,8 +1966,8 @@ function Evidence({
             <StatusBadge status="Review" />
             <span>
               {canApprove
-                ? "Review conflicts or confirm the identity before approval."
-                : "Read-only evidence view."}
+                ? approvalReason || "This device is not eligible for approval yet."
+                : "Only organization administrators can approve devices."}
             </span>
           </>
         )}
@@ -2074,7 +1983,6 @@ function sourceLabel(source: string) {
   if (value.includes("hostname_rule")) return "Hostname Rules";
   if (value.includes("dns")) return "DNS";
   if (value.includes("dhcp")) return "DHCP";
-  if (value.includes("snmp")) return "SNMP";
   if (value.includes("arp")) return "ARP";
   if (value.includes("icmp") || value.includes("ping"))
     return "Network Discovery";
@@ -2087,12 +1995,9 @@ function explainEvidence(source: string, type: string) {
   const attribute = type.replaceAll("_", " ");
   return label && attribute ? `${label} supplied ${attribute} evidence` : "";
 }
-function enrichmentMessage(provider: string, status: string) {
+function enrichmentMessage(status: string) {
   if (status === "not_attempted") return "Enrichment has not been performed.";
-  if (status === "unavailable")
-    return provider === "Active Directory"
-      ? "Active Directory unavailable."
-      : "SNMP unavailable.";
+  if (status === "unavailable") return "Active Directory unavailable.";
   return status.replaceAll("_", " ");
 }
 function dnsMessage(
@@ -2118,5 +2023,3 @@ function dnsMessage(
     ? "DNS information available."
     : "DNS information unavailable.";
 }
-
-

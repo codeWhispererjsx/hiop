@@ -30,11 +30,7 @@ from app.api.v1.automation import router as automation_router
 from app.api.v1.automation_triggers import router as automation_triggers_router
 from app.api.v1.incidents import router as incidents_router
 from app.api.v1.discovery_intelligence import router as discovery_intelligence_router
-from app.api.v1.snmp import router as snmp_router
 from app.api.v1.active_directory_v2c import router as active_directory_v2c_router
-from app.api.v1.topology_v3a import router as topology_v3a_router
-from app.api.v1.port_intelligence import router as port_intelligence_router
-from app.api.v1.segmentation import router as segmentation_router
 from app.api.v1.monitoring_health import router as monitoring_health_router
 from app.api.v1.alerts_events import router as alerts_events_router
 from app.api.v1.assets import router as assets_router
@@ -52,6 +48,7 @@ from app.api.v1.public_onboarding import router as public_onboarding_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.onboarding_progress import router as onboarding_progress_router
 from app.api.v1.local_agents import admin_router as local_agent_admin_router, agent_router as local_agent_router
+from app.api.v1.inventory_imports import router as inventory_imports_router
 from app.api.v1.system_health import router as system_health_router
 from app.api.v1.backup_recovery import router as backup_recovery_router
 from app.api.v1.email import router as email_router
@@ -202,14 +199,11 @@ app.include_router(automation_router, prefix=settings.api_prefix)
 app.include_router(automation_triggers_router, prefix=settings.api_prefix)
 app.include_router(incidents_router, prefix=settings.api_prefix)
 app.include_router(discovery_intelligence_router, prefix=settings.api_prefix)
-app.include_router(snmp_router, prefix=settings.api_prefix)
 app.include_router(active_directory_v2c_router, prefix=settings.api_prefix)
-app.include_router(topology_v3a_router, prefix=settings.api_prefix)
-app.include_router(port_intelligence_router, prefix=settings.api_prefix)
-app.include_router(segmentation_router, prefix=settings.api_prefix)
 app.include_router(monitoring_health_router, prefix=settings.api_prefix)
 app.include_router(alerts_events_router, prefix=settings.api_prefix)
 app.include_router(assets_router, prefix=settings.api_prefix)
+app.include_router(inventory_imports_router, prefix=settings.api_prefix)
 app.include_router(platform_router, prefix=settings.api_prefix)
 app.include_router(procurement_router, prefix=settings.api_prefix)
 app.include_router(vendors_router, prefix=settings.api_prefix)

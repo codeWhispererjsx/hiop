@@ -110,13 +110,10 @@ def test_relationship_becomes_stale_but_is_not_deleted_and_can_be_verified_again
     assert link.status=="stale" and link.missing_since==link.last_seen_at
 
 
-def test_v3a_api_surface_is_read_only_except_admin_refresh():
+def test_v3a_api_surface_is_not_mounted():
     from app.main import app
     paths=app.openapi()["paths"]
-    for path in ("/api/v1/topology","/api/v1/topology/refresh","/api/v1/topology/relationships/{relationship_id}","/api/v1/topology/devices/{device_id}/neighbors","/api/v1/topology/stats"):
-        assert path in paths
-    assert set(paths["/api/v1/topology"].keys())=={"get"}
-    assert set(paths["/api/v1/topology/refresh"].keys())=={"post"}
+    assert not any(path.startswith(("/api/v1/topology", "/api/v1/topologies")) for path in paths)
 
 
 def test_unknown_mac_cannot_create_a_fake_inventory_device():

@@ -88,7 +88,7 @@ def invite(payload: InviteRequest, db: Session = Depends(get_db), actor: User = 
     delivery = _safe_delivery("You are invited to HIOP", f"Accept your secure invitation: {_url('/accept-invitation', raw)}\nThis link expires in 72 hours.", email)
     if delivery != "sent":
         db.rollback()
-        raise HTTPException(503, "Invitation email could not be sent. Ask the platform owner to check email delivery, then try again.")
+        raise HTTPException(503, "Invitation email could not be sent. Email delivery is unavailable in this installation. Create the user locally or configure email delivery, then try again.")
     create_audit_log(db, actor.username, "USER_INVITED", "UserInvitation", str(row.id), f"Invited {email}", organization_id=actor.organization_id, property_id=row.property_id, event_category="security")
     db.commit()
     response = {"id": str(row.id), "email": email, "role": row.role, "status": row.status, "expires_at": row.expires_at, "delivery_status": delivery}

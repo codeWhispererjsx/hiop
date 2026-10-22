@@ -112,7 +112,7 @@ def test_conflicts_reduce_confidence_deterministically():
 
 
 def test_manual_confirmation_is_preserved_and_can_reach_very_high():
-    rows=[evidence("ping_response","icmp","online"),evidence("mac_address","arp","AA:BB:CC:DD:EE:FF"),evidence("hostname_match","dns","host1"),evidence("description","dhcp","POS 1"),evidence("snmp","snmp_read_only","oid"),evidence("manual_confirmation","administrator",{"device_type":"POS"})]
+    rows=[evidence("ping_response","icmp","online"),evidence("mac_address","arp","AA:BB:CC:DD:EE:FF"),evidence("hostname_match","dns","host1"),evidence("description","dhcp","POS 1"),evidence("manual_confirmation","administrator",{"device_type":"POS"})]
     root=result(identity_confirmed=True);score=ConfidenceHarness(root,rows).calculate_confidence(root)
     assert score["level"]=="very_high" and "administrator-confirmed" in score["reason"].lower()
 

@@ -16,14 +16,12 @@ const primaryLinks: { label: string; to: string; icon: IconName; adminOnly?: boo
 
 const monitorLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Alerts", to: "/alerts", icon: "alerts" },
-  { label: "Topology", to: "/topology", icon: "hierarchy" },
-  { label: "Segments", to: "/segmentation", icon: "network" },
   { label: "Performance", to: "/network-performance", icon: "chart" },
-  { label: "SNMP", to: "/snmp", icon: "server" },
 ];
 
-const manageLinks: { label: string; to: string; icon: IconName }[] = [
+const manageLinks: { label: string; to: string; icon: IconName; adminOnly?: boolean }[] = [
   { label: "Reports", to: "/reports", icon: "audit" },
+  { label: "Inventory imports", to: "/imports", icon: "import", adminOnly: true },
   { label: "Procurement", to: "/procurement", icon: "devices" },
   { label: "Vendors", to: "/vendors", icon: "users" },
 ];
@@ -35,12 +33,13 @@ const administrationLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Roles & access", to: "/administration/roles", icon: "lock" },
   { label: "Audit log", to: "/administration/audit", icon: "audit" },
   ...(!isDesktopMode ? [{ label: "Billing", to: "/administration/billing", icon: "devices" as IconName }] : []),
-  { label: isDesktopMode ? "This Computer" : "Local Agents", to: "/administration/agents", icon: "network" },
+  { label: isDesktopMode ? "Site Server" : "Local Agents", to: "/administration/agents", icon: "network" },
   { label: "Settings", to: "/settings", icon: "server" },
 ];
 
 const platformLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Platform control", to: "/platform", icon: "dashboard" },
+  { label: "Billing readiness", to: "/platform/billing", icon: "audit" },
 ];
 
 const SIDEBAR_SCROLL_KEY = "hiop.sidebar.scroll";
@@ -104,6 +103,7 @@ export default function Sidebar({
   const isAdmin = role === "admin";
   const isPlatformAdmin = role === "platformadmin";
   const visiblePrimary = primaryLinks.filter((link) => !link.adminOnly || isAdmin);
+  const visibleManage = manageLinks.filter((link) => !link.adminOnly || isAdmin);
   
   return (
     <aside 
@@ -136,7 +136,7 @@ export default function Sidebar({
           </NavLink>
         ))}
         <p className="nav-label nav-label-spaced">Manage intelligence</p>
-        {manageLinks.map((link) => (
+        {visibleManage.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
@@ -211,4 +211,3 @@ export default function Sidebar({
     </aside>
   );
 }
-

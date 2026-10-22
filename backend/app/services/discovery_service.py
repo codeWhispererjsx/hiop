@@ -570,11 +570,12 @@ class DiscoveryService:
             ip_address=ip_address,
             mac_address=mac_address,
         )
-        duplicate = self.db.query(Device).filter(or_(
-            Device.asset_tag == device_data.asset_tag,
-            Device.serial_number == device_data.serial_number,
-            Device.mac_address == device_data.mac_address,
-        )).first()
+        identity_filters = [Device.asset_tag == device_data.asset_tag]
+        if device_data.serial_number:
+            identity_filters.append(Device.serial_number == device_data.serial_number)
+        if device_data.mac_address:
+            identity_filters.append(Device.mac_address == device_data.mac_address)
+        duplicate = self.db.query(Device).filter(or_(*identity_filters)).first()
         if duplicate:
             raise DiscoveryConflictError("Approval would duplicate an existing inventory device")
 

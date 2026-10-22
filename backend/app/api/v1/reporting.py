@@ -23,8 +23,6 @@ from app.models.knowledge import KnowledgeArticle, KnowledgeRating
 from app.models.network_scan import NetworkScan
 from app.models.problem_management import Problem, ProblemRelationship
 from app.models.procurement import AssetProcurement, ProcurementLineItem
-from app.models.snmp import SNMPInterface, SNMPTarget
-from app.models.topology import NetworkSegment, TopologyNode
 
 router=APIRouter(prefix="/reporting",tags=["Organization Reporting"])
 reader=require_roles(["platformadmin","admin","technician","viewer"])
@@ -101,11 +99,7 @@ def build(report,db,org,start,end,filters):
         trends["availability"]={"status":"available","points":[{"date":day,"value":round(sum(x.status.lower()=="online" for x in scans if x.scanned_at.date().isoformat()==day)*100/sum(1 for x in scans if x.scanned_at.date().isoformat()==day),2)} for day in sorted({x.scanned_at.date().isoformat() for x in scans})]} if scans else {"status":"insufficient_data","message":"Insufficient data","points":[]}
         if report=="network":
             network_types={"switch","router","access point","firewall","network appliance"};infra=[x for x in devices if x.device_type.lower() in network_types]
-            target_ids=[x[0] for x in db.query(SNMPTarget.id).filter(SNMPTarget.device_id.in_([x.id for x in infra])).all()] if infra else []
-            interfaces=db.query(SNMPInterface).filter(SNMPInterface.target_id.in_(target_ids)).all() if target_ids else []
-            topology_ids=list({x[0] for x in db.query(TopologyNode.topology_id).filter(TopologyNode.device_id.in_([x.id for x in devices])).all()}) if devices else []
-            segments=db.query(NetworkSegment).filter(NetworkSegment.topology_id.in_(topology_ids)).all() if topology_ids else []
-            metrics += [metric(len(infra),"Network Devices"),metric(sum(x.operational_status and x.operational_status.lower()!="up" for x in interfaces),"Interfaces Not Up"),metric(len(segments),"Network Segments / VLANs")]
+            metrics.append(metric(len(infra),"Network Devices"))
             breakdowns["network_devices_by_type"]=groups(infra,"device_type")
     if report in {"executive","operations","incidents"}:
         current=[x for x in incidents if x.created_at and start<=x.created_at<=end];resolved=[x for x in current if x.resolved_at]

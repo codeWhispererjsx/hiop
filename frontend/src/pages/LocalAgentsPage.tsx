@@ -123,7 +123,7 @@ export default function LocalAgentsPage() {
       </section>
       <section className="operational-guide" aria-label="How local agents work">
         <div><span>Why it exists</span><strong>Observe the hotel network from inside</strong><p>A hosted HIOP server cannot directly see private hotel networks. A local agent securely sends approved discovery and monitoring observations.</p></div>
-        <div><span>How to use it</span><strong>Create enrollment, install, verify</strong><p>Create a short-lived token for the correct property, enroll the agent on-site, then confirm its heartbeat and version here.</p></div>
+        <div><span>How to use it</span><strong>Create enrollment, install, verify</strong><p>Create a short-lived token for the correct property, enroll the agent on-site, then confirm its heartbeat and version here. To update an enrolled agent, run Connect HIOP.cmd from a fresh download; to remove it, run Remove HIOP Agent.cmd from the extracted ZIP.</p></div>
         <div><span>Security</span><strong>Property-bound and read-only by default</strong><p>An agent cannot submit data for another property and does not provide arbitrary remote command execution.</p></div>
       </section>
       <FeatureGuide kind="agent"/>

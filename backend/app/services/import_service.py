@@ -26,8 +26,8 @@ STORAGE_ROOT = Path(tempfile.gettempdir()) / "hiop-imports"
 
 # Safety constants
 MAX_IMPORT_FILE_SIZE = 50 * 1024 * 1024  # 50MB limit
-ALLOWED_FILE_EXTENSIONS = {'.csv', '.xlsx', '.xls'}
-SUPPORTED_FORMATS = {'csv', 'xlsx', 'xls'}
+ALLOWED_FILE_EXTENSIONS = {'.csv', '.xlsx', '.docx'}
+SUPPORTED_FORMATS = {'csv', 'xlsx', 'docx'}
 
 
 class ImportNotFoundError(ValueError): pass
@@ -95,7 +95,16 @@ class ImportService:
         
         return safe_name
 
-    def create_import_session(self, *, original_filename: str, content_type: str | None, content: bytes, uploader: User) -> tuple[ImportSession, dict]:
+    def create_import_session(
+        self,
+        *,
+        original_filename: str,
+        content_type: str | None,
+        content: bytes,
+        uploader: User,
+        organization_id: UUID | None = None,
+        property_id: UUID | None = None,
+    ) -> tuple[ImportSession, dict]:
         config = self._settings()
         
         # Safety: Check file size
@@ -129,7 +138,13 @@ class ImportService:
             session = ImportSession(
                 filename=safe_name, original_filename=display_name[:255], import_type="device_inventory",
                 file_format=file_format, uploaded_by=uploader.id, selected_worksheet=parsed.selected_worksheet,
-                mapping_metadata={**mapping, "mapping": mapping["suggested_mapping"], "worksheet_names": parsed.worksheet_names},
+                mapping_metadata={
+                    **mapping,
+                    "mapping": mapping["suggested_mapping"],
+                    "worksheet_names": parsed.worksheet_names,
+                    "tenant_organization_id": str(organization_id) if organization_id else None,
+                    "tenant_property_id": str(property_id) if property_id else None,
+                },
             )
             self.sessions.add(session)
             self.db.flush()

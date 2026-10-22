@@ -20,7 +20,16 @@ def test_daily_audit_digest_is_not_sent_before_configured_time():
 
 def test_daily_audit_digest_sends_once_and_records_marker():
     db=MagicMock();db.get.return_value=None;db.query.return_value.filter.return_value.order_by.return_value.all.return_value=[]
-    with patch("app.services.audit_digest_service._all", return_value=values()), patch("app.services.audit_digest_service.send_email") as send, patch("app.services.audit_digest_service.create_audit_log"):
+    with patch("app.services.audit_digest_service._all", return_value=values()), patch("app.services.audit_digest_service.send_email", return_value={"status":"sent"}) as send, patch("app.services.audit_digest_service.create_audit_log"):
         result=send_daily_audit_digest(db,datetime(2026,8,11,23,59,tzinfo=timezone.utc))
     assert result=={"status":"sent","records":0,"date":"2026-08-11"}
     send.assert_called_once();db.commit.assert_called_once()
+
+
+def test_daily_audit_digest_does_not_mark_failed_delivery_as_sent():
+    db=MagicMock();db.get.return_value=None
+    with patch("app.services.audit_digest_service._all", return_value=values()), patch("app.services.audit_digest_service.send_email", return_value={"status":"failed","safe_message":"SMTP unavailable"}), patch("app.services.audit_digest_service.create_audit_log") as audit:
+        result=send_daily_audit_digest(db,datetime(2026,8,11,23,59,tzinfo=timezone.utc))
+    assert result=={"status":"failed","message":"SMTP unavailable"}
+    db.commit.assert_not_called()
+    audit.assert_not_called()

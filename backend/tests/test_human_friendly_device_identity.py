@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from uuid import uuid4
 
+from app.api.v1.discovery_intelligence import IdentityRuleWrite
 from app.services.device_identity_service import DeviceIdentityService, _matches, confidence_level
 
 
@@ -39,10 +40,23 @@ def device(prop, hostname="FO-PRN-01", **overrides):
 
 def test_deterministic_match_operators_and_confidence_bands():
     assert _matches("FO-PRN-01", "contains", "prn")
+    assert _matches("HELLOSHALt1408", "contains", "LT")
     assert _matches("FO-PRN-01", "starts_with", "fo")
     assert _matches("FO-PRN-01", "ends_with", "01")
     assert not _matches("FO-PRN-01", "equals", "FO")
     assert [confidence_level(x) for x in (20, 60, 90)] == ["LOW", "MEDIUM", "HIGH"]
+
+
+def test_empty_department_id_is_treated_as_unassigned_not_an_invalid_uuid():
+    rule = IdentityRuleWrite(
+        name="Laptop hostname rule",
+        match_field="hostname",
+        match_operator="contains",
+        pattern="LT",
+        output_device_type="Laptop",
+        output_department_id="",
+    )
+    assert rule.output_department_id is None
 
 
 def test_scoped_rule_generates_explainable_stable_friendly_name():

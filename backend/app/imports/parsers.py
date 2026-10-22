@@ -1,6 +1,7 @@
 import csv
 import io
 import zipfile
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -37,8 +38,8 @@ def _safe_cell(value: Any, maximum: int) -> Any:
 
 def detect_format(filename: str, content_type: str | None, sample: bytes) -> str:
     suffix = Path(filename).suffix.lower()
-    if suffix not in {".csv", ".xlsx"}:
-        raise ImportFileError("Unsupported import format; use CSV or XLSX")
+    if suffix not in {".csv", ".xlsx", ".docx"}:
+        raise ImportFileError("Unsupported import format; use CSV, XLSX, or DOCX")
     if not sample:
         raise ImportFileError("The uploaded file is empty")
     if suffix == ".xlsx":
@@ -47,6 +48,15 @@ def detect_format(filename: str, content_type: str | None, sample: bytes) -> str
         if content_type and content_type not in {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/octet-stream"}:
             raise ImportFileError("File content type does not match the XLSX extension")
         return "xlsx"
+    if suffix == ".docx":
+        if not sample.startswith(b"PK\x03\x04"):
+            raise ImportFileError("File content does not match the DOCX extension")
+        if content_type and content_type not in {
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/octet-stream",
+        }:
+            raise ImportFileError("File content type does not match the DOCX extension")
+        return "docx"
     if sample.startswith((b"PK\x03\x04", b"MZ", b"%PDF", b"\x89PNG", b"GIF8")) or b"\x00" in sample:
         raise ImportFileError("File content does not match the CSV extension")
     if content_type and content_type not in {"text/csv", "text/plain", "application/csv", "application/vnd.ms-excel", "application/octet-stream"}:
@@ -162,4 +172,56 @@ def _xlsx_file(path: Path, limits: dict, worksheet: str | None) -> ParsedFile:
 
 
 def parse_file(path: Path, file_format: str, limits: dict, worksheet: str | None = None) -> ParsedFile:
-    return _csv_file(path, limits) if file_format == "csv" else _xlsx_file(path, limits, worksheet)
+    if file_format == "csv":
+        return _csv_file(path, limits)
+    if file_format == "xlsx":
+        return _xlsx_file(path, limits, worksheet)
+    if file_format == "docx":
+        return _docx_file(path, limits)
+    raise ImportFileError("Unsupported import format")
+
+
+def _docx_file(path: Path, limits: dict) -> ParsedFile:
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = set(archive.namelist())
+            if "[Content_Types].xml" not in names or "word/document.xml" not in names:
+                raise ImportFileError("File content is not a valid DOCX document")
+            if len(names) > 5000 or sum(item.file_size for item in archive.infolist()) > 100 * 1024 * 1024:
+                raise ImportFileError("Document expanded content exceeds the safety limit")
+            document = ET.fromstring(archive.read("word/document.xml"))
+    except ImportFileError:
+        raise
+    except (OSError, zipfile.BadZipFile, ET.ParseError, KeyError, RuntimeError) as exc:
+        raise ImportFileError("Word document is corrupt, unreadable, or password protected") from exc
+
+    for table in document.findall(".//w:tbl", namespace):
+        records = []
+        for row in table.findall("./w:tr", namespace):
+            cells = []
+            for cell in row.findall("./w:tc", namespace):
+                text = " ".join(value.strip() for value in cell.itertext() if value.strip())
+                cells.append(text)
+            if any(value.strip() for value in cells):
+                records.append(cells)
+        headers = [value.strip() for value in records[0]] if records else []
+        if not headers:
+            continue
+        if len(headers) > limits["maximum_columns"] or any(not value for value in headers):
+            raise ImportFileError("Word table header is empty or invalid")
+        rows = []
+        for source_row, values in enumerate(records[1:], start=2):
+            warnings = []
+            if len(values) != len(headers):
+                warnings.append({"field": "row", "code": "column_count", "message": "Row column count differs from the header"})
+            padded = (values + [""] * len(headers))[:len(headers)]
+            row = {header: _safe_cell(value, limits["maximum_cell_length"]) for header, value in zip(headers, padded)}
+            if not any(row.values()):
+                continue
+            rows.append((source_row, row, warnings))
+            if len(rows) > limits["maximum_rows"]:
+                raise ImportFileError("Word table exceeds the configured row limit")
+        if rows:
+            return ParsedFile("docx", [], None, headers, rows)
+    raise ImportFileError("Word document must contain a table with column headings and inventory rows")

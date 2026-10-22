@@ -20,6 +20,8 @@ export default function AlertsPage() {
   const [selected, setSelected] = useState<V3EAlert>();
   const [mode, setMode] = useState<"alerts" | "events" | "rules">("alerts");
   const [notice, setNotice] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
   const [resolveOpen, setResolveOpen] = useState(false);
 
   const alerts = useRequest(
@@ -50,17 +52,41 @@ export default function AlertsPage() {
 
   const acknowledge = async () => {
     if (!selected) return;
-    setSelected(await endpoints.acknowledgeV3EAlert(selected.id));
-    setNotice("Alert acknowledged and audited.");
-    await alerts.reload();
+    setActionBusy(true);
+    setActionError("");
+    try {
+      setSelected(await endpoints.acknowledgeV3EAlert(selected.id));
+      setNotice("Alert acknowledged and audited.");
+      try {
+        await alerts.reload();
+      } catch {
+        setActionError("The alert was acknowledged, but the alert list could not be refreshed. Reload the page to update it.");
+      }
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "The alert could not be acknowledged. Try again.");
+    } finally {
+      setActionBusy(false);
+    }
   };
 
   const resolve = async (reason: string) => {
     if (!selected) return;
-    setSelected(await endpoints.resolveV3EAlert(selected.id, reason));
-    setResolveOpen(false);
-    setNotice("Alert manually resolved and audited; monitoring continues independently.");
-    await alerts.reload();
+    setActionBusy(true);
+    setActionError("");
+    try {
+      setSelected(await endpoints.resolveV3EAlert(selected.id, reason));
+      setResolveOpen(false);
+      setNotice("Alert manually resolved and audited; monitoring continues independently.");
+      try {
+        await alerts.reload();
+      } catch {
+        setActionError("The alert was resolved, but the alert list could not be refreshed. Reload the page to update it.");
+      }
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "The alert could not be resolved. Try again.");
+    } finally {
+      setActionBusy(false);
+    }
   };
 
   return (
@@ -274,15 +300,19 @@ export default function AlertsPage() {
         <AlertDetails
           row={selected}
           acknowledge={acknowledge}
-          resolve={() => setResolveOpen(true)}
+          actionError={actionError}
+          actionBusy={actionBusy}
+          resolve={() => { setActionError(""); setResolveOpen(true); }}
           close={() => setSelected(undefined)}
           canCreateTicket={me.data?.role !== "viewer"}
+          canManageAlerts={me.data?.role === "admin" || me.data?.role === "technician"}
         />
       )}
 
       {resolveOpen && (
         <ResolutionDialog
           title={selected?.title ?? "this alert"}
+          error={actionError}
           close={() => setResolveOpen(false)}
           resolve={resolve}
         />
@@ -294,19 +324,26 @@ export default function AlertsPage() {
 function AlertDetails({
   row,
   acknowledge,
+  actionError,
+  actionBusy,
   resolve,
   close,
   canCreateTicket,
+  canManageAlerts,
 }: {
   row: V3EAlert;
   acknowledge: () => Promise<void>;
+  actionError: string;
+  actionBusy: boolean;
   resolve: () => void;
   close: () => void;
   canCreateTicket: boolean;
+  canManageAlerts: boolean;
 }) {
   return (
     <Modal title="Alert details" onClose={close}>
       <div className="alert-detail-body">
+        {actionError && <p className="form-error" role="alert">{actionError}</p>}
         <div className="alert-detail-hero">
           <span className={`pulse ${row.severity}`} aria-hidden="true" />
           <div>
@@ -394,10 +431,10 @@ function AlertDetails({
               Create ticket
             </Link>
           )}
-          <button
+          {canManageAlerts && <button
             className="secondary-action"
             onClick={() => void acknowledge()}
-            disabled={row.status === "acknowledged"}
+            disabled={actionBusy || row.status === "acknowledged"}
             aria-label={
               row.status === "acknowledged"
                 ? "Alert already acknowledged"
@@ -405,16 +442,17 @@ function AlertDetails({
             }
           >
             <Icon name="check" aria-hidden="true" />
-            {row.status === "acknowledged" ? "Acknowledged" : "Acknowledge alert"}
-          </button>
-          <button
+            {actionBusy ? "Saving…" : row.status === "acknowledged" ? "Acknowledged" : "Acknowledge alert"}
+          </button>}
+          {canManageAlerts && <button
             className="danger-action"
             onClick={resolve}
+            disabled={actionBusy}
             aria-label="Resolve this alert manually"
           >
             <Icon name="audit" aria-hidden="true" />
             Resolve manually
-          </button>
+          </button>}
         </footer>
       )}
     </Modal>
@@ -423,10 +461,12 @@ function AlertDetails({
 
 function ResolutionDialog({
   title,
+  error,
   close,
   resolve,
 }: {
   title: string;
+  error: string;
   close: () => void;
   resolve: (reason: string) => Promise<void>;
 }) {
@@ -448,6 +488,7 @@ function ResolutionDialog({
           }
         }}
       >
+        {error && <p className="form-error" role="alert">{error}</p>}
         <p>
           You are resolving <strong>{title}</strong> manually. This does not stop
           monitoring or claim that the underlying condition recovered.

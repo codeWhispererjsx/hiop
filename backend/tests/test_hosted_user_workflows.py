@@ -13,10 +13,11 @@ from app.models.billing import CommercialPlan, OrganizationSubscription
 from app.models.audit_log import AuditLog
 from app.models.system_setting import SystemSetting, OrganizationSetting
 from app.services.billing_service import require_entitlement, enforce_limit, require_billable
-from app.services.audit_service import export_csv
+from app.services.audit_service import export_csv, list_logs
 from app.services.settings_service import save_group, _all
 from app.schemas.settings import GeneralSettings
 from app.core.tenant import organization_context
+from app.audit.routes import effective_property
 
 
 @pytest.fixture
@@ -78,6 +79,47 @@ def test_audit_export_scopes_organisation_property_and_escapes_formulas(db):
     content, _ = export_csv(db, organization_id=first.id, property_id=prop.id)
     assert "'=SUM(1,2)" in content
     assert "other-organisation" not in content and "outside-property" not in content
+
+
+def test_audit_filters_scope_property_and_export_the_same_outcome(db):
+    owner = org(db)
+    first = Property(name="North", organization_id=owner.id)
+    second = Property(name="South", organization_id=owner.id)
+    db.add_all([first, second])
+    db.flush()
+    db.add_all([
+        AuditLog(actor="admin", action="DEVICE_APPROVED", entity_type="Device", entity_id="one", description="Approved device", organization_id=owner.id, property_id=first.id),
+        AuditLog(actor="admin", action="LOGIN_FAILED", entity_type="User", entity_id="two", description="Invalid password", organization_id=owner.id, property_id=first.id),
+        AuditLog(actor="admin", action="DEVICE_APPROVED", entity_type="Device", entity_id="three", description="Another property", organization_id=owner.id, property_id=second.id),
+    ])
+    db.commit()
+
+    result = list_logs(db, organization_id=owner.id, property_id=first.id, outcome="failure")
+    assert result["total"] == 1
+    assert result["items"][0]["entity_id"] == "two"
+    assert result["items"][0]["outcome"] == "failure"
+    assert result["options"]["properties"] == [{"id": str(first.id), "name": "North"}]
+
+    content, _ = export_csv(db, organization_id=owner.id, property_id=first.id, outcome="failure")
+    assert "Invalid password" in content
+    assert "Approved device" not in content
+    assert "Another property" not in content
+
+
+def test_audit_property_filter_cannot_escape_organization_or_selected_property(db):
+    owner, other_owner = org(db), org(db)
+    permitted = Property(name="Permitted", organization_id=owner.id)
+    foreign = Property(name="Foreign", organization_id=other_owner.id)
+    db.add_all([permitted, foreign])
+    db.commit()
+
+    assert effective_property(db, permitted.id, None, owner.id) == permitted.id
+    with pytest.raises(HTTPException) as exc:
+        effective_property(db, foreign.id, None, owner.id)
+    assert exc.value.status_code == 403
+    with pytest.raises(HTTPException) as exc:
+        effective_property(db, foreign.id, permitted.id, owner.id)
+    assert exc.value.status_code == 403
 
 
 def test_settings_are_isolated_and_platform_branding_is_fixed(db):

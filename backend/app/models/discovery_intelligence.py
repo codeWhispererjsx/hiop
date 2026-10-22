@@ -88,3 +88,19 @@ class DiscoveryDHCPLease(Base):
     __tablename__="enterprise_discovery_dhcp_leases";id:Mapped[uuid.UUID]=uid();ip_address:Mapped[str]=mapped_column(String(45),index=True);mac_address:Mapped[str]=mapped_column(String(17),index=True);hostname:Mapped[str|None]=mapped_column(String(255),index=True);source:Mapped[str]=mapped_column(String(120));lease_server:Mapped[str|None]=mapped_column(String(255));starts_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True));expires_at:Mapped[datetime|None]=mapped_column(DateTime(timezone=True),index=True);is_reservation:Mapped[bool]=mapped_column(Boolean,default=False,server_default="false");reservation_name:Mapped[str|None]=mapped_column(String(255));description:Mapped[str|None]=mapped_column(Text);last_imported_at:Mapped[datetime]=now();created_by:Mapped[str|None]=mapped_column(String,ForeignKey("users.id",ondelete="SET NULL"));__table_args__=(UniqueConstraint("source","ip_address","mac_address",name="uq_discovery_dhcp_lease_identity"),)
 class DiscoveryChangeSuggestion(Base):
     __tablename__="discovery_change_suggestions";id:Mapped[uuid.UUID]=uid();result_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("enterprise_discovery_results.id",ondelete="CASCADE"),index=True);ci_id:Mapped[uuid.UUID]=mapped_column(UUID(as_uuid=True),ForeignKey("configuration_items.id"),index=True);change_type:Mapped[str]=mapped_column(String(40));previous_value:Mapped[str|None]=mapped_column(Text);current_value:Mapped[str]=mapped_column(Text);status:Mapped[str]=mapped_column(String(30),default="proposed",index=True);created_at:Mapped[datetime]=now();__table_args__=(UniqueConstraint("result_id","ci_id","change_type","current_value",name="uq_discovery_change_suggestion"),)
+
+
+class DiscoveryApprovalLink(Base):
+    __tablename__ = "enterprise_discovery_approval_links"
+
+    result_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("enterprise_discovery_results.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    device_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("devices.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )

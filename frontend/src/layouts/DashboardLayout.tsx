@@ -109,9 +109,14 @@ export default function DashboardLayout({
       }
     };
   }, []);
-  const logout = () => {
-    clearAuthToken();
-    navigate("/login");
+  const logout = async () => {
+    try {
+      await clearAuthToken();
+    } catch (error) {
+      console.error("Unable to remove the saved HIOP desktop session.", error);
+    } finally {
+      navigate("/login");
+    }
   };
   return (
     <div className="app-shell">

@@ -40,10 +40,10 @@ def test_collected_observations_merge_without_erasing_identity():
 
 
 def test_confidence_accumulates_multiple_evidence_sources():
-    score = confidence(["ping_response", "hostname_match", "snmp", "vendor_match", "operating_system"])
-    assert score["score"] == 70
+    score = confidence(["ping_response", "hostname_match", "vendor_match", "operating_system"])
+    assert score["score"] == 50
     assert {item["evidence"] for item in score["contributions"]} == {
-        "ping_response", "hostname_match", "snmp", "vendor_match", "operating_system"
+        "ping_response", "hostname_match", "vendor_match", "operating_system"
     }
 
 

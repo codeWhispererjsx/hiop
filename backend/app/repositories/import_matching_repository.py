@@ -6,12 +6,34 @@ from sqlalchemy.orm import Session
 
 from app.models.device import Device
 from app.models.discovered_device import DiscoveredDevice
+from app.models.hierarchy import NetworkZone, Property
 from app.models.inventory_import import ImportLocationSuggestion, ImportMatchCandidate, ImportedDevice
 
 
 class ImportMatchingRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _tenant_filters(self):
+        filters = []
+        organization_id = self.db.info.get("organization_id")
+        property_id = self.db.info.get("property_id")
+        if organization_id is not None:
+            properties = select(Property.id).where(Property.organization_id == organization_id)
+            if property_id is not None:
+                properties = properties.where(Property.id == property_id)
+            filters.append(Device.property_id.in_(properties))
+        return filters
+
+    def _discovery_tenant_filters(self):
+        organization_id = self.db.info.get("organization_id")
+        if organization_id is None:
+            return []
+        properties = select(Property.id).where(Property.organization_id == organization_id)
+        property_id = self.db.info.get("property_id")
+        if property_id is not None:
+            properties = properties.where(Property.id == property_id)
+        return [DiscoveredDevice.network_zone_id.in_(select(NetworkZone.id).where(NetworkZone.property_id.in_(properties)))]
 
     def rows_to_match(self, session_id: UUID) -> Sequence[ImportedDevice]:
         return self.db.scalars(select(ImportedDevice).where(ImportedDevice.import_session_id == session_id, ImportedDevice.validation_status.in_(("valid", "warning", "duplicate"))).order_by(ImportedDevice.source_row_number)).all()
@@ -49,8 +71,8 @@ class ImportMatchingRepository:
         inventory_filters = self._batch_filters(Device, rows, ("mac_address", "asset_tag", "serial_number", "hostname", "ip_address"))
         discovery_filters = self._batch_filters(DiscoveredDevice, rows, ("mac_address", "hostname", "ip_address"))
         staged_filters = self._batch_filters(ImportedDevice, rows, ("mac_address", "asset_tag", "serial_number", "hostname", "ip_address"))
-        inventory = self.db.scalars(select(Device).where(or_(*inventory_filters)).limit(limit)).all() if inventory_filters else []
-        discovery = self.db.scalars(select(DiscoveredDevice).where(or_(*discovery_filters)).limit(limit)).all() if discovery_filters else []
+        inventory = self.db.scalars(select(Device).where(*self._tenant_filters(), or_(*inventory_filters)).limit(limit)).all() if inventory_filters else []
+        discovery = self.db.scalars(select(DiscoveredDevice).where(*self._discovery_tenant_filters(), or_(*discovery_filters)).limit(limit)).all() if discovery_filters else []
         staged = self.db.scalars(select(ImportedDevice).where(ImportedDevice.import_session_id == rows[0].import_session_id, or_(*staged_filters)).limit(limit)).all() if staged_filters else []
 
         def relevant(row, target, fields):

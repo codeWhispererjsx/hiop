@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.imports.matching import score_records, select_hostname_rule, select_subnet_rule
 from app.models.hierarchy import Building, Department, Floor, NetworkZone, Room
+from app.models.hierarchy import Property
 from app.models.discovered_device import DiscoveredDevice
 from app.models.inventory_import import (
     ImportCandidateType,
@@ -128,14 +129,14 @@ class ImportMatchingService:
             if not value: continue
             aliases = settings.get("hierarchy_aliases", {})
             lookup = aliases.get(source_field, {}).get(value.lower(), value)
-            matches = self.db.scalars(select(model).where(model.is_active.is_(True), func.lower(model.name) == lookup.lower()).limit(2)).all()
+            matches = self.db.scalars(self._hierarchy_query(model).where(func.lower(model.name) == lookup.lower()).limit(2)).all()
             if len(matches) == 1:
                 selected[target_field] = matches[0].id
                 evidence.append({"field": source_field, "source": "exact_hierarchy", "value": value, "confidence": 95})
             elif len(matches) > 1:
                 conflicts.append({"field": source_field, "code": "ambiguous_hierarchy", "candidate_count": len(matches)})
             elif settings["fuzzy_matching_enabled"]:
-                candidates = self.db.scalars(select(model).where(model.is_active.is_(True), model.name.ilike(f"{lookup[:3]}%")).limit(10)).all() if len(lookup) >= 3 else []
+                candidates = self.db.scalars(self._hierarchy_query(model).where(model.name.ilike(f"{lookup[:3]}%")).limit(10)).all() if len(lookup) >= 3 else []
                 ranked = sorted(((round(SequenceMatcher(None, lookup.lower(), item.name.lower()).ratio() * 100), item) for item in candidates), reverse=True, key=lambda pair: pair[0])
                 threshold = settings["fuzzy_similarity_threshold"]
                 if ranked and ranked[0][0] >= threshold and (len(ranked) == 1 or ranked[0][0] - ranked[1][0] >= 5):
@@ -173,6 +174,26 @@ class ImportMatchingService:
         suggestion.status = LocationSuggestionStatus.PENDING
         if not existing: self.db.add(suggestion)
         return suggestion
+
+    def _hierarchy_query(self, model):
+        query = select(model).where(model.is_active.is_(True))
+        organization_id = self.db.info.get("organization_id")
+        if organization_id is None:
+            return query
+        properties = select(Property.id).where(Property.organization_id == organization_id)
+        property_id = self.db.info.get("property_id")
+        if property_id is not None:
+            properties = properties.where(Property.id == property_id)
+        if model in (Department, Building, NetworkZone):
+            return query.where(model.property_id.in_(properties))
+        buildings = select(Building.id).where(Building.property_id.in_(properties))
+        if model is Floor:
+            return query.where(Floor.organization_id == organization_id, Floor.building_id.in_(buildings))
+        floors = select(Floor.id).where(
+            Floor.organization_id == organization_id,
+            Floor.building_id.in_(buildings),
+        )
+        return query.where(Room.organization_id == organization_id, Room.floor_id.in_(floors))
 
     def run(self, session_id: UUID, actor: User, *, recompute: bool = False) -> dict[str, Any]:
         session = self._session(session_id)

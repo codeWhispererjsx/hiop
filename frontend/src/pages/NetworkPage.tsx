@@ -103,18 +103,13 @@ export default function NetworkPage() {
 
   return (
     <DashboardLayout onLiveEvent={live} onLiveStateChange={setSocketConnected}>
-      <nav className="page-actions" aria-label="Monitoring workspaces">
-        <Link className="secondary-action" to="/alerts">Alerts</Link>
-        <Link className="secondary-action" to="/topology">Topology</Link>
-        <Link className="secondary-action" to="/segmentation">Segments</Link>
-      </nav>
-      
       <PageTitle
         eyebrow="Advanced monitoring"
         title="Device health intelligence"
-        copy="Historical, explainable health from the local agent and supported SNMP evidence."
+        copy="Historical device availability and response-time checks from HIOP on this local network."
         action={
           <div className="noc-actions">
+            <Link className="secondary-action" to="/alerts">Open alerts</Link>
             <select
               aria-label="Monitoring time window"
               value={window}
@@ -397,7 +392,7 @@ function HealthEvidence({
 }
 
 function monitoringErrorMessage(text: string) {
-  if (text.toLowerCase().includes("timed out")) return "Monitoring request timed out. This usually means the hosted backend is waiting for local-agent evidence or the backend/database is slow. Existing device history is still preserved.";
+  if (text.toLowerCase().includes("timed out")) return "Monitoring request timed out. This usually means the local HIOP service is waiting for device evidence or the database is slow. Existing device history is still preserved.";
   return text || "Monitoring request failed. Existing device history is still preserved.";
 }
 
@@ -408,8 +403,8 @@ function MonitoringEvidenceNotice({ error, loading, hasSummary }: { error: strin
     <Icon name={error ? "warning" : "clock"} aria-hidden="true" />
     <div>
       <strong>{error ? timedOut ? "Monitoring evidence is taking too long" : "Monitoring summary is unavailable" : "No monitoring evidence yet"}</strong>
-      <p>{error ? monitoringErrorMessage(error) : "Run monitoring after a local agent is connected. HIOP will show online, offline, latency, and missed-check evidence after the agent reports observations."}</p>
-      <small>Discovery finds devices. Monitoring needs approved devices plus local-agent or supported SNMP observations.</small>
+      <p>{error ? monitoringErrorMessage(error) : "Run monitoring from this HIOP Desktop installation. HIOP will show online, offline, latency, and missed-check evidence as local checks complete."}</p>
+      <small>Discovery finds devices. Monitoring checks approved devices that have a usable network address.</small>
     </div>
   </section>;
 }
@@ -417,10 +412,10 @@ function MonitoringEvidenceNotice({ error, loading, hasSummary }: { error: strin
 function ScanProgress({ state }: { state: ScanState }) {
   const content =
     state === "running"
-      ? ["Scan running", "HIOP is sending checks to the local agent. Results appear as the agent reports back."]
+      ? ["Scan running", "HIOP Desktop is checking approved devices from this computer. Results appear here as local checks finish."]
       : state === "completed"
       ? ["Scan completed", "Latest device states and history have been refreshed."]
-      : ["Monitoring did not complete", "The request timed out before HIOP received fresh monitoring evidence. Check the local agent, then refresh the view."];
+      : ["Monitoring did not complete", "The request timed out before HIOP received fresh monitoring evidence. Check that HIOP Desktop is running, then refresh the view."];
       
   return (
     <section className={`scan-progress ${state}`} aria-live="polite">
@@ -539,4 +534,3 @@ function AlertRow({ alert, device, onOpen }: { alert: Alert; device?: Device; on
     </button>
   );
 }
-

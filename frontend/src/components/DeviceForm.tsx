@@ -11,7 +11,7 @@ const fields: Array<{ key: keyof DeviceInput; label: string; placeholder: string
   { key: "device_type", label: "Device Type", placeholder: "Desktop" },
   { key: "brand", label: "Brand", placeholder: "Dell" },
   { key: "model", label: "Model", placeholder: "OptiPlex 7010" },
-  { key: "serial_number", label: "Serial Number", placeholder: "Enter serial number" },
+  { key: "serial_number", label: "Serial Number (optional)", placeholder: "Enter a verified serial number" },
   { key: "ip_address", label: "IP Address", placeholder: "192.168.1.10" },
   { key: "mac_address", label: "MAC Address", placeholder: "00:1A:2B:3C:4D:5E" },
 ];
@@ -103,7 +103,7 @@ export function DeviceForm({ initialValues, cancelTo, submitLabel, submittingLab
 
 function validate(device: DeviceInput): Errors {
   const errors: Errors = {};
-  const required: Array<keyof DeviceInput> = ["asset_tag", "hostname", "device_type", "brand", "model", "serial_number", "department", "location", "ip_address", "mac_address", "inventory_status"];
+  const required: Array<keyof DeviceInput> = ["asset_tag", "hostname", "device_type", "brand", "model", "department", "location", "ip_address", "mac_address", "inventory_status"];
   for (const key of required) {
     if (!String(device[key] ?? "").trim()) errors[key] = "This field is required.";
   }
@@ -126,7 +126,14 @@ function isValidIpv4(value: string) {
 
 function trimDevice(device: DeviceInput): DeviceInput {
   return Object.fromEntries(
-    Object.entries(device).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]),
+    Object.entries(device).map(([key, value]) => [
+      key,
+      key === "serial_number" && typeof value === "string" && !value.trim()
+        ? null
+        : typeof value === "string"
+          ? value.trim()
+          : value,
+    ]),
   ) as DeviceInput;
 }
 

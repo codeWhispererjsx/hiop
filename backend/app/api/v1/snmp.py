@@ -533,3 +533,32 @@ def disable_snmp_credential(
         return {"id": str(credential.id), "enabled": credential.enabled}
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid credential ID")
+
+@router.delete("/targets/{target_id}", status_code=204)
+def delete_snmp_target(target_id: str, db: Session = Depends(get_db), current_user: User = Depends(admin_role), organization_id=Depends(organization_context)):
+    try:
+        target = db.query(SNMPTarget).filter(SNMPTarget.id == UUID(target_id), SNMPTarget.organization_id == organization_id).first()
+        if not target:
+            raise HTTPException(status_code=404, detail="Target not found")
+        name = target.name
+        db.delete(target)
+        create_audit_log(db, current_user.username, "SNMP_TARGET_DELETED", "SNMPTarget", target_id, f"Deleted SNMP target '{name}'.")
+        db.commit()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid target ID")
+
+@router.delete("/credentials/{credential_id}", status_code=204)
+def delete_snmp_credential(credential_id: str, db: Session = Depends(get_db), current_user: User = Depends(admin_role), organization_id=Depends(organization_context)):
+    try:
+        credential = db.query(SNMPCredential).filter(SNMPCredential.id == UUID(credential_id), SNMPCredential.organization_id == organization_id).first()
+        if not credential:
+            raise HTTPException(status_code=404, detail="Credential not found")
+        linked_targets = db.query(SNMPTarget).filter(SNMPTarget.credential_id == credential.id).count()
+        if linked_targets:
+            raise HTTPException(status_code=409, detail=f"Delete or move {linked_targets} linked SNMP target(s) before deleting this credential.")
+        name = credential.name
+        db.delete(credential)
+        create_audit_log(db, current_user.username, "SNMP_CREDENTIAL_DELETED", "SNMPCredential", credential_id, f"Deleted SNMP credential '{name}'.")
+        db.commit()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid credential ID")

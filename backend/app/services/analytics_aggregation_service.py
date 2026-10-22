@@ -8,17 +8,10 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.models.analytics import AnalyticsDataQualityRecord, AnalyticsMetricDefinition
 from app.models.network_scan import NetworkScan
-from app.models.snmp import SNMPMetric
 from app.repositories.analytics_repository import AnalyticsAggregateRepository
 
 BUCKET_SECONDS = {"5_minutes": 300, "15_minutes": 900, "1_hour": 3600, "1_day": 86400, "1_week": 604800, "1_month": 2592000}
 SOURCE_MAP = {
-    ("SNMP", "device.response_time_ms"): ("snmp", "device.response_time_ms"),
-    ("SNMP", "device.uptime_seconds"): ("snmp", "device.uptime_seconds"),
-    ("SNMP", "device.cpu_percent"): ("snmp", "device.cpu_percent"),
-    ("SNMP", "device.memory_percent"): ("snmp", "device.memory_percent"),
-    ("SNMP", "interface.in_utilization_percent"): ("snmp", "interface.in_utilization_percent"),
-    ("SNMP", "interface.out_utilization_percent"): ("snmp", "interface.out_utilization_percent"),
     ("network_scan", "device.response_time_ms"): ("scan", "response_time"),
 }
 
@@ -69,14 +62,6 @@ class AnalyticsAggregationService:
         mapping = SOURCE_MAP.get((definition.source_module, definition.source_metric_key))
         if not mapping:
             raise HTTPException(400, "Metric definition has no approved source mapping.")
-        if mapping[0] == "snmp":
-            query = select(SNMPMetric.observed_at, SNMPMetric.value_numeric, SNMPMetric.quality).where(
-                SNMPMetric.metric_key == mapping[1], SNMPMetric.observed_at >= start, SNMPMetric.observed_at < end,
-                SNMPMetric.value_numeric.is_not(None),
-            )
-            if entity_id:
-                query = query.where(SNMPMetric.target_id == entity_id)
-            return list(self.db.execute(query).all())
         query = select(NetworkScan.scanned_at, NetworkScan.response_time).where(
             NetworkScan.scanned_at >= start, NetworkScan.scanned_at < end, NetworkScan.response_time.is_not(None)
         )

@@ -132,7 +132,9 @@ class DeviceCorrelationService:
             elif row.evidence_type=="description":group="description";value=str(self._evidence_value(row) or "").strip().casefold()
             elif row.evidence_type in {"device_type","hostname_rule"}:group="device_type";value=str(self._evidence_value(row,"device_type") or self._evidence_value(row) or "").strip().casefold()
             if group and value:groups[group].setdefault(value,set()).add(row.source)
-        bonuses={"mac":10,"hostname":10,"description":5,"device_type":5};agreements=[name for name,values in groups.items() if any(len(sources)>=2 for sources in values.values())];bonus=min(20,sum(bonuses[name] for name in agreements));open_conflicts=len(self.conflicts(root,open_only=True));penalty=min(45,open_conflicts*15);raw=max(0,base+bonus-penalty);score=min(100 if root.identity_confirmed and not open_conflicts else 95,raw)
+        bonuses={"mac":10,"hostname":10,"description":5,"device_type":5};agreements=[name for name,values in groups.items() if any(len(sources)>=2 for sources in values.values())];bonus=min(20,sum(bonuses[name] for name in agreements));open_conflicts=len(self.conflicts(root,open_only=True));penalty=min(45,open_conflicts*15);raw=max(0,base+bonus-penalty)
+        if root.identity_confirmed and not open_conflicts:raw=max(85,raw)
+        score=min(100 if root.identity_confirmed and not open_conflicts else 95,raw)
         reasons=[]
         if types:reasons.append(f"{len(types)} distinct evidence types")
         if agreements:reasons.append("agreement across "+", ".join(agreements))

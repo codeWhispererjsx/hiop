@@ -1,11 +1,13 @@
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+from zipfile import ZipFile
 import pytest
 from fastapi import HTTPException
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.api.v1.local_agents import ALLOWED_JOBS, ObservationWrite, _validate_network_job, agent_router, agent_view, authenticate_agent, ingest
+from app.api.v1.local_agents import ALLOWED_JOBS, ObservationWrite, _validate_network_job, agent_router, agent_view, authenticate_agent, download_windows_installer, ingest
 from app.core.security import get_db
 
 def agent(**values):
@@ -43,3 +45,15 @@ def test_network_jobs_fail_closed_without_property_policy():
     query=MagicMock();query.filter.return_value.all.return_value=[];db=MagicMock();db.query.return_value=query
     with pytest.raises(HTTPException) as exc:_validate_network_job(db,agent(),"DISCOVERY",{"cidr":"10.50.0.0/24"})
     assert exc.value.status_code==422
+
+def test_agent_download_includes_update_and_confirmed_removal_tools():
+    response=download_windows_installer(SimpleNamespace(base_url="https://hiop.example/"),SimpleNamespace(),None)
+    with ZipFile(BytesIO(response.body)) as archive:
+        names=set(archive.namelist())
+        assert {"setup.json","install-user.ps1","uninstall-user.ps1","Remove HIOP Agent.cmd"} <= names
+        setup=archive.read("setup.json").decode()
+        installer=archive.read("install-user.ps1").decode()
+        uninstaller=archive.read("uninstall-user.ps1").decode()
+    assert "https://hiop.example" in setup
+    assert "Updating the existing HIOP agent without changing its enrollment." in installer
+    assert "Type REMOVE to continue" in uninstaller

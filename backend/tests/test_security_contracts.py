@@ -144,7 +144,7 @@ class SecurityContractTests(unittest.TestCase):
         db = MagicMock()
         db.query.return_value.filter.return_value.first.return_value = device
         with patch("app.scanner.routes.read_network", return_value={"approved_network": "10.50.20.0/24,192.168.10.0/24"}), patch("app.scanner.routes.scan_single_device", return_value={"status": "ok"}):
-            result = scan_device(NetworkScanCreate(device_id=device_id), db=db, current_user=SimpleNamespace())
+            result = scan_device(NetworkScanCreate(device_id=device_id), db=db, current_user=SimpleNamespace(id="test-actor"))
         self.assertEqual(result, {"status": "ok"})
 
 

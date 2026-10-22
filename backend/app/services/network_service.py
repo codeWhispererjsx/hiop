@@ -5,10 +5,20 @@ from sqlalchemy.orm import Session
 from app.models.device import Device
 from app.models.local_agent import AgentJob, LocalAgentRegistration
 from app.models.network_scan import NetworkScan
+from app.models.hierarchy import Property
 from app.network.utils import ping_host
 from app.websocket.connection_manager import manager
 from app.services.settings_service import read_network
 from app.services.automation_event_outbox_service import publish_internal_event
+
+
+def offline_threshold_crossed(current_status, previous_scans, threshold):
+    previous_streak = 0
+    for row in previous_scans:
+        if row.status.lower() != "offline":
+            break
+        previous_streak += 1
+    return current_status.lower() == "offline" and previous_streak < threshold <= previous_streak + 1
 
 
 def _online_agent_for_property(db: Session, property_id):
@@ -94,6 +104,15 @@ def scan_single_device(
     db.flush()
     from app.services.alert_event_service import evaluate_scan
     alert_result = evaluate_scan(db, device, new_scan)
+    offline_threshold=max(1,int(runtime["offline_threshold"]))
+    previous_scans=(
+        db.query(NetworkScan)
+        .filter(NetworkScan.device_id==device.id,NetworkScan.id!=new_scan.id)
+        .order_by(NetworkScan.scanned_at.desc())
+        .limit(offline_threshold)
+        .all()
+    )
+    offline_incident_triggered=offline_threshold_crossed(new_scan.status,previous_scans,offline_threshold)
 
     status_changed = (
         previous_scan is not None
@@ -105,7 +124,8 @@ def scan_single_device(
     if status_changed:
         if alert_result["opened"]:
             publish_internal_event(db,event_type="alert_created",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"opened":alert_result["opened"]},severity="critical" if new_scan.status=="Offline" else "informational",status="open",correlation_key=f"device:{device.id}:network")
-        publish_internal_event(db,event_type="device_offline" if new_scan.status=="Offline" else "device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"]},severity="critical" if new_scan.status=="Offline" else "informational",status=new_scan.status.lower(),correlation_key=f"device:{device.id}:network")
+        if new_scan.status=="Online":
+            publish_internal_event(db,event_type="device_restored",property_id=device.property_id,source_entity_type="device",source_entity_id=device.id,safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"]},severity="informational",status="online",correlation_key=f"device:{device.id}:network")
 
         live_event = {
             "event": "device_status_changed",
@@ -121,6 +141,23 @@ def scan_single_device(
         # correlation key, so automated work appears in Maintain instead of
         # disappearing into the legacy Ticket table.
 
+    if offline_incident_triggered:
+        publish_internal_event(
+            db,
+            event_type="device_offline",
+            property_id=device.property_id,
+            source_entity_type="device",
+            source_entity_id=device.id,
+            safe_payload={
+                "automatic_ticket":runtime["automatic_offline_tickets"],
+                "failed_checks":offline_threshold,
+                "source":"network_monitoring",
+            },
+            severity="critical",
+            status="offline",
+            correlation_key=f"device:{device.id}:network",
+        )
+
     try:
         db.commit()
         db.refresh(new_scan)
@@ -134,8 +171,11 @@ def scan_single_device(
     return new_scan
 
 
-def scan_all_devices(db: Session):
-    devices = db.query(Device).filter(Device.inventory_status != "Retired").all()
+def scan_all_devices(db: Session, organization_id=None):
+    query=db.query(Device).filter(Device.inventory_status != "Retired")
+    if organization_id is not None:
+        query=query.join(Property,Device.property_id==Property.id).filter(Property.organization_id==organization_id)
+    devices = query.all()
     results = []
 
     for device in devices:

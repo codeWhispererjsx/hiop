@@ -7,8 +7,10 @@ const app = read("src/App.tsx");
 const sidebar = read("src/components/Sidebar.tsx");
 const page = read("src/pages/DiscoveryIntelligencePage.tsx");
 const api = read("src/lib/api.ts");
+const backend = read("../backend/app/api/v1/discovery_intelligence.py");
 const settings = read("src/pages/SettingsPage.tsx");
 const activeDirectorySettings = read("src/components/ActiveDirectorySettings.tsx");
+const deviceForm = read("src/components/DeviceForm.tsx");
 
 test("discovery is a primary product pillar", () => {
   assert.match(app, /DiscoveryIntelligencePage/);
@@ -34,10 +36,10 @@ test("device details open in the shared modal instead of below the table", () =>
   assert.match(page, /<Modal title="Device details"/);
   assert.match(page, /<Evidence[\s\S]*<\/Modal>/);
 });
-test("device details expose manual SNMP enrichment without cluttering the table", () => {
-  assert.match(api, /enrichDiscoveryResult/);
-  for (const label of ["Enrich Device", "SNMP:", "Serial Number", "Firmware", "Uptime", "Interfaces"])
-    assert.match(page, new RegExp(label));
+test("discovery retains directory enrichment without exposing removed SNMP tools", () => {
+  assert.match(api, /enrichDiscoveryResultFromAD/);
+  assert.doesNotMatch(api, /enrichDiscoveryResult:/);
+  assert.doesNotMatch(page, /SNMP|Enrich Device/);
 });
 
 test("V2C exposes read-only Active Directory configuration and device enrichment", () => {
@@ -64,8 +66,9 @@ test("V2E presents a technician-friendly final discovery experience", () => {
     assert.match(page, new RegExp(label, "i"));
   for (const searchable of ["departmentFilter", "typeFilter", "vendorFilter", "mac_address"])
     assert.match(page, new RegExp(searchable));
-  for (const state of ["No devices discovered yet", "Enrichment has not been performed", "SNMP unavailable", "Active Directory unavailable", "DNS information unavailable"])
+  for (const state of ["No devices discovered yet", "Enrichment has not been performed", "Active Directory unavailable", "DNS information unavailable"])
     assert.match(page, new RegExp(state));
+  assert.doesNotMatch(page, /SNMP/);
   assert.match(page, /inventory_device_id/);
   assert.doesNotMatch(page, /\+\{String\(item\.weight/);
 });
@@ -87,6 +90,16 @@ test("friendly identity never hides the technical hostname", () => {
   assert.equal(example.primary_hostname, "heloshadtsc1821");
 });
 
+test("naming rules use user-defined case-insensitive hostname matches", () => {
+  assert.match(page, /Where hostname contains/);
+  assert.match(page, /Classify as/);
+  assert.match(page, /Case-insensitive hostname match/);
+  assert.match(page, /Edit naming rule/);
+  assert.match(page, /Confirm delete/);
+  assert.match(api, /deleteIdentityRule/);
+  assert.doesNotMatch(page, /HOSTNAME_CODE_PRESETS|addHostnameCode/);
+});
+
 test("bulk approval is explicit, confirmed, and uses the scoped API", () => {
   for (const label of ["Select Identified", "Select All", "Approve Selected", "These devices will be added to this property's managed inventory"])
     assert.match(page, new RegExp(label));
@@ -94,6 +107,21 @@ test("bulk approval is explicit, confirmed, and uses the scoped API", () => {
   assert.doesNotMatch(page, /window\.confirm/);
   assert.match(api, /bulkApproveDiscoveryResults/);
   assert.match(api, /discovery-intelligence\/results\/bulk-approve/);
+});
+
+test("approval eligibility matches the server confidence and conflict guard", () => {
+  assert.match(page, /function approvalBlockReason/);
+  assert.match(page, /device\.identity_confirmed && device\.confidence_score < 60/);
+  assert.match(page, /device\.conflict_status === "open"/);
+  assert.match(page, /Resolve the identity conflicts before approving this device/);
+  assert.match(page, /approvalBlockReason\(item\)/);
+  assert.match(backend, /approval_ineligibility_reason\(row,correlation\.conflicts\(row,open_only=True\)\)/);
+});
+
+test("serial numbers are optional unless verified", () => {
+  assert.match(deviceForm, /Serial Number \(optional\)/);
+  assert.match(deviceForm, /key === "serial_number"[\s\S]*\? null/);
+  assert.match(backend, /serial_number=\(row\.serial_number or None\)/);
 });
 
 test("bulk selection can target only devices with discovered hostnames", () => {

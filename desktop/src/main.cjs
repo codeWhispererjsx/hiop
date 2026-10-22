@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, shell, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, shell, ipcMain, safeStorage } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -26,6 +26,62 @@ function openCommandWindow(title, command, target) {
   });
   process.unref();
 }
+
+function assertTrustedRenderer(event) {
+  if (!mainWindow || event.sender !== mainWindow.webContents) {
+    throw new Error("Session storage is only available to the HIOP window.");
+  }
+  const senderUrl = event.senderFrame && event.senderFrame.url;
+  let sender;
+  let expected;
+  try {
+    sender = new URL(senderUrl);
+    expected = new URL(frontendUrl);
+  } catch {
+    throw new Error("Session storage is unavailable to this page.");
+  }
+  if (sender.protocol !== expected.protocol || sender.host !== expected.host ||
+      (isDev ? sender.origin !== expected.origin : sender.pathname !== expected.pathname)) {
+    throw new Error("Session storage is unavailable to this page.");
+  }
+}
+
+function sessionTokenPath() {
+  return path.join(app.getPath("userData"), "auth-session.bin");
+}
+
+function requireEncryptedStorage() {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error("Windows secure storage is unavailable. HIOP cannot save this session safely.");
+  }
+}
+
+ipcMain.handle("hiop:session:get", (event) => {
+  assertTrustedRenderer(event);
+  requireEncryptedStorage();
+  const tokenPath = sessionTokenPath();
+  if (!fs.existsSync(tokenPath)) return null;
+  try {
+    return safeStorage.decryptString(fs.readFileSync(tokenPath));
+  } catch {
+    fs.rmSync(tokenPath, { force: true });
+    throw new Error("The saved HIOP desktop session could not be decrypted and was removed. Sign in again.");
+  }
+});
+
+ipcMain.handle("hiop:session:set", (event, token) => {
+  assertTrustedRenderer(event);
+  requireEncryptedStorage();
+  if (typeof token !== "string" || token.length > 8192 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) {
+    throw new Error("The HIOP session token is invalid.");
+  }
+  fs.writeFileSync(sessionTokenPath(), safeStorage.encryptString(token), { mode: 0o600 });
+});
+
+ipcMain.handle("hiop:session:clear", (event) => {
+  assertTrustedRenderer(event);
+  fs.rmSync(sessionTokenPath(), { force: true });
+});
 
 ipcMain.handle("hiop:device-action", async (_event, action, rawTarget) => {
   if (!validNetworkTarget(rawTarget)) throw new Error("This device does not have a usable hostname or IP address.");

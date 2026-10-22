@@ -1,5 +1,6 @@
-import { useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import * as XLSX from "xlsx";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
 import { StatusBadge } from "../components/StatusBadge";
@@ -31,10 +32,14 @@ export default function DevicesPage() {
   const [vendor, setVendor] = useState("All");
   const [condition, setCondition] = useState("All");
   const [warranty, setWarranty] = useState("All");
+  const [exportCount, setExportCount] = useState<"50" | "100" | "all">("50");
+  const [exportFormat, setExportFormat] = useState<"word" | "csv" | "excel">("word");
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState("");
+  const [exportError, setExportError] = useState("");
 
   const all = useMemo(() => getPaginatedItems(assets.data), [assets.data]);
-  const rows = useMemo(() => 
-    all.filter((row) => {
+  const filterAssets = useCallback((items: ManagedAsset[]) => items.filter((row) => {
       const searchable = [
         row.asset_number,
         row.asset_tag,
@@ -56,20 +61,69 @@ export default function DevicesPage() {
         (condition === "All" || row.condition === condition) &&
         (warranty === "All" || row.warranty_status === warranty)
       );
-    }), 
-    [all, query, status, type, department, location, health, vendor, condition, warranty]
+    }), [query, status, type, department, location, health, vendor, condition, warranty]);
+  const rows = useMemo(
+    () => filterAssets(all),
+    [all, filterAssets]
   );
   const admin = me.data?.role === "admin";
   const activeFilters = [status, type, department, location, health, vendor, condition, warranty].filter((item) => item !== "All").length;
-  const exportWord = () => {
+  const exportFile = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setExportProgress("Loading filtered inventory…");
+    setExportError("");
+    try {
+      const firstPage = await endpoints.assetPage({ page: "1", page_size: "5000" });
+      const pageItems = getPaginatedItems(firstPage);
+      const firstPageInfo = Array.isArray(firstPage) ? { total: pageItems.length, page_size: pageItems.length } : firstPage;
+      const pageCount = Math.max(1, Math.ceil(firstPageInfo.total / Math.max(firstPageInfo.page_size, 1)));
+      const inventory = [...pageItems];
+      for (let page = 2; page <= pageCount; page += 1) {
+        setExportProgress(`Loading inventory page ${page} of ${pageCount}…`);
+        const result = await endpoints.assetPage({ page: String(page), page_size: "5000" });
+        inventory.push(...getPaginatedItems(result));
+      }
+      const filteredRows = filterAssets(inventory);
+      const selectedRows =
+        exportCount === "all" ? filteredRows : filteredRows.slice(0, Number(exportCount));
+      if (!selectedRows.length) throw new Error("There are no filtered assets to export.");
+      setExportProgress(`Preparing ${selectedRows.length} ${selectedRows.length === 1 ? "record" : "records"}…`);
+      const columns = [
+        ["Asset number", "asset_number"], ["Asset tag", "asset_tag"], ["Name", "name"],
+        ["Hostname", "hostname"], ["IP address", "ip_address"], ["MAC address", "mac_address"],
+        ["Device type", "device_type"], ["Vendor", "vendor"], ["Model", "model"],
+        ["Serial number", "serial_number"], ["Department", "department"], ["Location", "location"],
+        ["Lifecycle status", "status"], ["Health", "health"], ["Warranty status", "warranty_status"],
+      ] as const;
+      const exportRows = selectedRows.map((row) =>
+        Object.fromEntries(columns.map(([label, key]) => [label, row[key] ?? ""])),
+      );
+      const filename = `HIOP-device-inventory-${new Date().toISOString().slice(0, 10)}`;
+      if (exportFormat === "csv") {
+        const quote = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+        const csv = [
+          columns.map(([label]) => quote(label)).join(","),
+          ...exportRows.map((row) => columns.map(([label]) => quote(row[label])).join(",")),
+        ].join("\r\n");
+        saveBlob(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }), `${filename}.csv`);
+      } else if (exportFormat === "excel") {
+        const worksheet = XLSX.utils.json_to_sheet(exportRows);
+        worksheet["!cols"] = columns.map(([label]) => ({ wch: Math.max(label.length + 2, 16) }));
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Device inventory");
+        const bytes = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+        saveBlob(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${filename}.xlsx`);
+      } else {
     const escape = (text: unknown) => String(text ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    const rowsHtml = rows.map((row) => `<tr>
+    const rowsHtml = selectedRows.map((row) => `<tr>
       <td><strong>${escape(row.name)}</strong><br><span>${escape(row.asset_number || "No asset number")}</span></td>
       <td>${escape(row.hostname || "No hostname")}</td>
       <td>${escape(row.ip_address || "Not available")}</td>
       <td>${escape(row.device_type || "Unknown")}</td>
       <td>${escape(row.department || "Unassigned")}<br><span>${escape(row.location || "No location")}</span></td>
       <td>${escape(row.status || "Unknown")}<br><span>${escape(row.health || "Unknown")}</span></td>
+      <td>${escape(row.mac_address || "Not recorded")}<br><span>${escape(row.serial_number || "Serial not verified")}</span></td>
     </tr>`).join("");
     const exportedAt = escape(new Date().toLocaleString());
     const documentHtml = `<!doctype html>
@@ -78,28 +132,39 @@ export default function DevicesPage() {
       <style>
         @page Section1 { size: 11in 8.5in; mso-page-orientation: landscape; margin: .42in .35in .48in .35in; }
         div.Section1 { page: Section1; }
-        body { margin: 0; color: #172033; font-family: Calibri, Arial, sans-serif; font-size: 9pt; }
-        h1 { margin: 0 0 4pt; color: #123e91; font-size: 19pt; }
-        .meta { margin: 0 0 15pt; color: #526174; font-size: 9pt; }
+        body { margin: 0; color: darkslategray; font-family: Calibri, Arial, sans-serif; font-size: 9pt; }
+        h1 { margin: 0 0 4pt; color: navy; font-size: 19pt; }
+        .meta { margin: 0 0 15pt; color: slategray; font-size: 9pt; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
         thead { display: table-header-group; }
         tr { page-break-inside: avoid; }
-        th { padding: 7pt 6pt; background: #123e91; color: #ffffff; border: 1px solid #123e91; font-size: 8pt; font-weight: 700; text-align: left; text-transform: uppercase; }
-        td { padding: 7pt 6pt; border: 1px solid #cbd5e1; line-height: 1.25; vertical-align: top; overflow-wrap: anywhere; word-wrap: break-word; }
-        td strong { color: #172033; } td span { color: #5c6b7d; font-size: 8pt; }
-        th:nth-child(1) { width: 20%; } th:nth-child(2) { width: 19%; } th:nth-child(3) { width: 13%; }
-        th:nth-child(4) { width: 14%; } th:nth-child(5) { width: 19%; } th:nth-child(6) { width: 15%; }
+        th { padding: 7pt 6pt; background: navy; color: white; border: 1px solid navy; font-size: 8pt; font-weight: 700; text-align: left; text-transform: uppercase; }
+        td { padding: 7pt 6pt; border: 1px solid lightgray; line-height: 1.25; vertical-align: top; overflow-wrap: anywhere; word-wrap: break-word; }
+        td strong { color: darkslategray; } td span { color: slategray; font-size: 8pt; }
+        th:nth-child(1) { width: 17%; } th:nth-child(2) { width: 15%; } th:nth-child(3) { width: 11%; }
+        th:nth-child(4) { width: 12%; } th:nth-child(5) { width: 16%; } th:nth-child(6) { width: 13%; } th:nth-child(7) { width: 16%; }
       </style></head><body><div class="Section1">
       <h1>HIOP Device Inventory</h1>
-      <p class="meta">Exported ${exportedAt} · ${rows.length} managed asset${rows.length === 1 ? "" : "s"}</p>
-      <table><thead><tr><th>Asset</th><th>Hostname</th><th>IP address</th><th>Type</th><th>Department / location</th><th>Lifecycle / health</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+      <p class="meta">Exported ${exportedAt} · ${selectedRows.length} managed asset${selectedRows.length === 1 ? "" : "s"} · Search and active inventory filters applied</p>
+      <table><thead><tr><th>Asset</th><th>Hostname</th><th>IP address</th><th>Type</th><th>Department / location</th><th>Lifecycle / health</th><th>MAC / serial</th></tr></thead><tbody>${rowsHtml}</tbody></table>
       </div></body></html>`;
     const blob = new Blob(["\ufeff", documentHtml], { type: "application/msword;charset=utf-8" });
+        saveBlob(blob, `${filename}.doc`);
+      }
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "The device export could not be created.");
+    } finally {
+      setExporting(false);
+      setExportProgress("");
+    }
+  };
+  const saveBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `HIOP-device-inventory-${new Date().toISOString().slice(0,10)}.doc`;
+    link.href = url;
+    link.download = filename;
     link.click();
-    window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const clearFilters = () => {
     setStatus("All"); setType("All"); setDepartment("All"); setLocation("All");
@@ -112,7 +177,7 @@ export default function DevicesPage() {
         eyebrow="CMDB & asset intelligence" 
         title="Managed assets" 
         copy="Organizational asset identity joined to authoritative device, health, and network evidence." 
-        action={<div className="page-actions"><button className="secondary-action" type="button" onClick={exportWord} disabled={!rows.length}>Export Word report</button>{admin ? (
+        action={<div className="page-actions"><label>Export count<select value={exportCount} onChange={(event) => setExportCount(event.target.value as "50" | "100" | "all")}><option value="50">First 50 filtered</option><option value="100">First 100 filtered</option><option value="all">All filtered</option></select></label><label>Format<select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as "word" | "csv" | "excel")}><option value="word">Word report</option><option value="csv">CSV</option><option value="excel">Excel workbook</option></select></label><button className="secondary-action" type="button" onClick={() => void exportFile()} disabled={!rows.length || exporting}>{exporting ? exportProgress || "Preparing export…" : `Export ${exportCount === "all" ? "all filtered" : `first ${exportCount}`}`}</button>{admin ? (
           <Link className="primary-action" to="/assets/new">
             <Icon name="devices" aria-hidden="true" />
             Add Asset
@@ -127,6 +192,7 @@ export default function DevicesPage() {
         />
       ) : (
         <>
+          {exportError && <p role="alert" className="form-error">{exportError}</p>}
           <section className="toolbar-panel" aria-label="Asset search and filters">
             <label className="search-field" htmlFor="asset-search-input">
               <Icon name="search" aria-hidden="true" />
@@ -245,8 +311,3 @@ function Filter({
     </select>
   );
 }
-
-
-
-
-

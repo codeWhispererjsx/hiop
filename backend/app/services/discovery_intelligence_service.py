@@ -6,12 +6,12 @@ from ipaddress import ip_network
 from app.discovery.network import ensure_authorized
 from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryJob,DiscoveryOUI,DiscoveryResult,DiscoveryStage
 
-PIPELINE=("icmp_reachability","arp_resolution","reverse_dns","hostname_resolution","mac_collection","mac_vendor_identification","port_discovery","service_fingerprinting","snmp_discovery","netbios_discovery","windows_wmi_discovery","linux_ssh_fingerprinting","http_https_fingerprinting","tls_certificate_inspection","lldp_cdp_topology","dhcp_lease_correlation","active_directory_correlation","cmdb_correlation","confidence_calculation","configuration_item_update")
-WEIGHTS={"ping_response":15,"mac_address":15,"vendor_match":10,"hostname_match":15,"dns_resolution":5,"description":10,"snmp":20,"ad_match":10,"ad_description_agreement":10,"ad_department_agreement":5,"ad_domain_match":5,"cmdb_match":10,"lldp":5,"service_fingerprint":5,"operating_system":10,"hostname_rule":5,"manual_confirmation":15}
+PIPELINE=("icmp_reachability","arp_resolution","reverse_dns","hostname_resolution","mac_collection","mac_vendor_identification","port_discovery","service_fingerprinting","netbios_discovery","windows_wmi_discovery","linux_ssh_fingerprinting","http_https_fingerprinting","tls_certificate_inspection","dhcp_lease_correlation","active_directory_correlation","cmdb_correlation","confidence_calculation","configuration_item_update")
+WEIGHTS={"ping_response":15,"mac_address":15,"vendor_match":10,"hostname_match":15,"dns_resolution":5,"description":10,"ad_match":10,"ad_description_agreement":10,"ad_department_agreement":5,"ad_domain_match":5,"cmdb_match":10,"service_fingerprint":5,"operating_system":10,"hostname_rule":5,"manual_confirmation":15}
 # Compatibility symbol only. Hotel department conventions are configured as
 # scoped IdentityRule records and are never global application defaults.
 DEPARTMENT_RULES={}
-SERVICE_PORTS={21:"FTP",22:"SSH/SFTP",53:"DNS",67:"DHCP",80:"HTTP",123:"NTP",135:"WMI",139:"NetBIOS",161:"SNMP",389:"LDAP",443:"HTTPS",445:"SMB",636:"LDAPS",1433:"SQL Server",1521:"Oracle",2375:"Docker",2376:"Docker TLS",3306:"MySQL",3389:"RDP",5432:"PostgreSQL",5985:"WinRM",5986:"WinRM TLS",6379:"Redis",6443:"Kubernetes API",9200:"Elasticsearch",27017:"MongoDB"}
+SERVICE_PORTS={21:"FTP",22:"SSH/SFTP",53:"DNS",67:"DHCP",80:"HTTP",123:"NTP",135:"WMI",139:"NetBIOS",389:"LDAP",443:"HTTPS",445:"SMB",636:"LDAPS",1433:"SQL Server",1521:"Oracle",2375:"Docker",2376:"Docker TLS",3306:"MySQL",3389:"RDP",5432:"PostgreSQL",5985:"WinRM",5986:"WinRM TLS",6379:"Redis",6443:"Kubernetes API",9200:"Elasticsearch",27017:"MongoDB"}
 DEVICE_FAMILIES=("Server","Windows Computer","Windows","Linux","VMware ESXi","Hyper-V","Docker Host","Kubernetes Node","Switch","Router","Firewall","Wireless Controller","Access Point","Printer","Scanner","UPS","IP Phone","VoIP Gateway","POS Terminal","PMS Server","IPTV System","Door Lock Controller","CCTV Camera","Biometric Device","IoT Device","Storage Array","Virtual Machine","Unknown Device")
 
 def normalize_hostname(value):
@@ -20,12 +20,12 @@ def normalize_hostname(value):
 def merge_hostnames(values):
     normalized=sorted({x for x in (normalize_hostname(v) for v in values) if x},key=lambda x:(x.count("."),len(x),x),reverse=True);return {"primary":normalized[0] if normalized else None,"aliases":normalized[1:]}
 def hostname_evidence(values):
-    """Promote confirmed DNS, NetBIOS, AD, and SNMP names into device identity."""
+    """Promote confirmed DNS, NetBIOS, and directory names into device identity."""
     candidates=[]
     for row in values or []:
         if not isinstance(row,dict) or not row.get("verified"):
             continue
-        if row.get("evidence_type") not in {"dns_resolution","hostname_match","ad_match","sys_name"}:
+        if row.get("evidence_type") not in {"dns_resolution","hostname_match","ad_match"}:
             continue
         value=normalize_hostname(row.get("value") or row.get("normalized_value"))
         if value:
@@ -33,23 +33,12 @@ def hostname_evidence(values):
     return candidates
 def confidence(evidence_types):
     seen=set(evidence_types);parts=[{"evidence":key,"weight":weight} for key,weight in WEIGHTS.items() if key in seen];return {"score":min(100,sum(x["weight"] for x in parts)),"contributions":parts,"maximum":100}
-def interpret_hostname(hostname, type_rules=None, department_rules=None):
-    original=normalize_hostname(hostname)
-    if not original:return None
-    compact=re.sub(r"[^a-z0-9]","",original.split(".")[0]).upper();types=type_rules or {};departments=department_rules or {}
-    type_match=next(((code,label) for code,label in sorted(types.items(),key=lambda item:-len(item[0])) if code in compact),None)
-    dept_match=next(((code,label) for code,label in sorted(departments.items(),key=lambda item:-len(item[0])) if code in compact),None)
-    number=re.search(r"(\d+)$",compact)
-    if not type_match and not dept_match:return None
-    device_number=number.group(1) if number else None;friendly=None
-    if type_match:friendly=f"{'POS Terminal' if type_match[0]=='POS' else type_match[1]}{f' {device_number}' if device_number else ''}"
-    return {"original_hostname":original,"device_type":type_match[1] if type_match else None,"department":dept_match[1] if dept_match else None,"device_number":device_number,"friendly_name":friendly}
 def discovered_description(current, current_source, discovered, discovered_source="Discovery"):
     if current_source in ("Manual","Inventory") or not discovered:return current,current_source
     return discovered,discovered_source
 def services_from_ports(ports):return [{"port":int(port),"service":SERVICE_PORTS.get(int(port),"Unknown")} for port in sorted({int(x) for x in ports})]
 def identify(observation):
-    text=" ".join(str(observation.get(x,"")) for x in ("hostname","vendor","snmp_description","http_server","http_title","description","ssh_banner","operating_system")).lower();ports={int(x) for x in observation.get("open_ports",[])}
+    text=" ".join(str(observation.get(x,"")) for x in ("hostname","vendor","http_server","http_title","description","ssh_banner","operating_system")).lower();ports={int(x) for x in observation.get("open_ports",[])}
     rules=(("VMware ESXi",("esxi","vmware")),("Hyper-V",("hyper-v","hyperv")),("Kubernetes Node",("kubernetes","kubelet")),("Docker Host",("docker",)),("Domain Controller",("domain controller","active directory")),("Firewall",("fortigate","firewall","palo alto")),("Wireless AP",("access point","unifi","aruba ap")),("Core Switch",("core-sw","core switch")),("Distribution Switch",("distribution switch","dist-sw")),("Access Switch",("catalyst","access switch","switch")),("CCTV Camera",("hikvision","axis","camera")),("Door Controller",("door lock","door controller")),("POS Terminal",("pos terminal","pos-")),("Printer",("secureprint","laserjet","officejet","color laserjet","printer")),("PMS Server",("opera","oracle hospitality","property management system","pms server")),("Database Server",("postgres","mysql","sql server","oracle database")),("Application Server",("nginx","microsoft-iis","iis windows","apache","oracle http","application server","server","srv-")))
     classification=next((label for label,markers in rules if any(marker in text for marker in markers)),"Unknown Device")
     if classification=="Unknown Device" and 3389 in ports:classification="Windows Server"

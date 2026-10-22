@@ -20,8 +20,8 @@ admin_router=APIRouter(prefix="/local-agents",tags=["Local Agents"])
 agent_router=APIRouter(prefix="/agent",tags=["Agent Protocol"])
 manager=require_roles(["platformadmin","admin"]);reader=require_roles(["platformadmin","admin","technician","viewer"])
 enrollment_limiter=OperationRateLimiter(limit=10,window_seconds=60);ingestion_limiter=OperationRateLimiter(limit=120,window_seconds=60)
-ALLOWED_JOBS={"DISCOVERY","MONITORING","PING","DNS_LOOKUP","ARP_SNAPSHOT","SNMP_POLL","AD_ENRICHMENT"}
-ALLOWED_SOURCES={"discovery","monitoring","icmp","dns","arp","dhcp","snmp","active_directory","windows"}
+ALLOWED_JOBS={"DISCOVERY","MONITORING","PING","DNS_LOOKUP","ARP_SNAPSHOT","AD_ENRICHMENT"}
+ALLOWED_SOURCES={"discovery","monitoring","icmp","dns","arp","dhcp","active_directory","windows"}
 
 def _digest(value:str)->str:return hashlib.sha256(value.encode()).hexdigest()
 
@@ -99,13 +99,19 @@ def download_windows_installer(request:Request, actor:User=Depends(manager), org
     from zipfile import ZipFile, ZIP_DEFLATED
     from fastapi.responses import Response
     bundle=Path(__file__).resolve().parents[2]/"distributions"/"hiop-agent-windows.zip"
+    distribution=Path(__file__).resolve().parents[2]/"distributions"
     if not bundle.is_file():
         raise HTTPException(503,"The Windows agent download is not available. Contact your HIOP administrator.")
     output=BytesIO()
     with ZipFile(bundle,"r") as source, ZipFile(output,"w",ZIP_DEFLATED) as archive:
         for entry in source.infolist():
-            if entry.filename!="setup.json":
+            if entry.filename not in {"setup.json","install-user.ps1","uninstall-user.ps1","Remove HIOP Agent.cmd"}:
                 archive.writestr(entry,source.read(entry.filename))
+        for filename in ("install-user.ps1","uninstall-user.ps1","Remove HIOP Agent.cmd"):
+            script=distribution/filename
+            if not script.is_file():
+                raise HTTPException(503,"The Windows agent setup files are incomplete.")
+            archive.write(script,filename)
         archive.writestr("setup.json",json.dumps({"backend_url":str(request.base_url).rstrip("/")}))
     return Response(output.getvalue(),media_type="application/zip",headers={"Content-Disposition":'attachment; filename="HIOP-Agent-Windows.zip"',"Cache-Control":"no-store"})
 
@@ -126,11 +132,11 @@ def revoke_agent(agent_id:UUID,db:Session=Depends(get_db),actor:User=Depends(man
 def create_job(agent_id:UUID,body:JobCreate,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
     kind=body.job_type.strip().upper()
     if kind not in ALLOWED_JOBS:raise HTTPException(422,"Unsupported agent job type")
-    if kind in {"SNMP_POLL","AD_ENRICHMENT"}:raise HTTPException(409,"This agent version does not yet support SNMP or Active Directory collection")
+    if kind == "AD_ENRICHMENT":raise HTTPException(409,"This agent version does not yet support Active Directory collection")
     agent=db.query(LocalAgentRegistration).filter_by(id=agent_id,organization_id=org).first()
     if not agent or agent.property_id not in allowed_property_ids(db,actor,org) or agent.revoked_at:raise HTTPException(404,"Active agent not found")
     _validate_network_job(db,agent,kind,body.payload)
-    row=AgentJob(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,job_type=kind,payload=json.dumps(body.payload,separators=(",",":")),timeout_seconds=body.timeout_seconds,created_by=actor.id);db.add(row);db.commit();db.refresh(row);return {"id":row.id,"job_type":row.job_type,"status":row.status}
+    row=AgentJob(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,job_type=kind,payload=json.dumps(body.payload,separators=(",",":")),timeout_seconds=body.timeout_seconds,created_by=actor.id);db.add(row);db.flush();create_audit_log(db,actor.username,"AGENT_JOB_CREATED","LocalAgent",str(agent.id),f"Queued {kind} agent job {row.id}");db.commit();db.refresh(row);return {"id":row.id,"job_type":row.job_type,"status":row.status}
 
 @agent_router.post("/enroll",status_code=201)
 def enroll(body:EnrollRequest,request:Request,db:Session=Depends(get_db)):
@@ -192,7 +198,7 @@ def ingest(body:ObservationWrite,request:Request,db:Session=Depends(get_db),agen
     if body.source=="discovery":
         agent.last_discovery=agent.last_seen
         ingest_discovery(db,agent,body.payload)
-    if body.source in {"monitoring","icmp","snmp"}:
+    if body.source in {"monitoring","icmp"}:
         agent.last_monitoring=agent.last_seen
         if body.source in {"monitoring","icmp"}:
             ingest_monitoring(db,agent,body.payload)

@@ -1,4 +1,3 @@
-import { FeatureGuide } from "../components/FeatureGuide";
 /* eslint-disable react-hooks/set-state-in-effect */
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -22,7 +21,6 @@ type Section =
   | "active_directory"
   | "notifications"
   | "incidents"
-  | "snmp"
   | "appearance"
   | "security"
   | "health"
@@ -43,7 +41,6 @@ const sections: Array<{
   { key: "active_directory", label: "Active Directory", icon: "lock" },
   { key: "notifications", label: "Notifications & email", icon: "bell" },
   { key: "incidents", label: "Incident management", icon: "audit" },
-  { key: "snmp", label: "SNMP monitoring", icon: "network" },
   { key: "appearance", label: "Appearance", icon: "sun" },
   { key: "security", label: "Security", icon: "lock" },
   { key: "health", label: "System health", icon: "server" },
@@ -105,8 +102,6 @@ export default function SettingsPage() {
         result = await endpoints.updateNotificationSettings(draft.notifications);
       } else if (section === "incidents") {
         result = await endpoints.updateIncidentSettings(draft.incidents);
-      } else if (section === "snmp") {
-        result = await endpoints.updateSNMPSettings(draft.snmp);
       }
       setDraft(result);
       window.dispatchEvent(new Event("hiop:organization-updated"));
@@ -150,7 +145,6 @@ export default function SettingsPage() {
   const d = draft.discovery;
   const notifications = draft.notifications;
   const incidents = draft.incidents;
-  const snmp = draft.snmp;
 
   return (
     <DashboardLayout>
@@ -658,90 +652,6 @@ export default function SettingsPage() {
                   }
                 />
               </div>
-              <SaveButton saving={saving} onClick={save} />
-            </SettingsPanel>
-          )}
-
-          {section === "snmp" && <FeatureGuide kind="snmp"/>}
-          {section === "snmp" && (
-            <SettingsPanel
-              title="SNMP monitoring"
-              copy="Simple Network Management Protocol configuration for device monitoring and polling."
-            >
-              <div className="settings-toggles">
-                <Toggle
-                  label="SNMP enabled"
-                  checked={snmp.enabled}
-                  onChange={(value) =>
-                    setDraft({ ...draft, snmp: { ...snmp, enabled: value } })
-                  }
-                />
-                <Toggle
-                  label="Allow SNMPv1"
-                  checked={snmp.allow_v1}
-                  onChange={(value) =>
-                    setDraft({ ...draft, snmp: { ...snmp, allow_v1: value } })
-                  }
-                />
-                <Toggle
-                  label="Allow legacy protocols (MD5, DES)"
-                  checked={snmp.allow_legacy_protocols}
-                  onChange={(value) =>
-                    setDraft({ ...draft, snmp: { ...snmp, allow_legacy_protocols: value } })
-                  }
-                />
-              </div>
-              <div className="settings-form-grid">
-                <NumberField
-                  label="Default timeout (seconds)"
-                  value={snmp.default_timeout_seconds}
-                  min={1}
-                  max={60}
-                  onChange={(value) =>
-                    setDraft({ ...draft, snmp: { ...snmp, default_timeout_seconds: value } })
-                  }
-                />
-                <NumberField
-                  label="Default retries"
-                  value={snmp.default_retries}
-                  min={0}
-                  max={10}
-                  onChange={(value) =>
-                    setDraft({ ...draft, snmp: { ...snmp, default_retries: value } })
-                  }
-                />
-                <NumberField
-                  label="Maximum concurrent polls"
-                  value={snmp.maximum_concurrent_polls}
-                  min={1}
-                  max={100}
-                  onChange={(value) =>
-                    setDraft({ ...draft, snmp: { ...snmp, maximum_concurrent_polls: value } })
-                  }
-                />
-                <NumberField
-                  label="Metric retention (days)"
-                  value={snmp.metric_retention_days}
-                  min={1}
-                  max={3650}
-                  onChange={(value) =>
-                    setDraft({ ...draft, snmp: { ...snmp, metric_retention_days: value } })
-                  }
-                />
-                <NumberField
-                  label="Interface retention (days)"
-                  value={snmp.interface_retention_days}
-                  min={1}
-                  max={3650}
-                  onChange={(value) =>
-                    setDraft({ ...draft, snmp: { ...snmp, interface_retention_days: value } })
-                  }
-                />
-              </div>
-              <p className="settings-note">
-                <Icon name="lock" aria-hidden="true" />
-                SNMPv1 and legacy protocols are disabled by default for security. Enable only if required by your environment.
-              </p>
               <SaveButton saving={saving} onClick={save} />
             </SettingsPanel>
           )}

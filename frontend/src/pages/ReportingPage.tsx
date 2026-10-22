@@ -115,8 +115,8 @@ export default function ReportingPage() {
           </button>
         }
       />
-      <nav className="page-actions report-tabs" aria-label="Report types">
-        {reports.map((x) => (
+      <nav className="page-actions report-tabs" aria-label="Common report types">
+        {reports.slice(0, 4).map((x) => (
           <button
             key={x}
             className={x === report ? "primary-action" : "secondary-action"}
@@ -126,8 +126,23 @@ export default function ReportingPage() {
             {title(x)}
           </button>
         ))}
+        <details className="advanced-report-menu">
+          <summary className="secondary-action">More reports</summary>
+          <div className="page-actions">
+            {reports.slice(4).map((x) => (
+              <button
+                key={x}
+                className={x === report ? "primary-action" : "secondary-action"}
+                onClick={() => setReport(x)}
+                aria-current={x === report ? "page" : undefined}
+              >
+                {title(x)}
+              </button>
+            ))}
+          </div>
+        </details>
       </nav>
-      <section className="operations-guide report-guide" aria-label="Reporting guide"><div><span>Choose</span><strong>{title(report)} report</strong><p>Select the question you need answered from the report types above.</p></div><div><span>Filter</span><strong>Keep scope explicit</strong><p>Use a time period and optional organization fields to narrow the evidence.</p></div><div><span>Act</span><strong>Drill down or export</strong><p>Open underlying records from linked metrics or export the current view as CSV.</p></div></section>
+      <section className="operations-guide report-guide" aria-label="Reporting guide"><div><span>Choose</span><strong>{title(report)} report</strong><p>Select a common report or open More reports for additional options.</p></div><div><span>Filter</span><strong>Choose a date range</strong><p>Start with a preset period or select a custom date range.</p></div><div><span>Act</span><strong>Drill down or export</strong><p>Open underlying records from linked metrics or export the current view as CSV.</p></div></section>
       <section className="toolbar-panel" aria-label="Report filters">
         <div className="filter-row">
           <label htmlFor="report-period">
@@ -166,6 +181,10 @@ export default function ReportingPage() {
               </label>
             </>
           )}
+        </div>
+        <details className="advanced-report-filters">
+          <summary>Advanced filters{reportFilterCount > (period !== "30d" ? 1 : 0) + (start ? 1 : 0) + (end ? 1 : 0) ? ` (${reportFilterCount - (period !== "30d" ? 1 : 0) - (start ? 1 : 0) - (end ? 1 : 0)} active)` : ""}</summary>
+          <div className="filter-row">
           <label htmlFor="report-device-type">
             Device type
             <input
@@ -221,7 +240,8 @@ export default function ReportingPage() {
             />
           </label>
           {reportFilterCount > 0 && <button className="filter-reset" type="button" onClick={clearReportFilters}>Reset filters <span>{reportFilterCount}</span></button>}
-        </div>
+          </div>
+        </details>
         <p className="toolbar-summary">Report scope: <strong>{title(report)}</strong> · {periods.find((item) => item.id === period)?.label}</p>
       </section>
       {data.loading || data.error || !data.data ? (

@@ -135,13 +135,10 @@ def test_uplink_is_not_classified_as_endpoint_and_stale_records_are_preserved(mo
     assert db.associations[0].association_type == "uplink" and db.associations[0].connected_device_id == peer.id
 
 
-def test_v3b_api_is_read_only_against_infrastructure_with_admin_refresh_only():
+def test_v3b_api_is_not_mounted():
     from app.main import app
     paths = app.openapi()["paths"]
-    assert set(paths["/api/v1/port-intelligence/devices/{device_id}/connection"]) == {"get"}
-    assert set(paths["/api/v1/port-intelligence/switches/{device_id}/interfaces"]) == {"get"}
-    assert set(paths["/api/v1/port-intelligence/interfaces/{interface_id}"]) == {"get"}
-    assert set(paths["/api/v1/port-intelligence/switches/{device_id}/refresh"]) == {"post"}
+    assert not any(path.startswith("/api/v1/port-intelligence") for path in paths)
     source = Path(__file__).parents[1].joinpath("app/services/port_intelligence_service.py").read_text(encoding="utf-8")
     for forbidden in ("enable_port", "disable_port", "set_vlan", "configure_interface", "restart_interface"):
         assert forbidden not in source
