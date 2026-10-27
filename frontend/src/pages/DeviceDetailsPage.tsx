@@ -1,4 +1,4 @@
-import { formatDateTime } from "../lib/dateTime";
+import { formatDateOnly, formatDateTime } from "../lib/dateTime";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { ConfirmationModal } from "../components/ConfirmationModal";
@@ -116,7 +116,7 @@ export default function DeviceDetailsPage() {
               <div><span>Ownership & location</span><strong>{device.department || "Department not assigned"}</strong><small>{device.location || "Location not assigned"}</small></div>
             </div>
           </section>
-          {asset&&<section className="panel"><header className="section-head"><div><span>Managed asset</span><h2>{asset.asset_number}</h2><p>{asset.asset_tag||"No human-readable asset tag assigned"} · {asset.ci_category}</p></div>{currentUser.data?.role==="admin"&&<Link className="secondary-action" to={`/assets/${asset.id}/edit`}>Edit asset metadata</Link>}</header><dl className="settings-readonly"><div><dt>Lifecycle status</dt><dd>{asset.status.replace("_"," ")}</dd></div><div><dt>Business owner</dt><dd>{asset.business_owner||"Unknown"}</dd></div><div><dt>Technical owner</dt><dd>{asset.technical_owner||"Unknown"}</dd></div><div><dt>Metadata source</dt><dd>{asset.source}</dd></div></dl></section>}
+          {asset&&<section className="panel"><header className="section-head"><div><span>Managed asset and lifecycle</span><h2>{asset.asset_number}</h2><p>{asset.asset_tag||"No human-readable asset tag assigned"} · {asset.ci_category} · Lifecycle {asset.status.replaceAll("_"," ")}</p></div>{currentUser.data?.role==="admin"&&<Link className="secondary-action" to={`/assets/${asset.id}/edit`}>Edit asset metadata</Link>}</header><dl className="settings-readonly"><div><dt>Serial number</dt><dd>{asset.serial_number||"Not recorded"}</dd></div><div><dt>Condition</dt><dd>{asset.condition||"Not recorded"}</dd></div><div><dt>Acquired / received</dt><dd>{formatDateOnly(asset.acquisition_date)} / {formatDateOnly(asset.received_date)}</dd></div><div><dt>Deployed</dt><dd>{formatDateOnly(asset.deployment_date)}</dd></div><div><dt>Warranty</dt><dd>{asset.warranty_status}{asset.warranty_end?` · ends ${formatDateOnly(asset.warranty_end)}`:""}</dd></div><div><dt>Expected replacement</dt><dd>{formatDateOnly(asset.expected_replacement_date)}</dd></div><div><dt>Business owner</dt><dd>{asset.business_owner||"Unknown"}</dd></div><div><dt>Technical owner</dt><dd>{asset.technical_owner||"Unknown"}</dd></div><div><dt>Vendor / procurement</dt><dd>{asset.supplier?.name||"Not recorded"}{asset.acquisition?` · ${asset.acquisition.procurement_number}`:""}</dd></div><div><dt>Metadata source</dt><dd>{asset.source}</dd></div></dl>{asset.lifecycle_history.length>0&&<><h3>Lifecycle history</h3><ol className="lifecycle-timeline">{asset.lifecycle_history.map(event=><li key={event.id}><strong>{event.new_status.replaceAll("_"," ")}</strong><span>{formatDateTime(event.created_at)} · {event.changed_by_name}</span>{event.reason&&<p>{event.reason}</p>}{event.notes&&<p>{event.notes}</p>}</li>)}</ol></>}</section>}
           <nav className="detail-tabs" aria-label="Device detail sections">
             {tabs.map((tab) => <button key={tab.id} className={activeTab === tab.id ? "active" : ""} aria-current={activeTab === tab.id ? "page" : undefined} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
           </nav>
@@ -142,21 +142,24 @@ export default function DeviceDetailsPage() {
 }
 
 type DesktopDeviceAction = "ping" | "trace" | "http" | "https" | "rdp" | "ssh";
+type WindowsDeviceAction = "RESTART" | "SHUTDOWN" | "LOCK";
 
 function DeviceActions({ device, role, onNotice, onError, onRescan }: { device: Device; role?: User["role"]; onNotice: (message: string) => void; onError: (message: string) => void; onRescan: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmingAction, setConfirmingAction] = useState<WindowsDeviceAction>();
   const target = device.ip_address || device.hostname;
   const validTarget = Boolean(target && /^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$/.test(target) && !target.includes(".."));
   const canManageNetwork = role === "admin" || role === "technician";
   const operatingSystem = (device.ad_operating_system || "").toLowerCase();
   const canOpenRemoteDesktop = role === "admin" && operatingSystem.includes("windows");
+  const canUseAgentActions = role === "admin" && operatingSystem.includes("windows") && device.inventory_status.toLowerCase() !== "retired";
   const canOpenSsh = role === "admin" && /(linux|unix|bsd|macos)/.test(operatingSystem);
   const canOpenWeb = validTarget;
   const hasActions = canOpenWeb || (isDesktopMode && validTarget && canManageNetwork) ||
     (isDesktopMode && validTarget && (canOpenRemoteDesktop || canOpenSsh)) ||
     (canManageNetwork && Boolean(device.ip_address)) ||
-    Boolean(device.ip_address || device.hostname || device.mac_address);
+    Boolean(device.ip_address || device.hostname || device.mac_address || canUseAgentActions);
   const run = async (action: DesktopDeviceAction, label: string) => {
     if (!validTarget) { onError("This device has no usable hostname or IP address to use."); return; }
     setBusy(true);
@@ -184,6 +187,22 @@ function DeviceActions({ device, role, onNotice, onError, onRescan }: { device: 
     catch (error) { onError(error instanceof Error ? error.message : "The rescan could not be started."); }
     finally { setBusy(false); }
   };
+  const queueWindowsAction = async () => {
+    if (!confirmingAction || busy) return;
+    const action = confirmingAction;
+    setBusy(true);
+    try {
+      const job = await endpoints.createDeviceAgentAction(device.id, action);
+      const labels: Record<WindowsDeviceAction, string> = { RESTART: "Restart", SHUTDOWN: "Shut down", LOCK: "Lock session" };
+      onNotice(`${labels[action]} was queued for the HIOP agent. Job ${job.id}.`);
+      setConfirmingAction(undefined);
+      setOpen(false);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "The Windows action could not be queued.");
+    } finally {
+      setBusy(false);
+    }
+  };
   if (!hasActions) return null;
   return <div className="device-actions-menu">
     <button className="secondary-action" type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu">Device actions</button>
@@ -194,8 +213,14 @@ function DeviceActions({ device, role, onNotice, onError, onRescan }: { device: 
       </>}
       {canOpenWeb && <div><button type="button" role="menuitem" disabled={busy} onClick={() => void run("http", "HTTP")}>Open HTTP</button><button type="button" role="menuitem" disabled={busy} onClick={() => void run("https", "HTTPS")}>Open HTTPS</button></div>}
       {(isDesktopMode && validTarget && (canOpenRemoteDesktop || canOpenSsh)) && <div>
-        {canOpenRemoteDesktop && <button type="button" role="menuitem" disabled={busy} onClick={() => void run("rdp", "Remote Desktop")}>RDP</button>}
+        {canOpenRemoteDesktop && <button type="button" role="menuitem" disabled={busy} onClick={() => void run("rdp", "Native RDP")}>Native RDP</button>}
         {canOpenSsh && <button type="button" role="menuitem" disabled={busy} onClick={() => void run("ssh", "SSH")}>SSH</button>}
+      </div>}
+      {canUseAgentActions && <div>
+        <p>Windows agent actions</p>
+        <button type="button" role="menuitem" disabled={busy} onClick={() => setConfirmingAction("RESTART")}>Restart device</button>
+        <button type="button" role="menuitem" disabled={busy} onClick={() => setConfirmingAction("SHUTDOWN")}>Shut down device</button>
+        <button type="button" role="menuitem" disabled={busy} onClick={() => setConfirmingAction("LOCK")}>Lock user session</button>
       </div>}
       {canManageNetwork && device.ip_address && <button type="button" role="menuitem" onClick={() => void rescan()} disabled={busy}>Rescan connectivity</button>}
       {(device.ip_address || device.hostname || device.mac_address) && <>
@@ -207,6 +232,18 @@ function DeviceActions({ device, role, onNotice, onError, onRescan }: { device: 
         </div>
       </>}
     </div>}
+    {confirmingAction && <ConfirmationModal
+      title={`${confirmingAction === "RESTART" ? "Restart" : confirmingAction === "SHUTDOWN" ? "Shut down" : "Lock"} ${device.hostname}?`}
+      confirmLabel="Queue action"
+      busyLabel="Queueing..."
+      busy={busy}
+      onCancel={() => setConfirmingAction(undefined)}
+      onConfirm={() => void queueWindowsAction()}
+    >
+      <p>This action will be sent to the online HIOP agent linked to this Windows device and recorded in the audit trail.</p>
+      {confirmingAction !== "LOCK" && <p className="confirmation-warning">Windows schedules this action 60 seconds after it is accepted. Make sure the device is not running work that must remain available.</p>}
+      {confirmingAction === "LOCK" && <p className="confirmation-warning">Locking requires an interactive Windows session with the HIOP Agent tray app running.</p>}
+    </ConfirmationModal>}
   </div>;
 }
 

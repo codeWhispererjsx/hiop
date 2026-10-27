@@ -1,17 +1,21 @@
-import hashlib, hmac, ipaddress, json, secrets
+import hashlib, hmac, ipaddress, json, secrets, socket, re
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.core.rate_limit import OperationRateLimiter
 from app.core.security import get_db, require_roles
 from app.core.tenant import allowed_property_ids, organization_context
-from app.models.hierarchy import Property
+from app.models.device import Device
+from app.models.discovery_intelligence import DiscoveryApprovalLink
+from app.models.hierarchy import Floor, Property
 from app.models.discovery_intelligence import DiscoveryPolicy
-from app.models.local_agent import AgentEnrollment, AgentJob, AgentObservation, LocalAgentRegistration
+from app.models.local_agent import AgentEnrollment, AgentJob, AgentMetricSample, AgentObservation, LocalAgentRegistration
+from app.models.network_scan import NetworkScan
 from app.models.user import User
 from app.services.audit_service import create_audit_log
 from app.services.billing_service import enforce_limit
@@ -21,7 +25,8 @@ agent_router=APIRouter(prefix="/agent",tags=["Agent Protocol"])
 manager=require_roles(["platformadmin","admin"]);reader=require_roles(["platformadmin","admin","technician","viewer"])
 enrollment_limiter=OperationRateLimiter(limit=10,window_seconds=60);ingestion_limiter=OperationRateLimiter(limit=120,window_seconds=60)
 ALLOWED_JOBS={"DISCOVERY","MONITORING","PING","DNS_LOOKUP","ARP_SNAPSHOT","AD_ENRICHMENT"}
-ALLOWED_SOURCES={"discovery","monitoring","icmp","dns","arp","dhcp","active_directory","windows"}
+DEVICE_ACTIONS={"RESTART","SHUTDOWN","LOCK","ENABLE_RDP","DISABLE_RDP","TRIGGER_WINDOWS_UPDATE"}
+ALLOWED_SOURCES={"discovery","monitoring","icmp","dns","arp","dhcp","active_directory","windows","device_action"}
 
 def _digest(value:str)->str:return hashlib.sha256(value.encode()).hexdigest()
 
@@ -30,11 +35,14 @@ class EnrollmentCreate(BaseModel):
 class EnrollRequest(BaseModel):
     enrollment_token:str=Field(min_length=32,max_length=512);hostname:str=Field(min_length=1,max_length=255);version:str=Field(min_length=1,max_length=50);api_version:int=Field(default=1,ge=1,le=1)
 class HeartbeatRequest(BaseModel):
-    version:str=Field(min_length=1,max_length=50);hostname:str=Field(min_length=1,max_length=255);uptime_seconds:int=Field(ge=0);pending_queue:int=Field(default=0,ge=0,le=1_000_000);queue_capacity:int=Field(default=10000,ge=1,le=1_000_000);last_successful_job:str|None=Field(default=None,max_length=80)
+    version:str=Field(min_length=1,max_length=50);hostname:str=Field(min_length=1,max_length=255);uptime_seconds:int=Field(ge=0);pending_queue:int=Field(default=0,ge=0,le=1_000_000);queue_capacity:int=Field(default=10000,ge=1,le=1_000_000);last_successful_job:str|None=Field(default=None,max_length=80);cpu_percent:float|None=Field(default=None,ge=0,le=100);memory_total_bytes:int|None=Field(default=None,ge=0);memory_free_bytes:int|None=Field(default=None,ge=0);disk_free_bytes:int|None=Field(default=None,ge=0);ip_address:str|None=Field(default=None,max_length=64);operating_system:str|None=Field(default=None,max_length=255);logged_user:str|None=Field(default=None,max_length=255);last_update:datetime|None=None
 class JobCreate(BaseModel):
     job_type:str;payload:dict=Field(default_factory=dict);timeout_seconds:int=Field(default=120,ge=5,le=3600)
 class JobUpdate(BaseModel):
     status:Literal["started","completed","failed","timed_out","cancelled"];error:str|None=Field(default=None,max_length=1000)
+class DeviceActionCreate(BaseModel):
+    action:Literal["RESTART","SHUTDOWN","LOCK","ENABLE_RDP","DISABLE_RDP","TRIGGER_WINDOWS_UPDATE"]
+    confirm:bool
 class ObservationWrite(BaseModel):
     observation_id:str=Field(min_length=8,max_length=80);source:str;observed_at:datetime;schema_version:int=Field(default=1,ge=1,le=1);payload:dict;organization_id:UUID|None=None;property_id:UUID|None=None
 
@@ -75,7 +83,19 @@ def agent_view(row):
     elif not row.last_heartbeat:effective="pending"
     else:
         age=(now-row.last_heartbeat).total_seconds();effective="online" if age<=120 else "stale" if age<=600 else "offline"
-    return {key:getattr(row,key) for key in ("id","agent_id","organization_id","property_id","name","version","hostname","last_seen","last_heartbeat","last_discovery","last_monitoring","uptime_seconds","pending_queue","queue_capacity","registered_at")}|{"status":effective}
+    values = {key: getattr(row, key) for key in (
+        "id", "agent_id", "organization_id", "property_id", "device_id", "name",
+        "version", "hostname", "last_seen", "last_heartbeat", "last_discovery",
+        "last_monitoring", "uptime_seconds", "pending_queue", "queue_capacity",
+        "registered_at",
+    )}
+    values.update({
+        key: getattr(row, key, None) for key in (
+            "cpu_percent", "memory_total_bytes", "memory_free_bytes", "disk_free_bytes",
+            "ip_address", "operating_system", "logged_user", "last_update",
+        )
+    })
+    return values | {"status": effective}
 
 def authenticate_agent(authorization:str|None=Header(default=None),db:Session=Depends(get_db)):
     if not authorization or not authorization.startswith("Agent "):raise HTTPException(status.HTTP_401_UNAUTHORIZED,"Agent credential required")
@@ -90,24 +110,58 @@ def authenticate_agent(authorization:str|None=Header(default=None),db:Session=De
 @admin_router.get("")
 def list_agents(db:Session=Depends(get_db),user:User=Depends(reader),org=Depends(organization_context)):
     allowed=allowed_property_ids(db,user,org)
-    return [agent_view(x) for x in db.query(LocalAgentRegistration).filter(LocalAgentRegistration.organization_id==org,LocalAgentRegistration.property_id.in_(allowed)).order_by(LocalAgentRegistration.name).all()]
+    rows=db.query(LocalAgentRegistration,Device,Floor).outerjoin(Device,LocalAgentRegistration.device_id==Device.id).outerjoin(Floor,Device.floor_id==Floor.id).filter(LocalAgentRegistration.organization_id==org,LocalAgentRegistration.property_id.in_(allowed)).order_by(LocalAgentRegistration.name).all()
+    return [
+        agent_view(agent)|{
+            "ip_address":agent.ip_address or (device.ip_address if device else None),
+            "department":device.department if device else None,
+            "location":device.location if device else None,
+            "operating_system":agent.operating_system or (device.ad_operating_system if device else None),
+            "floor":floor.display_name or floor.name if floor else None,
+            "mac_address":device.mac_address if device else None,
+        }
+        for agent,device,floor in rows
+    ]
+
+@admin_router.get("/jobs/{job_id}")
+def get_agent_job(job_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    row=db.query(AgentJob).filter_by(id=job_id,organization_id=org).first()
+    if not row or row.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Agent job not found")
+    payload=json.loads(row.payload)
+    return {"id":str(row.id),"job_type":row.job_type,"action":payload.get("action"),"status":row.status,"created_at":row.created_at,"started_at":row.started_at,"completed_at":row.completed_at,"error":row.error}
+
+@admin_router.get("/{agent_id}/history")
+def agent_history(agent_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    agent=db.query(LocalAgentRegistration).filter_by(id=agent_id,organization_id=org).first()
+    if not agent or agent.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Agent not found")
+    rows=db.query(AgentJob).filter_by(agent_id=agent.id,organization_id=org).order_by(AgentJob.created_at.desc()).limit(10).all()
+    return [{"id":str(row.id),"job_type":row.job_type,"action":json.loads(row.payload).get("action"),"status":row.status,"created_at":row.created_at,"started_at":row.started_at,"completed_at":row.completed_at,"error":row.error,"created_by":row.created_by} for row in rows]
+
+@admin_router.get("/{agent_id}/metrics")
+def agent_metrics(agent_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    agent=db.query(LocalAgentRegistration).filter_by(id=agent_id,organization_id=org).first()
+    if not agent or agent.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Agent not found")
+    cutoff=datetime.now(timezone.utc)-timedelta(days=7)
+    rows=db.query(AgentMetricSample).filter_by(agent_id=agent.id,organization_id=org).filter(AgentMetricSample.recorded_at>=cutoff).order_by(AgentMetricSample.recorded_at.asc()).limit(2500).all()
+    return [{"recorded_at":row.recorded_at,"uptime_seconds":row.uptime_seconds,"cpu_percent":row.cpu_percent,"memory_total_bytes":row.memory_total_bytes,"memory_free_bytes":row.memory_free_bytes,"disk_free_bytes":row.disk_free_bytes} for row in rows]
 
 @admin_router.get("/installer/windows")
 def download_windows_installer(request:Request, actor:User=Depends(manager), org=Depends(organization_context)):
     from io import BytesIO
     from pathlib import Path
-    from zipfile import ZipFile, ZIP_DEFLATED
+    from zipfile import ZipFile, ZIP_STORED
     from fastapi.responses import Response
     bundle=Path(__file__).resolve().parents[2]/"distributions"/"hiop-agent-windows.zip"
     distribution=Path(__file__).resolve().parents[2]/"distributions"
     if not bundle.is_file():
         raise HTTPException(503,"The Windows agent download is not available. Contact your HIOP administrator.")
     output=BytesIO()
-    with ZipFile(bundle,"r") as source, ZipFile(output,"w",ZIP_DEFLATED) as archive:
+    with ZipFile(bundle,"r") as source, ZipFile(output,"w",ZIP_STORED) as archive:
         for entry in source.infolist():
-            if entry.filename not in {"setup.json","install-user.ps1","uninstall-user.ps1","Remove HIOP Agent.cmd"}:
-                archive.writestr(entry,source.read(entry.filename))
-        for filename in ("install-user.ps1","uninstall-user.ps1","Remove HIOP Agent.cmd"):
+            if entry.filename in {"setup.json","install-user.ps1","uninstall-user.ps1","Install HIOP Agent.cmd","Remove HIOP Agent.cmd","Connect HIOP.cmd"} or entry.filename.startswith("hiop_agent/"):
+                continue
+            archive.writestr(entry,source.read(entry.filename))
+        for filename in ("install-user.ps1","uninstall-user.ps1","Install HIOP Agent.cmd","Remove HIOP Agent.cmd"):
             script=distribution/filename
             if not script.is_file():
                 raise HTTPException(503,"The Windows agent setup files are incomplete.")
@@ -138,6 +192,54 @@ def create_job(agent_id:UUID,body:JobCreate,db:Session=Depends(get_db),actor:Use
     _validate_network_job(db,agent,kind,body.payload)
     row=AgentJob(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,job_type=kind,payload=json.dumps(body.payload,separators=(",",":")),timeout_seconds=body.timeout_seconds,created_by=actor.id);db.add(row);db.flush();create_audit_log(db,actor.username,"AGENT_JOB_CREATED","LocalAgent",str(agent.id),f"Queued {kind} agent job {row.id}");db.commit();db.refresh(row);return {"id":row.id,"job_type":row.job_type,"status":row.status}
 
+@admin_router.post("/devices/{device_id}/actions",status_code=202)
+def create_device_action(device_id:UUID,body:DeviceActionCreate,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    if not body.confirm:raise HTTPException(422,"Explicit confirmation is required")
+    device=db.query(Device).filter_by(id=device_id).join(Property,Device.property_id==Property.id).filter(Property.organization_id==org).with_for_update().first()
+    if not device:raise HTTPException(404,"Device not found")
+    if device.inventory_status.casefold()=="retired":raise HTTPException(409,"Retired devices cannot receive remote actions")
+    agents=db.query(LocalAgentRegistration).filter_by(device_id=device.id,organization_id=org,property_id=device.property_id).all()
+    active=[row for row in agents if not row.revoked_at and not row.retired_at and agent_view(row)["status"]=="online"]
+    if len(active)!=1:raise HTTPException(409,"A single online HIOP agent must be linked to this device")
+    agent=active[0]
+    if "windows" not in f"{device.ad_operating_system or ''} {getattr(agent, 'operating_system', None) or ''}".casefold():
+        raise HTTPException(409,"This action is available only for Windows devices")
+    row=AgentJob(
+        agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,
+        job_type="DEVICE_ACTION",payload=json.dumps({"action":body.action},separators=(",",":")),
+        timeout_seconds=30,created_by=actor.id,
+    )
+    db.add(row);db.flush()
+    create_audit_log(
+        db,actor.username,"DEVICE_ACTION_QUEUED","Device",str(device.id),
+        f"Queued {body.action.lower()} through HIOP agent {agent.agent_id} as job {row.id}",
+        organization_id=org,property_id=device.property_id,
+    )
+    db.commit()
+    return {"id":str(row.id),"action":body.action,"status":"queued"}
+
+@admin_router.post("/devices/{device_id}/wol",status_code=202)
+def wake_device(device_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    device=db.query(Device).filter_by(id=device_id).join(Property,Device.property_id==Property.id).filter(Property.organization_id==org).first()
+    if not device or device.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Device not found")
+    mac=re.sub(r"[^0-9a-fA-F]","",device.mac_address or "")
+    if len(mac)!=12:
+        create_audit_log(db,actor.username,"DEVICE_ACTION_WOL_FAILED","Device",str(device.id),"Wake-on-LAN requires a valid device MAC address.",organization_id=org,property_id=device.property_id)
+        db.commit()
+        raise HTTPException(409,"A valid MAC address is required for Wake-on-LAN")
+    packet=b"\xff"*6+bytes.fromhex(mac)*16
+    try:
+        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sender:
+            sender.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
+            sender.sendto(packet,("255.255.255.255",9))
+    except OSError as exc:
+        create_audit_log(db,actor.username,"DEVICE_ACTION_WOL_FAILED","Device",str(device.id),f"Wake-on-LAN send failed: {exc}",organization_id=org,property_id=device.property_id)
+        db.commit()
+        raise HTTPException(503,"The HIOP server could not send a Wake-on-LAN packet on its local network") from exc
+    create_audit_log(db,actor.username,"DEVICE_ACTION_WOL","Device",str(device.id),f"Sent Wake-on-LAN packet to {device.mac_address}",organization_id=org,property_id=device.property_id)
+    db.commit()
+    return {"status":"sent","mac_address":device.mac_address}
+
 @agent_router.post("/enroll",status_code=201)
 def enroll(body:EnrollRequest,request:Request,db:Session=Depends(get_db)):
     enrollment_limiter.check(f"machine-enroll:{request.client.host if request.client else 'unknown'}");now=datetime.now(timezone.utc)
@@ -151,7 +253,14 @@ def enroll(body:EnrollRequest,request:Request,db:Session=Depends(get_db)):
 
 @agent_router.post("/heartbeat")
 def heartbeat(body:HeartbeatRequest,db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
-    now=datetime.now(timezone.utc);agent.status="online";agent.last_seen=agent.last_heartbeat=now;agent.version=body.version;agent.hostname=body.hostname;agent.uptime_seconds=body.uptime_seconds;agent.pending_queue=body.pending_queue;agent.queue_capacity=body.queue_capacity;db.commit();return {"status":"accepted","server_time":now,"agent_api_version":1}
+    now=datetime.now(timezone.utc);agent.status="online";agent.last_seen=agent.last_heartbeat=now;agent.version=body.version;agent.hostname=body.hostname;agent.uptime_seconds=body.uptime_seconds;agent.pending_queue=body.pending_queue;agent.queue_capacity=body.queue_capacity
+    for field in ("cpu_percent","memory_total_bytes","memory_free_bytes","disk_free_bytes","ip_address","operating_system","logged_user","last_update"):
+        value=getattr(body,field)
+        if value is not None:setattr(agent,field,value)
+    last_sample=db.query(AgentMetricSample.recorded_at).filter_by(agent_id=agent.id).order_by(AgentMetricSample.recorded_at.desc()).first()
+    if not last_sample or now-last_sample[0]>=timedelta(minutes=5):
+        db.add(AgentMetricSample(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,uptime_seconds=body.uptime_seconds,cpu_percent=body.cpu_percent,memory_total_bytes=body.memory_total_bytes,memory_free_bytes=body.memory_free_bytes,disk_free_bytes=body.disk_free_bytes,recorded_at=now))
+    db.commit();return {"status":"accepted","server_time":now,"agent_api_version":1}
 
 @agent_router.get("/jobs")
 def jobs(db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
@@ -202,7 +311,39 @@ def ingest(body:ObservationWrite,request:Request,db:Session=Depends(get_db),agen
         agent.last_monitoring=agent.last_seen
         if body.source in {"monitoring","icmp"}:
             ingest_monitoring(db,agent,body.payload)
+    if body.source=="device_action":
+        ingest_device_action(db,agent,body.payload)
     db.commit();db.refresh(row);return {"status":"accepted","id":row.id}
+
+def ingest_device_action(db,agent,payload):
+    job_id=payload.get("job_id")
+    try:job_uuid=UUID(str(job_id))
+    except (ValueError,TypeError):raise HTTPException(422,"A device action job reference is required")
+    job=db.query(AgentJob).filter_by(
+        id=job_uuid,agent_id=agent.id,organization_id=agent.organization_id,
+        property_id=agent.property_id,job_type="DEVICE_ACTION",
+    ).first()
+    if not job:raise HTTPException(403,"Action result does not belong to this agent")
+    result=payload.get("result")
+    if not isinstance(result,dict):raise HTTPException(422,"Invalid device action result")
+    action=json.loads(job.payload).get("action")
+    if action not in DEVICE_ACTIONS or result.get("action")!=action:raise HTTPException(422,"Device action result does not match the queued action")
+    succeeded=result.get("succeeded")
+    if not isinstance(succeeded,bool):raise HTTPException(422,"Device action result must include its outcome")
+    device=db.query(Device).filter_by(id=agent.device_id,property_id=agent.property_id).first()
+    if not device:raise HTTPException(409,"The agent is no longer linked to a managed device")
+    actor=f"Agent {agent.agent_id}"
+    outcome="COMPLETED" if succeeded else "FAILED"
+    detail=result.get("message") if isinstance(result.get("message"),str) else "No result details provided."
+    if not succeeded:
+        job.status="failed"
+        job.error=detail[:1000]
+        job.completed_at=datetime.now(timezone.utc)
+    create_audit_log(
+        db,actor,f"DEVICE_ACTION_{outcome}","Device",str(device.id),
+        f"{action.lower()} {outcome.lower()} through HIOP agent. {detail[:500]}",
+        organization_id=agent.organization_id,property_id=agent.property_id,
+    )
 
 
 def ingest_monitoring(db,agent,payload):
@@ -256,16 +397,224 @@ def ingest_discovery(db,agent,payload):
     devices=result.get("devices",[])
     if not isinstance(devices,list) or len(devices)>1024:raise HTTPException(422,"Invalid discovery result size")
     service=DiscoveryIntelligenceService(db)
+    inventory_candidates=db.query(Device).filter(Device.property_id==agent.property_id).all()
     for item in devices:
         if not isinstance(item,dict):raise HTTPException(422,"Invalid discovered device")
         try: address=ipaddress.ip_address(item.get("target",""))
         except ValueError:raise HTTPException(422,"Invalid discovered address")
         if address not in network:raise HTTPException(422,"Discovered address is outside the requested network")
         if item.get("reachable"):
-            observation={"ip_address":str(address),"hostname":item.get("hostname"),"hostnames":[item.get("hostname")] if item.get("hostname") else [],"dns_status":item.get("dns_status"),"evidence":[evidence("ping_response",item.get("reachability_source") or "local_agent","reachable",verified=True)]}
-            if item.get("hostname"):observation["evidence"].append(evidence("hostname_match",item.get("hostname_source") or "local_agent",item.get("hostname"),verified=item.get("hostname_source") in {"reverse_dns","netbios"}))
+            mac=_agent_text(item,"mac_address",17)
+            if mac and not _normalized_mac(mac):raise HTTPException(422,"Invalid discovered MAC address")
+            hostname=_agent_text(item,"hostname",255)
+            observation={"ip_address":str(address),"hostname":hostname,"hostnames":[hostname] if hostname else [],"dns_status":item.get("dns_status"),"mac_address":mac,"evidence":[evidence("ping_response",item.get("reachability_source") or "local_agent","reachable",verified=True)]}
+            if mac:observation["evidence"].append(evidence("mac_address","local_agent",mac,verified=False))
+            if hostname:observation["evidence"].append(evidence("hostname_match",item.get("hostname_source") or "local_agent",hostname,verified=item.get("hostname_source") in {"reverse_dns","netbios"}))
             root=service.ingest(scan,observation)
             root.confidence_reason="Local agent confirmed network reachability and hostname evidence." if item.get("hostname") else "Local agent confirmed network reachability. Hostname was unavailable."
+            reconcile_agent_discovery(db,agent,root,str(address),item,inventory_candidates)
+    computer=result.get("agent_computer")
+    if computer is not None:
+        if not isinstance(computer,dict):raise HTTPException(422,"Invalid local Windows inventory")
+        adapters=computer.get("network_adapters",[])
+        if not isinstance(adapters,list) or len(adapters)>64:raise HTTPException(422,"Invalid local Windows adapter inventory")
+        for adapter in adapters:
+            if not isinstance(adapter,dict):raise HTTPException(422,"Invalid local Windows adapter")
+            try: address=ipaddress.ip_address(adapter.get("ip_address",""))
+            except ValueError:raise HTTPException(422,"Invalid local Windows adapter address")
+            if address.version!=network.version or address not in network:continue
+            mac=_agent_text(adapter,"mac_address",17)
+            if mac and not _normalized_mac(mac):raise HTTPException(422,"Invalid local Windows MAC address")
+            hostname=_agent_text(computer,"hostname",255)
+            observation={
+                "ip_address":str(address),
+                "hostname":hostname,
+                "hostnames":[hostname] if hostname else [],
+                "mac_address":mac,
+                "mac_address_source":_agent_text(adapter,"mac_address_source",40),
+                "vendor":_agent_text(computer,"manufacturer",160),
+                "manufacturer":_agent_text(computer,"manufacturer",160),
+                "model":_agent_text(computer,"model",180),
+                "serial_number":_agent_text(computer,"serial_number",180),
+                "operating_system":_agent_text(computer,"operating_system",180),
+                "version":_agent_text(computer,"operating_system_version",180),
+                "memory":computer.get("memory"),
+                "cpu":_agent_text(computer,"processor",255),
+                "nics":adapters,
+                "device_type":"Windows Computer",
+                "evidence":[evidence("windows_inventory","local_agent",agent.agent_id,verified=True)],
+            }
+            if mac:observation["evidence"].append(evidence("mac_address","local_agent",mac,verified=True))
+            if observation["serial_number"]:observation["evidence"].append(evidence("serial_number","local_agent",observation["serial_number"],verified=True))
+            if hostname:observation["evidence"].append(evidence("hostname_match","local_agent",hostname,verified=True))
+            if observation["operating_system"]:observation["evidence"].append(evidence("operating_system","local_agent",observation["operating_system"],verified=True))
+            root=service.ingest(scan,observation)
+            reconcile_agent_discovery(db,agent,root,str(address),observation,inventory_candidates)
     try: scanned=int(result.get("scanned",0))
     except (ValueError,TypeError):raise HTTPException(422,"Invalid discovery progress")
     scan.hosts_completed=max(scan.hosts_completed or 0,min(max(0,scanned),scan.hosts_total or 1024))
+
+
+def _normalized_mac(value):
+    normalized="".join(character for character in str(value or "").casefold() if character.isalnum())
+    return normalized if len(normalized)==12 and all(character in "0123456789abcdef" for character in normalized) else None
+
+
+def _normalized_identity_text(value):
+    return str(value or "").strip().rstrip(".").casefold().split(".",1)[0]
+
+
+def _agent_text(payload,key,maximum):
+    value=payload.get(key)
+    if value is None:return None
+    if not isinstance(value,str):raise HTTPException(422,f"Invalid agent inventory field: {key}")
+    value=value.strip()
+    if len(value)>maximum:raise HTTPException(422,f"Agent inventory field exceeds the supported length: {key}")
+    return value or None
+
+
+def _select_inventory_match(agent,result,candidates,*,mac_is_trusted=True):
+    """Return only a unique same-property identity match; IP alone is not identity."""
+    scoped=[device for device in candidates if device.property_id==agent.property_id]
+    serial=str(result.serial_number or "").strip().casefold()
+    mac=_normalized_mac(result.mac_address) if mac_is_trusted else None
+    hostname=_normalized_identity_text(result.primary_hostname or result.fqdn)
+    matches=[]
+    if serial:
+        matches.append([device for device in scoped if str(device.serial_number or "").strip().casefold()==serial])
+    if mac:
+        matches.append([device for device in scoped if _normalized_mac(device.mac_address)==mac])
+    if any(len(rows)>1 for rows in matches):
+        return None,None
+    matched=[rows[0] for rows in matches if len(rows)==1]
+    if matched:
+        if len({device.id for device in matched})!=1:
+            return None,None
+        device=matched[0]
+        if serial and device.serial_number and str(device.serial_number).strip().casefold()!=serial:
+            return None,None
+        if mac and device.mac_address and _normalized_mac(device.mac_address)!=mac:
+            return None,None
+        return device,"strong"
+    if not hostname:
+        return None,None
+    hostname_matches=[device for device in scoped if _normalized_identity_text(device.hostname)==hostname]
+    if len(hostname_matches)!=1:
+        return None,None
+    device=hostname_matches[0]
+    if result.serial_number and device.serial_number and str(result.serial_number).strip().casefold()!=str(device.serial_number).strip().casefold():
+        return None,None
+    if mac_is_trusted and result.mac_address and device.mac_address and _normalized_mac(result.mac_address)!=_normalized_mac(device.mac_address):
+        return None,None
+    return device,"hostname"
+
+
+def reconcile_agent_discovery(db,agent,result,observed_ip,item,candidates):
+    if result.property_id!=agent.property_id:
+        return None
+    trusted_mac=item.get("mac_address_source")=="local_adapter"
+    device,match_strength=_select_inventory_match(agent,result,candidates,mac_is_trusted=trusted_mac)
+    if not device:
+        return None
+    if result.serial_number:
+        serial_owner=db.query(Device.id).filter(
+            func.lower(Device.serial_number)==str(result.serial_number).strip().casefold(),
+        ).first()
+        if serial_owner and serial_owner[0]!=device.id:
+            return None
+    if trusted_mac and result.mac_address:
+        normalized_mac=_normalized_mac(result.mac_address)
+        mac_owner=db.query(Device.id).filter(
+            func.replace(func.replace(func.replace(func.lower(Device.mac_address),":",""),"-",""),".","")==normalized_mac,
+        ).first()
+        if mac_owner and mac_owner[0]!=device.id:
+            return None
+
+    link=db.get(DiscoveryApprovalLink,result.id)
+    if link and link.device_id!=device.id:
+        return None
+    if item.get("device_type")=="Windows Computer" and trusted_mac:
+        if agent.device_id and agent.device_id!=device.id:
+            return None
+        agent.device_id=device.id
+    if not link:
+        db.add(DiscoveryApprovalLink(result_id=result.id,device_id=device.id))
+    from app.services.device_identity_service import DeviceIdentityService
+    DeviceIdentityService(db).apply(result,agent.organization_id,actor=f"Agent {agent.agent_id}")
+
+    def is_unknown(value):
+        return not value or str(value).strip().casefold() in {"unknown","unknown device","n/a","not available"}
+
+    if is_unknown(device.device_type) and not is_unknown(result.device_type):
+        device.device_type=result.device_type
+    if is_unknown(device.brand) and not is_unknown(result.vendor):
+        device.brand=result.vendor
+    if is_unknown(device.model) and not is_unknown(result.model):
+        device.model=result.model
+    if result.serial_number and not device.serial_number:
+        serial_owner=db.query(Device.id).filter(
+            func.lower(Device.serial_number)==str(result.serial_number).strip().casefold(),
+            Device.id!=device.id,
+        ).first()
+        if not serial_owner:
+            device.serial_number=result.serial_number
+    if trusted_mac and result.mac_address and not device.mac_address:
+        normalized_mac=_normalized_mac(result.mac_address)
+        mac_owner=db.query(Device.id).filter(
+            func.replace(func.replace(func.replace(func.lower(Device.mac_address),":",""),"-",""),".","")==normalized_mac,
+            Device.id!=device.id,
+        ).first()
+        if not mac_owner:
+            device.mac_address=result.mac_address
+    if not device.ad_operating_system and result.operating_system:
+        device.ad_operating_system=result.operating_system
+    if not device.ad_operating_system_version and result.configuration_snapshot:
+        try:
+            snapshot=json.loads(result.configuration_snapshot)
+        except (TypeError,json.JSONDecodeError):
+            snapshot={}
+        version=snapshot.get("version")
+        if isinstance(version,str) and version.strip():
+            device.ad_operating_system_version=version.strip()
+    if not device.description and result.description:
+        device.description=result.description
+        device.description_source=result.description_source or "Discovery"
+
+    if match_strength=="strong":
+        occupied_ip=db.query(Device.id).filter(
+            Device.property_id==agent.property_id,
+            Device.ip_address==observed_ip,
+            Device.id!=device.id,
+        ).first()
+        if not occupied_ip:
+            device.ip_address=observed_ip
+
+    previous_status=device.network_status
+    device.network_status="Online"
+    scan_record=NetworkScan(
+        device_id=device.id,
+        ip_address=observed_ip,
+        status="Online",
+        response_time=item.get("latency_ms"),
+    )
+    db.add(scan_record)
+    db.flush()
+    from app.services.alert_event_service import evaluate_scan
+    evaluate_scan(db,device,scan_record)
+    if previous_status!="Online":
+        from app.services.automation_event_outbox_service import process_outbox_batch, publish_internal_event
+        from app.services.settings_service import read_network
+        runtime=read_network(db)
+        publish_internal_event(
+            db,
+            event_type="device_restored",
+            property_id=device.property_id,
+            source_entity_type="device",
+            source_entity_id=device.id,
+            safe_payload={"automatic_ticket":runtime["automatic_offline_tickets"],"source":"local_agent"},
+            severity="informational",
+            status="online",
+            correlation_key=f"device:{device.id}:network",
+        )
+        process_outbox_batch(db,25)
+    return device

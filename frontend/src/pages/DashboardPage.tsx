@@ -14,6 +14,7 @@ export { PageTitle } from "../components/PageTitle";
 export default function DashboardPage() {
   const dashboard = useRequest(endpoints.dashboard, []);
   const inventory = useRequest(endpoints.devices, []);
+  const systemHealth = useRequest(endpoints.systemHealthReport, []);
   const [query, setQuery] = useState("");
   
   const devices = useMemo(() => getPaginatedItems(inventory.data), [inventory.data]);
@@ -144,6 +145,23 @@ export default function DashboardPage() {
                   <Icon name="discovery" aria-hidden="true" />
                   Discover devices
                 </Link>
+              </div>
+            )}
+          </section>
+
+          <section className="system-health-overview" aria-label="System Health - Update and Cool Off Status">
+            <header>
+              <div><p className="page-kicker">System health</p><h2>Update &amp; Cool Off Status</h2></div>
+              <Link className="secondary-action" to="/reports/system-maintenance">Open maintenance report</Link>
+            </header>
+            {systemHealth.loading || systemHealth.error || !systemHealth.data ? (
+              <Feedback loading={systemHealth.loading} error={systemHealth.error} onRetry={systemHealth.reload} />
+            ) : (
+              <div className="system-health-cards">
+                <Link to="/reports/system-maintenance" className="system-health-card tone-warning"><span>Systems needing update</span><strong>{systemHealth.data.summary.updates_needed}</strong><small>Windows update older than 7 days</small></Link>
+                <Link to="/reports/system-maintenance" className={`system-health-card ${systemHealth.data.summary.restarts_needed > 5 ? "tone-danger" : systemHealth.data.summary.restarts_needed ? "tone-warning" : "tone-good"}`}><span>Systems needing restart / cool off</span><strong>{systemHealth.data.summary.restarts_needed}</strong><small>Uptime is over 48 hours</small></Link>
+                <Link to="/reports/system-maintenance" className="system-health-card tone-info"><span>Cooled off last night</span><strong>{systemHealth.data.summary.cooled_off_last_night}</strong><small>Scheduled shutdown recorded 21:00–06:00</small></Link>
+                <Link to="/reports/system-maintenance" className={`system-health-card ${systemHealth.data.summary.hygiene_score > 80 ? "tone-good" : systemHealth.data.summary.hygiene_score >= 50 ? "tone-warning" : "tone-danger"}`}><span>System hygiene score</span><strong>{systemHealth.data.summary.hygiene_score}%</strong><small>Online, recently restarted, and updated</small><i><b style={{ width: `${systemHealth.data.summary.hygiene_score}%` }} /></i></Link>
               </div>
             )}
           </section>

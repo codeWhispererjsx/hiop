@@ -48,6 +48,8 @@ from app.api.v1.public_onboarding import router as public_onboarding_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.onboarding_progress import router as onboarding_progress_router
 from app.api.v1.local_agents import admin_router as local_agent_admin_router, agent_router as local_agent_router
+from app.api.v1.public_agent_download import router as public_agent_download_router
+from app.api.v1.system_maintenance import router as system_maintenance_router, rules_router as maintenance_rules_router
 from app.api.v1.inventory_imports import router as inventory_imports_router
 from app.api.v1.system_health import router as system_health_router
 from app.api.v1.backup_recovery import router as backup_recovery_router
@@ -219,6 +221,9 @@ app.include_router(billing_router, prefix=settings.api_prefix)
 app.include_router(onboarding_progress_router, prefix=settings.api_prefix)
 app.include_router(local_agent_admin_router, prefix=settings.api_prefix)
 app.include_router(local_agent_router, prefix=settings.api_prefix)
+app.include_router(public_agent_download_router)
+app.include_router(system_maintenance_router, prefix=settings.api_prefix)
+app.include_router(maintenance_rules_router, prefix=settings.api_prefix)
 app.include_router(system_health_router, prefix=settings.api_prefix)
 app.include_router(backup_recovery_router, prefix=settings.api_prefix)
 app.include_router(email_router, prefix=settings.api_prefix)

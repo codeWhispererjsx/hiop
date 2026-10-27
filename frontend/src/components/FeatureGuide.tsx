@@ -55,12 +55,11 @@ const guides = {
             Choose a Windows computer that stays on and can reach the devices
             you want to monitor.
           </li>
-          <li>Install the HIOP agent package supplied by your platform operator.</li>
+          <li>Extract the HIOP Windows agent package and run Install HIOP Agent.cmd as an administrator.</li>
           <li>Select the property and create a one-time connection code.</li>
           <li>
-            Open <strong>Connect HIOP.cmd</strong>, wait for{" "}
-            <code>Paste your HIOP connection code:</code>, paste the code, and
-            press Enter.
+            Open the HIOP Agent tray icon, choose <strong>Connect or enroll...</strong>,
+            and paste the one-time code in the native agent window.
           </li>
           <li>
             Wait for Online status, select the same property in Discover, and

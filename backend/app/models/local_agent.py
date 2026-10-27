@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from app.db.database import Base
@@ -12,6 +12,7 @@ class LocalAgentRegistration(Base):
     agent_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     property_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("devices.id", ondelete="SET NULL"), index=True)
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", nullable=False)
     version: Mapped[str | None] = mapped_column(String(50))
@@ -23,6 +24,14 @@ class LocalAgentRegistration(Base):
     last_discovery: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_monitoring: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     uptime_seconds: Mapped[int | None] = mapped_column(BigInteger)
+    cpu_percent: Mapped[float | None] = mapped_column(Float)
+    memory_total_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    memory_free_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    disk_free_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    ip_address: Mapped[str | None] = mapped_column(String(64))
+    operating_system: Mapped[str | None] = mapped_column(String(255))
+    logged_user: Mapped[str | None] = mapped_column(String(255))
+    last_update: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pending_queue: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     queue_capacity: Mapped[int] = mapped_column(Integer, default=10000, server_default="10000", nullable=False)
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False)
@@ -75,3 +84,38 @@ class AgentObservation(Base):
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False)
     processed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     __table_args__ = (Index("uq_agent_observation", "agent_id", "observation_id", unique=True),)
+
+class AgentMaintenanceRule(Base):
+    __tablename__ = "agent_maintenance_rules"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    property_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    criteria: Mapped[str] = mapped_column(Text, nullable=False)
+    schedule: Mapped[str] = mapped_column(Text, nullable=False)
+    action: Mapped[str] = mapped_column(String(30), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_by: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False)
+
+class AgentDownloadEvent(Base):
+    __tablename__ = "agent_download_events"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    client_ip: Mapped[str] = mapped_column(String(64), nullable=False)
+    downloaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False, index=True)
+
+class AgentMetricSample(Base):
+    __tablename__ = "agent_metric_samples"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("local_agent_registrations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    property_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False, index=True)
+    uptime_seconds: Mapped[int | None] = mapped_column(BigInteger)
+    cpu_percent: Mapped[float | None] = mapped_column(Float)
+    memory_total_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    memory_free_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    disk_free_bytes: Mapped[int | None] = mapped_column(BigInteger)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False, index=True)

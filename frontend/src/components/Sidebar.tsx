@@ -21,19 +21,21 @@ const monitorLinks: { label: string; to: string; icon: IconName }[] = [
 
 const manageLinks: { label: string; to: string; icon: IconName; adminOnly?: boolean }[] = [
   { label: "Reports", to: "/reports", icon: "audit" },
+  { label: "System Maintenance Report", to: "/reports/system-maintenance", icon: "chart" },
   { label: "Inventory imports", to: "/imports", icon: "import", adminOnly: true },
   { label: "Procurement", to: "/procurement", icon: "devices" },
   { label: "Vendors", to: "/vendors", icon: "users" },
+  ...(isDesktopMode ? [{ label: "Site Server", to: "/this-computer", icon: "server" as IconName, adminOnly: true }] : []),
 ];
 
 const administrationLinks: { label: string; to: string; icon: IconName }[] = [
   { label: "Organization", to: "/administration/organization", icon: "hierarchy" },
+  { label: "Agents - Managed Endpoints", to: "/administration/agents", icon: "network" },
   { label: "Properties", to: "/administration/properties", icon: "server" },
   { label: "Users", to: "/users", icon: "users" },
   { label: "Roles & access", to: "/administration/roles", icon: "lock" },
   { label: "Audit log", to: "/administration/audit", icon: "audit" },
   ...(!isDesktopMode ? [{ label: "Billing", to: "/administration/billing", icon: "devices" as IconName }] : []),
-  { label: isDesktopMode ? "Site Server" : "Local Agents", to: "/administration/agents", icon: "network" },
   { label: "Settings", to: "/settings", icon: "server" },
 ];
 

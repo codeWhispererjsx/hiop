@@ -115,6 +115,9 @@ export default function ReportingPage() {
           </button>
         }
       />
+      <nav className="page-actions report-tabs" aria-label="Specialized reports">
+        <Link className="secondary-action" to="/reports/system-maintenance">System Maintenance Report</Link>
+      </nav>
       <nav className="page-actions report-tabs" aria-label="Common report types">
         {reports.slice(0, 4).map((x) => (
           <button
@@ -277,19 +280,7 @@ export default function ReportingPage() {
                 {!rows.length ? (
                   <Feedback empty="Insufficient data" />
                 ) : (
-                  <div className="report-breakdown">
-                    {rows.map((row, index) => (
-                      <div key={`${String(row.label)}-${index}`}>
-                        <strong>{String(row.label ?? "Unknown")}</strong>
-                        <span>
-                          {Object.entries(row)
-                            .filter(([key]) => key !== "label" && key !== "id")
-                            .map(([key, value]) => `${title(key)}: ${value}`)
-                            .join(" · ")}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <BreakdownChart name={name} rows={rows} />
                 )}
               </article>
             ))}
@@ -331,4 +322,26 @@ export default function ReportingPage() {
       )}
     </DashboardLayout>
   );
+}
+
+function BreakdownChart({ name, rows }: { name: string; rows: Array<Record<string, unknown>> }) {
+  const chartRows = rows.map((row) => ({
+    label: String(row.label ?? "Unknown"),
+    value: typeof row.value === "number" && Number.isFinite(row.value) ? row.value : null,
+  }));
+  const maximum = Math.max(0, ...chartRows.map((row) => row.value ?? 0));
+  if (maximum === 0 || chartRows.some((row) => row.value === null)) {
+    return <div className="report-breakdown">{rows.map((row, index) => (
+      <div key={`${String(row.label)}-${index}`}>
+        <strong>{String(row.label ?? "Unknown")}</strong>
+        <span>{Object.entries(row).filter(([key]) => key !== "label" && key !== "id").map(([key, value]) => `${title(key)}: ${value}`).join(" · ")}</span>
+      </div>
+    ))}</div>;
+  }
+  return <div className="report-breakdown-chart" role="group" aria-label={`${title(name)} breakdown chart`}>
+    {chartRows.map((row, index) => <div className="report-breakdown-bar" key={`${row.label}-${index}`} role="group" aria-label={`${row.label}: ${row.value}`}>
+      <div><strong>{row.label}</strong><span>{row.value}</span></div>
+      <span className="report-breakdown-track"><i style={{ width: `${Math.max(0, (row.value ?? 0) / maximum * 100)}%` }} /></span>
+    </div>)}
+  </div>;
 }

@@ -5,6 +5,7 @@ export type DesktopStatus={platform_owner_required:boolean;organization_required
 export type PlatformBootstrapPayload={username:string;email:string;password:string};
 export type PlatformBootstrapResult={id:string;username:string;email:string;role:"platformadmin";is_active:boolean};
 export type OnboardingResult={access_token:string;organization:{id:string;name:string;code:string};property:{id:string;name:string;code:string};administrator:{id:string;username:string;email:string;role:"admin"};subscription:{id:string;status:string;trial_end:string|null}};
+export type PublicAgentStatus={status:"online";server_ip:string|null;downloads:number};
 type ValidationIssue={loc?:Array<string|number>;msg?:string;type?:string};
 const fieldMessages:Record<string,string>={
  admin_username:"Username can only contain letters, numbers, periods, underscores, and hyphens. Spaces are not allowed.",
@@ -32,6 +33,24 @@ export async function registerCustomer(payload:OnboardingPayload):Promise<Onboar
 export async function getPublicPlans():Promise<PublicBillingPlan[]>{const response=await fetch(`${API_URL}/billing/public/plans`);if(!response.ok)throw new Error("Unable to load current plans.");return response.json()}
 
 export async function getDesktopStatus():Promise<DesktopStatus>{const response=await fetch(`${API_URL}/public/onboarding/desktop-status`);if(!response.ok)throw new Error("Unable to read desktop setup status.");return response.json()}
-export async function bootstrapPlatformOwner(payload:PlatformBootstrapPayload):Promise<PlatformBootstrapResult>{const response=await fetch(`${API_URL}/platform/bootstrap`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!response.ok){let message="Unable to create platform owner.";try{const body=await response.json() as {detail?:string|ValidationIssue[]};message=typeof body.detail==="string"?body.detail:Array.isArray(body.detail)?safeValidationMessage(body.detail):message}catch{}throw new Error(message)}return response.json()}
+export async function bootstrapPlatformOwner(payload:PlatformBootstrapPayload):Promise<PlatformBootstrapResult>{const response=await fetch(`${API_URL}/platform/bootstrap`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!response.ok){let message="Unable to create platform owner.";try{const body=await response.json() as {detail?:string|ValidationIssue[]};message=typeof body.detail==="string"?body.detail:Array.isArray(body.detail)?safeValidationMessage(body.detail):message}catch{/* Keep the generic error when the response is not JSON. */}throw new Error(message)}return response.json()}
 
 export async function getDesktopActivationStatus():Promise<{status:string;configured:boolean;activation_url:string|null;organization_code:string|null}>{const response=await fetch(`${API_URL}/public/onboarding/desktop-activation-status`);if(!response.ok)throw new Error("Unable to read desktop activation status.");return response.json()}
+
+export async function getPublicAgentStatus():Promise<PublicAgentStatus>{
+ const response=await fetch("/download/status",{cache:"no-store"});
+ if(!response.ok)throw new Error(response.status===403?"This page is available only on the hotel admin network.":"HIOP server status is unavailable.");
+ try{return await response.json()}catch{throw new Error("HIOP server status is unavailable.")}
+}
+
+export async function downloadPublicAgent():Promise<void>{
+ const response=await fetch("/download/agent");
+ if(!response.ok){let message="Agent download failed. Contact the HIOP administrator.";try{const body=await response.json() as {detail?:string};if(body.detail)message=body.detail}catch{/* response may not be JSON */}throw new Error(message)}
+ const blob=await response.blob();
+ const url=URL.createObjectURL(blob);
+ const anchor=document.createElement("a");
+ anchor.href=url;
+ anchor.download="HIOP-Agent-Windows.zip";
+ anchor.click();
+ window.setTimeout(()=>URL.revokeObjectURL(url),1000);
+}

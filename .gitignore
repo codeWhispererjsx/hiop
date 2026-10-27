@@ -26,6 +26,11 @@ frontend/dist/
 .pnpm-store/
 *.tsbuildinfo
 
+# .NET
+**/bin/
+**/obj/
+**/.vs/
+
 # IDE
 .vscode/
 .idea/

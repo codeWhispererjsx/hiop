@@ -4,6 +4,50 @@
   gap: 18px;
 }
 
+.agent-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
+
+.agent-summary-grid article {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.agent-summary-grid span {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.agent-summary-grid strong {
+  font-size: 1.8rem;
+  line-height: 1.1;
+}
+
+.agent-summary-grid small {
+  color: var(--text-muted);
+}
+
+.agent-summary-online strong {
+  color: var(--color-success);
+}
+
+.agent-summary-offline strong,
+.agent-uptime-warning {
+  color: var(--color-danger);
+}
+
+.agent-summary-attention strong {
+  color: var(--color-warning);
+}
+
 .agents-list {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -14,6 +58,10 @@
 .agents-toolbar {
   padding: 16px;
   border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(135px, 180px)) auto;
+  align-items: end;
+  gap: 14px;
 }
 
 .agents-toolbar label {
@@ -28,9 +76,34 @@
   border-radius: 8px;
 }
 
+.agents-toolbar select {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.agents-toolbar .agent-uptime-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  white-space: nowrap;
+}
+
+.agent-uptime-filter input {
+  width: auto;
+}
+
 .agents-list table {
   width: 100%;
   border-collapse: collapse;
+  min-width: 1050px;
+}
+
+.agents-list {
+  overflow-x: auto;
 }
 
 .agents-list th,
@@ -47,6 +120,132 @@
 .agents-list tbody tr:hover,
 .agents-list tbody tr.selected {
   background: var(--primary-soft);
+}
+
+.agent-row-actions {
+  white-space: nowrap;
+}
+
+.agent-row-actions button {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+
+.agent-row-actions button + button {
+  margin-left: 5px;
+}
+
+.agent-row-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.agent-command-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.agent-command-pending{display:flex;align-items:center;gap:.55rem;color:var(--text-muted)}
+.agent-command-spinner{width:15px;height:15px;border:2px solid var(--border-strong);border-top-color:var(--color-primary);border-radius:50%;animation:agent-command-spin .8s linear infinite}
+@keyframes agent-command-spin{to{transform:rotate(360deg)}}
+
+.agent-command-buttons button {
+  flex: 1 1 145px;
+  min-height: 38px;
+}
+
+.agent-metric-chart {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.agent-metric-chart svg {
+  width: 100%;
+  height: 110px;
+  overflow: visible;
+}
+
+.agent-metric-chart polyline {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.agent-metric-chart span {
+  color: var(--text-muted);
+  font-size: .75rem;
+}
+
+.agent-empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 42px 22px;
+  text-align: center;
+}
+
+.agent-empty-state p,
+.agent-empty-state small {
+  max-width: 520px;
+  color: var(--text-muted);
+}
+
+.agent-empty-icon {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--primary-soft);
+  color: var(--color-primary);
+  font-weight: 800;
+}
+
+.agent-no-matches {
+  padding: 18px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.agent-history {
+  display: grid;
+  gap: 8px;
+  margin: 20px 0;
+}
+
+.agent-history h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+
+.agent-history article {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.agent-history small,
+.agent-history article p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
 }
 
 .agents-list code {
@@ -344,9 +543,21 @@
   .agents-layout {
     grid-template-columns: 1fr;
   }
+
+  .agent-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 600px) {
+  .agents-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-summary-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .enrollment-token {
     grid-template-columns: 1fr;
   }

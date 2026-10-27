@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Hiop.Agent.Core/Hiop.Agent.Core.csproj" />
+  <Project Path="Hiop.Agent.Service/Hiop.Agent.Service.csproj" />
+  <Project Path="Hiop.Agent.Tests/Hiop.Agent.Tests.csproj" />
+  <Project Path="Hiop.Agent.Tray/Hiop.Agent.Tray.csproj" />
+</Solution>

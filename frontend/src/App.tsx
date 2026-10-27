@@ -8,6 +8,7 @@ import type { User } from "./lib/types";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const PublicHomePage = lazy(() => import("./pages/PublicHomePage"));
+const AgentDownloadPage = lazy(() => import("./pages/AgentDownloadPage"));
 const FeaturesPage = lazy(() => import("./pages/FeaturesPage"));
 const PricingPage = lazy(() => import("./pages/PricingPage"));
 const GetStartedPage = lazy(() => import("./pages/GetStartedPage"));
@@ -40,6 +41,7 @@ const ProblemsPage = lazy(() => import("./pages/ProblemsPage"));
 const ChangesPage = lazy(() => import("./pages/ChangesPage"));
 const KnowledgePage = lazy(() => import("./pages/KnowledgePage"));
 const ReportingPage = lazy(() => import("./pages/ReportingPage"));
+const SystemMaintenancePage = lazy(() => import("./pages/SystemMaintenancePage"));
 const InventoryImportsPage = lazy(() => import("./pages/InventoryImportsPage"));
 const PropertiesPage = lazy(() => import("./pages/PropertiesPage"));
 const BillingPage = lazy(() => import("./pages/BillingPage"));
@@ -96,6 +98,7 @@ export default function App() {
     {!isDesktopMode && <Route path="/pricing" element={<PricingPage />} />}
     {!isDesktopMode && <Route path="/get-started" element={<GetStartedPage />} />}
     <Route path="/login" element={<LoginPage />} />
+    <Route path="/download" element={<AgentDownloadPage />} />
     <Route path="/forgot-password" element={<AccountAccessPage mode="forgot" />} />
     <Route path="/reset-password" element={<AccountAccessPage mode="reset" />} />
     <Route path="/verify-email" element={<AccountAccessPage mode="verify" />} />
@@ -134,6 +137,7 @@ export default function App() {
     <Route path="/knowledge/new" element={roleProtectedPage(<KnowledgePage />, ["admin", "technician"])} />
     <Route path="/knowledge/:id" element={protectedPage(<KnowledgePage />)} />
     <Route path="/reports" element={protectedPage(<ReportingPage />)} />
+    <Route path="/reports/system-maintenance" element={protectedPage(<SystemMaintenancePage />)} />
     <Route path="/imports" element={roleProtectedPage(<InventoryImportsPage />, ["admin"])} />
     <Route path="/hierarchy" element={protectedPage(<HierarchyPage />)} />
     <Route path="/users" element={roleProtectedPage(<UsersPage />, ["admin"])} />
@@ -148,7 +152,8 @@ export default function App() {
     <Route path="/administration/organization" element={roleProtectedPage(<OrganizationStructurePage />, ["admin"])} />
     <Route path="/administration/properties" element={roleProtectedPage(<PropertiesPage />, ["admin"])} />
     {!isDesktopMode && <Route path="/administration/billing" element={roleProtectedPage(<BillingPage />, ["admin"])} />}
-    <Route path="/administration/agents" element={roleProtectedPage(isDesktopMode ? <ThisComputerPage /> : <LocalAgentsPage />, ["admin"])} />
+    <Route path="/administration/agents" element={roleProtectedPage(<LocalAgentsPage />, ["admin"])} />
+    {isDesktopMode && <Route path="/this-computer" element={roleProtectedPage(<ThisComputerPage />, ["admin"])} />}
     {!isDesktopMode && <Route path="/platform/billing" element={roleProtectedPage(<PlatformBillingPage />, ["platformadmin"])} />}
     {!isDesktopMode && <Route path="/platform/*" element={roleProtectedPage(<PlatformControlCenterPage />, ["platformadmin"])} />}
     <Route path="*" element={<Navigate to="/" replace />} />
