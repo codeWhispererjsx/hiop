@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.imports.matching import score_records, select_hostname_rule, select_subnet_rule
 from app.models.hierarchy import Building, Department, Floor, NetworkZone, Room
 from app.models.hierarchy import Property
+from app.models.device import Device
 from app.models.discovered_device import DiscoveredDevice
 from app.models.inventory_import import (
     ImportCandidateType,
@@ -268,6 +269,53 @@ class ImportMatchingService:
             session.matching_state = "failed"
             self.db.commit()
             raise
+
+    def prepare_quick_import(self, session_id: UUID, actor: User) -> None:
+        self._session(session_id)
+        for row in self.repository.rows_to_match(session_id):
+            if row.validation_status == "invalid":
+                continue
+            if row.validation_status == "duplicate":
+                from app.services.import_finalization_service import ImportFinalizationService
+
+                ImportFinalizationService(self.db).set_disposition(
+                    session_id, row.id, "skip", [], [], actor
+                )
+                continue
+
+            candidates = self.repository.candidates_for_row(session_id, row.id)
+            relevant_candidates = [
+                candidate for candidate in candidates
+                if candidate.candidate_type != ImportCandidateType.IMPORTED_DEVICE
+            ]
+            exact_hostname_matches = []
+            if row.hostname:
+                for candidate in relevant_candidates:
+                    if (
+                        candidate.candidate_device_id
+                        and "hostname" in candidate.matching_fields
+                        and not candidate.conflicting_fields
+                    ):
+                        device = self.db.get(Device, candidate.candidate_device_id)
+                        if device and device.hostname.casefold() == row.hostname.casefold():
+                            exact_hostname_matches.append(candidate)
+
+            if len(relevant_candidates) == 1 and len(exact_hostname_matches) == 1:
+                self.resolve_candidate(
+                    session_id,
+                    row.id,
+                    exact_hostname_matches[0].id,
+                    actor,
+                    accept=True,
+                )
+                continue
+
+            if not relevant_candidates and row.hostname:
+                from app.services.import_finalization_service import ImportFinalizationService
+
+                ImportFinalizationService(self.db).set_disposition(
+                    session_id, row.id, "create_asset", [], [], actor
+                )
 
     def matches(self, session_id: UUID, **filters) -> dict[str, Any]:
         self._session(session_id)

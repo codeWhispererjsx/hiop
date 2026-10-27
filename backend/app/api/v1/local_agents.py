@@ -12,6 +12,7 @@ from app.core.security import get_db, require_roles
 from app.core.tenant import allowed_property_ids, organization_context
 from app.models.device import Device
 from app.models.discovery_intelligence import DiscoveryApprovalLink
+from app.models.asset_intelligence import ManagedAsset
 from app.models.hierarchy import Floor, Property
 from app.models.discovery_intelligence import DiscoveryPolicy
 from app.models.local_agent import AgentEnrollment, AgentJob, AgentMetricSample, AgentObservation, LocalAgentRegistration
@@ -83,8 +84,8 @@ def agent_view(row):
     elif not row.last_heartbeat:effective="pending"
     else:
         age=(now-row.last_heartbeat).total_seconds();effective="online" if age<=120 else "stale" if age<=600 else "offline"
-    values = {key: getattr(row, key) for key in (
-        "id", "agent_id", "organization_id", "property_id", "device_id", "name",
+    values = {key: getattr(row, key, None) for key in (
+        "id", "agent_id", "organization_id", "property_id", "device_id", "managed_asset_id", "name",
         "version", "hostname", "last_seen", "last_heartbeat", "last_discovery",
         "last_monitoring", "uptime_seconds", "pending_queue", "queue_capacity",
         "registered_at",
@@ -110,7 +111,7 @@ def authenticate_agent(authorization:str|None=Header(default=None),db:Session=De
 @admin_router.get("")
 def list_agents(db:Session=Depends(get_db),user:User=Depends(reader),org=Depends(organization_context)):
     allowed=allowed_property_ids(db,user,org)
-    rows=db.query(LocalAgentRegistration,Device,Floor).outerjoin(Device,LocalAgentRegistration.device_id==Device.id).outerjoin(Floor,Device.floor_id==Floor.id).filter(LocalAgentRegistration.organization_id==org,LocalAgentRegistration.property_id.in_(allowed)).order_by(LocalAgentRegistration.name).all()
+    rows=db.query(LocalAgentRegistration,Device,Floor,ManagedAsset).outerjoin(Device,LocalAgentRegistration.device_id==Device.id).outerjoin(Floor,Device.floor_id==Floor.id).outerjoin(ManagedAsset,LocalAgentRegistration.managed_asset_id==ManagedAsset.id).filter(LocalAgentRegistration.organization_id==org,LocalAgentRegistration.property_id.in_(allowed)).order_by(LocalAgentRegistration.name).all()
     return [
         agent_view(agent)|{
             "ip_address":agent.ip_address or (device.ip_address if device else None),
@@ -119,8 +120,9 @@ def list_agents(db:Session=Depends(get_db),user:User=Depends(reader),org=Depends
             "operating_system":agent.operating_system or (device.ad_operating_system if device else None),
             "floor":floor.display_name or floor.name if floor else None,
             "mac_address":device.mac_address if device else None,
+            "managed_asset_name":asset.name if asset else None,
         }
-        for agent,device,floor in rows
+        for agent,device,floor,asset in rows
     ]
 
 @admin_router.get("/jobs/{job_id}")
@@ -245,8 +247,28 @@ def enroll(body:EnrollRequest,request:Request,db:Session=Depends(get_db)):
     enrollment_limiter.check(f"machine-enroll:{request.client.host if request.client else 'unknown'}");now=datetime.now(timezone.utc)
     enrollment=db.query(AgentEnrollment).filter(AgentEnrollment.token_hash==_digest(body.enrollment_token),AgentEnrollment.used_at.is_(None),AgentEnrollment.revoked_at.is_(None),AgentEnrollment.expires_at>now).with_for_update().first()
     if not enrollment:raise HTTPException(401,"Enrollment credential is invalid, expired, or already used")
+    hostname=body.hostname.strip()
+    devices=db.query(Device).filter(
+        Device.property_id==enrollment.property_id,
+        func.lower(Device.hostname)==hostname.lower(),
+    ).limit(2).all()
+    device=devices[0] if len(devices)==1 else None
+    assets=db.query(ManagedAsset).filter(
+        ManagedAsset.organization_id==enrollment.organization_id,
+        ManagedAsset.property_id==enrollment.property_id,
+        func.lower(ManagedAsset.name)==hostname.lower(),
+    ).limit(2).all()
+    if device:
+        linked_assets=db.query(ManagedAsset).filter(
+                ManagedAsset.organization_id==enrollment.organization_id,
+                ManagedAsset.property_id==enrollment.property_id,
+                ManagedAsset.device_id==device.id,
+            ).limit(2).all()
+        assets_by_id={asset.id:asset for asset in (*assets,*linked_assets)}
+        assets=list(assets_by_id.values())
+    managed_asset=assets[0] if len(assets)==1 else None
     secret=secrets.token_urlsafe(48);public_id=f"HIOP-AGENT-{secrets.token_hex(8).upper()}"
-    row=LocalAgentRegistration(agent_id=public_id,organization_id=enrollment.organization_id,property_id=enrollment.property_id,name=enrollment.name,status="online",version=body.version,hostname=body.hostname,credential_hash=_digest(secret),last_seen=now,last_heartbeat=now,registered_by=enrollment.created_by);enrollment.used_at=now;db.add(row)
+    row=LocalAgentRegistration(agent_id=public_id,organization_id=enrollment.organization_id,property_id=enrollment.property_id,device_id=device.id if device else None,managed_asset_id=managed_asset.id if managed_asset else None,name=enrollment.name,status="online",version=body.version,hostname=hostname,credential_hash=_digest(secret),last_seen=now,last_heartbeat=now,registered_by=enrollment.created_by);enrollment.used_at=now;db.add(row)
     try:db.commit();db.refresh(row)
     except IntegrityError as exc:db.rollback();raise HTTPException(409,"An agent with this name is already registered") from exc
     return {"agent_id":row.agent_id,"credential":f"{row.agent_id}.{secret}","organization_id":row.organization_id,"property_id":row.property_id,"agent_api_version":1}

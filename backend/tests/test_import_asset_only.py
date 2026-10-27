@@ -145,7 +145,15 @@ def test_asset_only_readiness_does_not_require_network_device_fields(monkeypatch
     )
     monkeypatch.setattr(service, "_session", lambda _session_id: session)
     monkeypatch.setattr(service, "_rows", lambda _session_id: [row])
-    db.scalar = lambda statement: None if "import_location_suggestions" in str(statement) else property_id
+    def scalar(statement):
+        query = str(statement).lower()
+        if "import_location_suggestions" in query:
+            return None
+        if "count(" in query:
+            return 0
+        return property_id
+
+    db.scalar = scalar
     db.get = lambda _model, _identifier: None
 
     readiness = service.readiness(session_id)

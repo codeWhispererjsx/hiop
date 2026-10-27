@@ -394,12 +394,27 @@ class ImportFinalizationService:
             for plan in intended
             if plan["disposition"] in {"create_new", "create_asset"}
         )
-        mac_counts = Counter((plan["values"].get("mac_address") or "").casefold() for plan in intended if plan["disposition"] == "create_new")
-        for label, counts in (("asset_tag", asset_counts), ("mac_address", mac_counts)):
+        mac_counts = Counter(
+            (plan["values"].get("mac_address") or "").casefold()
+            for plan in intended if plan["disposition"] in {"create_new", "create_asset"}
+        )
+        serial_counts = Counter(
+            (plan["values"].get("serial_number") or "").casefold()
+            for plan in intended if plan["disposition"] in {"create_new", "create_asset"}
+        )
+        hostname_counts = Counter(
+            (plan["values"].get("hostname") or "").casefold()
+            for plan in intended if plan["disposition"] in {"create_new", "create_asset"}
+        )
+        for label, counts in (
+            ("asset_tag", asset_counts),
+            ("mac_address", mac_counts),
+            ("serial_number", serial_counts),
+            ("hostname", hostname_counts),
+        ):
             duplicates = [value for value, count in counts.items() if value and count > 1]
             if duplicates:
                 blockers.append({"code": f"duplicate_final_{label}", "message": f"Planned creates contain duplicate {label.replace('_', ' ')} values"})
-        create_plans = [plan for plan in intended if plan["disposition"] == "create_new"]
         planned_asset_tags = [
             plan["values"]["asset_tag"]
             for plan in intended
@@ -417,11 +432,63 @@ class ImportFinalizationService:
                 "code": "managed_asset_identifier_conflict",
                 "message": "A planned asset tag already exists on a managed asset",
             })
-        if create_plans:
-            macs = [plan["values"]["mac_address"] for plan in create_plans if plan["values"].get("mac_address")]
-            serials = [plan["values"]["serial_number"] for plan in create_plans if plan["values"].get("serial_number")]
-        else:
-            macs, serials = [], []
+        planned_hostnames = {
+            plan["values"]["hostname"].casefold()
+            for plan in intended
+            if plan["disposition"] in {"create_new", "create_asset"}
+            and plan["values"].get("hostname")
+        }
+        planned_serials = {
+            plan["values"]["serial_number"]
+            for plan in intended
+            if plan["disposition"] in {"create_new", "create_asset"}
+            and plan["values"].get("serial_number")
+        }
+        raw_property_id = session.mapping_metadata.get("tenant_property_id")
+        try:
+            import_property_id = UUID(raw_property_id) if raw_property_id else None
+        except ValueError:
+            import_property_id = None
+        organization_id = self.db.info.get("organization_id")
+        if planned_hostnames and import_property_id:
+            existing_devices = self.db.scalar(
+                select(func.count(Device.id)).where(
+                    Device.property_id == import_property_id,
+                    func.lower(Device.hostname).in_(planned_hostnames),
+                )
+            )
+            existing_assets = self.db.scalar(
+                select(func.count(ManagedAsset.id)).where(
+                    ManagedAsset.organization_id == organization_id,
+                    ManagedAsset.property_id == import_property_id,
+                    func.lower(ManagedAsset.name).in_(planned_hostnames),
+                )
+            )
+            if existing_devices or existing_assets:
+                blockers.append({
+                    "code": "inventory_hostname_conflict",
+                    "message": "A planned hostname already exists in this property's inventory; review the match instead of creating a duplicate",
+                })
+        if planned_serials and self.db.scalar(
+            select(func.count(ManagedAsset.id)).where(
+                ManagedAsset.organization_id == organization_id,
+                ManagedAsset.property_id == import_property_id,
+                func.lower(ManagedAsset.serial_number).in_(
+                    {value.casefold() for value in planned_serials}
+                ),
+            )
+        ):
+            blockers.append({
+                "code": "managed_asset_serial_conflict",
+                "message": "A planned serial number already exists on a managed asset",
+            })
+        macs = [
+            plan["values"]["mac_address"]
+            for plan in intended
+            if plan["disposition"] in {"create_new", "create_asset"}
+            and plan["values"].get("mac_address")
+        ]
+        serials = list(planned_serials)
         if planned_asset_tags or macs or serials:
             identifier_conflicts = []
             if planned_asset_tags:
@@ -439,12 +506,6 @@ class ImportFinalizationService:
             ):
                 blockers.append({"code": "inventory_identifier_conflict", "message": "A planned identifier now exists in inventory"})
         counts = Counter(plan["disposition"] for plan in plans)
-        raw_property_id = session.mapping_metadata.get("tenant_property_id")
-        try:
-            import_property_id = UUID(raw_property_id) if raw_property_id else None
-        except ValueError:
-            import_property_id = None
-        organization_id = self.db.info.get("organization_id")
         if import_property_id is None or organization_id is None or not self.db.scalar(
             select(Property.id).where(
                 Property.id == import_property_id,

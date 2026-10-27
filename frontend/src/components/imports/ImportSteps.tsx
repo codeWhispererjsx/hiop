@@ -6,7 +6,7 @@ import Modal from "../Modal";
 import { StatusBadge } from "../StatusBadge";
 import { useRequest } from "../../hooks/useRequest";
 import { endpoints } from "../../lib/api";
-import type { Device, DiscoveredDevice, HierarchyCatalog, ImportColumnDetection, ImportedDevice, ImportLocationSuggestion, ImportMatchCandidate, ImportPreview, ImportSession, ImportValidationStatus, LocationReviewInput, MergePlan } from "../../lib/types";
+import type { Device, DiscoveredDevice, HierarchyCatalog, ImportColumnDetection, ImportReadiness, ImportedDevice, ImportLocationSuggestion, ImportMatchCandidate, ImportPreview, ImportResults, ImportSession, ImportValidationStatus, LocationReviewInput, MergePlan } from "../../lib/types";
 
 const canonicalFields = ["asset_tag","hostname","device_type","ip_address","mac_address","department_name","building_name","floor_name","room_name","network_zone","vendor","brand","model","serial_number","inventory_status","notes","business_owner","deployment_date"];
 const requiredFields = new Set(["hostname"]);
@@ -17,16 +17,16 @@ export function UploadStep({admin,onUploaded}:{admin:boolean;onUploaded:(session
   const [file,setFile]=useState<File|null>(null); const [drag,setDrag]=useState(false); const [busy,setBusy]=useState(false); const [error,setError]=useState(""); const [controller,setController]=useState<AbortController|null>(null);
   const choose=(candidate:File|undefined)=>{setError("");if(!candidate)return;const extension=candidate.name.split(".").pop()?.toLowerCase();if(!["csv","xlsx","docx"].includes(extension??"")){setFile(null);setError("Choose a CSV, XLSX, or DOCX file.");return}setFile(candidate)};
   const drop=(event:DragEvent)=>{event.preventDefault();setDrag(false);choose(event.dataTransfer.files[0])};
-  const upload=async()=>{if(!file||!admin)return;const next=new AbortController();setController(next);setBusy(true);setError("");try{const result=await endpoints.uploadImport(file,next.signal);onUploaded(result.session,result.preview)}catch(error){if(next.signal.aborted)setError("Upload cancelled before staging completed.");else setError(message(error))}finally{setBusy(false);setController(null)}};
-  return <section className="wizard-card"><div className="wizard-card-head"><span className="step-number">1</span><div><h2>Upload device inventory</h2><p>CSV, XLSX, and Word tables are parsed into staging only. Nothing is added directly to Devices.</p></div></div>
+  const upload=async()=>{if(!file||!admin)return;const next=new AbortController();setController(next);setBusy(true);setError("");try{const result=await endpoints.uploadImport(file,next.signal,true);onUploaded(result.session,result.preview)}catch(error){if(next.signal.aborted)setError("Upload cancelled before staging completed.");else setError(message(error))}finally{setBusy(false);setController(null)}};
+  return <section className="wizard-card"><div className="wizard-card-head"><span className="step-number">1</span><div><h2>Upload device list</h2><p>HIOP reads the hostname column, checks existing inventory, and prepares unmatched hosts for review.</p></div></div>
     {!admin&&<div className="inline-notice warning" role="alert">Only administrators can upload inventory files. Your access is read-only.</div>}
     <div className={`import-dropzone ${drag?"dragging":""}`} onDragOver={event=>{event.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={drop}>
       <Icon name="import" size={34}/><strong>Drop CSV, XLSX, or DOCX here</strong><span>or</span><label className="secondary-action">Browse file<input type="file" accept=".csv,.xlsx,.docx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={event=>choose(event.target.files?.[0])} disabled={!admin||busy}/></label><small>Word files must contain an inventory table with a header row. Backend-enforced size and content checks apply.</small>
     </div>
     {file&&<div className="selected-file"><Icon name="server"/><div><strong>{file.name}</strong><span>{(file.size/1024).toFixed(1)} KiB · {file.type||"content type unavailable"}</span></div><button className="icon-button" aria-label="Clear selected file" onClick={()=>setFile(null)} disabled={busy}><Icon name="close"/></button></div>}
-    <div className="import-guidance"><div><strong>Required to stage rows</strong><span>A system name or hostname. Asset tag is optional for managed assets; HIOP will not treat an SN row counter as an asset tag.</span></div><div><strong>Choose the right record type</strong><span>Create a network Device only when all technical fields are present. For allocation sheets, choose Create managed asset to preserve the owner, department, serial number, description, and deployment date without inventing network details.</span></div><div><strong>Security</strong><span>Macros and formulas are never executed</span></div></div>
-    {error&&<div className="inline-notice error" role="alert">{error}</div>}{busy&&<div className="processing-state" role="status"><span className="spinner"/><div><strong>Uploading and inspecting file</strong><span>Extension, content, workbook and row limits are being checked.</span></div><span className="progress-track indeterminate"><i/></span></div>}
-    <footer className="wizard-actions">{busy&&<button className="secondary-action" onClick={()=>controller?.abort()}>Cancel upload</button>}<button className="primary-action" disabled={!file||!admin||busy} onClick={()=>void upload()}>{busy?"Uploading…":"Upload securely"}</button></footer>
+    <div className="import-guidance"><div><strong>Required</strong><span>A clear hostname or computer-name column. Matching uses the exact hostname; existing device information is never overwritten.</span></div><div><strong>New hosts</strong><span>Unmatched hosts become managed inventory records using only uploaded details. Agent enrollment can link to that record by exact hostname later.</span></div><div><strong>Duplicates</strong><span>Repeated hostnames and conflicting identifiers are held back. Macros and formulas are never executed.</span></div></div>
+    {error&&<div className="inline-notice error" role="alert">{error}</div>}{busy&&<div className="processing-state" role="status"><span className="spinner"/><div><strong>Checking uploaded hosts</strong><span>File safety, hostname matching, and duplicate checks are running.</span></div><span className="progress-track indeterminate"><i/></span></div>}
+    <footer className="wizard-actions">{busy&&<button className="secondary-action" onClick={()=>controller?.abort()}>Cancel upload</button>}<button className="primary-action" disabled={!file||!admin||busy} onClick={()=>void upload()}>{busy?"Checking…":"Upload and find hosts"}</button></footer>
   </section>;
 }
 
@@ -201,6 +201,92 @@ export function ReadyStep({session,admin}:{session:ImportSession;admin:boolean})
     {results&&<section className="import-results"><header><h3>Finalization results</h3><StatusBadge status={results.status}/></header><div className="mini-kpis">{[["Completed",results.summary.completed_rows??0],["Failed",results.summary.failed_rows??0],["Created Devices",results.summary.created_devices??0],["Created assets",results.summary.created_assets??0],["Linked",results.summary.linked_devices??0],["Enriched",results.summary.enriched_devices??0],["Merged",results.summary.merged_devices??0]].map(([label,value])=><div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}</div><div className="review-queue">{results.items.map(item=><article className="review-card" key={item.id}><div className="review-identity"><strong>Row {item.plan.source_row_number} · {item.action.replaceAll("_"," ")}</strong><span>{item.safe_error_message??(item.plan.target_asset_id?`Managed asset ${item.plan.target_asset_id}`:`Target ${item.target_device_id??"not applicable"}`)}</span></div><StatusBadge status={item.status}/>{item.target_device_id&&<Link to={`/devices/${item.target_device_id}`}>View device</Link>}{item.plan.target_asset_id&&<Link to={`/assets/${item.plan.target_asset_id}`}>View managed asset</Link>}</article>)}</div><footer className="wizard-actions">{admin&&results.status==="partial"&&<button className="secondary-action" disabled={busy} onClick={()=>void retry()}>Retry safe failures</button>}{admin&&results.rollback_available&&<button className="secondary-action" disabled={busy} onClick={()=>void previewRollback()}>Preview rollback</button>}</footer></section>}
     {rollback&&<Modal title="Rollback safety preview" onClose={()=>setRollback(null)}><div className="modal-body import-detail"><div className={`inline-notice ${rollback.can_rollback?"warning":"error"}`}>{rollback.can_rollback?"All listed actions still match their recorded after-state. Rollback uses compensating changes and preserves audit history.":"Rollback is blocked because later state makes full reversal unsafe."}</div><h3>Reversible actions ({rollback.reversible.length})</h3><ul className="issue-list">{rollback.reversible.map(item=><li key={item.result_id}><strong>{item.action.replaceAll("_"," ")}</strong><span>{item.target_asset_id?`Managed asset ${item.target_asset_id}`:`Device ${item.target_device_id}`}</span></li>)}</ul><h3>Non-reversible actions ({rollback.non_reversible.length})</h3><ul className="issue-list">{rollback.non_reversible.map(item=><li key={item.result_id}><strong>Blocked</strong><span>{item.reason}</span></li>)}</ul><footer className="wizard-actions"><button className="secondary-action" onClick={()=>setRollback(null)}>Cancel</button><button className="primary-action" disabled={!rollback.can_rollback||busy} onClick={()=>void executeRollback()}>Apply compensating rollback</button></footer></div></Modal>}
   </section>
+}
+
+export function QuickImportFinalizeStep({session,admin}:{session:ImportSession;admin:boolean}) {
+  const readiness=useRequest(()=>endpoints.importReadiness(session.id),[session.id]);
+  const rows=useRequest(()=>endpoints.importRows(session.id,{page_size:100}),[session.id]);
+  const [plan,setPlan]=useState<ImportReadiness|null>(null);
+  const [results,setResults]=useState<ImportResults|null>(null);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+
+  useEffect(()=>{
+    if(results?.status!=="importing"&&!session.finalization_completed_at)return;
+    let active=true;let timer:number|undefined;
+    const poll=async()=>{
+      try{
+        const value=await endpoints.importResults(session.id);
+        if(!active)return;
+        setResults(value);
+        if(value.status==="importing")timer=window.setTimeout(poll,2500);
+      }catch(reason){
+        if(active)setError(message(reason));
+      }
+    };
+    void poll();
+    return()=>{active=false;if(timer)window.clearTimeout(timer)};
+  },[results?.status,session.finalization_completed_at,session.id]);
+
+  const finalize=async()=>{
+    setBusy(true);setError("");
+    try{
+      const current=await endpoints.importExecutionPlan(session.id,true);
+      setPlan(current);
+      if(!current.ready){
+        await readiness.reload();
+        return;
+      }
+      const value=await endpoints.finalizeImport(
+        session.id,
+        current.plan_version,
+        `simple-import:${session.id}:${crypto.randomUUID()}`,
+      );
+      setResults(value);
+    }catch(reason){
+      setError(message(reason));
+    }finally{
+      setBusy(false);
+      await Promise.all([readiness.reload(),rows.reload()]);
+    }
+  };
+
+  const current=plan??readiness.data;
+  const counts=current?.counts??{};
+  const blocked=current?.blocking_issues??[];
+  return <section className="wizard-card">
+    <div className="wizard-card-head">
+      <span className="step-number">2</span>
+      <div>
+        <h2>Hostname check</h2>
+        <p>Exact hostname matches link to existing devices without changing their information. New hosts are added as managed inventory records using only uploaded details.</p>
+      </div>
+    </div>
+    {readiness.loading&&!current?<Feedback loading/>:readiness.error&&!current?<Feedback error={readiness.error} onRetry={readiness.reload}/>:current&&<>
+      <div className="mini-kpis">
+        {[["Already in inventory",counts.link_existing??0],["New managed records",counts.create_asset??0],["Duplicates skipped",counts.skip??0],["Rows needing attention",blocked.length]].map(([label,value])=><div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}
+      </div>
+      {!!blocked.length&&<div className="inline-notice warning" role="status">No conflicting or duplicate records will be added. Resolve these items in Advanced review or correct the source file and upload again.</div>}
+      {!!blocked.length&&<ul className="issue-list">{blocked.map((issue,index)=><li key={`${issue.code}-${index}`}><strong>{issue.code.replaceAll("_"," ")}{issue.row?` · row ${issue.row}`:""}</strong><span>{issue.message}</span></li>)}</ul>}
+      {rows.loading||rows.error?<Feedback loading={rows.loading} error={rows.error} onRetry={rows.reload}/>:<div className="table-wrap">
+        <table className="data-table"><thead><tr><th>Hostname</th><th>Import result</th><th>Source details</th></tr></thead>
+          <tbody>{(rows.data?.items??[]).map(row=><tr key={row.id}>
+            <td>{display(row.hostname)}</td>
+            <td>{row.validation_status==="invalid"?"Invalid — skipped":row.validation_status==="duplicate"?"Duplicate — skipped":row.linked_device_id?"Existing device — linked":row.final_disposition==="create_asset"?"New managed inventory record":row.resolution_action?"Reviewed":"Needs attention"}</td>
+            <td>{[row.department_name,row.room_name,row.serial_number].filter(Boolean).join(" · ")||"Hostname only"}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+      <footer className="wizard-actions">
+        {admin&&current.ready&&!results&&<button className="primary-action" disabled={busy} onClick={()=>void finalize()}>{busy?"Adding to inventory…":`Confirm and add ${counts.create_asset??0} new hosts`}</button>}
+      </footer>
+    </>}
+    {error&&<div className="inline-notice error" role="alert">{error}</div>}
+    {busy&&<div className="processing-state" role="status"><span className="spinner"/><div><strong>Adding hosts to inventory</strong><span>Existing device data is preserved; repeated hostnames are blocked.</span></div><span className="progress-track indeterminate"><i/></span></div>}
+    {results&&<section className="import-results"><header><h3>Import result</h3><StatusBadge status={results.status}/></header>
+      <div className="mini-kpis">{[["Added",results.summary.created_assets??0],["Linked",results.summary.linked_devices??0],["Failed",results.summary.failed_rows??0]].map(([label,value])=><div key={String(label)}><span>{label}</span><strong>{value}</strong></div>)}</div>
+    </section>}
+  </section>;
 }
 
 function Pagination({current,pages,onChange}:{current:number;pages:number;onChange:(page:number)=>void}) { return <nav className="pagination" aria-label="Import rows pages"><button disabled={current<=1} onClick={()=>onChange(current-1)}>Previous</button><span>Page {current} of {pages}</span><button disabled={current>=pages} onClick={()=>onChange(current+1)}>Next</button></nav> }

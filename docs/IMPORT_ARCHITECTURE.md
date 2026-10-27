@@ -150,13 +150,13 @@ Administrators run and resolve matching. Administrators and technicians may read
 
 ## Epic 2D frontend review architecture
 
-Epic 2D adds one import feature surface inside the existing React application rather than a second UI framework. `/imports` lists backend sessions and `/imports/:session_id/*` hosts a resumable nine-step wizard. The shared authenticated API client owns every request; pages do not issue ad hoc fetches. Existing dashboard layout, role lookup, feedback, modal, status badge, hierarchy catalog, design tokens, and responsive table conventions are reused.
+Epic 2D adds one import feature surface inside the existing React application rather than a second UI framework. `/imports` lists backend sessions and presents a hostname-first upload flow; the resumable nine-step wizard remains available under Advanced review. The shared authenticated API client owns every request; pages do not issue ad hoc fetches. Existing dashboard layout, role lookup, feedback, modal, status badge, hierarchy catalog, design tokens, and responsive table conventions are reused.
 
 The backend remains the source of truth. A resumed route derives its safe stage from session lifecycle, selected worksheet, matching state, counters, persisted row resolutions, candidates, and location reviews. Direct routes are available for mapping, validation, matches, locations, conflicts, summary, and readiness. URL state selects a review view but never substitutes for persisted import state.
 
 Epic 2D adds the session list, staged-row detail, session-location list, row-location detail, and audited mark-skip support endpoints required by the review UI. Administrator-only endpoints remain protected by backend role dependencies; hiding mutation controls from technicians is only a usability measure.
 
-Merge plans are previews and the readiness screen is a handoff boundary. The frontend contains no final-import button and calls no official Device create, overwrite, merge, delete, or rollback operation. Epic 2E must introduce the transactional finalization contract before those actions can exist.
+Merge plans are previews and the readiness screen is a handoff boundary. The frontend never calls official Device create, overwrite, merge, delete, or rollback operations directly; all mutations use the transactional finalization contract.
 
 ## Epic 2E finalization architecture
 
@@ -171,3 +171,9 @@ Finalization uses configurable batches (default 100) and per-row database savepo
 Execution results retain bounded plans, before/after inventory snapshots, targets, timestamps, safe errors, and retry counts. Retry is limited and never repeats completed work. Rollback compares current values with recorded after-state; later changes block compensation. Safe create reversals retire devices, enrichment reversals restore values, and import-created Discovery links are detached. Audit and import history are never deleted.
 
 The upload limit remains 10 MiB and 10,000 rows. Defaults are 100 final rows per batch, three retries, 30 rollback-retention days, and 365 result-retention days. Background scheduled imports remain unsupported.
+
+## Hostname-first inventory intake
+
+The default `/imports` flow accepts CSV, XLSX, and DOCX uploads with a clear hostname/computer-name header. The simple upload runs the detected mapping, validation, and matching server-side, then presents one confirmation before inventory changes are finalized. An exact hostname match is linked only when it is unique and has no conflicting identifiers; existing device fields are not overwritten. Unmatched valid hosts become managed assets containing only supplied values. Duplicate source rows are skipped, while ambiguous or conflicting matches and inventory-name collisions block finalization and remain available in Advanced review.
+
+On later agent enrollment, HIOP links the agent to a unique exact-hostname Device and/or managed asset within the enrolled property. The agent remains monitored if there is no linked Device, but device actions stay disabled until a Device is linked.

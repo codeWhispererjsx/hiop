@@ -6,6 +6,7 @@ import {
   LocationStep,
   MappingStep,
   MatchReviewStep,
+  QuickImportFinalizeStep,
   ReadyStep,
   SummaryStep,
   UploadStep,
@@ -38,6 +39,7 @@ export default function InventoryImportsPage() {
   const [columns, setColumns] = useState<ImportColumnDetection>();
   const [worksheet, setWorksheet] = useState("");
   const [activeStep, setActiveStep] = useState(0);
+  const [simpleFlow, setSimpleFlow] = useState(true);
   const [error, setError] = useState("");
   const selectedId = searchParams.get("session");
   const activeSession = session?.id === selectedId ? session : undefined;
@@ -55,6 +57,7 @@ export default function InventoryImportsPage() {
         setColumns(nextColumns);
         setPreview(nextColumns.preview);
         setWorksheet(nextColumns.selected_worksheet ?? "");
+        setSimpleFlow(nextSession.matching_state === "completed");
         setActiveStep(
           nextSession.status === "uploaded" ? 1
             : nextSession.matching_state === "completed" ? 5
@@ -112,7 +115,8 @@ export default function InventoryImportsPage() {
       preview: firstPreview,
     });
     setWorksheet(firstPreview.selected_worksheet ?? "");
-    setActiveStep(1);
+    setSimpleFlow(true);
+    setActiveStep(0);
     setSearchParams({ session: next.id });
     void sessions.reload();
   };
@@ -127,8 +131,11 @@ export default function InventoryImportsPage() {
       <PageTitle
         eyebrow="Inventory management"
         title="Inventory imports"
-        copy="Stage, validate, match, and review inventory records before any approved changes are applied."
-        action={activeSession ? <button className="secondary-action" onClick={() => selectSession()}>All imports</button> : undefined}
+        copy="Upload a device list, match existing hosts by hostname, and add unmatched hosts without creating duplicate records."
+        action={activeSession ? <div className="wizard-actions">
+          <button className="secondary-action" onClick={() => setSimpleFlow(value => !value)}>{simpleFlow ? "Advanced review" : "Simple import"}</button>
+          <button className="secondary-action" onClick={() => selectSession()}>All imports</button>
+        </div> : undefined}
       />
       {error && <div className="inline-notice error" role="alert">{error}</div>}
       {!activeSession ? (
@@ -163,7 +170,10 @@ export default function InventoryImportsPage() {
             <div><span>Import session</span><h2>{activeSession.original_filename}</h2><p>{activeSession.total_rows} rows · {activeSession.file_format.toUpperCase()} · Uploaded {new Date(activeSession.uploaded_at).toLocaleString()}</p></div>
             <span className={`import-state state-${activeSession.status}`}>{activeSession.status.replaceAll("_", " ")}</span>
           </div>
-          <nav className="import-step-nav" aria-label="Import workflow steps">
+          {simpleFlow ? (
+            <QuickImportFinalizeStep session={activeSession} admin={admin} />
+          ) : <>
+          <nav className="import-step-nav" aria-label="Advanced import workflow steps">
             {steps.map((label, index) => (
               <button key={label} className={activeStep === index ? "active" : ""} aria-current={activeStep === index ? "step" : undefined} onClick={() => setActiveStep(index)}>
                 <span>{index + 1}</span>{label}
@@ -180,6 +190,7 @@ export default function InventoryImportsPage() {
           {activeStep === 7 && <SummaryStep session={activeSession}/>}
           {activeStep === 8 && <ReadyStep session={activeSession} admin={admin}/>}
           {preview && activeStep === 1 && <p className="import-preview-note">{preview.validation_summary.total_rows} source rows detected. Preview is limited to {preview.rows.length} rows.</p>}
+          </>}
         </section>
       )}
     </DashboardLayout>

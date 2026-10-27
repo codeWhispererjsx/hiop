@@ -99,6 +99,8 @@ def score_records(source: Any, candidate: Any, settings: Mapping[str, Any]) -> d
     score = max(0, min(100, score))
     thresholds = {key: int(settings[f"{key}_match_threshold"]) for key in ("exact", "strong", "probable", "weak")}
     level = classify(score, thresholds)
+    if "hostname" in matching and level == "none":
+        level = "weak"
     fuzzy_only = bool(evidence) and not matching
     if conflicts:
         action = "review"

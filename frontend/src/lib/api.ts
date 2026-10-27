@@ -304,7 +304,7 @@ export const endpoints = {
   exportDiscovery: () => download("/discovery/export"),
   importSessions: (filters: import("./types").ImportSessionFilters = {}) => api<import("./types").ImportSessionPage>(`/imports${queryString(filters)}`),
   importSession: (id: string) => api<import("./types").ImportSession>(`/imports/${id}`),
-  uploadImport: (file: File, signal?: AbortSignal) => { const body = new FormData(); body.append("file", file); return api<import("./types").ImportUploadResponse>("/imports/device-inventory/upload", { method: "POST", body, signal }); },
+  uploadImport: (file: File, signal?: AbortSignal, simple = false) => { const body = new FormData(); body.append("file", file); return api<import("./types").ImportUploadResponse>(`/imports/device-inventory/upload${simple ? "?simple=true" : ""}`, { method: "POST", body, signal }); },
   importColumns: (id: string, worksheet?: string) => api<import("./types").ImportColumnDetection>(`/imports/${id}/columns${queryString({ worksheet })}`),
   saveImportMapping: (id: string, mapping: Record<string, string | null>, worksheet?: string | null) => api<import("./types").ImportColumnDetection>(`/imports/${id}/mapping`, { method: "POST", body: JSON.stringify({ mapping, worksheet: worksheet || null }) }),
   validateImport: (id: string) => api<import("./types").ImportSession>(`/imports/${id}/validate`, { method: "POST" }),

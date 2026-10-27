@@ -205,7 +205,10 @@ class ImportService:
         if worksheet and worksheet != session.selected_worksheet:
             parsed = parse_file(self._path(session), session.file_format, self._settings(), worksheet)
             headers = parsed.headers
-        cleaned = validate_mapping(headers, mapping)
+        try:
+            cleaned = validate_mapping(headers, mapping)
+        except ValueError as exc:
+            raise ImportValidationError(str(exc)) from exc
         detection = detect_mapping(headers)
         session.mapping_metadata = {**session.mapping_metadata, **detection, "mapping": cleaned, "ambiguous_mappings": {}, "missing_required_columns": []}
         session.selected_worksheet = worksheet or session.selected_worksheet

@@ -142,6 +142,7 @@ def list_imports(
 @router.post("/device-inventory/upload", response_model=ImportUploadResponse, status_code=201)
 async def upload_import(
     file: UploadFile = File(...),
+    simple: bool = Query(default=False),
     db: Session = Depends(get_db),
     actor: User = Depends(administrator),
     organization_id: UUID = Depends(organization_context),
@@ -161,9 +162,20 @@ async def upload_import(
             organization_id=organization_id,
             property_id=property_id,
         )
+        if simple:
+            imports = ImportService(db)
+            mapping = session.mapping_metadata.get("mapping", {})
+            imports.save_mapping(session.id, mapping, session.selected_worksheet, actor)
+            imports.process_import(session.id, actor)
+            matching = ImportMatchingService(db)
+            matching.run(session.id, actor)
+            matching.prepare_quick_import(session.id, actor)
+            db.refresh(session)
         return {"session": session, "preview": preview}
     except (ImportConflictError, ImportNotFoundError, ImportValidationError) as error:
         _translate_import_error(error)
+    except (MatchingConflictError, MatchingNotFoundError, MatchingValidationError) as error:
+        _translate_matching_error(error)
     except Exception as error:
         logger.exception("Inventory import upload failed organization_id=%s", organization_id)
         raise HTTPException(500, "The inventory file could not be staged. Try again; if the problem continues, contact an administrator with the upload time.") from error

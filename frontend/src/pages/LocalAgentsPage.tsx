@@ -281,6 +281,7 @@ export default function LocalAgentsPage() {
                   <th>Last update</th>
                   <th>Uptime</th>
                   <th>Version</th>
+                  <th>Inventory</th>
                   <th>Property</th>
                   <th>Actions</th>
                 </tr>
@@ -303,6 +304,13 @@ export default function LocalAgentsPage() {
                     <td>{agent.last_update ? formatDateTime(agent.last_update) : "—"}</td>
                     <td className={(agent.uptime_seconds ?? 0) > 48 * 60 * 60 ? "agent-uptime-warning" : ""}>{formatUptime(agent.uptime_seconds)}</td>
                     <td>{agent.version || "Unknown"}</td>
+                    <td onClick={(event) => event.stopPropagation()}>
+                      {agent.managed_asset_id
+                        ? <Link to={`/assets/${agent.managed_asset_id}`}>{agent.managed_asset_name || "Managed asset"}</Link>
+                        : agent.device_id
+                          ? <Link to={`/devices/${agent.device_id}`}>Device linked</Link>
+                          : "Not linked"}
+                    </td>
                     <td>{properties.data?.find(property=>property.id===agent.property_id)?.name ?? "Assigned property"}</td>
                     <td className="agent-row-actions" onClick={(event) => event.stopPropagation()}>
                       <button disabled={agent.status !== "online" || !agent.device_id || commandAgentId === agent.id} onClick={() => void runAction(agent, "RESTART")}>Restart</button>
