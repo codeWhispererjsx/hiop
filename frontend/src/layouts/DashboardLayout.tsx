@@ -49,14 +49,18 @@ export default function DashboardLayout({
       void endpoints
         .me()
         .then(account=>{setUser(account);return endpoints.propertyContext()})
-        .then(context=>{setPropertyContext(context);if(!window.localStorage.getItem("hiop.active_property_id")&&context.active_property_id)window.localStorage.setItem("hiop.active_property_id",context.active_property_id)})
+        .then(context=>{setPropertyContext(context);if(!window.localStorage.getItem("hiop.active_property_id")&&context.active_property_id)window.localStorage.setItem("hiop.active_property_id",context.active_property_id);const selected=context.properties.find(property=>property.id===context.active_property_id);if(selected)configureTimeZone(selected.timezone)})
         .catch(() => undefined);
     };
     refreshContext();
     window.addEventListener("hiop:organization-updated", refreshContext);
     return () => window.removeEventListener("hiop:organization-updated", refreshContext);
   }, []);
-  useEffect(() => { const refresh=()=>void endpoints.publicSettings().then(value=>{setBranding(value);configureTimeZone(value.timezone)}).catch(() => undefined);refresh();window.addEventListener("hiop:organization-updated",refresh);return()=>window.removeEventListener("hiop:organization-updated",refresh); }, []);
+  useEffect(() => { const refresh=()=>void endpoints.publicSettings().then(setBranding).catch(() => undefined);refresh();window.addEventListener("hiop:organization-updated",refresh);return()=>window.removeEventListener("hiop:organization-updated",refresh); }, []);
+  useEffect(() => {
+    const selected = propertyContext?.properties.find(property => property.id === propertyContext.active_property_id);
+    configureTimeZone(selected?.timezone ?? branding?.timezone ?? "Africa/Lagos");
+  }, [propertyContext, branding]);
   useEffect(() => {
     let closed = false;
     let socket: WebSocket | undefined;

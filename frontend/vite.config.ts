@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         '/api': apiTarget,
+        '/download': apiTarget,
         '/ws': {
           target: apiTarget.replace(/^http/, 'ws'),
           ws: true,

@@ -1004,6 +1004,15 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const hierarchy = useRequest(endpoints.hierarchy, []);
+  const activePropertyId = window.localStorage.getItem("hiop.active_property_id");
+  const availableDepartments = (hierarchy.data?.departments ?? []).filter(
+    (department) =>
+      department.is_active &&
+      (form.scope === "property"
+        ? !department.parent_id || department.parent_id === activePropertyId
+        : !department.parent_id),
+  );
   const load = () =>
     endpoints.identityRules(true)
       .then((ruleData) => {
@@ -1025,19 +1034,22 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
     setError("");
     setMessage("");
     try {
-      const activePropertyId = window.localStorage.getItem("hiop.active_property_id");
       if (form.scope === "property" && !activePropertyId) {
         throw new Error("Select a property before creating a property-specific naming rule.");
       }
+      const selectedDepartment = availableDepartments.find(
+        (department) => department.id === form.output_department_id,
+      );
       const body = {
         ...(editingRule ?? {}),
         ...form,
-        name: `Hostname contains ${form.pattern.trim()} = ${form.output_device_type}`,
+        name: `Hostname contains ${form.pattern.trim()} = ${form.output_device_type || "existing type"}${selectedDepartment ? ` · Department: ${selectedDepartment.name}` : ""}`.slice(0, 180),
         match_field: "hostname",
         match_operator: "contains",
+        output_device_type: form.output_device_type || null,
         pattern: form.pattern.trim(),
         property_id: form.scope === "property" ? activePropertyId : null,
-        output_department_id: editingRule?.output_department_id ?? null,
+        output_department_id: form.output_department_id || null,
         output_location: editingRule?.output_location ?? null,
       };
       if (editingRule) {
@@ -1047,7 +1059,9 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
       }
       setEditingRule(null);
       setForm({ ...EMPTY_RULE });
-      setMessage(editingRule ? "Naming rule updated." : "Naming rule created.");
+      setMessage(editingRule
+        ? "Naming rule updated. Existing discovery results and linked inventory were re-evaluated."
+        : "Naming rule created. Existing discovery results and linked inventory were re-evaluated.");
       await load();
     } catch (caught) {
       setError(
@@ -1064,7 +1078,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
       ...EMPTY_RULE,
       scope: rule.property_id ? "property" : "organization",
       pattern: rule.pattern,
-      output_device_type: rule.output_device_type || "Other",
+      output_device_type: rule.output_device_type || "",
       match_field: rule.match_field,
       match_operator: rule.match_operator,
       output_department_id: rule.output_department_id || "",
@@ -1087,7 +1101,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
         setEditingRule(null);
         setForm({ ...EMPTY_RULE });
       }
-      setMessage("Naming rule deleted.");
+      setMessage("Naming rule deleted. Existing discovery results and linked inventory were re-evaluated.");
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Naming rule could not be deleted.");
@@ -1124,8 +1138,14 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
           classify a device when none of your rules match.
         </p>
         <p>
-          Naming rules suggest device type only. Other reviewed sources, such
-          as Active Directory enrichment, may provide a Suggested Department.
+          A rule can suggest a device type, assign a department, or do both
+          based on the hostname code you specify. For example, “Where hostname
+          contains FO = Front Office department”. Leave device type unchanged
+          when the rule should only assign a department.
+        </p>
+        <p>
+          Other reviewed sources, such as Active Directory enrichment, may also
+          provide a Suggested Department.
         </p>
         <p className="precedence-note">
           A match is a classification suggestion only. It does not approve the
@@ -1151,7 +1171,10 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
               {rules.map((rule) => (
                 <article key={rule.id}>
                   <div>
-                    <strong>Where hostname contains “{rule.pattern}” = {rule.output_device_type || "Unspecified"}</strong>
+                    <strong>
+                      Where hostname contains “{rule.pattern}” = {rule.output_device_type || "existing type"}
+                      {rule.department_name ? ` · Department: ${rule.department_name}` : ""}
+                    </strong>
                     <small>
                       {rule.property_id ? "Current property" : "Organization-wide"} ·{" "}
                       {rule.enabled ? "Active" : "Inactive"}
@@ -1197,12 +1220,12 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
                 <label>
                   Classify as
                   <select
-                    required
                     value={form.output_device_type}
                     onChange={(event) =>
                       setForm({ ...form, output_device_type: event.target.value })
                     }
                   >
+                    <option value="">Keep detected device type</option>
                     {[
                       "Desktop", "Windows Computer", "Laptop", "POS Terminal",
                       "Printer", "Camera", "CCTV Camera",
@@ -1214,12 +1237,34 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
                   </select>
                 </label>
                 <label>
+                  Assign department
+                  <select
+                    value={form.output_department_id}
+                    disabled={hierarchy.loading}
+                    onChange={(event) =>
+                      setForm({ ...form, output_department_id: event.target.value })
+                    }
+                  >
+                    <option value="">Do not assign a department</option>
+                    {availableDepartments.map((department) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                  {hierarchy.error && (
+                    <small role="alert">Departments could not be loaded: {hierarchy.error}</small>
+                  )}
+                </label>
+                <label>
                   Apply to
                   <select
                     value={form.scope}
-                    onChange={(event) =>
-                      setForm({ ...form, scope: event.target.value })
-                    }
+                    onChange={(event) => setForm({
+                      ...form,
+                      scope: event.target.value,
+                      output_department_id: "",
+                    })}
                   >
                     <option value="property">Current property</option>
                     <option value="organization">Organization-wide</option>
@@ -1258,7 +1303,17 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
                 <strong>{Array.isArray(preview.matched_rules) && preview.matched_rules.length ? "Matching rule found" : "No configured rule matched"}</strong>
                 {Array.isArray(preview.evidence) && preview.evidence.map((item) => <p key={String(item)}>{String(item)}</p>)}
                 {typeof preview.suggestion === "object" && preview.suggestion !== null && (
-                  <p>Suggested device type: {String((preview.suggestion as Record<string, unknown>).device_type || "Not classified")}</p>
+                  <>
+                    {(preview.suggestion as Record<string, unknown>).friendly_name && (
+                      <p>Suggested friendly name: {String((preview.suggestion as Record<string, unknown>).friendly_name)}</p>
+                    )}
+                    {(preview.suggestion as Record<string, unknown>).device_type && (
+                      <p>Suggested device type: {String((preview.suggestion as Record<string, unknown>).device_type)}</p>
+                    )}
+                    {(preview.suggestion as Record<string, unknown>).department && (
+                      <p>Suggested department: {String((preview.suggestion as Record<string, unknown>).department)}</p>
+                    )}
+                  </>
                 )}
               </div>
             )}

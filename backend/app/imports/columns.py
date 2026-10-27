@@ -6,12 +6,13 @@ CANONICAL_FIELDS = (
     "asset_tag", "hostname", "ip_address", "mac_address", "department_name",
     "building_name", "floor_name", "room_name", "network_zone", "vendor",
     "brand", "model", "device_type", "serial_number", "inventory_status", "notes",
+    "business_owner", "deployment_date",
 )
-REQUIRED_FIELDS = {"asset_tag", "hostname"}
+REQUIRED_FIELDS = {"hostname"}
 
 ALIASES = {
     "asset_tag": {"asset tag", "asset_tag", "asset id", "asset number", "tag number"},
-    "hostname": {"hostname", "host name", "computer name", "device name", "machine name"},
+    "hostname": {"hostname", "host name", "computer name", "device name", "machine name", "system name"},
     "ip_address": {"ip", "ip address", "ip_address", "ipv4"},
     "mac_address": {"mac", "mac address", "mac_address", "physical address"},
     "department_name": {"department", "department name", "dept"},
@@ -23,9 +24,11 @@ ALIASES = {
     "brand": {"brand"},
     "model": {"model", "model number"},
     "device_type": {"device type", "device_type", "asset type", "equipment type"},
-    "serial_number": {"serial", "serial number", "service tag"},
+    "serial_number": {"serial", "serial number", "service tag", "item serial number"},
     "inventory_status": {"inventory status", "status", "asset status"},
-    "notes": {"notes", "comments", "description"},
+    "notes": {"notes", "comments", "description", "laptop description & config"},
+    "business_owner": {"business owner", "staff assigned", "assigned to", "assigned user", "owner"},
+    "deployment_date": {"deployment date", "date of deployment", "deployed date"},
 }
 
 
@@ -35,6 +38,10 @@ def normalize_header(value: object) -> str:
 
 
 ALIAS_LOOKUP = {normalize_header(alias): field for field, aliases in ALIASES.items() for alias in aliases}
+
+
+def recognized_header_count(headers: list[str]) -> int:
+    return len({ALIAS_LOOKUP[normalize_header(header)] for header in headers if normalize_header(header) in ALIAS_LOOKUP})
 
 
 def detect_mapping(headers: list[str]) -> dict:

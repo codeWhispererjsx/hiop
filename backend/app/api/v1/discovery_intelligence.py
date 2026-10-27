@@ -390,32 +390,42 @@ def create_identity_rule(body:IdentityRuleWrite,db:Session=Depends(get_db),user=
     allowed={"department","device_type","location","sequence","hostname"};tokens=set(re.findall(r"\{([^{}]+)\}",body.friendly_name_template))
     if not tokens.issubset(allowed):raise HTTPException(422,"Template supports only department, device_type, location, sequence, and hostname")
     ensure_unique_identity_match(db,organization_id,target_property,body)
-    row=IdentityRule(**body.model_dump(),organization_id=organization_id,created_by=user.id);db.add(row);db.flush();create_audit_log(db,user.username,"CREATE","identity_rule",str(row.id),"Created scoped naming and classification rule",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+    row=IdentityRule(**body.model_dump(),organization_id=organization_id,created_by=user.id);db.add(row);db.flush()
+    sync=DeviceIdentityService(db).reevaluate_rules(organization_id,row.property_id,user.username)
+    create_audit_log(db,user.username,"CREATE","identity_rule",str(row.id),f"Created scoped naming and classification rule; re-evaluated {sync['evaluated']} discovery records",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
 @router.put("/identity/rules/{id}")
 def update_identity_rule(id:UUID,body:IdentityRuleWrite,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=db.query(IdentityRule).filter(IdentityRule.id==id,IdentityRule.organization_id==organization_id).first()
     if not row:raise HTTPException(404,"Identity rule not found")
     if property_id is not None and row.property_id is not None and row.property_id!=property_id:raise HTTPException(403,"Rule is outside the active property")
+    previous_property_id=row.property_id
     if property_id is not None and body.property_id is not None and body.property_id!=property_id:raise HTTPException(403,"Rule property is outside the active property")
     if body.property_id and not db.query(Property).filter(Property.id==body.property_id,Property.organization_id==organization_id).first():raise HTTPException(422,"Property is outside this organization")
     if body.output_department_id and not db.query(Department).filter(Department.id==body.output_department_id,Department.organization_id==organization_id,or_(Department.property_id.is_(None),Department.property_id==body.property_id)).first():raise HTTPException(422,"Department is outside the rule scope")
     ensure_unique_identity_match(db,organization_id,body.property_id,body,id)
     for key,value in body.model_dump().items():setattr(row,key,value)
-    create_audit_log(db,user.username,"UPDATE","identity_rule",str(row.id),"Updated scoped naming and classification rule",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+    identity=DeviceIdentityService(db)
+    scopes={None} if previous_property_id is None or body.property_id is None else {previous_property_id,body.property_id}
+    sync_counts=[identity.reevaluate_rules(organization_id,scope,user.username) for scope in scopes]
+    evaluated=sum(item["evaluated"] for item in sync_counts)
+    create_audit_log(db,user.username,"UPDATE","identity_rule",str(row.id),f"Updated scoped naming and classification rule; re-evaluated {evaluated} discovery records",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
 @router.post("/identity/rules/{id}/disable")
 def disable_identity_rule(id:UUID,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=db.query(IdentityRule).filter(IdentityRule.id==id,IdentityRule.organization_id==organization_id).first()
     if not row:raise HTTPException(404,"Identity rule not found")
     if property_id is not None and row.property_id!=property_id:raise HTTPException(403,"Rule is outside the active property")
-    row.enabled=False;create_audit_log(db,user.username,"DISABLE","identity_rule",str(row.id),"Disabled naming and classification rule",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+    row.enabled=False
+    sync=DeviceIdentityService(db).reevaluate_rules(organization_id,row.property_id,user.username)
+    create_audit_log(db,user.username,"DISABLE","identity_rule",str(row.id),f"Disabled naming and classification rule; re-evaluated {sync['evaluated']} discovery records",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
 @router.delete("/identity/rules/{id}",status_code=204)
 def delete_identity_rule(id:UUID,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=db.query(IdentityRule).filter(IdentityRule.id==id,IdentityRule.organization_id==organization_id).first()
     if not row:raise HTTPException(404,"Naming rule not found")
     if property_id is not None and row.property_id is not None and row.property_id!=property_id:raise HTTPException(403,"Rule is outside the active property")
-    name=row.name
+    name=row.name;rule_property_id=row.property_id
     db.delete(row)
-    create_audit_log(db,user.username,"DELETE","identity_rule",str(id),f"Deleted naming rule '{name}'",organization_id=organization_id,property_id=row.property_id)
+    sync=DeviceIdentityService(db).reevaluate_rules(organization_id,rule_property_id,user.username)
+    create_audit_log(db,user.username,"DELETE","identity_rule",str(id),f"Deleted naming rule '{name}'; re-evaluated {sync['evaluated']} discovery records",organization_id=organization_id,property_id=rule_property_id)
     db.commit()
 @router.post("/identity/rules/preview")
 def preview_identity_rule(body:IdentityPreviewWrite,db:Session=Depends(get_db),_=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
@@ -610,6 +620,11 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
     for result_id in group_ids:
         if not db.get(DiscoveryApprovalLink,result_id):
             db.add(DiscoveryApprovalLink(result_id=result_id,device_id=device.id))
+        linked_result=db.get(DiscoveryResult,result_id)
+        if linked_result:
+            DeviceIdentityService(db).sync_approved_inventory(
+                linked_result,device,organization_id,user.username
+            )
     if discovered:
         discovered.review_status="approved";discovered.approved_device_id=device.id;discovered.reviewed_by=user.id;discovered.reviewed_at=datetime.now(timezone.utc)
     if scoped_context:

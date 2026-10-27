@@ -1,4 +1,7 @@
 const API_URL=import.meta.env.VITE_API_URL??"/api/v1";
+const BACKEND_URL=API_URL.replace(/\/api\/v1\/?$/,"");
+const publicDownloadUrl=(path:string)=>`${BACKEND_URL}${path}`;
+export function getPublicAgentServerUrl():string{return BACKEND_URL||window.location.origin}
 export type PublicBillingPlan={id:string;code:string;name:string;description:string;audience:string|null;monthly_price:string|null;yearly_price:string|null;currency:string;trial_days:number;features:string[];limits:Record<string,number>;checkout_available:boolean};
 export type OnboardingPayload={plan_code:string;organization_name:string;organization_code:string;contact_email:string;country:string;timezone:string;phone?:string;description?:string;property_name:string;property_code:string;property_city:string;admin_username:string;admin_email:string;admin_password:string};
 export type DesktopStatus={platform_owner_required:boolean;organization_required:boolean;platform_owner_count:number;organization_count:number};
@@ -38,19 +41,19 @@ export async function bootstrapPlatformOwner(payload:PlatformBootstrapPayload):P
 export async function getDesktopActivationStatus():Promise<{status:string;configured:boolean;activation_url:string|null;organization_code:string|null}>{const response=await fetch(`${API_URL}/public/onboarding/desktop-activation-status`);if(!response.ok)throw new Error("Unable to read desktop activation status.");return response.json()}
 
 export async function getPublicAgentStatus():Promise<PublicAgentStatus>{
- const response=await fetch("/download/status",{cache:"no-store"});
+ const response=await fetch(publicDownloadUrl("/download/status"),{cache:"no-store"});
  if(!response.ok)throw new Error(response.status===403?"This page is available only on the hotel admin network.":"HIOP server status is unavailable.");
  try{return await response.json()}catch{throw new Error("HIOP server status is unavailable.")}
 }
 
 export async function downloadPublicAgent():Promise<void>{
- const response=await fetch("/download/agent");
+ const response=await fetch(publicDownloadUrl("/download/agent"));
  if(!response.ok){let message="Agent download failed. Contact the HIOP administrator.";try{const body=await response.json() as {detail?:string};if(body.detail)message=body.detail}catch{/* response may not be JSON */}throw new Error(message)}
  const blob=await response.blob();
  const url=URL.createObjectURL(blob);
  const anchor=document.createElement("a");
  anchor.href=url;
- anchor.download="HIOP-Agent-Windows.zip";
+ anchor.download="HIOP-Agent-Windows.exe";
  anchor.click();
  window.setTimeout(()=>URL.revokeObjectURL(url),1000);
 }

@@ -3,6 +3,7 @@ import re
 import unicodedata
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Any
 
 from app.discovery.network import normalize_mac
@@ -74,7 +75,7 @@ class MACAddressValidator(ImportFieldValidator):
 
 class AssetTagValidator(TextValidator):
     def __init__(self) -> None:
-        super().__init__(100, required=True)
+        super().__init__(80)
 
     def validate(self, value: Any) -> ValidationResult:
         result = super().validate(value)
@@ -126,6 +127,20 @@ class InventoryStatusValidator(ImportFieldValidator):
         return ValidationResult(True, normalized)
 
 
+class DateValidator(ImportFieldValidator):
+    def validate(self, value: Any) -> ValidationResult:
+        text = clean_text(value)
+        if text is None:
+            return ValidationResult(True, None)
+        try:
+            parsed = date.fromisoformat(text[:10]) if isinstance(value, str) else value.date() if isinstance(value, datetime) else value
+        except ValueError:
+            return ValidationResult(False, None, "invalid_date", "Use an unambiguous ISO date such as YYYY-MM-DD")
+        if not isinstance(parsed, date):
+            return ValidationResult(False, None, "invalid_date", "Use an unambiguous ISO date such as YYYY-MM-DD")
+        return ValidationResult(True, parsed.isoformat())
+
+
 VALIDATORS: dict[str, ImportFieldValidator] = {
     "asset_tag": AssetTagValidator(), "hostname": HostnameValidator(),
     "ip_address": IPAddressValidator(), "mac_address": MACAddressValidator(),
@@ -135,6 +150,7 @@ VALIDATORS: dict[str, ImportFieldValidator] = {
     "model": TextValidator(128), "serial_number": TextValidator(128),
     "device_type": TextValidator(80),
     "inventory_status": InventoryStatusValidator(), "notes": TextValidator(2000),
+    "business_owner": TextValidator(180), "deployment_date": DateValidator(),
 }
 
 

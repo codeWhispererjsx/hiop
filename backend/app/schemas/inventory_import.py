@@ -173,7 +173,7 @@ class LocationSuggestionResponse(BaseModel):
 
 
 class FinalDispositionRequest(BaseModel):
-    disposition: str = Field(pattern="^(create_new|link_existing|enrich_existing|merge_reviewed|link_discovery|skip)$")
+    disposition: str = Field(pattern="^(create_new|create_asset|link_existing|enrich_existing|merge_reviewed|link_discovery|skip)$")
     approved_fields: list[str] = Field(default_factory=list, max_length=25)
     approved_overwrites: list[str] = Field(default_factory=list, max_length=10)
 

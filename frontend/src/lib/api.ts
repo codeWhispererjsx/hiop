@@ -189,7 +189,7 @@ export const endpoints = {
   updateProperty: (id:string, body: unknown) => api<import("./types").Property>(`/properties/${id}`, {method:"PATCH", body:JSON.stringify(body)}),
   archiveProperty: (id:string) => api<void>(`/properties/${id}`, {method:"DELETE"}),
   dashboard: () => api<import("./types").DashboardData>("/dashboard/"),
-  devices: () => api<import("./types").Device[]>("/devices/"),
+  devices: () => api<{ items: import("./types").Device[]; total: number; page: number; page_size: number; total_pages: number }>("/devices/"),
   assetPage: (filters:Record<string,string|undefined>={}) => api<import("./types").ManagedAsset[]|{items:import("./types").ManagedAsset[];total:number;page:number;page_size:number}>(`/assets${queryString(filters)}`),
   assets: async (filters:Record<string,string|undefined>={}) => getPaginatedItems(await endpoints.assetPage(filters)),
   asset: (id:string) => api<import("./types").ManagedAsset>(`/assets/${id}`),

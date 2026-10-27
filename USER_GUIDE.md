@@ -377,22 +377,22 @@ For additional assistance, contact your system administrator or refer to the Adm
 
 ## Inventory imports (2.0.0-dev)
 
-Open **Inventory Import** from the sidebar to review recent sessions or resume unfinished work. Administrators can start a CSV or XLSX import; technicians can inspect sessions allowed by their role.
+Open **Inventory Import** from the sidebar to review recent sessions or resume unfinished work. Administrators can start a CSV, XLSX, or DOCX table import; technicians can inspect sessions allowed by their role.
 
 The wizard stages data before any inventory change:
 
 1. Upload the file and, for Excel workbooks, explicitly choose the worksheet.
-2. Review suggested column mappings. Asset tag and hostname are required, duplicate targets are blocked, and unknown columns may be ignored.
+2. Review suggested column mappings. A hostname/system name is required to stage a row; asset tags are optional. Duplicate mapping targets are blocked, and unknown columns may be ignored.
 3. Run validation and inspect original values, normalized values, errors, warnings, and duplicate references. Staged rows are read-only; correct the source file and restart when necessary.
-4. Run matching, compare candidates and evidence, and accept, reject, defer, or prepare a create-new decision. Conflicting identifiers are always shown.
+4. Run matching, compare candidates and evidence, and accept, reject, defer, or choose a final disposition. Choose **Create Device** only when the required technical network-device fields are present. Choose **Create managed asset** for allocation records that have ownership, department, serial, description, or lifecycle details but lack network data; HIOP does not invent IP or MAC addresses.
 5. Review location suggestions and either accept, reject, or override them with existing hierarchy records.
 6. Resolve or defer conflicts, then review the summary and readiness checklist.
 
-Leaving the wizard is safe. Use **Continue** on the imports page to reload backend-persisted progress. “Ready for Final Import” is a review state only; final device creation and merging are pending Epic 2E.
+Leaving the wizard is safe. Use **Continue** on the imports page to reload backend-persisted progress. A row without a hostname/system name remains invalid and needs correction in the source workbook before it can be finalized.
 
 ### Finalizing and reviewing results
 
-The final step requests a fresh server readiness check and shows exact create, update, link, and skip counts. Administrators must lock the plan and acknowledge conflict review, merge review, inventory mutation, and rollback limitations before Finalize is enabled. Results survive refresh and link to affected devices. Partial sessions may retry safe failures. Rollback is available only when a fresh preview confirms every action still matches its recorded after-state.
+The final step requests a fresh server readiness check and shows separate Device and managed-asset create counts, plus update, link, and skip counts. Administrators must lock the plan and acknowledge conflict review, merge review, inventory mutation, and rollback limitations before Finalize is enabled. Results survive refresh and link to affected Devices or managed assets. Partial sessions may retry safe failures. Rollback is available only when a fresh preview confirms every action still matches its recorded after-state; imported managed assets are retired rather than deleted so their audit history is preserved.
 # SNMP Monitoring
 
 Authorized users can open **SNMP Monitoring** to review infrastructure health, recent poll runs, interfaces, metrics, state changes, and candidate evidence. Administrators additionally manage credentials/targets/profiles, perform explicit tests and collections, review candidates, and run previewed retention cleanup. Empty or unsupported metric sections are intentional; HIOP never fabricates monitoring data.

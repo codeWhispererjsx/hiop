@@ -98,7 +98,7 @@ def rules(db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(o
     for row in rows:
         if row.organization_id==organization_id and row.property_id is None:selected[row.rule_type]=row
         if property_id and row.organization_id==organization_id and row.property_id==property_id:selected[row.rule_type]=row
-    return list(selected.values())
+    return {"items": list(selected.values())}
 @router.put("/rules/{rule_id}")
 def update_rule(rule_id:UUID,payload:RuleUpdate,db:Session=Depends(get_db),user:User=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=db.get(AlertRule,rule_id)

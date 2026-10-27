@@ -1,19 +1,29 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import BrandLogo from "../components/BrandLogo";
 import { Icon } from "../components/Icon";
 import { PublicLayout } from "../components/PublicLayout";
-import { downloadPublicAgent, getPublicAgentStatus, type PublicAgentStatus } from "../lib/publicApi";
+import { downloadPublicAgent, getPublicAgentServerUrl, getPublicAgentStatus, type PublicAgentStatus } from "../lib/publicApi";
 import "../styles/public.css";
 
 export default function AgentDownloadPage() {
+  const navigate = useNavigate();
   const [server, setServer] = useState<PublicAgentStatus>();
   const [serverError, setServerError] = useState("");
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [notice, setNotice] = useState("");
-  const serverUrl = `${window.location.origin}/download`;
-  const httpsRequired = window.location.protocol !== "https:"
-    && !["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+  const serverUrl = getPublicAgentServerUrl();
+  const serverAddress = new URL(serverUrl);
+  const httpsRequired = serverAddress.protocol !== "https:"
+    && !["localhost", "127.0.0.1", "::1"].includes(serverAddress.hostname);
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/");
+  };
 
   useEffect(() => {
     let active = true;
@@ -29,7 +39,7 @@ export default function AgentDownloadPage() {
     setNotice("");
     try {
       await downloadPublicAgent();
-      setNotice("Download started. Extract the ZIP before running the installer.");
+      setNotice("Download started. Run the EXE, enter the HIOP server address, then enroll with a one-time code.");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Agent download failed.");
     } finally {
@@ -39,20 +49,24 @@ export default function AgentDownloadPage() {
 
   const copyServerUrl = () => {
     void navigator.clipboard.writeText(serverUrl)
-      .then(() => setNotice("Hotel HIOP download address copied."))
+      .then(() => setNotice("HIOP server address copied."))
       .catch(() => setError(`Copy failed. Use this address: ${serverUrl}`));
   };
 
   return (
     <PublicLayout agentDownload>
       <section className="agent-download-page">
+        <button type="button" className="agent-download-back" onClick={goBack}>
+          <Icon name="arrow" size={18} />
+          Back
+        </button>
         <header className="agent-download-brand">
           <BrandLogo />
           <p>Lagos Continental IT Support</p>
         </header>
         <div className={`agent-server-status ${server ? "is-online" : serverError ? "is-unavailable" : ""}`} role={serverError ? "alert" : "status"}>
           <i aria-hidden="true" />
-          {serverError ? serverError : server ? `HIOP server online · ${server.server_ip || window.location.host} · ${server.downloads} downloads recorded` : "Checking hotel HIOP server..."}
+          {serverError ? serverError : server ? `HIOP server online · ${server.server_ip || serverAddress.host} · ${server.downloads} downloads recorded` : "Checking hotel HIOP server..."}
         </div>
         <section className="agent-download-card" aria-labelledby="agent-download-title">
           <span className="agent-download-icon"><Icon name="devices" size={30} aria-hidden="true" /></span>
@@ -61,11 +75,11 @@ export default function AgentDownloadPage() {
           <p className="agent-download-lead">IT support, device health, and approved maintenance actions for company-managed Windows computers on the hotel admin network.</p>
           <div className="agent-package-facts">
             <span>Windows service + tray app</span>
-            <span>ZIP installer package</span>
+            <span>Single-file Windows installer (EXE)</span>
             <span>Admin network only</span>
           </div>
           <button className="public-button agent-download-button" onClick={() => void download()} disabled={!server || downloading}>
-            {downloading ? "Preparing download..." : "Download Windows agent package"}
+            {downloading ? "Preparing download..." : "Download HIOP Agent for Windows"}
           </button>
           {notice && <p className="agent-download-notice" role="status">{notice}</p>}
           {error && <p className="agent-download-error" role="alert">{error}</p>}
@@ -77,20 +91,20 @@ export default function AgentDownloadPage() {
           <p className="public-eyebrow">Installation</p>
           <h2 id="agent-install-title">Connect a company computer</h2>
           <ol>
-            <li><span>1</span><div><strong>Download and extract</strong><p>Save the ZIP on a company Windows computer and extract all files.</p></div></li>
-            <li><span>2</span><div><strong>Install the agent</strong><p>Run <code>Install HIOP Agent.cmd</code> as an administrator and approve the Windows prompt.</p></div></li>
-            <li><span>3</span><div><strong>Get an enrollment code</strong><p>Ask an HIOP administrator to create a one-time code under Administration → Agents - Managed Endpoints for the correct hotel property.</p></div></li>
-            <li><span>4</span><div><strong>Connect this computer</strong><p>Open the HIOP Agent tray icon and enter the code. The code expires and can only be used once.</p></div></li>
-            <li><span>5</span><div><strong>Confirm the endpoint</strong><p>The computer appears in the managed endpoints page after its first heartbeat.</p></div></li>
+            <li><span>1</span><div><strong>Download and run</strong><p>Save the EXE on a company Windows computer and double-click it.</p></div></li>
+            <li><span>2</span><div><strong>Connect to your HIOP server</strong><p>Enter the HIOP server address shown below and approve the Windows administrator prompt.</p></div></li>
+            <li><span>3</span><div><strong>Enter an enrollment code</strong><p>Ask an HIOP administrator to create a one-time code under Administration → Agents - Managed Endpoints for the correct hotel property.</p></div></li>
+            <li><span>4</span><div><strong>Confirm the endpoint</strong><p>Enter the code in the HIOP Agent tray window. The code expires and can only be used once.</p></div></li>
+            <li><span>5</span><div><strong>Check the dashboard</strong><p>The computer appears in Managed Endpoints after its first heartbeat.</p></div></li>
           </ol>
         </section>
 
         <section className="agent-admin-deploy">
           <h2>For IT administrators</h2>
-          <p>For USB or managed group deployment, distribute this package only through approved company channels. Create a separate one-time enrollment code for each computer or enrollment batch. The current installer does not support a reusable shared secret or unattended enrollment argument.</p>
+          <p>For USB or managed group deployment, distribute this installer only through approved company channels. Create a separate one-time enrollment code for each computer or enrollment batch. The installer requires a trusted HTTPS server address and does not accept a reusable shared secret.</p>
           <div className="agent-server-copy">
             <code>{serverUrl}</code>
-            <button type="button" className="secondary-action" onClick={copyServerUrl}>Copy hotel link</button>
+            <button type="button" className="secondary-action" onClick={copyServerUrl}>Copy server address</button>
           </div>
         </section>
         <footer className="agent-download-footer">

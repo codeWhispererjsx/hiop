@@ -280,6 +280,11 @@
   border-bottom: 1px solid var(--border);
 }
 .report-breakdown span { color: var(--muted); text-align: right; }
+.report-breakdown-chart { display: grid; gap: 0.8rem; }
+.report-breakdown-bar > div { display: flex; justify-content: space-between; gap: 1rem; }
+.report-breakdown-bar > div span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.report-breakdown-track { display: block; height: 0.55rem; margin-top: 0.35rem; overflow: hidden; border-radius: 1rem; background: var(--surface-soft); }
+.report-breakdown-track i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 
 .trend-chart {
   display: flex;

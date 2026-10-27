@@ -17,11 +17,15 @@ dotnet test .\agent-windows\Hiop.Agent.slnx
 .\agent-windows\scripts\build-agent.ps1
 ```
 
-The build script publishes self-contained x64 service and tray executables and creates `backend\app\distributions\hiop-agent-windows.zip`.
+The build script publishes the self-contained x64 service and tray executables, creates `backend\app\distributions\hiop-agent-windows.zip`, and builds the single-file `backend\app\distributions\HIOP-Agent-Windows.exe` installer. The installer asks for the hotel's HTTPS HIOP address, installs the service and tray app, and opens the one-time enrollment flow.
+
+Building the installer requires NSIS (`makensis.exe`). The script uses it from `PATH`, an electron-builder NSIS cache, or the `-NsisPath` argument. The installer file version is read from `AgentConfiguration.Version`.
 
 ## Install and enroll
 
-Download and extract the Windows agent package from HIOP, then run `Install HIOP Agent.cmd` as an administrator. The installer creates the Windows service, applies restrictive ACLs to the credential/queue directory, and starts the visible tray app. In HIOP, create a one-time code for the intended property, then use **Connect or enroll...** from the HIOP Agent tray icon.
+Download and double-click `HIOP-Agent-Windows.exe` on the company Windows computer. Enter the hotel's HTTPS HIOP address and approve the Windows administrator prompt. The installer creates the Windows service, applies restrictive ACLs to the credential/queue directory, and starts the visible tray app. In HIOP, create a one-time code for the intended property, then enter it in the tray enrollment window.
+
+The ZIP package remains available for IT administrators who need to deploy or inspect its component files manually.
 
 Running `Install HIOP Agent.cmd` from a newer package updates the binaries without replacing the enrolled credential or offline observation queue. `Remove HIOP Agent.cmd` prompts for confirmation, removes the local credential/queue and service, and leaves the HIOP registration available for audit history; revoke the registration in HIOP when the computer should no longer be authorized.
 

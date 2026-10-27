@@ -4,7 +4,7 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
 import { StatusBadge } from "../components/StatusBadge";
-import { endpoints } from "../lib/api";
+import { endpoints, getPaginatedItems } from "../lib/api";
 import type { MonitoringSummary } from "../lib/types";
 import { PageTitle } from "./DashboardPage";
 import "../styles/network-performance.css";
@@ -25,7 +25,9 @@ export default function NetworkPerformancePage() {
       ]);
       setSummary(monitoring);
       setDeviceNames(
-        Object.fromEntries(devices.map((device) => [device.id, device.hostname])),
+        Object.fromEntries(
+          getPaginatedItems(devices).map((device) => [device.id, device.hostname]),
+        ),
       );
     } catch (caught) {
       setError(

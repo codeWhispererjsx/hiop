@@ -9,6 +9,8 @@ from typing import Any
 
 from openpyxl import load_workbook
 
+from app.imports.columns import recognized_header_count
+
 
 class ImportFileError(ValueError):
     pass
@@ -64,6 +66,31 @@ def detect_format(filename: str, content_type: str | None, sample: bytes) -> str
     return "csv"
 
 
+def _header_row_index(records: list[list[Any]]) -> int | None:
+    candidates = [
+        (index, row)
+        for index, row in enumerate(records[:20])
+        if any(value is not None and str(value).strip() for value in row)
+    ]
+    if not candidates:
+        return None
+    recognized = [(index, recognized_header_count([str(value or "").strip() for value in row])) for index, row in candidates]
+    best_index, best_count = max(recognized, key=lambda item: item[1])
+    return best_index if best_count >= 2 else candidates[0][0]
+
+
+def _header_layout(values: list[Any], maximum_columns: int, file_label: str) -> tuple[list[str], list[int]]:
+    headers = [str(value).strip() if value is not None else "" for value in values]
+    while headers and not headers[-1]:
+        headers.pop()
+    if not headers or len(headers) > maximum_columns or not any(headers):
+        raise ImportFileError(f"{file_label} header is empty or invalid")
+    indices = [index for index, header in enumerate(headers) if header]
+    if not indices:
+        raise ImportFileError(f"{file_label} header is empty or invalid")
+    return [headers[index] for index in indices], indices
+
+
 def _csv_file(path: Path, limits: dict) -> ParsedFile:
     try:
         text = path.read_text(encoding="utf-8-sig")
@@ -81,21 +108,26 @@ def _csv_file(path: Path, limits: dict) -> ParsedFile:
         records = list(csv.reader(io.StringIO(text, newline=""), dialect=dialect, strict=True))
     except (csv.Error, OverflowError) as exc:
         raise ImportFileError("CSV structure is malformed") from exc
-    header_index = next((index for index, row in enumerate(records[:20]) if any(str(cell).strip() for cell in row)), None)
+    header_index = _header_row_index(records)
     if header_index is None:
         raise ImportFileError("A meaningful header row was not found")
-    headers = [str(value).strip() for value in records[header_index]]
-    if not any(headers) or len(headers) > limits["maximum_columns"] or any(not header for header in headers):
-        raise ImportFileError("CSV header is empty or invalid")
+    headers, header_indices = _header_layout(records[header_index], limits["maximum_columns"], "CSV")
     rows = []
     for source_row, values in enumerate(records[header_index + 1:], start=header_index + 2):
         if not any(str(value).strip() for value in values):
             continue
         warnings = []
-        if len(values) != len(headers):
+        if any(index < len(values) and str(values[index]).strip() for index in range(max(header_indices) + 1) if index not in header_indices):
+            warnings.append({"field": "row", "code": "unheaded_column", "message": "Values in columns without headers were ignored"})
+        if any(index >= len(values) for index in header_indices):
             warnings.append({"field": "row", "code": "column_count", "message": "Row column count differs from the header"})
-        padded = (values + [""] * len(headers))[:len(headers)]
-        rows.append((source_row, {header: _safe_cell(value, limits["maximum_cell_length"]) for header, value in zip(headers, padded)}, warnings))
+        if any(str(value).strip() for value in values[max(header_indices) + 1:]):
+            warnings.append({"field": "row", "code": "column_count", "message": "Row column count differs from the header"})
+        row = {
+            header: _safe_cell(values[index] if index < len(values) else "", limits["maximum_cell_length"])
+            for header, index in zip(headers, header_indices)
+        }
+        rows.append((source_row, row, warnings))
         if len(rows) > limits["maximum_rows"]:
             raise ImportFileError("File exceeds the configured row limit")
     if not rows:
@@ -134,34 +166,37 @@ def _xlsx_file(path: Path, limits: dict, worksheet: str | None) -> ParsedFile:
         if selected not in names:
             raise ImportFileError("Selected worksheet does not exist")
         sheet = workbook[selected]
-        iterator = sheet.iter_rows()
-        header_cells = None
-        header_row = 0
-        for row_number, cells in enumerate(iterator, start=1):
-            if any(cell.value is not None and str(cell.value).strip() for cell in cells):
-                header_cells, header_row = cells, row_number
-                break
-            if row_number >= 20:
-                break
-        if header_cells is None:
+        first_rows = list(sheet.iter_rows(min_row=1, max_row=min(sheet.max_row, 20)))
+        header_index = _header_row_index([[cell.value for cell in row] for row in first_rows])
+        if header_index is None:
             raise ImportFileError("A meaningful header row was not found")
-        headers = [str(cell.value).strip() if cell.value is not None else "" for cell in header_cells]
-        if not any(headers) or len(headers) > limits["maximum_columns"] or any(not header for header in headers):
-            raise ImportFileError("Workbook header is empty or invalid")
+        header_row = header_index + 1
+        headers, header_indices = _header_layout(
+            [cell.value for cell in first_rows[header_index]], limits["maximum_columns"], "Workbook"
+        )
         rows = []
-        for source_row, cells in enumerate(iterator, start=header_row + 1):
+        for source_row, cells in enumerate(sheet.iter_rows(min_row=header_row + 1), start=header_row + 1):
             if not any(cell.value is not None and str(cell.value).strip() for cell in cells):
                 continue
             warnings = []
-            values = []
-            for cell in cells[:len(headers)]:
+            values = {}
+            for header, index in zip(headers, header_indices):
+                cell = cells[index] if index < len(cells) else None
+                if cell is None:
+                    values[header] = None
+                    continue
                 if cell.data_type == "f":
-                    warnings.append({"field": headers[cell.column - 1], "code": "formula_ignored", "message": "Formula was not evaluated"})
-                    values.append(None)
+                    warnings.append({"field": header, "code": "formula_ignored", "message": "Formula was not evaluated"})
+                    values[header] = None
                 else:
-                    values.append(_safe_cell(cell.value, limits["maximum_cell_length"]))
-            values += [None] * (len(headers) - len(values))
-            rows.append((source_row, dict(zip(headers, values)), warnings))
+                    values[header] = _safe_cell(cell.value, limits["maximum_cell_length"])
+            if any(
+                cell.value is not None and str(cell.value).strip()
+                for index, cell in enumerate(cells[: max(header_indices) + 1])
+                if index not in header_indices
+            ):
+                warnings.append({"field": "row", "code": "unheaded_column", "message": "Values in columns without headers were ignored"})
+            rows.append((source_row, values, warnings))
             if len(rows) > limits["maximum_rows"]:
                 raise ImportFileError("Workbook exceeds the configured row limit")
         if not rows:

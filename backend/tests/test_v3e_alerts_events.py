@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.api.v1.alerts_events import Resolution, acknowledge, resolve
+from app.api.v1.alerts_events import Resolution, acknowledge, resolve, rules
 from app.models.alert import AlertHistory
 from app.services.alert_event_service import failed_check_percent,latency_breached,offline_breached
 from app.services.network_service import offline_threshold_crossed
@@ -102,3 +102,12 @@ def test_resolved_alert_cannot_be_resolved_twice():
         with pytest.raises(HTTPException) as error:
             resolve(alert.id, Resolution(reason="Again"), MagicMock(), SimpleNamespace(username="admin"), uuid4(), None)
     assert error.value.status_code == 409
+
+def test_rules_response_matches_frontend_items_contract():
+    rule = SimpleNamespace(rule_type="device_offline", organization_id=None, property_id=None)
+    db = MagicMock()
+    db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [rule]
+
+    result = rules(db, SimpleNamespace(), uuid4(), None)
+
+    assert result == {"items": [rule]}

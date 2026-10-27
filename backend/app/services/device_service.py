@@ -75,6 +75,19 @@ def update_device(
     for key, value in update_data.items():
         setattr(device, key, value)
 
+    identity_fields = set()
+    if "device_type" in update_data:
+        identity_fields.add("device_type")
+    if {"department", "department_id"} & update_data.keys():
+        identity_fields.add("department")
+    if identity_fields:
+        from app.services.device_identity_service import DeviceIdentityService
+        DeviceIdentityService(db).mark_inventory_identity_manual(
+            device,
+            identity_fields,
+            current_user.organization_id,
+        )
+
     if "inventory_status" in update_data:
         device.status = device.inventory_status
 

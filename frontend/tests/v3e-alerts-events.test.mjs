@@ -7,3 +7,9 @@ test("alert acknowledgement and resolution surface failures to users",()=>{
   assert.match(page,/The alert could not be resolved/);
   assert.match(page,/role="alert"/);
 });
+test("rules loading, failures, and the API response shape are handled",()=>{
+  assert.match(api,/v3Rules|v3eRules:\(\)=>api<\{items:/);
+  assert.match(page,/rules\.data\?\.items/);
+  assert.match(page,/rules may not have been installed/);
+  assert.match(page,/onRetry=\{reload\}/);
+});

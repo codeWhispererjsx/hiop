@@ -219,6 +219,7 @@ class ImportService:
         if normalized.get("mac_address"): keys.append(("mac_address", normalized["mac_address"]))
         if normalized.get("asset_tag"): keys.append(("asset_tag", normalized["asset_tag"].lower()))
         if normalized.get("serial_number"): keys.append(("serial_number", normalized["serial_number"].lower()))
+        if normalized.get("hostname"): keys.append(("hostname", normalized["hostname"].lower()))
         if normalized.get("ip_address") and normalized.get("hostname"): keys.append(("ip_hostname", (normalized["ip_address"], normalized["hostname"])))
         keys.append(("exact_row", tuple((field, normalized.get(field)) for field in sorted(normalized))))
         return keys
@@ -258,7 +259,8 @@ class ImportService:
                 if related is not None:
                     warnings.append({"field": duplicate_field, "code": "duplicate_in_file", "message": f"Duplicates source row {related}", "related_row_number": related})
                 status = ImportValidationStatus.INVALID if errors else ImportValidationStatus.DUPLICATE if related is not None else ImportValidationStatus.WARNING if warnings else ImportValidationStatus.VALID
-                device = ImportedDevice(import_session_id=session.id, source_row_number=source_row, raw_data=raw, normalized_data=normalized, errors=errors, warnings=warnings, validation_status=status, **normalized)
+                device_fields = {key: value for key, value in normalized.items() if key not in {"business_owner", "deployment_date"}}
+                device = ImportedDevice(import_session_id=session.id, source_row_number=source_row, raw_data=raw, normalized_data=normalized, errors=errors, warnings=warnings, validation_status=status, **device_fields)
                 self.devices.add(device)
                 counts[status.value] += 1
                 session.processed_rows = index

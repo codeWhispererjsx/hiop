@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import logging
 from typing import Any
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.device import Device
+from app.models.asset_intelligence import AssetLifecycleEvent, ManagedAsset
 from app.models.discovered_device import DiscoveredDevice, ReviewStatus
 from app.models.hierarchy import Building, Department, Floor, NetworkZone, Property, Room
 from app.models.inventory_import import (
@@ -47,13 +48,14 @@ class FinalizationValidationError(ValueError):
 
 FINAL_DISPOSITIONS = {
     "create_new",
+    "create_asset",
     "link_existing",
     "enrich_existing",
     "merge_reviewed",
     "link_discovery",
     "skip",
 }
-MUTATING_DISPOSITIONS = {"create_new", "enrich_existing", "merge_reviewed"}
+MUTATING_DISPOSITIONS = {"create_new", "create_asset", "enrich_existing", "merge_reviewed"}
 ENRICHABLE_FIELDS = {
     "hostname",
     "device_type",
@@ -280,6 +282,9 @@ class ImportFinalizationService:
             "department_id": hierarchy["department_id"],
             "room_id": hierarchy["room_id"],
             "network_zone_id": hierarchy["network_zone_id"],
+            "business_owner": (row.normalized_data or {}).get("business_owner"),
+            "deployment_date": (row.normalized_data or {}).get("deployment_date"),
+            "description": row.notes,
         }
         target_device_id = row.linked_device_id
         if not target_device_id and row.linked_discovery_id:
@@ -359,20 +364,79 @@ class ImportFinalizationService:
                 try:
                     DeviceCreate(**plan["values"])
                 except ValidationError as exc:
-                    blockers.append({"code": "invalid_device", "row": row.source_row_number, "message": "; ".join(error["msg"] for error in exc.errors())[:400]})
+                    details = "; ".join(
+                        f"{'.'.join(str(part) for part in error['loc'])}: {error['msg']}"
+                        for error in exc.errors()
+                    )
+                    blockers.append({
+                        "code": "invalid_device",
+                        "row": row.source_row_number,
+                        "message": f"Complete the missing or invalid Device fields in the source data: {details}"[:500],
+                    })
+            if disposition == "create_asset":
+                asset_name = plan["values"].get("hostname")
+                if not asset_name:
+                    blockers.append({"code": "missing_asset_name", "row": row.source_row_number, "message": "A system name is required to create a managed asset"})
+                elif len(asset_name) > 180:
+                    blockers.append({"code": "asset_name_too_long", "row": row.source_row_number, "message": "Managed asset names cannot exceed 180 characters"})
+                vendor = plan["values"].get("brand") or plan["values"].get("vendor")
+                if vendor and len(vendor) > 120:
+                    blockers.append({"code": "asset_vendor_too_long", "row": row.source_row_number, "message": "Managed asset vendor names cannot exceed 120 characters"})
+                deployment_date = plan["values"].get("deployment_date")
+                if deployment_date:
+                    try:
+                        datetime.fromisoformat(deployment_date).date()
+                    except (TypeError, ValueError):
+                        blockers.append({"code": "invalid_deployment_date", "row": row.source_row_number, "message": "Deployment date must be a valid ISO date"})
             self._validate_hierarchy(plan, blockers)
-        asset_counts = Counter((plan["values"].get("asset_tag") or "").casefold() for plan in intended if plan["disposition"] == "create_new")
+        asset_counts = Counter(
+            (plan["values"].get("asset_tag") or "").casefold()
+            for plan in intended
+            if plan["disposition"] in {"create_new", "create_asset"}
+        )
         mac_counts = Counter((plan["values"].get("mac_address") or "").casefold() for plan in intended if plan["disposition"] == "create_new")
         for label, counts in (("asset_tag", asset_counts), ("mac_address", mac_counts)):
             duplicates = [value for value, count in counts.items() if value and count > 1]
             if duplicates:
                 blockers.append({"code": f"duplicate_final_{label}", "message": f"Planned creates contain duplicate {label.replace('_', ' ')} values"})
         create_plans = [plan for plan in intended if plan["disposition"] == "create_new"]
+        planned_asset_tags = [
+            plan["values"]["asset_tag"]
+            for plan in intended
+            if plan["disposition"] in {"create_new", "create_asset"}
+            and plan["values"].get("asset_tag")
+        ]
+        if planned_asset_tags and self.db.scalar(
+            select(func.count(ManagedAsset.id)).where(
+                func.lower(ManagedAsset.asset_tag).in_(
+                    {value.casefold() for value in planned_asset_tags}
+                )
+            )
+        ):
+            blockers.append({
+                "code": "managed_asset_identifier_conflict",
+                "message": "A planned asset tag already exists on a managed asset",
+            })
         if create_plans:
-            assets = [plan["values"]["asset_tag"] for plan in create_plans if plan["values"].get("asset_tag")]
             macs = [plan["values"]["mac_address"] for plan in create_plans if plan["values"].get("mac_address")]
             serials = [plan["values"]["serial_number"] for plan in create_plans if plan["values"].get("serial_number")]
-            if self.db.scalar(select(func.count(Device.id)).where((Device.asset_tag.in_(assets)) | (Device.mac_address.in_(macs)) | (Device.serial_number.in_(serials)))):
+        else:
+            macs, serials = [], []
+        if planned_asset_tags or macs or serials:
+            identifier_conflicts = []
+            if planned_asset_tags:
+                identifier_conflicts.append(
+                    func.lower(Device.asset_tag).in_(
+                        {value.casefold() for value in planned_asset_tags}
+                    )
+                )
+            if macs:
+                identifier_conflicts.append(Device.mac_address.in_(macs))
+            if serials:
+                identifier_conflicts.append(Device.serial_number.in_(serials))
+            if self.db.scalar(
+                select(func.count(Device.id)).where(or_(*identifier_conflicts))
+            ):
                 blockers.append({"code": "inventory_identifier_conflict", "message": "A planned identifier now exists in inventory"})
         counts = Counter(plan["disposition"] for plan in plans)
         raw_property_id = session.mapping_metadata.get("tenant_property_id")
@@ -400,7 +464,9 @@ class ImportFinalizationService:
             "warnings": warnings,
             "counts": dict(counts),
             "estimated_changes": {
-                "creates": counts["create_new"],
+                "creates": counts["create_new"] + counts["create_asset"],
+                "device_creates": counts["create_new"],
+                "asset_creates": counts["create_asset"],
                 "updates": counts["enrich_existing"] + counts["merge_reviewed"],
                 "links": counts["link_existing"] + counts["link_discovery"],
                 "skips": counts["skip"] + counts["invalid"],
@@ -470,6 +536,85 @@ class ImportFinalizationService:
         result.after_snapshot = self._safe_snapshot(device)
         create_audit_log(self.db, actor.username, "IMPORT_DEVICE_CREATED", "Device", str(device.id), f"Created device {device.hostname} from reviewed import row {row.source_row_number}")
         return device
+
+    @staticmethod
+    def _asset_snapshot(asset: ManagedAsset) -> dict[str, Any]:
+        fields = (
+            "asset_number", "name", "asset_tag", "device_type", "status", "ci_category",
+            "vendor", "model", "serial_number", "department_id", "department_name",
+            "room_id", "location_name", "business_owner", "description", "deployment_date",
+            "source",
+        )
+        return {
+            field: value.isoformat() if hasattr((value := getattr(asset, field, None)), "isoformat")
+            else str(value) if isinstance(value, UUID) else value
+            for field in fields
+        }
+
+    def _create_asset(self, result: ImportExecutionResult, row: ImportedDevice, actor: User) -> ManagedAsset:
+        values = result.plan["values"]
+        session = self._session(row.import_session_id)
+        raw_property_id = session.mapping_metadata.get("tenant_property_id")
+        try:
+            property_id = UUID(raw_property_id) if raw_property_id else None
+        except ValueError as error:
+            raise FinalizationValidationError("Import property is invalid; re-review the session") from error
+        organization_id = self.db.info.get("organization_id")
+        if property_id is None or organization_id is None or not self.db.scalar(
+            select(Property.id).where(
+                Property.id == property_id,
+                Property.organization_id == organization_id,
+                Property.is_active.is_(True),
+            )
+        ):
+            raise FinalizationValidationError("Import property is no longer active in this organization")
+        department_id = UUID(values["department_id"]) if values.get("department_id") else None
+        room_id = UUID(values["room_id"]) if values.get("room_id") else None
+        deployment_date = date.fromisoformat(values["deployment_date"]) if values.get("deployment_date") else None
+        asset_number = int(self.db.scalar(text("SELECT nextval('managed_asset_number_seq')")))
+        asset = ManagedAsset(
+            asset_number=f"HIOP-{asset_number:06d}",
+            organization_id=organization_id,
+            property_id=property_id,
+            name=values["hostname"],
+            asset_tag=values.get("asset_tag"),
+            device_type=values.get("device_type") or "Computer (type not specified)",
+            status="deployed" if deployment_date else "active",
+            ci_category="device",
+            vendor=values.get("brand") or values.get("vendor"),
+            model=values.get("model"),
+            serial_number=values.get("serial_number"),
+            department_id=department_id,
+            department_name=values.get("department"),
+            room_id=room_id,
+            location_name=values.get("location"),
+            business_owner=values.get("business_owner"),
+            description=values.get("description"),
+            deployment_date=deployment_date,
+            source="inventory_import",
+            field_sources={"organizational_metadata": "Inventory import"},
+            created_by=str(actor.id),
+            updated_by=str(actor.id),
+        )
+        self.db.add(asset)
+        self.db.flush()
+        result.plan = {**result.plan, "target_asset_id": str(asset.id)}
+        result.after_snapshot = self._asset_snapshot(asset)
+        self.db.add(AssetLifecycleEvent(
+            asset_id=asset.id,
+            organization_id=organization_id,
+            previous_status=None,
+            new_status=asset.status,
+            reason="Inventory import",
+            notes=f"Created from reviewed import row {row.source_row_number}",
+            changed_by=str(actor.id),
+            changed_by_name=actor.username,
+        ))
+        create_audit_log(
+            self.db, actor.username, "IMPORT_MANAGED_ASSET_CREATED", "ManagedAsset",
+            str(asset.id), f"Created {asset.asset_number} from reviewed import row {row.source_row_number}",
+        )
+        return asset
 
     def _target(self, result: ImportExecutionResult) -> Device:
         target_id = result.plan.get("target_device_id")
@@ -561,6 +706,9 @@ class ImportFinalizationService:
         elif result.action == "create_new":
             self._create_device(result, row, actor)
             result.status = ImportExecutionStatus.COMPLETED
+        elif result.action == "create_asset":
+            self._create_asset(result, row, actor)
+            result.status = ImportExecutionStatus.COMPLETED
         elif result.action in {"link_existing", "link_discovery"}:
             target = self._link_existing(result, row, actor)
             if result.action == "link_discovery" and not result.target_discovery_id:
@@ -588,6 +736,7 @@ class ImportFinalizationService:
             "rollback_completed_rows": counts["rolled_back"],
             "rollback_failed_rows": counts["rollback_failed"],
             "created_devices": actions["create_new"],
+            "created_assets": actions["create_asset"],
             "linked_devices": actions["link_existing"] + actions["link_discovery"],
             "enriched_devices": actions["enrich_existing"],
             "merged_devices": actions["merge_reviewed"],
@@ -693,7 +842,13 @@ class ImportFinalizationService:
             "session_id": session.id,
             "status": session.status.value,
             "summary": session.execution_summary,
-            "rollback_available": session.status in {ImportSessionStatus.COMPLETED, ImportSessionStatus.PARTIAL},
+            "rollback_available": (
+                session.status in {ImportSessionStatus.COMPLETED, ImportSessionStatus.PARTIAL}
+                and any(
+                    item.status == ImportExecutionStatus.COMPLETED
+                    for item in session.execution_results
+                )
+            ),
             "items": items,
             "total": total,
             "page": page,
@@ -708,6 +863,20 @@ class ImportFinalizationService:
         reversible, blocked = [], []
         for result in session.execution_results:
             if result.status != ImportExecutionStatus.COMPLETED:
+                continue
+            if result.action == "create_asset":
+                asset_id = (result.plan or {}).get("target_asset_id")
+                asset = self.db.get(ManagedAsset, UUID(asset_id)) if asset_id else None
+                if not asset:
+                    blocked.append({"result_id": str(result.id), "reason": "Imported managed asset no longer exists"})
+                    continue
+                current = self._asset_snapshot(asset)
+                expected = result.after_snapshot
+                changed_later = any(current.get(field) != value for field, value in expected.items())
+                if changed_later:
+                    blocked.append({"result_id": str(result.id), "reason": "Managed asset values changed after import"})
+                else:
+                    reversible.append({"result_id": str(result.id), "action": result.action, "target_asset_id": str(asset.id)})
                 continue
             target = self.db.get(Device, result.target_device_id) if result.target_device_id else None
             if not target:
@@ -733,19 +902,42 @@ class ImportFinalizationService:
         self._event("import_rollback_started", session.id, total=len(preview["reversible"]))
         for index, item in enumerate(preview["reversible"], 1):
             result = self.db.get(ImportExecutionResult, UUID(item["result_id"]))
-            target = self.db.get(Device, result.target_device_id)
+            target = self.db.get(Device, result.target_device_id) if result.target_device_id else None
             try:
-                if result.action == "create_new":
+                if result.action == "create_asset":
+                    asset_id = (result.plan or {}).get("target_asset_id")
+                    asset = self.db.get(ManagedAsset, UUID(asset_id)) if asset_id else None
+                    if not asset:
+                        raise FinalizationConflictError("Imported managed asset no longer exists")
+                    previous = asset.status
+                    asset.status = "retired"
+                    asset.retirement_date = datetime.now(timezone.utc).date()
+                    asset.retirement_reason = "other"
+                    asset.retired_by = str(actor.id)
+                    asset.updated_by = str(actor.id)
+                    asset.updated_at = datetime.now(timezone.utc)
+                    self.db.add(AssetLifecycleEvent(
+                        asset_id=asset.id,
+                        organization_id=asset.organization_id,
+                        previous_status=previous,
+                        new_status="retired",
+                        reason="other",
+                        notes="Retired as a non-destructive inventory-import rollback",
+                        changed_by=str(actor.id),
+                        changed_by_name=actor.username,
+                    ))
+                    create_audit_log(self.db, actor.username, "IMPORT_MANAGED_ASSET_ROLLED_BACK", "ManagedAsset", str(asset.id), "Managed asset retired by import rollback")
+                elif result.action == "create_new" and target:
                     target.inventory_status = "Retired"
                     target.status = "Retired"
-                elif result.action in {"enrich_existing", "merge_reviewed"}:
+                elif result.action in {"enrich_existing", "merge_reviewed"} and target:
                     for field, value in result.before_snapshot.items():
                         if field == "updated_at":
                             continue
                         if field.endswith("_id") and value:
                             value = UUID(value)
                         setattr(target, field, value)
-                if result.target_discovery_id:
+                if result.target_discovery_id and target:
                     discovery = self.db.get(DiscoveredDevice, result.target_discovery_id)
                     if discovery and discovery.approved_device_id == target.id:
                         discovery.approved_device_id = None
@@ -753,13 +945,18 @@ class ImportFinalizationService:
                         discovery.reviewed_by = None
                         discovery.reviewed_at = None
                 row = self.db.get(ImportedDevice, result.imported_device_id)
-                if row:
+                if row and target:
                     row.linked_device_id = None
                     row.linked_discovery_id = None
                 result.status = ImportExecutionStatus.ROLLED_BACK
                 result.rolled_back_at = datetime.now(timezone.utc)
                 create_audit_log(self.db, actor.username, "IMPORT_ROW_ROLLED_BACK", "ImportedDevice", str(result.imported_device_id), f"Compensated {result.action} without deleting import history")
             except Exception:
+                logger.exception(
+                    "Import rollback failed session=%s result=%s",
+                    session.id,
+                    result.id,
+                )
                 result.status = ImportExecutionStatus.ROLLBACK_FAILED
                 result.safe_error_message = "Rollback could not safely restore this row"
             self.db.commit()

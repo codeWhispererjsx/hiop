@@ -291,6 +291,8 @@ export default function AlertsPage() {
       {mode === "rules" && (
         <Rules
           rows={rules.data?.items ?? []}
+          loading={rules.loading}
+          error={rules.error}
           reload={rules.reload}
           canEdit={canEditRules}
         />
@@ -532,17 +534,23 @@ function ResolutionDialog({
 
 function Rules({
   rows,
+  loading,
+  error,
   reload,
   canEdit,
 }: {
   rows: V3EAlertRule[];
+  loading: boolean;
+  error?: string;
   reload: () => Promise<void>;
   canEdit: boolean;
 }) {
   const [busy, setBusy] = useState<string>();
+  const [actionError, setActionError] = useState("");
 
   const save = async (row: V3EAlertRule, enabled: boolean) => {
     setBusy(row.id);
+    setActionError("");
     try {
       await endpoints.updateV3ERule(row.id, {
         enabled,
@@ -554,6 +562,8 @@ function Rules({
         notify_email: row.notify_email,
       });
       await reload();
+    } catch (caught) {
+      setActionError(caught instanceof Error ? caught.message : "The alert rule could not be updated.");
     } finally {
       setBusy(undefined);
     }
@@ -568,6 +578,8 @@ function Rules({
           scripting is supported.
         </p>
       </header>
+      {actionError && <p className="form-error" role="alert">{actionError}</p>}
+      {loading || error ? <Feedback loading={loading} error={error} onRetry={reload} /> : null}
 
       {!canEdit && (
         <p className="settings-note" role="note">
@@ -575,9 +587,9 @@ function Rules({
         </p>
       )}
 
-      {!rows.length && <Feedback emptyTitle="No predefined rules are configured." empty="Alert rules are created by platform configuration; no arbitrary rule scripts are accepted." />}
+      {!loading && !error && !rows.length && <Feedback emptyTitle="No predefined rules are configured." empty="The default rules may not have been installed. Ask an administrator to check the HIOP database migrations; no arbitrary rule scripts are accepted." />}
 
-      {rows.map((row) => (
+      {!loading && !error && rows.map((row) => (
         <article className="admin-entry" key={row.id}>
           <div>
             <h3>{row.name}</h3>

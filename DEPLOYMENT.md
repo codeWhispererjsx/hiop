@@ -10,6 +10,8 @@ HIOP uses a split production architecture. Vercel hosts the compiled React front
 4. Set the backend `CORS_ORIGINS` to a JSON list containing the exact Vercel production URL and only the preview URLs you intentionally support.
 5. Redeploy after changing either Vite variable because Vite embeds them at build time.
 
+Agent download status and installer requests use the FastAPI host's root `/download` routes, derived from `VITE_API_URL`; the agent EXE and package belong in the backend distribution, not Vercel's public frontend assets. Keep those routes restricted to the hotel admin network and ensure admin PCs can reach the backend over trusted HTTPS.
+
 The Vercel build intentionally fails when either endpoint is missing or insecure. Do not deploy FastAPI as a Vercel function: HIOP requires persistent processes, WebSockets, scheduled jobs, database pooling, and local-network integrations.
 
 ## Architecture

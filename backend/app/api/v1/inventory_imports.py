@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -46,6 +47,7 @@ from app.services.import_service import (
 )
 
 router = APIRouter(prefix="/imports", tags=["Inventory imports"])
+logger = logging.getLogger(__name__)
 reader = require_roles(["platformadmin", "admin"])
 administrator = require_roles(["admin"])
 
@@ -162,6 +164,9 @@ async def upload_import(
         return {"session": session, "preview": preview}
     except (ImportConflictError, ImportNotFoundError, ImportValidationError) as error:
         _translate_import_error(error)
+    except Exception as error:
+        logger.exception("Inventory import upload failed organization_id=%s", organization_id)
+        raise HTTPException(500, "The inventory file could not be staged. Try again; if the problem continues, contact an administrator with the upload time.") from error
     finally:
         await file.close()
 
