@@ -1,7 +1,8 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
+import { useRequest } from "../hooks/useRequest";
 import { endpoints } from "../lib/api";
-import type { DeviceInput, HierarchyCatalog } from "../lib/types";
+import type { DeviceInput } from "../lib/types";
 
 type Errors = Partial<Record<keyof DeviceInput, string>>;
 
@@ -27,12 +28,7 @@ export function DeviceForm({ initialValues, cancelTo, submitLabel, submittingLab
   const [errors, setErrors] = useState<Errors>({});
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [catalog, setCatalog] = useState<HierarchyCatalog | null>(null);
-  const [catalogError, setCatalogError] = useState("");
-
-  useEffect(() => {
-    endpoints.hierarchy().then(setCatalog).catch((error) => setCatalogError(error instanceof Error ? error.message : "Unable to load locations and departments."));
-  }, []);
+  const catalog = useRequest(endpoints.hierarchy, []);
 
   const update = (key: keyof DeviceInput, value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -75,9 +71,9 @@ export function DeviceForm({ initialValues, cancelTo, submitLabel, submittingLab
               {errors[key] && <span className="field-error" id={`${key}-error`}>{errors[key]}</span>}
             </label>
           ))}
-          <HierarchySelect label="Department" value={form.department_id} fallback={form.department} options={catalog?.departments ?? []} unavailable={catalogError} error={errors.department} onChange={(id, name) => { setForm((current) => ({ ...current, department_id: id, department: name })); setErrors((current)=>({...current,department:undefined})); }} disabled={submitting} />
-          <HierarchySelect label="Room / Location" value={form.room_id} fallback={form.location} options={catalog?.rooms ?? []} unavailable={catalogError} error={errors.location} onChange={(id, name) => { setForm((current) => ({ ...current, room_id: id, location: name })); setErrors((current)=>({...current,location:undefined})); }} disabled={submitting} />
-          <HierarchySelect label="Network Zone" value={form.network_zone_id} fallback="" options={catalog?.network_zones ?? []} unavailable={catalogError} optional onChange={(id) => setForm((current) => ({ ...current, network_zone_id: id }))} disabled={submitting} />
+          <HierarchySelect label="Department" value={form.department_id} fallback={form.department} options={catalog.data?.departments ?? []} unavailable={catalog.error} error={errors.department} onChange={(id, name) => { setForm((current) => ({ ...current, department_id: id, department: name })); setErrors((current)=>({...current,department:undefined})); }} disabled={submitting} />
+          <HierarchySelect label="Room / Location" value={form.room_id} fallback={form.location} options={catalog.data?.rooms ?? []} unavailable={catalog.error} error={errors.location} onChange={(id, name) => { setForm((current) => ({ ...current, room_id: id, location: name })); setErrors((current)=>({...current,location:undefined})); }} disabled={submitting} />
+          <HierarchySelect label="Network Zone" value={form.network_zone_id} fallback="" options={catalog.data?.network_zones ?? []} unavailable={catalog.error} optional onChange={(id) => setForm((current) => ({ ...current, network_zone_id: id }))} disabled={submitting} />
           <label>
             Inventory Status
             <select value={form.inventory_status} onChange={(event) => update("inventory_status", event.target.value)} disabled={submitting}>

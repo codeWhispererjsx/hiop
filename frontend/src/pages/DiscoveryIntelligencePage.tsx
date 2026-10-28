@@ -8,6 +8,7 @@ import { endpoints } from "../lib/api";
 import type {
   ConsolidatedDiscoveryDevice,
   DiscoveryJob,
+  ImportedAssetMatch,
   IdentityRule,
 } from "../lib/types";
 import "../styles/discovery-intelligence.css";
@@ -20,6 +21,11 @@ const tabs = [
   ["Needs Review", "/discovery-intelligence/review"],
   ["Naming Rules", "/discovery-intelligence/identity-rules"],
 ] as const;
+
+type DiscoveryApprovalTarget = Pick<
+  ConsolidatedDiscoveryDevice,
+  "result_id" | "primary_hostname" | "ip_address"
+>;
 
 export default function DiscoveryIntelligencePage() {
   const location = useLocation();
@@ -58,6 +64,7 @@ export default function DiscoveryIntelligencePage() {
     window.localStorage.getItem(discoveryClearKey()),
   );
   const currentUser = useRequest(endpoints.me, []);
+  const hierarchy = useRequest(endpoints.hierarchy, []);
   const canDiscover = currentUser.data?.role !== "viewer";
   const canApprove =
     currentUser.data?.role === "admin" ||
@@ -66,6 +73,7 @@ export default function DiscoveryIntelligencePage() {
     (item) =>
       selected.has(item.result_id) &&
       !item.inventory_device_id &&
+      !item.inventory_match_candidates?.length &&
       !approvalBlockReason(item),
   ).length;
   const discoveryFilterCount = [query, identityFilter !== "all" ? identityFilter : "", departmentFilter, typeFilter, vendorFilter].filter(Boolean).length;
@@ -275,11 +283,14 @@ export default function DiscoveryIntelligencePage() {
       );
     }
   };
-  const approve = async (device: ConsolidatedDiscoveryDevice) => {
+  const approve = async (
+    device: DiscoveryApprovalTarget,
+    managedAssetId?: string,
+  ) => {
     setApproving(device.result_id);
     setError("");
     try {
-      const managed = await endpoints.approveDiscoveryResult(device.result_id);
+      const managed = await endpoints.approveDiscoveryResult(device.result_id, managedAssetId);
       setDevices((current) =>
         current.map((item) =>
           item.result_id === device.result_id
@@ -291,7 +302,9 @@ export default function DiscoveryIntelligencePage() {
         current ? { ...current, inventory_device_id: managed.id } : current,
       );
       setMessage(
-        `${device.primary_hostname || device.ip_address} was approved into managed inventory.`,
+        managedAssetId
+          ? `${device.primary_hostname || device.ip_address} was matched to its uploaded inventory record.`
+          : `${device.primary_hostname || device.ip_address} was approved into managed inventory.`,
       );
     } catch (caught) {
       setError(
@@ -355,16 +368,20 @@ export default function DiscoveryIntelligencePage() {
       "Discovery results cleared from this view. Historical evidence and managed devices were preserved.",
     );
   };
-  const approveDetail = async () => {
+  const approveDetail = async (managedAssetId?: string) => {
     const result = (detail?.result || {}) as Record<string, unknown>;
     if (!result.id) return;
+    const resultId = String(result.id);
     await approve(
-      devices.find((item) => item.result_id === String(result.id)) ||
-        ({
-          ...result,
-          result_id: String(result.id),
-          inventory_device_id: null,
-        } as ConsolidatedDiscoveryDevice),
+      devices.find((item) => item.result_id === resultId) || {
+        result_id: resultId,
+        primary_hostname:
+          typeof result.primary_hostname === "string"
+            ? result.primary_hostname
+            : null,
+        ip_address: String(result.ip_address || ""),
+      },
+      managedAssetId,
     );
   };
   const enrichFromAD = async () => {
@@ -784,6 +801,7 @@ export default function DiscoveryIntelligencePage() {
                             (item) =>
                               hasDiscoveredHostname(item) &&
                               !item.inventory_device_id &&
+                              !item.inventory_match_candidates?.length &&
                               !approvalBlockReason(item),
                           )
                           .map((item) => item.result_id),
@@ -878,7 +896,10 @@ export default function DiscoveryIntelligencePage() {
                 onChange={(event) => setDepartmentFilter(event.target.value)}
               >
                 <option value="">All departments</option>
-                {options((device) => device.department).map((value) => (
+                {[...new Set([
+                  ...(hierarchy.data?.departments.filter((item) => item.is_active).map((item) => item.name) ?? []),
+                  ...options((device) => device.department),
+                ])].sort().map((value) => (
                   <option key={value}>{value}</option>
                 ))}
               </select>
@@ -947,6 +968,7 @@ export default function DiscoveryIntelligencePage() {
             approving={Boolean(approving)}
             canDiscover={canDiscover}
             canApprove={canApprove}
+            inventoryMatches={(detail.inventory_match_candidates as ImportedAssetMatch[] | undefined) ?? []}
           />
         </Modal>
       )}
@@ -1062,6 +1084,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
       setMessage(editingRule
         ? "Naming rule updated. Existing discovery results and linked inventory were re-evaluated."
         : "Naming rule created. Existing discovery results and linked inventory were re-evaluated.");
+      window.dispatchEvent(new Event("hiop:organization-updated"));
       await load();
     } catch (caught) {
       setError(
@@ -1102,6 +1125,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
         setForm({ ...EMPTY_RULE });
       }
       setMessage("Naming rule deleted. Existing discovery results and linked inventory were re-evaluated.");
+      window.dispatchEvent(new Event("hiop:organization-updated"));
       await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Naming rule could not be deleted.");
@@ -1183,15 +1207,15 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
                   <p><code>Case-insensitive hostname match</code></p>
                   {canManage && (
                     <div className="identity-review-actions">
-                      <button type="button" disabled={busy} onClick={() => edit(rule)}>Edit</button>
+                      <button type="button" className="secondary-action" disabled={busy} onClick={() => edit(rule)}>Edit</button>
                       {deleteConfirmation === rule.id ? (
                         <>
                           <span>Delete this rule?</span>
-                          <button type="button" disabled={busy} onClick={() => void remove(rule)}>Confirm delete</button>
-                          <button type="button" disabled={busy} onClick={() => setDeleteConfirmation(null)}>Cancel</button>
+                          <button type="button" className="danger-action" disabled={busy} onClick={() => void remove(rule)}>Confirm delete</button>
+                          <button type="button" className="secondary-action" disabled={busy} onClick={() => setDeleteConfirmation(null)}>Cancel</button>
                         </>
                       ) : (
-                        <button type="button" disabled={busy} onClick={() => setDeleteConfirmation(rule.id)}>Delete</button>
+                        <button type="button" className="danger-action" disabled={busy} onClick={() => setDeleteConfirmation(rule.id)}>Delete</button>
                       )}
                     </div>
                   )}
@@ -1274,7 +1298,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
               <button className="primary-action" disabled={busy}>
                 {busy ? "Saving…" : editingRule ? "Save changes" : "Add rule"}
               </button>
-              {editingRule && <button type="button" disabled={busy} onClick={() => { setEditingRule(null); setForm({ ...EMPTY_RULE }); }}>Cancel edit</button>}
+              {editingRule && <button type="button" className="secondary-action" disabled={busy} onClick={() => { setEditingRule(null); setForm({ ...EMPTY_RULE }); }}>Cancel edit</button>}
             </form>
           ) : (
             <p>
@@ -1293,6 +1317,8 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
               />
             </label>
             <button
+              className="primary-action"
+              type="button"
               disabled={busy || !previewInput}
               onClick={() => void test()}
             >
@@ -1441,7 +1467,7 @@ function DeviceTable({
   rows: ConsolidatedDiscoveryDevice[];
   filtered: boolean;
   inspect: (device: ConsolidatedDiscoveryDevice) => void;
-  approve: (device: ConsolidatedDiscoveryDevice) => void;
+  approve: (device: DiscoveryApprovalTarget, managedAssetId?: string) => void;
   approving: string;
   canApprove: boolean;
   selected: Set<string>;
@@ -1488,6 +1514,7 @@ function DeviceTable({
           {rows.map((device) => {
             const bucket = identityBucket(device);
             const approved = Boolean(device.inventory_device_id);
+            const inventoryMatches = device.inventory_match_candidates ?? [];
             const approvalReason = approvalBlockReason(device);
             const hostname =
               usableDiscoveryValue(device.primary_hostname || device.fqdn) || "No hostname observed";
@@ -1507,7 +1534,7 @@ function DeviceTable({
                     type="checkbox"
                     aria-label={`Select ${device.friendly_name || hostname || device.ip_address}`}
                     checked={selected.has(device.result_id)}
-                    disabled={approved || !canApprove || Boolean(approvalReason)}
+                    disabled={approved || !canApprove || Boolean(approvalReason) || inventoryMatches.length > 0}
                     title={approvalReason || undefined}
                     onChange={() => toggle(device.result_id)}
                   />
@@ -1542,6 +1569,8 @@ function DeviceTable({
                     status={
                       approved
                         ? "Approved"
+                        : inventoryMatches.length
+                          ? "Uploaded match"
                         : bucket === "identified"
                           ? "Identified"
                           : bucket === "review"
@@ -1557,7 +1586,19 @@ function DeviceTable({
                         ? "Review"
                         : "View details"}
                     </button>
-                    {canApprove && !approved && bucket === "identified" && (
+                    {canApprove && !approved && inventoryMatches.length > 0 && inventoryMatches.map((candidate) => (
+                      <button
+                        key={candidate.asset_id}
+                        title={`Exact match by ${candidate.matched_fields.join(" and ")}`}
+                        disabled={Boolean(approvalReason) || approving === device.result_id}
+                        onClick={() => void approve(device, candidate.asset_id)}
+                      >
+                        {approving === device.result_id
+                          ? "Linking…"
+                          : `Link ${candidate.asset_number}`}
+                      </button>
+                    ))}
+                    {canApprove && !approved && inventoryMatches.length === 0 && bucket === "identified" && (
                       <button
                         title={approvalReason || undefined}
                         disabled={Boolean(approvalReason) || approving === device.result_id}
@@ -1591,6 +1632,7 @@ function Evidence({
   approving,
   canDiscover,
   canApprove,
+  inventoryMatches,
 }: {
   data: Record<string, unknown>;
   close: () => void;
@@ -1604,10 +1646,11 @@ function Evidence({
   }) => void;
   decideIdentity: (action: "accept" | "reject") => void;
   confirming: boolean;
-  approve: () => Promise<void>;
+  approve: (managedAssetId?: string) => Promise<void>;
   approving: boolean;
   canDiscover: boolean;
   canApprove: boolean;
+  inventoryMatches: ImportedAssetMatch[];
 }) {
   const result = (data.result || {}) as Record<string, unknown>;
   const profile = (data.identity_profile || {}) as Record<string, unknown>;
@@ -2002,12 +2045,37 @@ function Evidence({
           <p>No identity changes have been recorded.</p>
         )}
       </section>
+      {inventoryMatches.length > 0 && (
+        <section className="identity-history" aria-label="Uploaded inventory matches">
+          <h4>Possible uploaded inventory match</h4>
+          <p>HIOP found exact hostname or serial-number matches. Choose the correct uploaded record to link it to this scanned device; existing department and location details will be preserved.</p>
+          {inventoryMatches.map((candidate) => (
+            <article key={candidate.asset_id}>
+              <p><b>{candidate.asset_number} · {candidate.name}</b></p>
+              <p>Matched by {candidate.matched_fields.join(" and ")}</p>
+              {candidate.department && <p>Department: {candidate.department}</p>}
+              {candidate.location && <p>Location: {candidate.location}</p>}
+              {canApprove && !approved && (
+                <button
+                  className="primary-action"
+                  disabled={approving || Boolean(approvalReason)}
+                  onClick={() => void approve(candidate.asset_id)}
+                >
+                  {approving ? "Linking…" : `Link ${candidate.asset_number}`}
+                </button>
+              )}
+            </article>
+          ))}
+        </section>
+      )}
       <footer className="identity-review-actions">
         {approved ? (
           <>
             <StatusBadge status="Approved" />
             <span>This device exists once in managed inventory.</span>
           </>
+        ) : inventoryMatches.length ? (
+          <span>Review and link the matching uploaded asset above instead of creating a duplicate.</span>
         ) : strong && canApprove ? (
           <button
             className="primary-action"

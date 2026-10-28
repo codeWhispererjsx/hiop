@@ -7,7 +7,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.api.v1.local_agents import ALLOWED_JOBS, DeviceActionCreate, ObservationWrite, _select_inventory_match, _validate_network_job, agent_router, agent_view, authenticate_agent, create_device_action, download_windows_installer, ingest, reconcile_agent_discovery
+from app.api.v1.local_agents import ALLOWED_JOBS, DeviceActionCreate, ObservationWrite, _select_inventory_match, _validate_network_job, agent_router, agent_view, authenticate_agent, create_asset_action, create_device_action, download_windows_installer, ingest, reconcile_agent_discovery
 from app.core.security import get_db
 
 def agent(**values):
@@ -205,6 +205,38 @@ def test_device_action_requires_confirmation_and_queues_only_allowlisted_operati
             SimpleNamespace(username="admin",id="user-1"),"11111111-1111-1111-1111-111111111111",
         )
     assert exc.value.status_code==422
+
+def test_asset_action_queues_for_one_online_windows_agent(monkeypatch):
+    property_id="22222222-2222-2222-2222-222222222222"
+    monkeypatch.setattr("app.api.v1.local_agents.allowed_property_ids",lambda *_args:{property_id})
+    monkeypatch.setattr("app.api.v1.local_agents.create_audit_log",lambda *_args,**_kwargs:None)
+    asset=SimpleNamespace(
+        id="asset-1",property_id=property_id,status="active",
+        device_type="Desktop",name="FO-DT-01",
+    )
+    registration=agent(
+        id="agent-row",organization_id="11111111-1111-1111-1111-111111111111",
+        property_id=property_id,managed_asset_id="asset-1",
+        operating_system="Windows 11",last_heartbeat=datetime.now(timezone.utc),
+        revoked_at=None,retired_at=None,
+    )
+    asset_query=MagicMock()
+    asset_query.filter_by.return_value.with_for_update.return_value.first.return_value=asset
+    agent_query=MagicMock()
+    agent_query.filter_by.return_value.all.return_value=[registration]
+    db=MagicMock()
+    db.query.side_effect=[asset_query,agent_query]
+
+    response=create_asset_action(
+        "asset-1",DeviceActionCreate(action="LOCK",confirm=True),db,
+        SimpleNamespace(username="admin",id="user-1"),
+        "11111111-1111-1111-1111-111111111111",
+    )
+
+    queued=next(call.args[0] for call in db.add.call_args_list if getattr(call.args[0],"job_type",None)=="DEVICE_ACTION")
+    assert response["status"]=="queued"
+    assert queued.agent_id=="agent-row"
+    assert queued.payload=='{"action":"LOCK"}'
 
 def test_agent_download_includes_update_and_confirmed_removal_tools():
     response=download_windows_installer(SimpleNamespace(base_url="https://hiop.example/"),SimpleNamespace(),None)

@@ -121,7 +121,7 @@ test("approval eligibility matches the server confidence and conflict guard", ()
 test("serial numbers are optional unless verified", () => {
   assert.match(deviceForm, /Serial Number \(optional\)/);
   assert.match(deviceForm, /key === "serial_number"[\s\S]*\? null/);
-  assert.match(backend, /serial_number=\(row\.serial_number or None\)/);
+  assert.match(backend, /serial_number=\(row\.serial_number or \(matched_asset\.serial_number if matched_asset else None\) or None\)/);
 });
 
 test("bulk selection can target only devices with discovered hostnames", () => {

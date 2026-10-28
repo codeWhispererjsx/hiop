@@ -6,11 +6,13 @@ const page = readFileSync(new URL("../src/pages/DashboardPage.tsx", import.meta.
 const css = readFileSync(new URL("../src/styles/dashboard.css", import.meta.url), "utf8");
 
 test("home is a simple real-data asset workspace", () => {
-  for (const text of ["Total assets", "Online now", "Types of assets", "Assets by location", "Asset inventory", "Discover devices"]) {
+  for (const text of ["Total assets", "Online now", "Devices by type", "Devices by location", "Device inventory", "Discover devices"]) {
     assert.match(page, new RegExp(text));
   }
   assert.match(page, /endpoints\.dashboard/);
   assert.match(page, /endpoints\.devices/);
+  assert.match(page, /endpoints\.assetPage\(\{ page_size: "1" \}\)/);
+  assert.match(page, /const totalAssets = Array\.isArray\(managedAssets\.data\)/);
   assert.doesNotMatch(page, /57,842|1,203|dummy|mock/i);
 });
 

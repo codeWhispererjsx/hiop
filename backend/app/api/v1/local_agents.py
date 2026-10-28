@@ -115,8 +115,8 @@ def list_agents(db:Session=Depends(get_db),user:User=Depends(reader),org=Depends
     return [
         agent_view(agent)|{
             "ip_address":agent.ip_address or (device.ip_address if device else None),
-            "department":device.department if device else None,
-            "location":device.location if device else None,
+            "department":device.department if device else asset.department_name if asset else None,
+            "location":device.location if device else asset.location_name if asset else None,
             "operating_system":agent.operating_system or (device.ad_operating_system if device else None),
             "floor":floor.display_name or floor.name if floor else None,
             "mac_address":device.mac_address if device else None,
@@ -216,6 +216,32 @@ def create_device_action(device_id:UUID,body:DeviceActionCreate,db:Session=Depen
         db,actor.username,"DEVICE_ACTION_QUEUED","Device",str(device.id),
         f"Queued {body.action.lower()} through HIOP agent {agent.agent_id} as job {row.id}",
         organization_id=org,property_id=device.property_id,
+    )
+    db.commit()
+    return {"id":str(row.id),"action":body.action,"status":"queued"}
+
+@admin_router.post("/assets/{asset_id}/actions",status_code=202)
+def create_asset_action(asset_id:UUID,body:DeviceActionCreate,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    if not body.confirm:raise HTTPException(422,"Explicit confirmation is required")
+    asset=db.query(ManagedAsset).filter_by(id=asset_id,organization_id=org).with_for_update().first()
+    if not asset or asset.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Managed asset not found")
+    if asset.status=="retired":raise HTTPException(409,"Retired assets cannot receive remote actions")
+    agents=db.query(LocalAgentRegistration).filter_by(managed_asset_id=asset.id,organization_id=org,property_id=asset.property_id).all()
+    active=[row for row in agents if not row.revoked_at and not row.retired_at and agent_view(row)["status"]=="online"]
+    if len(active)!=1:raise HTTPException(409,"A single online HIOP agent must be linked to this asset")
+    agent=active[0]
+    if "windows" not in f"{asset.device_type} {agent.operating_system or ''}".casefold():
+        raise HTTPException(409,"This action is available only for Windows assets")
+    row=AgentJob(
+        agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,
+        job_type="DEVICE_ACTION",payload=json.dumps({"action":body.action},separators=(",",":")),
+        timeout_seconds=30,created_by=actor.id,
+    )
+    db.add(row);db.flush()
+    create_audit_log(
+        db,actor.username,"DEVICE_ACTION_QUEUED","ManagedAsset",str(asset.id),
+        f"Queued {body.action.lower()} through HIOP agent {agent.agent_id} as job {row.id}",
+        organization_id=org,property_id=asset.property_id,
     )
     db.commit()
     return {"id":str(row.id),"action":body.action,"status":"queued"}

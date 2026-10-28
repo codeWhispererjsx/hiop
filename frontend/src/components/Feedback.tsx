@@ -1,6 +1,6 @@
 import { Icon } from "./Icon";
 export function Feedback({ loading, error, empty, emptyTitle, onRetry, loadingTitle, loadingMessage }: { loading?: boolean; error?: string; empty?: string; emptyTitle?: string; onRetry?: () => void; loadingTitle?: string; loadingMessage?: string }) {
-  if (loading) return <div className="feedback-card feedback-loading" role="status" aria-live="polite"><span className="spinner" aria-hidden="true"/><h3>{loadingTitle ?? "Loading operational data"}</h3><p>{loadingMessage ?? "Please wait while HIOP retrieves the latest information."}</p><div className="feedback-skeleton" aria-hidden="true"><i/><i/><i/></div></div>;
+  if (loading) return <div className="feedback-card feedback-loading" role="status" aria-live="polite"><span className="feedback-loading-mark" aria-hidden="true"><i/><i/><i/></span><h3>{loadingTitle ?? "Loading operational data"}</h3><p>{loadingMessage ?? "Please wait while HIOP retrieves the latest information."}</p><div className="feedback-skeleton" aria-hidden="true"><i/><i/><i/></div></div>;
   if (error) return <div className="feedback-card error" role="alert"><Icon name="warning" size={28}/><h3>Unable to load this information</h3><p>{error}</p>{onRetry && <button className="secondary-action" onClick={onRetry}>Try again</button>}</div>;
   return <div className="feedback-card feedback-empty"><Icon name="search" size={28}/><h3>{emptyTitle ?? "No records found"}</h3><p>{empty ?? "There is nothing to display yet."}</p></div>;
 }

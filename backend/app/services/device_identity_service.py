@@ -8,6 +8,7 @@ from uuid import UUID
 
 from sqlalchemy import or_, select
 
+from app.models.asset_intelligence import ManagedAsset
 from app.models.device import Device
 from app.models.discovered_device import DiscoveredDevice
 from app.models.discovery_intelligence import (
@@ -57,9 +58,19 @@ def _matches(value: str | None, operator: str, pattern: str) -> bool:
 def _safe_type(value: str | None) -> str | None:
     if not value:
         return None
-    aliases = {"PC": "Desktop", "Point of Sale": "POS Terminal", "Wireless AP": "Access Point", "IP Phone": "Phone"}
-    value = aliases.get(value, value)
-    return value if value in VALID_TYPES else "Other"
+    normalized = value.strip().casefold()
+    aliases = {
+        "pc": "Desktop",
+        "point of sale": "POS Terminal",
+        "wireless ap": "Access Point",
+        "ip phone": "Phone",
+    }
+    if normalized in aliases:
+        return aliases[normalized]
+    return next(
+        (device_type for device_type in VALID_TYPES if device_type.casefold() == normalized),
+        "Other",
+    )
 
 
 class DeviceIdentityService:
@@ -402,7 +413,196 @@ class DeviceIdentityService:
             decision = self.apply(result, organization_id, actor)
             if decision.rule_ids:
                 updated += 1
-        return {"evaluated": len(results), "matched": updated}
+        asset_query = self.db.query(ManagedAsset).filter(
+            ManagedAsset.organization_id == organization_id
+        )
+        if property_id:
+            asset_query = asset_query.filter(ManagedAsset.property_id == property_id)
+        assets = asset_query.order_by(ManagedAsset.id).all()
+        matched_assets = sum(
+            self.apply_managed_asset_rules(asset, organization_id, actor)
+            for asset in assets
+        )
+        return {
+            "evaluated": len(results),
+            "matched": updated,
+            "assets_evaluated": len(assets),
+            "assets_matched": matched_assets,
+        }
+
+    def apply_managed_asset_rules(
+        self, asset: ManagedAsset, organization_id, actor: str = "System"
+    ) -> bool:
+        field_sources = dict(asset.field_sources or {})
+        device = (
+            self.db.get(Device, asset.device_id)
+            if getattr(asset, "device_id", None)
+            else None
+        )
+        rules = [
+            rule
+            for rule in self.scoped_rules(organization_id, asset.property_id)
+            if rule.match_field == "hostname"
+            and _matches(asset.name, rule.match_operator, rule.pattern)
+        ]
+        type_rule = next(
+            (rule for rule in rules if rule.output_device_type),
+            None,
+        )
+        department_rule = next(
+            (rule for rule in rules if rule.output_department_id),
+            None,
+        )
+        department = (
+            self.db.get(Department, department_rule.output_department_id)
+            if department_rule
+            else None
+        )
+        desired = {
+            "device_type": _safe_type(type_rule.output_device_type) if type_rule else None,
+            "department": (
+                {
+                    "id": str(department.id),
+                    "name": department.name,
+                }
+                if department_rule and department
+                else None
+            ),
+        }
+        field_rules = {
+            "device_type": type_rule,
+            "department": department_rule,
+        }
+        changed_fields = []
+
+        for field, asset_fields in {
+            "device_type": ("device_type",),
+            "department": ("department_id", "department_name"),
+        }.items():
+            source = field_sources.get(field)
+            marker = source if isinstance(source, dict) and source.get("source") == "identity_rule" else None
+            if isinstance(source, str) and source.casefold() == "manual":
+                continue
+            if (
+                getattr(asset, "source", None) == "manual"
+                and marker is None
+                and field_sources.get("organizational_metadata") == "Manual"
+            ):
+                continue
+
+            target = desired[field]
+            current_asset = (
+                getattr(asset, asset_fields[0])
+                if field == "device_type"
+                else {
+                    "id": (
+                        str(getattr(asset, "department_id"))
+                        if getattr(asset, "department_id")
+                        else None
+                    ),
+                    "name": getattr(asset, "department_name"),
+                }
+            )
+            current_device = None
+            if device:
+                current_device = (
+                    getattr(device, "device_type")
+                    if field == "device_type"
+                    else {
+                        "id": (
+                            str(getattr(device, "department_id"))
+                            if getattr(device, "department_id")
+                            else None
+                        ),
+                        "name": getattr(device, "department"),
+                    }
+                )
+            current = {"asset": current_asset, "device": current_device}
+            applied = marker.get("applied") if marker else None
+            if marker and not isinstance(applied, dict):
+                applied = {"asset": applied, "device": None}
+            if marker and (
+                current_asset != applied.get("asset")
+                or (
+                    device
+                    and applied.get("device") is not None
+                    and current_device != applied.get("device")
+                )
+            ):
+                field_sources[field] = "Manual"
+                continue
+
+            if target is not None:
+                rule = field_rules[field]
+                if rule is None:
+                    raise RuntimeError(
+                        f"Identity rule target for {field} has no matching rule."
+                    )
+                baseline = marker.get("baseline", current) if marker else current
+                if marker and not isinstance(baseline, dict):
+                    baseline = {"asset": baseline, "device": None}
+                baseline_source = (
+                    marker.get("baseline_source") if marker else source
+                )
+                applied = {"asset": target, "device": target if device else None}
+                if field == "device_type":
+                    asset.device_type = target
+                    if device:
+                        device.device_type = target
+                else:
+                    asset.department_id = UUID(target["id"])
+                    asset.department_name = target["name"]
+                    if device:
+                        device.department_id = UUID(target["id"])
+                        device.department = target["name"]
+                field_sources[field] = {
+                    "source": "identity_rule",
+                    "rule_id": str(rule.id),
+                    "baseline": baseline,
+                    "applied": applied,
+                    "baseline_source": baseline_source,
+                }
+                if current_asset != target or (device and current_device != target):
+                    changed_fields.append(field)
+            elif marker:
+                baseline = marker.get("baseline")
+                if not isinstance(baseline, dict):
+                    baseline = {"asset": baseline, "device": None}
+                baseline_asset = baseline.get("asset")
+                baseline_device = baseline.get("device")
+                if field == "device_type":
+                    asset.device_type = baseline_asset
+                    if device and baseline_device is not None:
+                        device.device_type = baseline_device
+                else:
+                    asset.department_id = UUID(baseline_asset["id"]) if baseline_asset and baseline_asset.get("id") else None
+                    asset.department_name = baseline_asset.get("name") if baseline_asset else None
+                    if device and baseline_device is not None:
+                        device.department_id = UUID(baseline_device["id"]) if baseline_device.get("id") else None
+                        device.department = baseline_device.get("name") or "Unassigned"
+                baseline_source = marker.get("baseline_source")
+                if baseline_source:
+                    field_sources[field] = baseline_source
+                else:
+                    field_sources.pop(field, None)
+                if current_asset != baseline_asset or (
+                    device and baseline_device is not None and current_device != baseline_device
+                ):
+                    changed_fields.append(field)
+
+        asset.field_sources = field_sources
+        if changed_fields:
+            create_audit_log(
+                self.db,
+                actor,
+                "IDENTITY_RULE_INVENTORY_SYNC",
+                "ManagedAsset",
+                str(asset.id),
+                f"Synchronized rule-managed identity fields: {', '.join(sorted(changed_fields))}",
+                organization_id=organization_id,
+                property_id=asset.property_id,
+            )
+        return bool(rules)
 
     @staticmethod
     def _input(result: DiscoveryResult, field: str) -> str | None:

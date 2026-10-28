@@ -11,6 +11,9 @@ test("Site Server dashboard reports live operations and provides real quick acti
     assert.match(page, new RegExp(label));
   for (const action of ["Run device discovery", "Open HIOP settings", "View service diagnostics", "Download support report", "View backup and recovery"])
     assert.match(page, new RegExp(action));
+  assert.match(page, /Installation health charts/);
+  assert.match(page, /scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
+  assert.doesNotMatch(page, /href="#diagnostics"/);
   assert.match(api, /localOperationsStatus/);
   assert.match(api, /downloadLocalSupportReport/);
   assert.match(page, /credentials, tokens, private keys/);

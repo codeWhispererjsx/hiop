@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import and_, case, func
 from sqlalchemy.orm import Session
 
 from app.core.security import get_db, require_roles
@@ -49,26 +49,65 @@ def trend(rows,field,start,end):
 def metric(value,label,drilldown=None,quality="available"):
     return {"label":label,"value":value if value is not None else "Insufficient data","quality":quality if value is not None else "insufficient_data","drilldown":drilldown}
 
-def context(db,org,start,end,selected_property=None):
-    property_ids=[selected_property] if selected_property else [x[0] for x in db.query(Property.id).filter_by(organization_id=org).all()]
+def context(db,org,start,end,selected_property=None,report="executive"):
+    needs_assets = report in {"executive","assets","lifecycle","vendors","departments","locations"}
+    needs_devices = report in {"executive","operations","network"}
+    needs_incidents = report in {"executive","operations","incidents","departments","locations"}
+    needs_problems = report in {"executive","problems","departments"}
+    needs_changes = report in {"executive","changes"}
+    needs_procurement = report in {"executive","procurement","vendors"}
+    needs_vendors = report in {"executive","vendors"}
+    needs_knowledge = report in {"executive","knowledge"}
+    needs_services = report in {"executive","services","departments"}
+    needs_departments = report == "departments"
+    needs_rooms = report == "locations"
+    needs_alerts = report == "executive"
+    needs_scans = report in {"executive","operations","network"}
+    property_ids=[selected_property] if selected_property else [x[0] for x in db.query(Property.id).filter_by(organization_id=org).all()] if needs_devices else []
     devices=db.query(Device).filter(Device.property_id.in_(property_ids)).all() if property_ids else []
     device_ids=[x.id for x in devices]
-    assets=db.query(ManagedAsset).filter(ManagedAsset.organization_id==org, *((ManagedAsset.property_id==selected_property,) if selected_property else ())).all()
-    incidents=db.query(OperationalIncident).filter(OperationalIncident.organization_id==org, *((OperationalIncident.property_id==selected_property,) if selected_property else ())).all()
-    problems=db.query(Problem).filter(Problem.organization_id==org, *((Problem.property_id==selected_property,) if selected_property else ())).all()
-    changes=db.query(ChangeRequest).filter(ChangeRequest.organization_id==org, *((ChangeRequest.property_id==selected_property,) if selected_property else ())).all()
-    procurement=db.query(AssetProcurement).filter(AssetProcurement.organization_id==org, *((AssetProcurement.property_id==selected_property,) if selected_property else ())).all()
-    vendors=db.query(Vendor).filter_by(organization_id=org).all()
-    knowledge=db.query(KnowledgeArticle).filter_by(organization_id=org).all()
-    services=db.query(HospitalityTechnologyService).filter(HospitalityTechnologyService.organization_id==org, *((HospitalityTechnologyService.property_id==selected_property,) if selected_property else ())).all()
-    departments=db.query(Department).filter_by(organization_id=org).all()
-    rooms=db.query(Room).filter_by(organization_id=org).all()
-    alerts=db.query(Alert).filter(Alert.device_id.in_(device_ids)).all() if device_ids else []
-    scans=db.query(NetworkScan).filter(NetworkScan.device_id.in_(device_ids),NetworkScan.scanned_at>=start,NetworkScan.scanned_at<=end).all() if device_ids else []
+    assets=db.query(ManagedAsset).filter(ManagedAsset.organization_id==org, *((ManagedAsset.property_id==selected_property,) if selected_property else ())).all() if needs_assets else []
+    incidents=db.query(OperationalIncident).filter(OperationalIncident.organization_id==org, *((OperationalIncident.property_id==selected_property,) if selected_property else ())).all() if needs_incidents else []
+    problems=db.query(Problem).filter(Problem.organization_id==org, *((Problem.property_id==selected_property,) if selected_property else ())).all() if needs_problems else []
+    changes=db.query(ChangeRequest).filter(ChangeRequest.organization_id==org, *((ChangeRequest.property_id==selected_property,) if selected_property else ())).all() if needs_changes else []
+    procurement=db.query(AssetProcurement).filter(AssetProcurement.organization_id==org, *((AssetProcurement.property_id==selected_property,) if selected_property else ())).all() if needs_procurement else []
+    vendors=db.query(Vendor).filter_by(organization_id=org).all() if needs_vendors else []
+    knowledge=db.query(KnowledgeArticle).filter_by(organization_id=org).all() if needs_knowledge else []
+    services=db.query(HospitalityTechnologyService).filter(HospitalityTechnologyService.organization_id==org, *((HospitalityTechnologyService.property_id==selected_property,) if selected_property else ())).all() if needs_services else []
+    departments=db.query(Department).filter_by(organization_id=org).all() if needs_departments else []
+    rooms=db.query(Room).filter_by(organization_id=org).all() if needs_rooms else []
+    alerts=db.query(Alert).filter(Alert.device_id.in_(device_ids)).all() if needs_alerts and device_ids else []
+    latest_times=db.query(
+        NetworkScan.device_id,
+        func.max(NetworkScan.scanned_at).label("last_scanned_at"),
+    ).filter(
+        NetworkScan.device_id.in_(device_ids),
+        NetworkScan.scanned_at>=start,
+        NetworkScan.scanned_at<=end,
+    ).group_by(NetworkScan.device_id).subquery() if needs_scans and device_ids else None
+    latest_scans=db.query(
+        NetworkScan.device_id,
+        NetworkScan.status,
+    ).join(
+        latest_times,
+        and_(
+            NetworkScan.device_id==latest_times.c.device_id,
+            NetworkScan.scanned_at==latest_times.c.last_scanned_at,
+        ),
+    ).all() if latest_times is not None else []
+    daily_scans=db.query(
+        func.date(NetworkScan.scanned_at).label("scan_day"),
+        func.sum(case((func.lower(NetworkScan.status)=="online",1),else_=0)).label("online_count"),
+        func.count(NetworkScan.id).label("scan_count"),
+    ).filter(
+        NetworkScan.device_id.in_(device_ids),
+        NetworkScan.scanned_at>=start,
+        NetworkScan.scanned_at<=end,
+    ).group_by(func.date(NetworkScan.scanned_at)).all() if needs_scans and device_ids else []
     return locals()
 
 def build(report,db,org,start,end,filters):
-    c=context(db,org,start,end,filters.get("selected_property"));assets=c["assets"];devices=c["devices"];incidents=c["incidents"];problems=c["problems"];changes=c["changes"];procurements=c["procurement"];vendors=c["vendors"];knowledge=c["knowledge"];services=c["services"];alerts=c["alerts"];scans=c["scans"]
+    c=context(db,org,start,end,filters.get("selected_property"),report);assets=c["assets"];devices=c["devices"];incidents=c["incidents"];problems=c["problems"];changes=c["changes"];procurements=c["procurement"];vendors=c["vendors"];knowledge=c["knowledge"];services=c["services"];alerts=c["alerts"]
     if filters.get("department_id"):
         dep=UUID(filters["department_id"]);assets=[x for x in assets if x.department_id==dep];incidents=[x for x in incidents if x.department_id==dep];problems=[x for x in problems if x.department_id==dep];procurements=[x for x in procurements if x.department_id==dep];services=[x for x in services if x.department_id==dep]
     if filters.get("service_id"):
@@ -91,12 +130,13 @@ def build(report,db,org,start,end,filters):
             avg_age=round(sum((today-x.acquisition_date).days for x in dated)/len(dated)/365.25,1) if dated else None
             metrics += [metric(avg_age,"Average Asset Age (years)",quality="available" if dated else "insufficient_data"),metric(sum(bool(x.expected_replacement_date and today<=x.expected_replacement_date<=today+timedelta(days=365)) for x in assets),"Expected Replacement Within 12 Months")]
     if report in {"executive","operations","network"}:
-        latest={}
-        for scan in sorted(scans,key=lambda x:x.scanned_at):latest[scan.device_id]=scan
-        online=sum(x.status.lower()=="online" for x in latest.values());offline=sum(x.status.lower()=="offline" for x in latest.values());known=len(latest)
-        availability=round(sum(x.status.lower()=="online" for x in scans)*100/len(scans),2) if scans else None
+        latest={device_id:status for device_id,status in c["latest_scans"]}
+        online=sum(status.lower()=="online" for status in latest.values());offline=sum(status.lower()=="offline" for status in latest.values());known=len(latest)
+        total_scans=sum(row.scan_count for row in c["daily_scans"])
+        online_scans=sum(row.online_count for row in c["daily_scans"])
+        availability=round(online_scans*100/total_scans,2) if total_scans else None
         metrics += [metric(len(devices),"Devices","/network"),metric(online,"Online Devices","/network?status=online"),metric(offline,"Offline Devices","/network?status=offline"),metric(len(devices)-known,"Unknown Devices","/network?status=unknown"),metric(availability,"Availability %")]
-        trends["availability"]={"status":"available","points":[{"date":day,"value":round(sum(x.status.lower()=="online" for x in scans if x.scanned_at.date().isoformat()==day)*100/sum(1 for x in scans if x.scanned_at.date().isoformat()==day),2)} for day in sorted({x.scanned_at.date().isoformat() for x in scans})]} if scans else {"status":"insufficient_data","message":"Insufficient data","points":[]}
+        trends["availability"]={"status":"available","points":[{"date":str(row.scan_day),"value":round(row.online_count*100/row.scan_count,2)} for row in sorted(c["daily_scans"],key=lambda item:item.scan_day)]} if c["daily_scans"] else {"status":"insufficient_data","message":"Insufficient data","points":[]}
         if report=="network":
             network_types={"switch","router","access point","firewall","network appliance"};infra=[x for x in devices if x.device_type.lower() in network_types]
             metrics.append(metric(len(infra),"Network Devices"))

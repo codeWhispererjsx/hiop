@@ -13,6 +13,7 @@ from app.core.tenant import organization_context,property_context
 from app.db.database import SessionLocal
 from app.models.hierarchy import Department,Property
 from app.models.cmdb import CIClass,CIIdentifier,CIType,ConfigurationItem
+from app.models.asset_intelligence import ManagedAsset
 from app.models.discovery_intelligence import DiscoveryChangeSuggestion,DiscoveryCredential,DiscoveryDHCPLease,DiscoveryEvidence,DiscoveryFingerprint,DiscoveryIdentityConflict,DiscoveryIdentityHistory,DiscoveryIdentityProfile,DiscoveryJob,DiscoveryOUI,DiscoveryPolicy,DiscoveryResult,DiscoveryStage,DiscoveryTask,IdentityRule
 from app.models.discovery_intelligence import DiscoveryApprovalLink
 from app.models.discovered_device import DiscoveredDevice,DiscoveryStatus
@@ -28,6 +29,7 @@ from app.services.device_correlation_service import DeviceCorrelationService
 from app.services.v1_v2_reconciliation_service import V1V2ReconciliationService
 from app.services.device_identity_service import DeviceIdentityService
 from app.services.asset_intelligence_service import ensure_asset_for_device
+from app.services.inventory_reconciliation_service import find_imported_asset_candidates, imported_asset_candidates_for_result, index_imported_assets
 from app.websocket.connection_manager import manager
 
 router=APIRouter(prefix="/discovery-intelligence",tags=["Enterprise Discovery & Configuration Intelligence"])
@@ -47,6 +49,7 @@ class ApproveWrite(BaseModel):
     category:str|None=Field(default=None,max_length=80)
     department:str=Field(default="Unassigned",max_length=120)
     location:str=Field(default="Unassigned",max_length=160)
+    managed_asset_id:UUID|None=None
 class BulkApproveWrite(BaseModel):
     result_ids:list[UUID]=Field(min_length=1,max_length=1000)
 class ConfirmIdentityWrite(BaseModel):
@@ -132,6 +135,9 @@ def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
     scoped=db.query(DiscoveryResult).join(Property,DiscoveryResult.property_id==Property.id).filter(Property.organization_id==organization_id)
     if property_id is not None:scoped=scoped.filter(DiscoveryResult.property_id==property_id)
     rows=scoped.order_by(DiscoveryResult.confidence_score.desc(),DiscoveryResult.last_seen_at.desc()).limit(10000).all();devices={};mac_index={};name_index={};ip_index={};row_keys={}
+    imported_assets_query=db.query(ManagedAsset).filter(ManagedAsset.organization_id==organization_id,ManagedAsset.source=="inventory_import",ManagedAsset.device_id.is_(None),ManagedAsset.status!="retired")
+    if property_id is not None:imported_assets_query=imported_assets_query.filter(ManagedAsset.property_id==property_id)
+    imported_asset_index=index_imported_assets(imported_assets_query.all())
     profiles={row.result_id:row for row in db.query(DiscoveryIdentityProfile).filter(DiscoveryIdentityProfile.organization_id==organization_id).all()}
     by_id={row.id:row for row in rows};canonical_ids={row.canonical_result_id for row in rows if row.canonical_result_id}
     approval_query=db.query(DiscoveryApprovalLink.result_id,DiscoveryApprovalLink.device_id).join(DiscoveryResult,DiscoveryApprovalLink.result_id==DiscoveryResult.id).join(Property,DiscoveryResult.property_id==Property.id).filter(Property.organization_id==organization_id,DiscoveryApprovalLink.device_id.is_not(None))
@@ -155,7 +161,7 @@ def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
             # than turning the whole Discover page into a 500 response.
             source=canonical or row
             profile=profiles.get(source.id)
-            devices[key]={"id":source.id,"result_id":source.id,"job_id":source.job_id,"ip_address":source.ip_address,"primary_hostname":source.primary_hostname,"fqdn":source.fqdn,"dns_status":source.dns_status,"friendly_name":source.friendly_name,"friendly_name_source":profile.friendly_name_source if profile else "MANUAL" if source.identity_confirmed else None,"friendly_name_confidence":profile.friendly_name_confidence if profile else 100 if source.identity_confirmed else None,"department":source.department,"department_source":profile.department_source if profile else "MANUAL" if source.identity_confirmed else None,"suggested_department":source.suggested_department,"device_number":source.device_number,"description":source.description,"description_source":source.description_source,"location":source.location,"location_source":profile.location_source if profile else "MANUAL" if source.identity_confirmed else None,"mac_address":source.mac_address,"vendor":source.vendor,"device_type":source.device_type,"classification":source.classification,"classification_source":profile.classification_source if profile else "MANUAL" if source.identity_confirmed else None,"classification_confidence":profile.classification_confidence if profile else 100 if source.identity_confirmed else None,"identity_suggestion":profile.suggestion if profile else "{}","operating_system":source.operating_system,"model":source.model,"serial_number":source.serial_number,"firmware":source.firmware,"uptime_seconds":source.uptime_seconds,"interface_count":source.interface_count,"last_enriched_at":source.last_enriched_at,"ad_computer_name":source.ad_computer_name,"ad_domain":source.ad_domain,"ad_organizational_unit":source.ad_organizational_unit,"ad_operating_system":source.ad_operating_system,"ad_enabled":source.ad_enabled,"ad_enrichment_status":source.ad_enrichment_status,"ad_last_enriched_at":source.ad_last_enriched_at,"identity_confirmed":source.identity_confirmed,"confidence_level":source.confidence_level,"confidence_reason":source.confidence_reason,"conflict_status":source.conflict_status,"review_status":source.review_status,"confidence_score":source.confidence_score,"confidence_explanation":source.confidence_explanation,"ci_id":source.ci_id,"inventory_device_id":approved_by_result.get(source.id) or approved_by_result.get(row.id),"first_seen_at":source.first_seen_at,"last_seen_at":source.last_seen_at,"observations":1}
+            devices[key]={"id":source.id,"result_id":source.id,"job_id":source.job_id,"property_id":source.property_id,"ip_address":source.ip_address,"primary_hostname":source.primary_hostname,"fqdn":source.fqdn,"dns_status":source.dns_status,"friendly_name":source.friendly_name,"friendly_name_source":profile.friendly_name_source if profile else "MANUAL" if source.identity_confirmed else None,"friendly_name_confidence":profile.friendly_name_confidence if profile else 100 if source.identity_confirmed else None,"department":source.department,"department_source":profile.department_source if profile else "MANUAL" if source.identity_confirmed else None,"suggested_department":source.suggested_department,"device_number":source.device_number,"description":source.description,"description_source":source.description_source,"location":source.location,"location_source":profile.location_source if profile else "MANUAL" if source.identity_confirmed else None,"mac_address":source.mac_address,"vendor":source.vendor,"device_type":source.device_type,"classification":source.classification,"classification_source":profile.classification_source if profile else "MANUAL" if source.identity_confirmed else None,"classification_confidence":profile.classification_confidence if profile else 100 if source.identity_confirmed else None,"identity_suggestion":profile.suggestion if profile else "{}","operating_system":source.operating_system,"model":source.model,"serial_number":source.serial_number,"firmware":source.firmware,"uptime_seconds":source.uptime_seconds,"interface_count":source.interface_count,"last_enriched_at":source.last_enriched_at,"ad_computer_name":source.ad_computer_name,"ad_domain":source.ad_domain,"ad_organizational_unit":source.ad_organizational_unit,"ad_operating_system":source.ad_operating_system,"ad_enabled":source.ad_enabled,"ad_enrichment_status":source.ad_enrichment_status,"ad_last_enriched_at":source.ad_last_enriched_at,"identity_confirmed":source.identity_confirmed,"confidence_level":source.confidence_level,"confidence_reason":source.confidence_reason,"conflict_status":source.conflict_status,"review_status":source.review_status,"confidence_score":source.confidence_score,"confidence_explanation":source.confidence_explanation,"ci_id":source.ci_id,"inventory_device_id":approved_by_result.get(source.id) or approved_by_result.get(row.id),"first_seen_at":source.first_seen_at,"last_seen_at":source.last_seen_at,"observations":1}
         else:
             current["observations"]+=1;current["first_seen_at"]=min(current["first_seen_at"],row.first_seen_at);current["last_seen_at"]=max(current["last_seen_at"],row.last_seen_at)
             current["inventory_device_id"]=current["inventory_device_id"] or approved_by_result.get(row.id)
@@ -175,6 +181,8 @@ def consolidated_device_rows(db,organization_id,property_id=None,limit=1000):
         for field in merge_fields:
             value=usable_discovery_value(getattr(row,field))
             if (not current[field] or current[field] in {"Unknown Device", "Not yet discovered"}) and value:current[field]=value
+    for item in devices.values():
+        item["inventory_match_candidates"]=find_imported_asset_candidates(item,imported_asset_index)
     return sorted(devices.values(),key=lambda x:x["last_seen_at"],reverse=True)[:limit]
 def execute_safe_job(db,job,user):
     policy=get(db,DiscoveryPolicy,job.policy_id,"Policy");job.status="running";job.current_stage="host_discovery";job.started_at=datetime.now(timezone.utc);db.commit()
@@ -392,7 +400,7 @@ def create_identity_rule(body:IdentityRuleWrite,db:Session=Depends(get_db),user=
     ensure_unique_identity_match(db,organization_id,target_property,body)
     row=IdentityRule(**body.model_dump(),organization_id=organization_id,created_by=user.id);db.add(row);db.flush()
     sync=DeviceIdentityService(db).reevaluate_rules(organization_id,row.property_id,user.username)
-    create_audit_log(db,user.username,"CREATE","identity_rule",str(row.id),f"Created scoped naming and classification rule; re-evaluated {sync['evaluated']} discovery records",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+    create_audit_log(db,user.username,"CREATE","identity_rule",str(row.id),f"Created scoped naming and classification rule; re-evaluated {sync['evaluated']} discovery records and {sync['assets_evaluated']} inventory assets",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
 @router.put("/identity/rules/{id}")
 def update_identity_rule(id:UUID,body:IdentityRuleWrite,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=db.query(IdentityRule).filter(IdentityRule.id==id,IdentityRule.organization_id==organization_id).first()
@@ -408,7 +416,8 @@ def update_identity_rule(id:UUID,body:IdentityRuleWrite,db:Session=Depends(get_d
     scopes={None} if previous_property_id is None or body.property_id is None else {previous_property_id,body.property_id}
     sync_counts=[identity.reevaluate_rules(organization_id,scope,user.username) for scope in scopes]
     evaluated=sum(item["evaluated"] for item in sync_counts)
-    create_audit_log(db,user.username,"UPDATE","identity_rule",str(row.id),f"Updated scoped naming and classification rule; re-evaluated {evaluated} discovery records",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+    assets_evaluated=sum(item["assets_evaluated"] for item in sync_counts)
+    create_audit_log(db,user.username,"UPDATE","identity_rule",str(row.id),f"Updated scoped naming and classification rule; re-evaluated {evaluated} discovery records and {assets_evaluated} inventory assets",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
 @router.post("/identity/rules/{id}/disable")
 def disable_identity_rule(id:UUID,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=db.query(IdentityRule).filter(IdentityRule.id==id,IdentityRule.organization_id==organization_id).first()
@@ -416,7 +425,7 @@ def disable_identity_rule(id:UUID,db:Session=Depends(get_db),user=Depends(identi
     if property_id is not None and row.property_id!=property_id:raise HTTPException(403,"Rule is outside the active property")
     row.enabled=False
     sync=DeviceIdentityService(db).reevaluate_rules(organization_id,row.property_id,user.username)
-    create_audit_log(db,user.username,"DISABLE","identity_rule",str(row.id),f"Disabled naming and classification rule; re-evaluated {sync['evaluated']} discovery records",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
+    create_audit_log(db,user.username,"DISABLE","identity_rule",str(row.id),f"Disabled naming and classification rule; re-evaluated {sync['evaluated']} discovery records and {sync['assets_evaluated']} inventory assets",organization_id=organization_id,property_id=row.property_id);db.commit();db.refresh(row);return row
 @router.delete("/identity/rules/{id}",status_code=204)
 def delete_identity_rule(id:UUID,db:Session=Depends(get_db),user=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     row=db.query(IdentityRule).filter(IdentityRule.id==id,IdentityRule.organization_id==organization_id).first()
@@ -425,7 +434,7 @@ def delete_identity_rule(id:UUID,db:Session=Depends(get_db),user=Depends(identit
     name=row.name;rule_property_id=row.property_id
     db.delete(row)
     sync=DeviceIdentityService(db).reevaluate_rules(organization_id,rule_property_id,user.username)
-    create_audit_log(db,user.username,"DELETE","identity_rule",str(id),f"Deleted naming rule '{name}'; re-evaluated {sync['evaluated']} discovery records",organization_id=organization_id,property_id=rule_property_id)
+    create_audit_log(db,user.username,"DELETE","identity_rule",str(id),f"Deleted naming rule '{name}'; re-evaluated {sync['evaluated']} discovery records and {sync['assets_evaluated']} inventory assets",organization_id=organization_id,property_id=rule_property_id)
     db.commit()
 @router.post("/identity/rules/preview")
 def preview_identity_rule(body:IdentityPreviewWrite,db:Session=Depends(get_db),_=Depends(identity_admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
@@ -535,7 +544,7 @@ def result(id:UUID,db:Session=Depends(get_db),_=Depends(reader),organization_id=
     if not inventory_device_id:
         inventory_device_id=db.query(DiscoveredDevice.approved_device_id).join(DiscoveryResult,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).filter(DiscoveryResult.id.in_(group_ids),DiscoveredDevice.approved_device_id.is_not(None)).scalar()
     profile=db.query(DiscoveryIdentityProfile).filter_by(result_id=root.id,organization_id=organization_id).first()
-    return {"result":root,"identity_profile":profile,"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(group_ids),"inventory_device_id":inventory_device_id,"fingerprint":db.query(DiscoveryFingerprint).filter_by(result_id=root.id).first(),"change_suggestions":db.query(DiscoveryChangeSuggestion).filter_by(result_id=root.id).all()}
+    return {"result":root,"identity_profile":profile,"evidence":correlation.evidence(root),"conflicts":correlation.conflicts(root),"identity_history":correlation.history(root),"correlated_observations":len(group_ids),"inventory_device_id":inventory_device_id,"inventory_match_candidates":imported_asset_candidates_for_result(db,root,organization_id),"fingerprint":db.query(DiscoveryFingerprint).filter_by(result_id=root.id).first(),"change_suggestions":db.query(DiscoveryChangeSuggestion).filter_by(result_id=root.id).all()}
 @router.get("/inventory/{device_id}")
 def inventory_identity(device_id:UUID,db:Session=Depends(get_db),_=Depends(reader),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     query=db.query(DiscoveryResult).outerjoin(DiscoveredDevice,DiscoveryResult.discovered_device_id==DiscoveredDevice.id).outerjoin(DiscoveryApprovalLink,DiscoveryApprovalLink.result_id==DiscoveryResult.id).join(Property,DiscoveryResult.property_id==Property.id).filter(or_(DiscoveryApprovalLink.device_id==device_id,DiscoveredDevice.approved_device_id==device_id),Property.organization_id==organization_id)
@@ -593,6 +602,23 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
     correlation.calculate_confidence(row)
     reason=approval_ineligibility_reason(row,correlation.conflicts(row,open_only=True))
     if reason:raise HTTPException(409,reason)
+    asset_matches=imported_asset_candidates_for_result(db,row,organization_id)
+    matched_asset=None
+    if body.managed_asset_id:
+        if not any(item["asset_id"]==str(body.managed_asset_id) for item in asset_matches):
+            raise HTTPException(409,"The selected uploaded inventory record is no longer an exact match for this discovery result.")
+        matched_asset=db.query(ManagedAsset).filter(
+            ManagedAsset.id==body.managed_asset_id,
+            ManagedAsset.organization_id==organization_id,
+            ManagedAsset.property_id==row.property_id,
+            ManagedAsset.source=="inventory_import",
+            ManagedAsset.device_id.is_(None),
+            ManagedAsset.status!="retired",
+        ).with_for_update().first()
+        if not matched_asset:
+            raise HTTPException(409,"The uploaded inventory record was already linked or is no longer available.")
+    elif asset_matches:
+        raise HTTPException(409,"A matching uploaded inventory record exists. Review the match and choose Link to uploaded asset to avoid creating a duplicate.")
     normalized_mac=(row.mac_address or "").strip().upper().replace("-",":")
     duplicate=None
     scoped_context=isinstance(organization_id,UUID)
@@ -603,14 +629,27 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
         names={name.strip().lower() for name in (row.primary_hostname,row.ad_computer_name,row.friendly_name) if name}
         if names:duplicate=device_scope.filter(func.lower(Device.hostname).in_(names)).first()
     if not duplicate: duplicate=device_scope.filter(Device.ip_address==row.ip_address).first()
+    if not duplicate and row.serial_number:
+        duplicate=device_scope.filter(func.lower(Device.serial_number)==row.serial_number.strip().lower()).first()
     if duplicate:raise HTTPException(409,"This device is already present in managed inventory")
     suffix=str(row.id).replace("-","")[:12].upper()
+    discovered_type=(body.category or row.device_type or row.classification or "").strip()
+    if not discovered_type or discovered_type.casefold() in {"unknown", "unknown device", "not yet discovered"}:
+        discovered_type=matched_asset.device_type if matched_asset else "Unknown"
+    department=(row.department or row.suggested_department or "").strip()
+    if body.department.strip()!="Unassigned":department=body.department.strip()
+    if not department or department.casefold()=="unassigned":
+        department=(matched_asset.department_name if matched_asset else None) or "Unassigned"
+    location=(row.location or "").strip()
+    if body.location.strip()!="Unassigned":location=body.location.strip()
+    if not location or location.casefold()=="unassigned":
+        location=(matched_asset.location_name if matched_asset else None) or "Unassigned"
     device=Device(
-        asset_tag=f"HIOP-{suffix[:8]}",hostname=(row.primary_hostname or row.fqdn or row.ip_address).strip(),
-        device_type=(body.category or row.device_type or row.classification or "Unknown").strip(),brand=(row.vendor or "Unknown").strip(),
-        model=(row.model or "Unknown").strip(),serial_number=(row.serial_number or None),department=((row.department or "Unassigned") if body.department.strip()=="Unassigned" else body.department.strip()),
-        location=((row.location or "Unassigned") if body.location.strip()=="Unassigned" else body.location.strip()),ip_address=row.ip_address,
-        mac_address=normalized_mac or None,description=row.description,description_source=row.description_source,
+        asset_tag=f"HIOP-{suffix[:8]}",hostname=(row.primary_hostname or row.fqdn or (matched_asset.name if matched_asset else None) or row.ip_address).strip(),
+        device_type=discovered_type,brand=(row.vendor or (matched_asset.vendor if matched_asset else None) or "Unknown").strip(),
+        model=(row.model or (matched_asset.model if matched_asset else None) or "Unknown").strip(),serial_number=(row.serial_number or (matched_asset.serial_number if matched_asset else None) or None),department=department,
+        location=location,ip_address=row.ip_address,
+        mac_address=normalized_mac or None,description=row.description or (matched_asset.description if matched_asset else None),description_source=row.description_source,
         ad_computer_name=row.ad_computer_name,ad_distinguished_name=row.ad_distinguished_name,ad_domain=row.ad_domain,
         ad_organizational_unit=row.ad_organizational_unit,ad_description=row.ad_description,ad_operating_system=row.ad_operating_system,
         ad_operating_system_version=row.ad_operating_system_version,ad_enabled=row.ad_enabled,ad_last_logon_at=row.ad_last_logon_at,
@@ -628,8 +667,13 @@ def approve_result(id:UUID,body:ApproveWrite,db:Session=Depends(get_db),user=Dep
     if discovered:
         discovered.review_status="approved";discovered.approved_device_id=device.id;discovered.reviewed_by=user.id;discovered.reviewed_at=datetime.now(timezone.utc)
     if scoped_context:
-        asset=ensure_asset_for_device(db,device,user,organization_id);asset.name=row.friendly_name or row.primary_hostname or row.ip_address
-    create_audit_log(db,user.username,"APPROVE","discovery_result",str(row.id),f"Approved {row.ip_address} into managed inventory",organization_id=organization_id,property_id=getattr(row,"property_id",None));db.commit();db.refresh(device);return device
+        if matched_asset:
+            matched_asset.device_id=device.id
+            matched_asset.updated_by=str(user.id)
+            create_audit_log(db,user.username,"LINK_IMPORTED_ASSET_TO_DISCOVERED_DEVICE","ManagedAsset",str(matched_asset.id),f"Linked imported asset {matched_asset.asset_number} to discovered device {device.hostname}",organization_id=organization_id,property_id=row.property_id)
+        else:
+            asset=ensure_asset_for_device(db,device,user,organization_id);asset.name=row.friendly_name or row.primary_hostname or row.ip_address
+    create_audit_log(db,user.username,"APPROVE","discovery_result",str(row.id),f"Approved {row.ip_address} into managed inventory"+(f" and linked uploaded asset {matched_asset.asset_number}" if matched_asset else ""),organization_id=organization_id,property_id=getattr(row,"property_id",None));db.commit();db.refresh(device);return device
 @router.post("/results/bulk-approve")
 def bulk_approve_results(body:BulkApproveWrite,db:Session=Depends(get_db),user=Depends(admin),organization_id=Depends(organization_context),property_id=Depends(property_context)):
     approved=[];already_approved=[];failed=[]

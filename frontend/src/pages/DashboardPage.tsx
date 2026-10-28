@@ -14,6 +14,7 @@ export { PageTitle } from "../components/PageTitle";
 export default function DashboardPage() {
   const dashboard = useRequest(endpoints.dashboard, []);
   const inventory = useRequest(endpoints.devices, []);
+  const managedAssets = useRequest(() => endpoints.assetPage({ page_size: "1" }), []);
   const systemHealth = useRequest(endpoints.systemHealthReport, []);
   const [query, setQuery] = useState("");
   
@@ -31,6 +32,9 @@ export default function DashboardPage() {
   const types = summarize(devices, (device) => device.device_type || "Unknown");
   const locations = summarize(devices, (device) => device.location || "Unassigned");
   const d = dashboard.data;
+  const totalAssets = Array.isArray(managedAssets.data)
+    ? managedAssets.data.length
+    : managedAssets.data?.total ?? 0;
 
   return (
     <DashboardLayout>
@@ -47,10 +51,10 @@ export default function DashboardPage() {
         </div>}
       />
 
-      {dashboard.loading || inventory.loading ? (
+      {dashboard.loading || inventory.loading || managedAssets.loading ? (
         <Feedback loading={true} />
-      ) : dashboard.error || inventory.error ? (
-        <Feedback error={dashboard.error || inventory.error} />
+      ) : dashboard.error || inventory.error || managedAssets.error ? (
+        <Feedback error={dashboard.error || inventory.error || managedAssets.error} />
       ) : !d ? (
         <Feedback loading={true} />
       ) : (
@@ -58,8 +62,8 @@ export default function DashboardPage() {
           <section className="asset-summary-grid" aria-label="Asset metrics">
             <Link className="asset-metric-card" to="/devices">
               <span>Total assets</span>
-              <strong>{d.devices.total}</strong>
-              <small>Approved inventory records</small>
+              <strong>{totalAssets}</strong>
+              <small>Approved managed-asset records</small>
             </Link>
             <Link className="asset-metric-card" to="/network">
               <span>Online now</span>
@@ -92,24 +96,24 @@ export default function DashboardPage() {
             </Link>
             <article className="asset-insight-card">
               <header>
-                <h2>Types of assets</h2>
+                <h2>Devices by type</h2>
                 <span>{types.length} types</span>
               </header>
               <Distribution rows={types} />
             </article>
             <article className="asset-insight-card">
               <header>
-                <h2>Assets by location</h2>
+                <h2>Devices by location</h2>
                 <span>Top locations</span>
               </header>
               <Distribution rows={locations} />
             </article>
           </section>
 
-          <section className="asset-inventory-panel" aria-label="Asset inventory">
+          <section className="asset-inventory-panel" aria-label="Device inventory">
             <header className="asset-inventory-head">
               <div>
-                <h2>Asset inventory</h2>
+                <h2>Device inventory</h2>
                 <p>
                   {devices.length
                     ? `${devices.length} managed devices${devices.length > 10 ? " · showing 10" : ""}`

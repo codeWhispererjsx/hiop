@@ -1,5 +1,12 @@
 # Changelog
 
+## HIOP 3.0.0
+
+- Promoted the enterprise and multi-property operations platform from development to a stable release.
+- Improved inventory reconciliation, owner and department import handling, device identity, reporting performance, and local-agent controls.
+- Refined desktop operations, reporting exports, Site Server diagnostics, performance views, organization management, alerts, and access controls.
+- Published the Windows desktop installer as HIOP Desktop 3.0.0.
+
 ## HIOP V3A — Network topology
 
 - Added a read-only topology API and interactive topology workspace backed only by LLDP, CDP, SNMP MAC-table, and existing inventory evidence.

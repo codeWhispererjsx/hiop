@@ -113,6 +113,7 @@ export default function HierarchyPage() {
       if (editing)
         await endpoints.updateHierarchy(section.kind, editing, payload);
       else await endpoints.createHierarchy(section.kind, payload);
+      window.dispatchEvent(new Event("hiop:organization-updated"));
       await request.reload();
       reset();
       setNotice(`${section.label.slice(0, -1)} saved.`);
@@ -133,6 +134,7 @@ export default function HierarchyPage() {
       return;
     try {
       await endpoints.deactivateHierarchy(section.kind, row.id);
+      window.dispatchEvent(new Event("hiop:organization-updated"));
       await request.reload();
       setNotice(`${row.name} was deactivated.`);
     } catch (error) {

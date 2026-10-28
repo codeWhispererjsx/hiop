@@ -4,13 +4,14 @@ from difflib import SequenceMatcher
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.imports.matching import score_records, select_hostname_rule, select_subnet_rule
 from app.models.hierarchy import Building, Department, Floor, NetworkZone, Room
 from app.models.hierarchy import Property
 from app.models.device import Device
+from app.models.asset_intelligence import ManagedAsset
 from app.models.discovered_device import DiscoveredDevice
 from app.models.inventory_import import (
     ImportCandidateType,
@@ -185,7 +186,17 @@ class ImportMatchingService:
         property_id = self.db.info.get("property_id")
         if property_id is not None:
             properties = properties.where(Property.id == property_id)
-        if model in (Department, Building, NetworkZone):
+        if model is Department:
+            return query.where(
+                or_(
+                    and_(
+                        Department.organization_id == organization_id,
+                        Department.property_id.is_(None),
+                    ),
+                    Department.property_id.in_(properties),
+                )
+            )
+        if model in (Building, NetworkZone):
             return query.where(model.property_id.in_(properties))
         buildings = select(Building.id).where(Building.property_id.in_(properties))
         if model is Floor:
@@ -310,12 +321,34 @@ class ImportMatchingService:
                 )
                 continue
 
-            if not relevant_candidates and row.hostname:
+            if row.hostname:
                 from app.services.import_finalization_service import ImportFinalizationService
 
-                ImportFinalizationService(self.db).set_disposition(
-                    session_id, row.id, "create_asset", [], [], actor
+                session = self._session(session_id)
+                organization_id = getattr(self.db, "info", {}).get("organization_id")
+                property_value = (
+                    session.mapping_metadata.get("tenant_property_id")
+                    if organization_id
+                    else None
                 )
+                if organization_id and property_value:
+                    property_id = UUID(property_value)
+                    existing_asset = self.db.scalar(
+                        select(ManagedAsset.id).where(
+                            ManagedAsset.organization_id == organization_id,
+                            ManagedAsset.property_id == property_id,
+                            func.lower(ManagedAsset.name) == row.hostname.strip().casefold(),
+                        ).limit(1)
+                    )
+                    if existing_asset:
+                        ImportFinalizationService(self.db).set_disposition(
+                            session_id, row.id, "skip", [], [], actor
+                        )
+                        continue
+                if not relevant_candidates:
+                    ImportFinalizationService(self.db).set_disposition(
+                        session_id, row.id, "create_asset", [], [], actor
+                    )
 
     def matches(self, session_id: UUID, **filters) -> dict[str, Any]:
         self._session(session_id)

@@ -66,6 +66,22 @@ def test_search_and_filters_cover_required_asset_identity(monkeypatch):
     assert len(result["items"])==1
 
 
+def test_department_filter_display_uses_current_hierarchy_name():
+    department_id = uuid4()
+    current_department = SimpleNamespace(id=department_id, name="Front Office")
+    db = SimpleNamespace(
+        get=lambda model, identifier: current_department
+        if identifier == department_id
+        else None
+    )
+    asset = SimpleNamespace(
+        department_id=department_id,
+        department_name="Reception",
+    )
+
+    assert service._department_display_name(db, asset) == "Front Office"
+
+
 def test_asset_write_authorization_excludes_technician_and_viewer():
     check=require_roles(["admin","superadmin"])
     assert check(actor).role=="admin"

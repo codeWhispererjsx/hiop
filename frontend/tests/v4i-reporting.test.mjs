@@ -17,12 +17,14 @@ test("V4I exposes the fourteen focused report types",()=>{
   for(const report of ["executive","operations","network","assets","lifecycle","incidents","problems","changes","procurement","vendors","knowledge","services","departments","locations"]) assert.ok(page.includes(`"${report}"`));
 });
 
-test("date ranges, honest missing data, trends, drilldowns, and CSV export are visible",()=>{
-  for(const value of ["Today","Last 7 days","Last 30 days","Last 90 days","This month","This quarter","This year","Custom range","Insufficient data","historical trend","Open underlying records","Export CSV"]) assert.ok(page.includes(value));
+test("date ranges, honest missing data, trends, drilldowns, and CSV and Word exports are visible",()=>{
+  for(const value of ["Today","Last 7 days","Last 30 days","Last 90 days","This month","This quarter","This year","Custom range","Insufficient data","historical trend","Open underlying records","value=\"csv\"","value=\"word\""]) assert.ok(page.includes(value));
   assert.match(api,/\/reporting\/\$\{report\}/);
   assert.match(api,/export\.csv/);
   assert.match(page,/BreakdownChart/);
   assert.match(page,/report-breakdown-track/);
+  assert.match(page,/report-export-toolbar/);
+  assert.match(page,/onRetry={data.reload}/);
 });
 
 test("the V4I surface has no predictive or generic BI builder capability",()=>{

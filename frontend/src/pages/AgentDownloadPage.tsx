@@ -62,7 +62,7 @@ export default function AgentDownloadPage() {
         </button>
         <header className="agent-download-brand">
           <BrandLogo />
-          <p>Lagos Continental IT Support</p>
+          <p>HIOP agent distribution</p>
         </header>
         <div className={`agent-server-status ${server ? "is-online" : serverError ? "is-unavailable" : ""}`} role={serverError ? "alert" : "status"}>
           <i aria-hidden="true" />
@@ -108,7 +108,7 @@ export default function AgentDownloadPage() {
           </div>
         </section>
         <footer className="agent-download-footer">
-          <span>Help: Contact IT · Extension 1234</span>
+          <span>Help: Contact your HIOP administrator</span>
           <span>Works only on the hotel admin network · No internet access required for agent communication</span>
           <span>For company-managed devices only</span>
         </footer>

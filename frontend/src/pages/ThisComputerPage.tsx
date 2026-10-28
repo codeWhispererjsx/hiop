@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
 import { useRequest } from "../hooks/useRequest";
@@ -45,6 +45,16 @@ export default function ThisComputerPage() {
 
   const status = operations.data;
   const addresses = status.network.ipv4_addresses.length ? status.network.ipv4_addresses.join(", ") : "Not detected";
+  const serviceChecks = [
+    { label: "HIOP service", value: status.service.status },
+    { label: "Database", value: status.database.status },
+    { label: "Automation scheduler", value: status.scheduler.status },
+    { label: "Backup and recovery", value: status.backup.status },
+  ];
+  const healthyChecks = serviceChecks.filter(({ value }) => !/unavailable|failed|error|offline/i.test(value)).length;
+  const discoveryCoverage = status.discovery.hosts_total
+    ? Math.min(100, Math.round(status.discovery.hosts_completed * 100 / status.discovery.hosts_total))
+    : 0;
 
   return <DashboardLayout>
     <PageTitle eyebrow="Hotel operations" title="Site Server" copy="Check this HIOP installation, local database, monitoring, backups, and recovery information." />
@@ -59,12 +69,37 @@ export default function ThisComputerPage() {
       <article><span>Storage</span><strong>{formatBytes(status.storage.available_bytes)} free</strong><p>HIOP database: {formatBytes(status.storage.database_bytes)}. {status.storage.details}</p></article>
     </section>
 
+    <section className="this-computer-visuals" aria-label="Installation health charts">
+      <article className="this-computer-chart">
+        <header><div><span>Service health</span><h2>Installation checks</h2></div><strong>{healthyChecks} / {serviceChecks.length} ready</strong></header>
+        <div className="service-health-bars">
+          {serviceChecks.map(({ label, value }) => {
+            const failed = /unavailable|failed|error|offline/i.test(value);
+            const warning = /stale|unknown|disabled|pending/i.test(value);
+            const score = failed ? 0 : warning ? 55 : 100;
+            return <div key={label} className={failed ? "danger" : warning ? "warning" : "healthy"}>
+              <div><span>{label}</span><strong>{readableStatus(value)}</strong></div>
+              <span className="service-health-track"><i style={{ width: `${score}%` }} /></span>
+            </div>;
+          })}
+        </div>
+      </article>
+      <article className="this-computer-chart discovery-coverage">
+        <header><div><span>Discovery</span><h2>Latest scan coverage</h2></div><strong>{discoveryCoverage}%</strong></header>
+        <div className="coverage-ring" style={{ "--coverage": `${discoveryCoverage}%` } as CSSProperties} role="img" aria-label={`${discoveryCoverage}% of scan targets checked`}>
+          <strong>{discoveryCoverage}%</strong><span>checked</span>
+        </div>
+        <p>{status.discovery.hosts_completed} of {status.discovery.hosts_total} hosts checked</p>
+        <small>{status.discovery.last_run ? `Last run ${formatDateTime(status.discovery.last_run)}` : "No scan recorded"}</small>
+      </article>
+    </section>
+
     <section className="this-computer-guide" aria-label="Local operations quick actions">
       <header><span>Quick actions</span><h2>Manage this HIOP installation</h2></header>
       <nav className="this-computer-actions">
         <Link className="primary-action" to="/discovery-intelligence">Run device discovery</Link>
         <Link className="secondary-action" to="/settings">Open HIOP settings</Link>
-        <a className="secondary-action" href="#diagnostics">View service diagnostics</a>
+        <button className="secondary-action" type="button" onClick={() => document.getElementById("diagnostics")?.scrollIntoView({ behavior: "smooth", block: "start" })}>View service diagnostics</button>
         <button className="secondary-action" type="button" disabled={downloading} onClick={() => void downloadReport()}>{downloading ? "Preparing report…" : "Download support report"}</button>
         <button className="secondary-action" type="button" onClick={() => document.getElementById("backup-recovery")?.scrollIntoView({ behavior: "smooth" })}>View backup and recovery</button>
       </nav>

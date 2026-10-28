@@ -8,6 +8,7 @@ from app.models.asset_intelligence import AssetLifecycleEvent, ManagedAsset
 from app.models.asset_management import Vendor
 from app.models.alert import Alert
 from app.models.device import Device
+from app.models.hierarchy import Department
 from app.models.incidents import OperationalIncidentSource
 from app.models.network_scan import NetworkScan
 from app.models.port_intelligence import PortDeviceAssociation
@@ -42,8 +43,21 @@ def _relationships(db, asset):
     return {"topology": topology, "ports": ports, "vlans": vlans, "alerts": alerts, "incidents": incidents}
 
 
-def present(db, asset, include_relationships=False):
+def _department_display_name(db, asset, device=None, resolved_name=None):
+    if resolved_name:
+        return resolved_name
+    department_id = asset.department_id or (device.department_id if device else None)
+    department = db.get(Department, department_id) if department_id else None
+    return department.name if department else asset.department_name or (device.department if device else None)
+
+
+def present(db, asset, include_relationships=False, resolved_department_name=None):
     device = db.get(Device, asset.device_id) if asset.device_id else None
+    type_source = (asset.field_sources or {}).get("device_type")
+    rule_managed_type = (
+        isinstance(type_source, dict)
+        and type_source.get("source") == "identity_rule"
+    )
     scan = _latest_scan(db, asset.device_id)
     history=db.scalars(select(AssetLifecycleEvent).where(AssetLifecycleEvent.asset_id==asset.id,AssetLifecycleEvent.organization_id==asset.organization_id).order_by(AssetLifecycleEvent.created_at.desc())).all() if include_relationships else []
     today=date.today();warranty_status="unknown"
@@ -54,14 +68,16 @@ def present(db, asset, include_relationships=False):
     supplier=db.get(Vendor,asset.vendor_id) if asset.vendor_id else None
     return {
         "id": asset.id, "property_id": asset.property_id, "asset_number": asset.asset_number, "device_id": asset.device_id,
-        "name": asset.name, "asset_tag": asset.asset_tag, "device_type": device.device_type if device else asset.device_type,
+        "name": asset.name, "asset_tag": asset.asset_tag, "device_type": asset.device_type if rule_managed_type or not device else device.device_type,
         "status": asset.status, "ci_category": asset.ci_category,
         "vendor": device.brand if device else asset.vendor, "supplier":{"id":supplier.id,"vendor_id":supplier.vendor_number,"name":supplier.legal_name,"status":supplier.status,"primary_email":supplier.primary_email,"primary_phone":supplier.primary_phone} if supplier else None, "model": device.model if device else asset.model,
         "serial_number": device.serial_number if device else asset.serial_number,
         "hostname": device.hostname if device else None, "ip_address": device.ip_address if device else None,
         "mac_address": device.mac_address if device else None,
         "department_id": asset.department_id or (device.department_id if device else None),
-        "department": asset.department_name or (device.department if device else None),
+        "department": _department_display_name(
+            db, asset, device, resolved_department_name
+        ),
         "room_id": asset.room_id or (device.room_id if device else None), "location": asset.location_name or (device.location if device else None),
         "business_owner": asset.business_owner, "technical_owner": asset.technical_owner,
         "description": asset.description or (device.description if device else None), "source": asset.source,
@@ -157,7 +173,29 @@ def list_assets(db, search=None, status=None, device_type=None, department=None,
     # Get total count with filters
     total_query=query
     rows=db.scalars(total_query.order_by(ManagedAsset.asset_number)).all()
-    items=[present(db,row) for row in rows]
+    department_ids = {
+        row.department_id
+        for row in rows
+        if getattr(row, "department_id", None)
+    }
+    departments = (
+        {
+            item.id: item.name
+            for item in db.scalars(
+                select(Department).where(Department.id.in_(department_ids))
+            ).all()
+        }
+        if department_ids
+        else {}
+    )
+    items=[
+        (
+            present(db,row,resolved_department_name=departments.get(row.department_id))
+            if departments and getattr(row, "department_id", None)
+            else present(db,row)
+        )
+        for row in rows
+    ]
     
     def match(item):
         values=[item.get(k) for k in ("asset_number","asset_tag","name","hostname","ip_address","mac_address","serial_number")]

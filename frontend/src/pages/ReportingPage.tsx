@@ -6,6 +6,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints } from "../lib/api";
+import { downloadExportFile } from "../lib/brandedWordExport";
 import { PageTitle } from "./DashboardPage";
 
 const reports = [
@@ -52,6 +53,10 @@ export default function ReportingPage() {
   const [vendorId, setVendorId] = useState("");
   const [deviceType, setDeviceType] = useState("");
   const [status, setStatus] = useState("");
+  const [exportFormat, setExportFormat] = useState<"csv" | "word">("csv");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
+  const hierarchy = useRequest(endpoints.hierarchy, []);
   const reportFilterCount = [period !== "30d" ? period : "", start, end, departmentId, locationId, serviceId, vendorId, deviceType, status].filter(Boolean).length;
   const clearReportFilters = () => { setPeriod("30d"); setStart(""); setEnd(""); setDepartmentId(""); setLocationId(""); setServiceId(""); setVendorId(""); setDeviceType(""); setStatus(""); };
 
@@ -89,14 +94,17 @@ export default function ReportingPage() {
     ]
   );
 
-  const exportCsv = async () => {
-    const file = await endpoints.exportOrganizationReport(report, filters);
-    const url = URL.createObjectURL(file.blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = file.filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
+  const exportReport = async () => {
+    setExporting(true);
+    setExportError("");
+    try {
+      const file = await endpoints.exportOrganizationReport(report, filters);
+      await downloadExportFile(exportFormat, `${title(report)} Report`, file.filename, file.blob);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "The report could not be exported.");
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -105,16 +113,8 @@ export default function ReportingPage() {
         eyebrow="Management intelligence"
         title="Organization reporting"
         copy="Prebuilt, explainable reports calculated from live HIOP organization data."
-        action={
-          <button
-            className="secondary-action"
-            onClick={() => void exportCsv()}
-            aria-label="Export report as CSV"
-          >
-            Export CSV
-          </button>
-        }
       />
+      {exportError && <p className="form-error" role="alert">{exportError}</p>}
       <nav className="page-actions report-tabs" aria-label="Specialized reports">
         <Link className="secondary-action" to="/reports/system-maintenance">System Maintenance Report</Link>
       </nav>
@@ -145,7 +145,12 @@ export default function ReportingPage() {
           </div>
         </details>
       </nav>
-      <section className="operations-guide report-guide" aria-label="Reporting guide"><div><span>Choose</span><strong>{title(report)} report</strong><p>Select a common report or open More reports for additional options.</p></div><div><span>Filter</span><strong>Choose a date range</strong><p>Start with a preset period or select a custom date range.</p></div><div><span>Act</span><strong>Drill down or export</strong><p>Open underlying records from linked metrics or export the current view as CSV.</p></div></section>
+      <section className="report-export-toolbar" aria-label="Export report">
+        <div><strong>{title(report)} report</strong><span>Export the current report using the selected date range and filters.</span></div>
+        <label htmlFor="report-export-format">Export format<select id="report-export-format" value={exportFormat} onChange={(event) => setExportFormat(event.target.value as "csv" | "word")}><option value="csv">CSV spreadsheet</option><option value="word">Branded Word report</option></select></label>
+        <button className="primary-action" onClick={() => void exportReport()} disabled={exporting}>{exporting ? "Preparing export…" : `Export ${exportFormat === "csv" ? "CSV" : "Word report"}`}</button>
+      </section>
+      <section className="operations-guide report-guide" aria-label="Reporting guide"><div><span>Choose</span><strong>{title(report)} report</strong><p>Select a common report or open More reports for additional options.</p></div><div><span>Filter</span><strong>Choose a date range</strong><p>Start with a preset period or select a custom date range.</p></div><div><span>Act</span><strong>Drill down or export</strong><p>Open underlying records from linked metrics or export the current view as CSV or a branded Word report.</p></div></section>
       <section className="toolbar-panel" aria-label="Report filters">
         <div className="filter-row">
           <label htmlFor="report-period">
@@ -207,22 +212,22 @@ export default function ReportingPage() {
             />
           </label>
           <label htmlFor="report-department">
-            Department ID
-            <input
-              id="report-department"
-              value={departmentId}
-              onChange={(e) => setDepartmentId(e.target.value)}
-              placeholder="Optional"
-            />
+            Department
+            <select id="report-department" value={departmentId} onChange={(event) => setDepartmentId(event.target.value)}>
+              <option value="">All departments</option>
+              {(hierarchy.data?.departments ?? []).filter((item) => item.is_active || item.id === departmentId).map((item) => (
+                <option key={item.id} value={item.id}>{item.name}{item.is_active ? "" : " (Inactive)"}</option>
+              ))}
+            </select>
           </label>
           <label htmlFor="report-location">
-            Location ID
-            <input
-              id="report-location"
-              value={locationId}
-              onChange={(e) => setLocationId(e.target.value)}
-              placeholder="Optional"
-            />
+            Room / location
+            <select id="report-location" value={locationId} onChange={(event) => setLocationId(event.target.value)}>
+              <option value="">All locations</option>
+              {(hierarchy.data?.rooms ?? []).filter((item) => item.is_active || item.id === locationId).map((item) => (
+                <option key={item.id} value={item.id}>{item.name}{item.is_active ? "" : " (Inactive)"}</option>
+              ))}
+            </select>
           </label>
           <label htmlFor="report-service">
             Service ID
@@ -248,7 +253,7 @@ export default function ReportingPage() {
         <p className="toolbar-summary">Report scope: <strong>{title(report)}</strong> · {periods.find((item) => item.id === period)?.label}</p>
       </section>
       {data.loading || data.error || !data.data ? (
-        <Feedback loading={data.loading} error={data.error} />
+        <Feedback loading={data.loading} error={data.error} onRetry={data.reload} loadingTitle={`Loading ${title(report).toLowerCase()} report`} loadingMessage="Calculating the report from the selected organization and date range." />
       ) : (
         <>
           <section className="report-metric-grid" aria-label="Report metrics">

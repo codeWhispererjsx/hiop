@@ -83,6 +83,31 @@ export default function SettingsPage() {
     void load();
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const refreshHierarchy = async () => {
+      try {
+        const [nextDepartments, nextLocations] = await Promise.all([
+          endpoints.organizationDepartments(),
+          endpoints.organizationLocations(),
+        ]);
+        if (active) {
+          setDepartments(nextDepartments);
+          setLocations(nextLocations);
+        }
+      } catch (caught) {
+        if (active) {
+          setNotice(caught instanceof Error ? caught.message : "Departments and locations could not be refreshed.");
+        }
+      }
+    };
+    window.addEventListener("hiop:organization-updated", refreshHierarchy);
+    return () => {
+      active = false;
+      window.removeEventListener("hiop:organization-updated", refreshHierarchy);
+    };
+  }, []);
+
   const save = async () => {
     if (!draft) return;
     setSaving(true);

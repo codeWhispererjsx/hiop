@@ -3,6 +3,7 @@ import { Feedback } from "../components/Feedback";
 import Modal from "../components/Modal";
 import { useRequest } from "../hooks/useRequest";
 import { endpoints } from "../lib/api";
+import { downloadExportFile } from "../lib/brandedWordExport";
 import { formatDateTime } from "../lib/dateTime";
 import type { MaintenanceRule } from "../lib/types";
 import DashboardLayout from "../layouts/DashboardLayout";
@@ -52,6 +53,8 @@ export default function SystemMaintenancePage() {
   const [range, setRange] = useState<Range>("7d");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [exportFormat, setExportFormat] = useState<"csv" | "word">("csv");
+  const [exporting, setExporting] = useState(false);
   const [draft, setDraft] = useState<RuleDraft>();
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
@@ -82,20 +85,18 @@ export default function SystemMaintenancePage() {
     ? uptimeValues.reduce((sum, value) => sum + value, 0) / uptimeValues.length
     : null;
 
-  const downloadCsv = async () => {
+  const downloadMaintenanceReport = async () => {
+    setExporting(true);
     setError("");
     try {
       const file = range === "custom"
         ? await endpoints.exportMaintenanceLog(range, startDate, endDate)
         : await endpoints.exportMaintenanceLog(range);
-      const url = URL.createObjectURL(file.blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = file.filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      await downloadExportFile(exportFormat, "System Maintenance Report", file.filename, file.blob);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not export the maintenance report.");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -191,7 +192,8 @@ export default function SystemMaintenancePage() {
         action={
           <div className="maintenance-page-actions">
             <button type="button" className="secondary-action" onClick={() => window.print()}>Print</button>
-            <button type="button" className="secondary-action" onClick={() => void downloadCsv()} disabled={range === "custom" && !customRangeValid}>Export CSV</button>
+            <label>Format<select value={exportFormat} onChange={(event) => setExportFormat(event.target.value as "csv" | "word")}><option value="csv">CSV</option><option value="word">Word report (.docx)</option></select></label>
+            <button type="button" className="secondary-action" onClick={() => void downloadMaintenanceReport()} disabled={exporting || (range === "custom" && !customRangeValid)}>{exporting ? "Preparing export…" : `Export ${exportFormat === "csv" ? "CSV" : "Word report"}`}</button>
           </div>
         }
       />

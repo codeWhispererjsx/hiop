@@ -6,6 +6,7 @@ HIOP exposes only Overview, Discover, Monitor, Manage, Automate, Maintain, and A
 
 - Private-network quick scans use deterministic discovery and preserve evidence.
 - Discovery results can be reviewed and approved into managed inventory.
+- Exact hostname/serial matches to unlinked uploaded assets are shown for administrator review; linking reuses the uploaded record instead of creating a duplicate.
 - Approval prevents duplicate IP/MAC records and writes an audit event.
 - Missing values remain `Unknown`; an absent MAC address is stored as `NULL`.
 - Overview combines inventory, availability, pending discovery, incidents, and alerts.

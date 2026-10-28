@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from app.models.inventory_import import ImportCandidateType, ImportValidationStatus
 from app.models.device import Device
+from app.models.hierarchy import Department
 from app.imports.matching import score_records
 from app.services.import_finalization_service import ImportFinalizationService
 from app.services.import_matching_service import ImportMatchingService
@@ -88,3 +89,77 @@ def test_quick_import_links_only_unambiguous_exact_hostname_and_stages_new_hosts
     assert (new_row.id, "create_asset") in dispositions
     assert (duplicate_row.id, "skip") in dispositions
     assert not any(row_id == conflict_row.id for row_id, _ in dispositions)
+
+
+def test_quick_import_skips_exact_managed_asset_matches_instead_of_creating_duplicates(monkeypatch):
+    session_id, row_id, organization_id, property_id = uuid4(), uuid4(), uuid4(), uuid4()
+    row = SimpleNamespace(
+        id=row_id,
+        hostname="host-01",
+        validation_status=ImportValidationStatus.VALID,
+    )
+    db = SimpleNamespace(
+        get=lambda *_args: None,
+        info={"organization_id": organization_id},
+        scalar=lambda _query: uuid4(),
+    )
+    service = ImportMatchingService(db)
+    service._session = lambda _: SimpleNamespace(
+        mapping_metadata={"tenant_property_id": str(property_id)}
+    )
+    service.repository.rows_to_match = lambda _: [row]
+    service.repository.candidates_for_row = lambda *_args: []
+    dispositions = []
+    monkeypatch.setattr(
+        ImportFinalizationService,
+        "set_disposition",
+        lambda _self, _session_id, row_id, disposition, *_args: dispositions.append(
+            (row_id, disposition)
+        ),
+    )
+
+    service.prepare_quick_import(session_id, SimpleNamespace())
+
+    assert dispositions == [(row_id, "skip")]
+
+
+def test_import_plan_resolves_a_unique_exact_department_name():
+    department = SimpleNamespace(id=uuid4(), name="Front Office")
+    db = SimpleNamespace(
+        info={"organization_id": uuid4(), "property_id": uuid4()},
+        scalars=lambda _query: SimpleNamespace(all=lambda: [department]),
+        get=lambda *_args: None,
+    )
+    service = ImportFinalizationService(db)
+    service._location = lambda _row: None
+    row = SimpleNamespace(
+        id=uuid4(),
+        import_session_id=uuid4(),
+        source_row_number=2,
+        final_disposition="create_asset",
+        resolution_action=None,
+        department_name=" front office ",
+        room_name=None,
+        asset_tag=None,
+        hostname="FO-PC-01",
+        device_type="Windows Computer",
+        brand=None,
+        vendor=None,
+        model=None,
+        serial_number=None,
+        inventory_status=None,
+        ip_address=None,
+        mac_address=None,
+        notes=None,
+        normalized_data={},
+        linked_device_id=None,
+        linked_discovery_id=None,
+        approved_changes=None,
+        resolved_by=None,
+        resolved_at=None,
+    )
+
+    plan = service._plan_row(row)
+
+    assert plan["hierarchy"]["department_id"] == str(department.id)
+    assert plan["values"]["department"] == department.name

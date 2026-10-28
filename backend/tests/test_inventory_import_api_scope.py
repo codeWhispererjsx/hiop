@@ -7,6 +7,7 @@ from sqlalchemy.dialects import postgresql
 
 from app.api.v1.inventory_imports import _session
 from app.models.hierarchy import Department
+from app.services.import_finalization_service import ImportFinalizationService
 from app.services.import_matching_service import ImportMatchingService
 
 
@@ -43,13 +44,16 @@ def test_import_session_property_scope_cannot_be_widened():
     assert error.value.status_code == 404
 
 
-def test_matching_hierarchy_lookup_is_scoped_to_active_organization_property():
+def test_import_hierarchy_lookup_includes_organization_departments_and_active_property():
     organization_id, property_id = uuid4(), uuid4()
     db = SimpleNamespace(info={"organization_id": organization_id, "property_id": property_id})
 
-    statement = ImportMatchingService(db)._hierarchy_query(Department)
-    sql = str(statement.compile(dialect=postgresql.dialect()))
+    for service in (ImportMatchingService(db), ImportFinalizationService(db)):
+        statement = service._hierarchy_query(Department)
+        sql = str(statement.compile(dialect=postgresql.dialect()))
 
-    assert "departments.property_id IN" in sql
-    assert "properties.organization_id" in sql
-    assert "properties.id =" in sql
+        assert "departments.organization_id =" in sql
+        assert "departments.property_id IS NULL" in sql
+        assert "departments.property_id IN" in sql
+        assert "properties.organization_id" in sql
+        assert "properties.id =" in sql

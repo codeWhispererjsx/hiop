@@ -271,6 +271,188 @@ def test_rule_sync_updates_linked_inventory_and_preserves_manual_edits(monkeypat
     assert "device_type" not in json.loads(profile.suggestion)["rule_managed"]
 
 
+def test_hostname_rule_overrides_imported_asset_type_and_department(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.device_identity_service.create_audit_log",
+        lambda *args, **kwargs: None,
+    )
+    organization_id, property_id, department_id = uuid4(), uuid4(), uuid4()
+    department = SimpleNamespace(id=department_id, name="Infrastructure")
+    hostname_rule = rule(
+        organization_id,
+        property_id,
+        department_id,
+        pattern="svr",
+        output_device_type="SERVER",
+    )
+    service = DeterministicIdentity([hostname_rule], {department_id: department})
+    asset = SimpleNamespace(
+        id=uuid4(),
+        property_id=property_id,
+        name="SVR-FILE-01",
+        source="inventory_import",
+        device_type="Windows Computer",
+        department_id=None,
+        department_name=None,
+        field_sources={"device_type": "Inventory import"},
+    )
+
+    assert service.apply_managed_asset_rules(asset, organization_id, "admin")
+
+    assert asset.device_type == "Server"
+    assert asset.department_id == department_id
+    assert asset.department_name == "Infrastructure"
+    assert asset.field_sources["device_type"]["source"] == "identity_rule"
+    assert asset.field_sources["department"]["source"] == "identity_rule"
+
+
+def test_hostname_rule_updates_auto_asset_and_linked_device(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.device_identity_service.create_audit_log",
+        lambda *args, **kwargs: None,
+    )
+    organization_id, property_id, department_id, device_id = (
+        uuid4(), uuid4(), uuid4(), uuid4()
+    )
+    department = SimpleNamespace(id=department_id, name="Front Office")
+    inventory_device = SimpleNamespace(
+        id=device_id,
+        device_type="Windows Computer",
+        department="Unassigned",
+        department_id=None,
+    )
+    hostname_rule = rule(
+        organization_id,
+        property_id,
+        department_id,
+        pattern="dt",
+        output_device_type="Desktop",
+    )
+    service = DeterministicIdentity([hostname_rule], {department_id: department})
+    service.db.get = lambda model, key: (
+        inventory_device if key == device_id else {department_id: department}.get(key)
+    )
+    asset = SimpleNamespace(
+        id=uuid4(),
+        device_id=device_id,
+        property_id=property_id,
+        name="HELOSHADTFO1115",
+        source="manual",
+        device_type="Windows Computer",
+        department_id=None,
+        department_name=None,
+        field_sources={
+            "technical_identity": "Device",
+            "organizational_metadata": "Imported from existing inventory",
+        },
+    )
+
+    assert service.apply_managed_asset_rules(asset, organization_id, "admin")
+
+    assert asset.device_type == inventory_device.device_type == "Desktop"
+    assert asset.department_name == inventory_device.department == "Front Office"
+    assert asset.department_id == inventory_device.department_id == department_id
+
+
+def test_separate_hostname_rules_compose_device_type_and_department(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.device_identity_service.create_audit_log",
+        lambda *args, **kwargs: None,
+    )
+    organization_id, property_id, department_id, device_id = (
+        uuid4(), uuid4(), uuid4(), uuid4()
+    )
+    department = SimpleNamespace(id=department_id, name="Front Office")
+    inventory_device = SimpleNamespace(
+        id=device_id,
+        device_type="Windows Computer",
+        department="Unassigned",
+        department_id=None,
+    )
+    type_rule = rule(
+        organization_id,
+        property_id,
+        None,
+        name="Hostname contains DT = Desktop",
+        pattern="dt",
+        output_device_type="Desktop",
+        output_department_id=None,
+    )
+    department_rule = rule(
+        organization_id,
+        property_id,
+        department_id,
+        name="Hostname contains FO = Front Office",
+        pattern="fo",
+        output_device_type=None,
+    )
+    service = DeterministicIdentity(
+        [type_rule, department_rule], {department_id: department}
+    )
+    service.db.get = lambda model, key: (
+        inventory_device if key == device_id else {department_id: department}.get(key)
+    )
+    asset = SimpleNamespace(
+        id=uuid4(),
+        device_id=device_id,
+        property_id=property_id,
+        name="HELOSHADTFO1115",
+        source="inventory_import",
+        device_type="Windows Computer",
+        department_id=None,
+        department_name=None,
+        field_sources={},
+    )
+
+    assert service.apply_managed_asset_rules(asset, organization_id, "admin")
+
+    assert asset.device_type == inventory_device.device_type == "Desktop"
+    assert asset.department_id == inventory_device.department_id == department_id
+    assert asset.department_name == inventory_device.department == "Front Office"
+    assert asset.field_sources["device_type"]["rule_id"] == str(type_rule.id)
+    assert asset.field_sources["department"]["rule_id"] == str(department_rule.id)
+
+
+def test_removed_hostname_rule_restores_baseline_but_preserves_manual_changes(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.device_identity_service.create_audit_log",
+        lambda *args, **kwargs: None,
+    )
+    organization_id, property_id, department_id = uuid4(), uuid4(), uuid4()
+    department = SimpleNamespace(id=department_id, name="Infrastructure")
+    hostname_rule = rule(
+        organization_id,
+        property_id,
+        department_id,
+        pattern="svr",
+        output_device_type="Server",
+    )
+    asset = SimpleNamespace(
+        id=uuid4(),
+        property_id=property_id,
+        name="SVR-FILE-01",
+        source="inventory_import",
+        device_type="Windows Computer",
+        department_id=None,
+        department_name=None,
+        field_sources={},
+    )
+    DeterministicIdentity([hostname_rule], {department_id: department}).apply_managed_asset_rules(
+        asset, organization_id, "admin"
+    )
+    asset.device_type = "Administrator-selected type"
+    asset.field_sources["device_type"] = "Manual"
+
+    DeterministicIdentity([], {department_id: department}).apply_managed_asset_rules(
+        asset, organization_id, "admin"
+    )
+
+    assert asset.device_type == "Administrator-selected type"
+    assert asset.department_id is None
+    assert asset.department_name is None
+    assert asset.field_sources["device_type"] == "Manual"
+
+
 def test_rule_removal_restores_only_unchanged_rule_managed_inventory(monkeypatch):
     monkeypatch.setattr("app.services.device_identity_service.create_audit_log", lambda *args, **kwargs: None)
     device_id, baseline_department_id = uuid4(), uuid4()

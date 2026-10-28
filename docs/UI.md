@@ -37,14 +37,15 @@ Light mode uses the designated cool-gray background, white cards, dark text, and
 
 - Login: email/password authentication and safe backend/error feedback. Email recovery is not implemented.
 - Overview: real inventory availability, recent scans, active tickets, refresh, and ticket links.
-- Devices: search, status/department filters, pagination, details, reusable add/edit form, soft retirement, and operational history tabs.
+- Devices: search, status/department filters, pagination, details, reusable add/edit form, soft retirement, operational history tabs, CSV/Excel export, and a branded Word report.
 - Network monitor: live summary, device table, approved scan controls, scan state, history, alerts, and WebSocket connection state.
 - Alerts: real combined filters, details panel, acknowledgement, related device/ticket navigation, scan/audit context, and live refresh.
 - Service tickets: summary, combined filters, pagination, details, reusable create/edit form, assignment, close, supported reopen, and controlled deletion.
 - Locations & structure: real normalized hierarchy catalog and admin create/edit/deactivate actions.
 - Team & access: real user metrics/table/details/form, role/status/password actions, search, filters, and pagination.
-- Audit trail: server-side combined filters, pagination, details, related-record navigation, refresh, and CSV export.
-- Reports: six real report datasets, date/filter/sort/pagination controls, charts, cross-navigation, CSV export, and print.
+- Audit trail: server-side combined filters, pagination, details, related-record navigation, refresh, CSV export, and branded Word reports.
+- Reports: fourteen real report datasets, date/filter/sort/pagination controls, charts, cross-navigation, CSV export, branded Word reports, and print.
+- System Maintenance and import validation: filtered CSV exports and branded Word reports. Word exports use the HIOP wordmark and the active organization's name and logo.
 - Settings: validated persisted global settings, organization, hierarchy entry points, scanner, notifications, theme, security facts, health, operations guidance, and application metadata.
 
 ## Accessibility and responsive behavior

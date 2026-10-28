@@ -33,6 +33,7 @@ export default function LocalAgentsPage() {
   const [enrollError, setEnrollError] = useState("");
 
   const agents = useRequest(endpoints.listLocalAgents, []);
+  const hierarchy = useRequest(endpoints.hierarchy, []);
   const reloadAgents = agents.reload;
   const history = useRequest(
     () => selected ? endpoints.getAgentHistory(selected.id) : Promise.resolve([]),
@@ -46,8 +47,14 @@ export default function LocalAgentsPage() {
   const onlineCount = rows.filter((agent) => agent.status === "online").length;
   const offlineCount = rows.filter((agent) => agent.status === "offline" || agent.status === "stale").length;
   const attentionCount = rows.filter((agent) => (agent.uptime_seconds ?? 0) > 48 * 60 * 60).length;
-  const departments = [...new Set(rows.map((agent) => agent.department).filter((value): value is string => Boolean(value)))].sort();
-  const locations = [...new Set(rows.map((agent) => agent.location).filter((value): value is string => Boolean(value)))].sort();
+  const departments = [...new Set([
+    ...(hierarchy.data?.departments.filter((item) => item.is_active).map((item) => item.name) ?? []),
+    ...rows.map((agent) => agent.department).filter((value): value is string => Boolean(value)),
+  ])].sort();
+  const locations = [...new Set([
+    ...(hierarchy.data ? [...hierarchy.data.buildings, ...hierarchy.data.floors, ...hierarchy.data.rooms].filter((item) => item.is_active).map((item) => item.name) : []),
+    ...rows.map((agent) => agent.location).filter((value): value is string => Boolean(value)),
+  ])].sort();
   const visibleAgents = rows.filter((agent) => {
     const term = search.trim().toLowerCase();
     const textMatch = !term || [agent.hostname, agent.name, agent.logged_user, agent.ip_address, agent.department, agent.location]

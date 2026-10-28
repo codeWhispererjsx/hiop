@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,7 @@ from app.models.inventory_import import (
 from app.models.user import User
 from app.schemas.device import DeviceCreate
 from app.services.audit_service import create_audit_log
+from app.services.device_identity_service import DeviceIdentityService
 from app.services.settings_service import read_import_settings
 from app.services.settings_service import read_bundle
 from app.services.email_service import send_email
@@ -97,7 +98,17 @@ class ImportFinalizationService:
         property_id = self.db.info.get("property_id")
         if property_id is not None:
             properties = properties.where(Property.id == property_id)
-        if model in (Department, Building, NetworkZone):
+        if model is Department:
+            return query.where(
+                or_(
+                    and_(
+                        Department.organization_id == organization_id,
+                        Department.property_id.is_(None),
+                    ),
+                    Department.property_id.in_(properties),
+                )
+            )
+        if model in (Building, NetworkZone):
             return query.where(model.property_id.in_(properties))
         buildings = select(Building.id).where(Building.property_id.in_(properties))
         if model is Floor:
@@ -267,6 +278,16 @@ class ImportFinalizationService:
             room = self.db.scalar(self._hierarchy_query(Room).where(Room.id == approved_location.room_id))
             if room:
                 room_name = room.name
+        if not hierarchy["department_id"] and department_name:
+            matching_departments = self.db.scalars(
+                self._hierarchy_query(Department)
+                .where(func.lower(Department.name) == department_name.strip().casefold())
+                .limit(2)
+            ).all()
+            if len(matching_departments) == 1:
+                department = matching_departments[0]
+                hierarchy["department_id"] = str(department.id)
+                department_name = department.name
         values = {
             "asset_tag": row.asset_tag,
             "hostname": row.hostname,
@@ -630,6 +651,17 @@ class ImportFinalizationService:
         ):
             raise FinalizationValidationError("Import property is no longer active in this organization")
         department_id = UUID(values["department_id"]) if values.get("department_id") else None
+        department_name = values.get("department")
+        if not department_id and department_name:
+            department = self._get_or_create_import_department(
+                department_name,
+                organization_id,
+                property_id,
+                actor,
+            )
+            department_id = department.id
+            values = {**values, "department_id": str(department.id), "department": department.name}
+            result.plan = {**result.plan, "values": values}
         room_id = UUID(values["room_id"]) if values.get("room_id") else None
         deployment_date = date.fromisoformat(values["deployment_date"]) if values.get("deployment_date") else None
         asset_number = int(self.db.scalar(text("SELECT nextval('managed_asset_number_seq')")))
@@ -659,6 +691,9 @@ class ImportFinalizationService:
         )
         self.db.add(asset)
         self.db.flush()
+        DeviceIdentityService(self.db).apply_managed_asset_rules(
+            asset, organization_id, actor.username
+        )
         result.plan = {**result.plan, "target_asset_id": str(asset.id)}
         result.after_snapshot = self._asset_snapshot(asset)
         self.db.add(AssetLifecycleEvent(
@@ -676,6 +711,49 @@ class ImportFinalizationService:
             str(asset.id), f"Created {asset.asset_number} from reviewed import row {row.source_row_number}",
         )
         return asset
+
+    def _get_or_create_import_department(
+        self,
+        name: str,
+        organization_id: UUID,
+        property_id: UUID,
+        actor: User,
+    ) -> Department:
+        normalized_name = name.strip()
+        existing = self.db.scalar(
+            select(Department).where(
+                Department.organization_id == organization_id,
+                func.lower(Department.name) == normalized_name.casefold(),
+            ).limit(1)
+        )
+        if existing:
+            if not existing.is_active:
+                raise FinalizationConflictError(
+                    f"Department '{normalized_name}' already exists but is inactive; activate it before importing assets"
+                )
+            if existing.property_id not in {None, property_id}:
+                raise FinalizationConflictError(
+                    f"Department '{normalized_name}' belongs to another property and cannot be assigned by this import"
+                )
+            return existing
+
+        department = Department(
+            name=normalized_name,
+            organization_id=organization_id,
+            property_id=property_id,
+            is_active=True,
+        )
+        self.db.add(department)
+        self.db.flush()
+        create_audit_log(
+            self.db,
+            actor.username,
+            "ORGANIZATION_DEPARTMENT_AUTO_CREATED",
+            "Department",
+            str(department.id),
+            f"Created department {normalized_name} during inventory import finalization",
+        )
+        return department
 
     def _target(self, result: ImportExecutionResult) -> Device:
         target_id = result.plan.get("target_device_id")

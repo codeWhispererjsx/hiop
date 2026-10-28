@@ -1,6 +1,6 @@
 {
   "name": "hiop-desktop",
-  "version": "2.0.7",
+  "version": "3.0.0",
   "private": true,
   "description": "HIOP Windows desktop app for local hotel IT operations.",
   "main": "src/main.cjs",
@@ -59,7 +59,7 @@
       "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": false
     },
-    "icon": "assets/icon.png"
+    "icon": "assets/icon.ico"
   },
   "devDependencies": {
     "electron": "^39.2.7",

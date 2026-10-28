@@ -6,6 +6,7 @@ import { Icon } from "../components/Icon";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints } from "../lib/api";
+import { downloadExportFile } from "../lib/brandedWordExport";
 import { PageTitle } from "./DashboardPage";
 import "../styles/administration.css";
 import { isDesktopMode } from "../lib/appMode";
@@ -17,9 +18,10 @@ export default function AdministrationPage(){
   const roles=useRequest(endpoints.roleDefinitions,[]);
   const [search,setSearch]=useState("");const [actor,setActor]=useState("");const [action,setAction]=useState("");const [entityType,setEntityType]=useState("");const [outcome,setOutcome]=useState<""|"success"|"failure">("");const [propertyId,setPropertyId]=useState("");const [startDate,setStartDate]=useState("");const [endDate,setEndDate]=useState("");const [page,setPage]=useState(1);
   const [exporting,setExporting]=useState(false);const [exportError,setExportError]=useState("");
+  const [exportFormat,setExportFormat]=useState<"csv"|"word">("csv");
   const auditFilters={search:search||undefined,actor:actor||undefined,action:action||undefined,entity_type:entityType||undefined,outcome:outcome||undefined,property_id:propertyId||undefined,start_date:startDate?`${startDate}T00:00:00Z`:undefined,end_date:endDate?`${endDate}T23:59:59.999Z`:undefined,page,page_size:25,sort_order:"desc" as const};
   const audit=useRequest(()=>endpoints.auditLogs(auditFilters),[search,actor,action,entityType,outcome,propertyId,startDate,endDate,page]);
-  const exportLogs=async()=>{setExporting(true);setExportError("");try{const {blob,filename}=await endpoints.exportAuditLogs({...auditFilters,page:undefined,page_size:undefined});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download=filename;link.click();window.setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(x){setExportError(x instanceof Error?x.message:"Export failed. Please try again.")}finally{setExporting(false)}};
+  const exportLogs=async()=>{setExporting(true);setExportError("");try{const {blob,filename}=await endpoints.exportAuditLogs({...auditFilters,page:undefined,page_size:undefined});await downloadExportFile(exportFormat,"Administrative Audit Log",filename,blob)}catch(x){setExportError(x instanceof Error?x.message:"Export failed. Please try again.")}finally{setExporting(false)}};
   const resetAuditFilters=()=>{setSearch("");setActor("");setAction("");setEntityType("");setOutcome("");setPropertyId("");setStartDate("");setEndDate("");setPage(1)};
   if(me.loading)return <DashboardLayout><Feedback loading/></DashboardLayout>;
   if(me.data?.role!=="admin")return <DashboardLayout><Feedback error="Administration is restricted to the Organization Administrator."/></DashboardLayout>;
@@ -36,7 +38,8 @@ export default function AdministrationPage(){
       {isDesktopMode ? <article className="panel admin-entry"><Icon name="network"/><div><h2>Site Server</h2><p>Check this hotel's HIOP service, private database, and scheduler.</p></div><Link className="secondary-action" to="/administration/agents">Open Site Server status</Link></article> : <article className="panel admin-entry"><Icon name="devices"/><div><h2>Billing</h2><p>Review the organization's plan, trial, subscription status, usage and limits.</p></div><Link className="secondary-action" to="/administration/billing">Open billing</Link></article>}
     </section></>}
     {mode==="roles"&&<section className="panel admin-roles"><header><div><span>Organization access</span><h2>Roles and permissions</h2><p>Platform authority is private and managed only from the Platform Control Center.</p></div><strong>{roles.data?.length??3} organization roles</strong></header>{roles.loading||roles.error?<Feedback loading={roles.loading} error={roles.error}/>:<div>{roles.data?.map(role=><article key={role.key}><div><strong>{role.name}</strong><span>{role.description}</span></div><ul>{role.permissions.map(permission=><li key={permission}>{permission.replaceAll("_"," ").replaceAll("."," · ")}</li>)}</ul></article>)}</div>}</section>}
-    {mode==="audit"&&<section className="panel admin-audit"><header><div><span>Accountability</span><h2>Administrative audit log</h2><p>{audit.data?`${audit.data.total} matching record(s)`:"Filter administrative activity by date, user, action, area, outcome, or property."}</p></div><button className="secondary-action" disabled={exporting} onClick={()=>void exportLogs()}>{exporting?"Exporting…":"Export filtered results (CSV)"}</button></header>
+    {mode==="audit"&&<section className="panel admin-audit"><header><div><span>Accountability</span><h2>Administrative audit log</h2><p>{audit.data?`${audit.data.total} matching record(s)`:"Filter administrative activity by date, user, action, area, outcome, or property."}</p></div><label>Format<select value={exportFormat} onChange={event=>setExportFormat(event.target.value as "csv"|"word")}><option value="csv">CSV</option><option value="word">Word report (.docx)</option></select></label><button className="secondary-action" disabled={exporting} onClick={()=>void exportLogs()}>{exporting?"Preparing export…":`Export filtered results (${exportFormat==="csv"?"CSV":"Word"})`}</button></header>
+      {exportError&&<p role="alert" className="form-error">{exportError}</p>}
       <form className="admin-audit-filters" onSubmit={event=>{event.preventDefault();setPage(1);void audit.reload()}}>
         <label>Search<input value={search} onChange={event=>{setSearch(event.target.value);setPage(1)}} placeholder="Description or record"/></label>
         <label>From<input type="date" value={startDate} onChange={event=>{setStartDate(event.target.value);setPage(1)}}/></label>

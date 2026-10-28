@@ -83,6 +83,18 @@ test("final product polish keeps shared states, context, and platform authority 
   assert.match(platform, /HIOP OWNER ADMINISTRATION/);
 });
 
+test("desktop and web startup show branded progress and a recoverable session error", () => {
+  const html = read("index.html");
+  const startup = read("src/components/StartupScreen.tsx");
+  const styles = read("src/styles/startup.css");
+  assert.match(html, /startup-preload/);
+  assert.match(html, /Starting HIOP/);
+  assert.match(startup, /role=\{failed \? "alert" : "status"\}/);
+  assert.match(startup, /Reload HIOP/);
+  assert.match(startup, /role="progressbar"/);
+  assert.match(styles, /prefers-reduced-motion/);
+});
+
 test("theme switching remains instant, system-aware, and persisted", () => {
   const context = read("src/theme/ThemeContext.tsx");
   const bootstrap = read("public/theme-init.js");

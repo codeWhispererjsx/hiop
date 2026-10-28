@@ -1,6 +1,6 @@
 import { configureTimeZone } from "../lib/dateTime";
 /* eslint-disable react-hooks/refs */
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Sidebar from "../components/Sidebar";
@@ -61,6 +61,51 @@ export default function DashboardLayout({
     const selected = propertyContext?.properties.find(property => property.id === propertyContext.active_property_id);
     configureTimeZone(selected?.timezone ?? branding?.timezone ?? "Africa/Lagos");
   }, [propertyContext, branding]);
+  const logout = useCallback(async () => {
+    try {
+      await clearAuthToken();
+    } catch (error) {
+      console.error("Unable to remove the saved HIOP desktop session.", error);
+    } finally {
+      navigate("/login");
+    }
+  }, [navigate]);
+  useEffect(() => {
+    const idleTimeoutMs = 30 * 60 * 1000;
+    let lastActivityAt = Date.now();
+    let timeout: number | undefined;
+    let loggedOut = false;
+
+    const scheduleLogout = () => {
+      if (loggedOut) return;
+      if (timeout !== undefined) window.clearTimeout(timeout);
+      const remaining = idleTimeoutMs - (Date.now() - lastActivityAt);
+      if (remaining <= 0) {
+        loggedOut = true;
+        void logout();
+        return;
+      }
+      timeout = window.setTimeout(scheduleLogout, remaining);
+    };
+    const recordActivity = () => {
+      if (loggedOut) return;
+      lastActivityAt = Date.now();
+      scheduleLogout();
+    };
+    const checkDeadline = () => {
+      if (!document.hidden) scheduleLogout();
+    };
+
+    const activityEvents = ["pointerdown", "pointermove", "keydown", "touchstart", "wheel"] as const;
+    activityEvents.forEach(event => document.addEventListener(event, recordActivity, { passive: true }));
+    document.addEventListener("visibilitychange", checkDeadline);
+    scheduleLogout();
+    return () => {
+      if (timeout !== undefined) window.clearTimeout(timeout);
+      activityEvents.forEach(event => document.removeEventListener(event, recordActivity));
+      document.removeEventListener("visibilitychange", checkDeadline);
+    };
+  }, [logout]);
   useEffect(() => {
     let closed = false;
     let socket: WebSocket | undefined;
@@ -113,15 +158,6 @@ export default function DashboardLayout({
       }
     };
   }, []);
-  const logout = async () => {
-    try {
-      await clearAuthToken();
-    } catch (error) {
-      console.error("Unable to remove the saved HIOP desktop session.", error);
-    } finally {
-      navigate("/login");
-    }
-  };
   return (
     <div className="app-shell">
       <Sidebar open={open} onClose={() => setOpen(false)} role={user?.role} live={live} logo={branding?.logo} organizationName={branding?.organization_name} />

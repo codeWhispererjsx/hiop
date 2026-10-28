@@ -45,7 +45,7 @@ def device_health(db: Session, device: Device, window: str = "24h"):
     known = [row for row in scans if row.status.lower() in {"online", "offline"}]
     failed = [row for row in known if row.status.lower() == "offline"]
     return {
-        "device_id": str(device.id), "window": window, "status": scans[-1].status if scans else "Unknown", "health": state,
+        "device_id": str(device.id), "hostname": device.hostname, "window": window, "status": scans[-1].status if scans else "Unknown", "health": state,
         "reasons": reasons, "confidence": confidence, "last_check": scans[-1].scanned_at if scans else None,
         "availability_percent": round(len(online) * 100 / len(known), 2) if known else None,
         "packet_loss_percent": round(len(failed) * 100 / len(known), 2) if len(known) >= 2 else None,
