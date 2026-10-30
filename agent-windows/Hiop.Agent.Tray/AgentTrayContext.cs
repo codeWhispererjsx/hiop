@@ -12,6 +12,7 @@ internal sealed class AgentTrayContext : ApplicationContext
     private readonly AgentPowerEventQueue _powerEvents = new(
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HIOP", "Agent"));
     private AgentConfiguration? _configuration;
+    private readonly ToolStripMenuItem _enrollItem;
     private EndOfDayPromptForm? _endOfDayPrompt;
     private bool _refreshing;
     private bool _smartLockArmed = true;
@@ -23,15 +24,16 @@ internal sealed class AgentTrayContext : ApplicationContext
         var menu = new ContextMenuStrip();
         menu.Items.Add(_statusItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Connect or enroll...", null, async (_, _) => await EnrollAsync());
+        _enrollItem = new ToolStripMenuItem("Connect or enroll...", null, async (_, _) => await EnrollAsync());
+        menu.Items.Add(_enrollItem);
         menu.Items.Add("Open HIOP", null, (_, _) => OpenHiop());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => ExitThread());
+        menu.Items.Add("Exit", null, (_, _) => ConfirmExit());
 
         _icon = new NotifyIcon
         {
             Icon = SystemIcons.Information,
-            Text = "HIOP Protected - IT Support Active",
+            Text = "HIOP Agent: checking status",
             ContextMenuStrip = menu,
             Visible = true,
         };
@@ -56,6 +58,8 @@ internal sealed class AgentTrayContext : ApplicationContext
             var response = await AgentControlClient.SendAsync(new AgentControlRequest("status"));
             _statusItem.Text = $"Status: {response.Status}";
             _icon.Text = $"HIOP Agent: {response.Status}";
+            // Enrolled computers must be revoked in HIOP before they can enroll again.
+            _enrollItem.Enabled = !response.Enrolled;
             if (response.Enrolled)
             {
                 await ApplySmartLockPolicyAsync(response.SmartLockTimeoutSeconds);
@@ -65,8 +69,8 @@ internal sealed class AgentTrayContext : ApplicationContext
         }
         catch (Exception exception) when (exception is IOException or TimeoutException or UnauthorizedAccessException)
         {
-            _statusItem.Text = "Status: Service unavailable";
-            _icon.Text = "HIOP Agent: Service unavailable";
+            _statusItem.Text = "Status: Service not running. Restart the computer or contact IT.";
+            _icon.Text = "HIOP Agent: service not running";
         }
         finally
         {
@@ -148,7 +152,7 @@ internal sealed class AgentTrayContext : ApplicationContext
             if (now.TimeOfDay >= new TimeSpan(22, 45, 0) && now.TimeOfDay < new TimeSpan(23, 30, 0) &&
                 _powerEvents.QueueDailyEvent("END_OF_DAY_NUDGE", localDate, isPrompt: false))
             {
-                _icon.BalloonTipTitle = "HIOP Closing-time reminder";
+                _icon.BalloonTipTitle = "HIOP: closing time reminder";
                 _icon.BalloonTipText = "Closing time is approaching. Please save your work and shut down when ready.";
                 _icon.BalloonTipIcon = ToolTipIcon.Info;
                 _icon.ShowBalloonTip(10000);
@@ -294,6 +298,20 @@ internal sealed class AgentTrayContext : ApplicationContext
                 "HIOP Agent",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+        }
+    }
+
+    private void ConfirmExit()
+    {
+        var answer = MessageBox.Show(
+            "Closing HIOP Agent stops IT notices, end-of-day reminders, and the idle screen lock on this computer until you sign in again.\n\nClose HIOP Agent anyway?",
+            "HIOP Agent",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (answer == DialogResult.Yes)
+        {
+            ExitThread();
         }
     }
 

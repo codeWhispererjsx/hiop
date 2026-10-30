@@ -8,6 +8,9 @@ internal sealed class EnrollmentDialog : Form
 
     public EnrollmentDialog()
     {
+        // Layout below is in 96-DPI pixels; scale it with the display so text is not clipped at 125%+.
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         Text = "Connect this computer to HIOP";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         StartPosition = FormStartPosition.CenterScreen;
@@ -19,7 +22,7 @@ internal sealed class EnrollmentDialog : Form
 
         var lead = new Label
         {
-            Text = "Paste the one-time connection code generated from HIOP Local Agents.",
+            Text = "In HIOP, open Agents and choose Connect a computer. Paste the one-time code here.",
             AutoSize = true,
             Left = 18,
             Top = 18,

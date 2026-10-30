@@ -23,6 +23,9 @@ internal sealed class EndOfDayPromptForm : Form
         _requestShutdown = requestShutdown;
         _stayOn = stayOn;
         _logBlocked = logBlocked;
+        // Layout below is in 96-DPI pixels; scale it with the display so text is not clipped at 125%+.
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         Text = "HIOP End-of-Day Reminder";
         Width = 520;
         Height = 350;
@@ -43,7 +46,7 @@ internal sealed class EndOfDayPromptForm : Form
         };
         var explanation = new Label
         {
-            Text = "HIOP will request a normal shutdown after 60 seconds of continued inactivity. Known work apps, any visible app window, or a failed safety check pauses and resets the countdown. HIOP never force-closes applications.",
+            Text = "If this computer stays idle for 60 more seconds, HIOP will ask Windows to shut down normally. Open work apps or windows pause the countdown, and HIOP never force-closes anything.",
             AutoSize = false,
             Left = 24,
             Top = 56,
@@ -68,7 +71,7 @@ internal sealed class EndOfDayPromptForm : Form
         };
         var reasonLabel = new Label
         {
-            Text = "Stay On — reason (required)",
+            Text = "Need this computer to stay on? Tell IT why (at least 5 characters):",
             AutoSize = true,
             Left = 24,
             Top = 219,
@@ -82,7 +85,7 @@ internal sealed class EndOfDayPromptForm : Form
         };
         _stayOnButton = new Button
         {
-            Text = "Stay On — Reason",
+            Text = "Keep computer on",
             Left = 319,
             Top = 278,
             Width = 160,
@@ -202,7 +205,7 @@ internal sealed class EndOfDayPromptForm : Form
         if (!_allowClose && eventArgs.CloseReason == CloseReason.UserClosing)
         {
             eventArgs.Cancel = true;
-            _safetyLabel.Text = "To dismiss this reminder, choose Stay On and enter a reason.";
+            _safetyLabel.Text = "To dismiss this reminder, enter a reason and choose Keep computer on.";
         }
     }
 

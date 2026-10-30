@@ -223,10 +223,10 @@ public sealed class AgentControlWorker(
         {
             var enrollment = await api.EnrollAsync(request.EnrollmentToken.Trim(), cancellationToken);
             credentials.Save(enrollment.Credential);
-            status.Set("Connecting", "Enrollment succeeded. Waiting for the first heartbeat.");
+            status.Set("Connecting", "Enrollment succeeded. Waiting for the first heartbeat; this can take a couple of minutes.");
             await WriteResponseAsync(
                 writer,
-                new AgentControlResponse(true, "Connecting", $"Enrolled as {enrollment.AgentId}. Waiting for HIOP."),
+                new AgentControlResponse(true, "Connecting", $"This computer is connected to HIOP as {enrollment.AgentId}. It can take a couple of minutes to show as online."),
                 cancellationToken);
         }
         catch (AgentApiException exception)
