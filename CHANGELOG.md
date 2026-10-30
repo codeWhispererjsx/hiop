@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## HIOP 3.0.5
+
+- Extended local startup checks to six minutes so PostgreSQL recovery and database migrations can finish without a premature connection error.
+
 ## HIOP 3.0.4
 
 - Made local startup recovery restart the HIOP service, wait longer for PostgreSQL recovery, and clearly distinguish local startup from an administrator-configured Site Server.

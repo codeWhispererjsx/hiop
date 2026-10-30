@@ -13,7 +13,7 @@ export default function DesktopLaunchPage() {
   const [destination, setDestination] = useState<"/desktop-setup" | "/login">();
   const [restarting, setRestarting] = useState(false);
   const siteServerUrl = window.hiopDesktop?.siteServerUrl;
-  const maxAttempts = siteServerUrl ? 3 : 24;
+  const maxAttempts = siteServerUrl ? 3 : 240;
 
   const retryConnection = async () => {
     setError("");

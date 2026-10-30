@@ -30,7 +30,7 @@ test("desktop launch checks are bounded and provide recovery actions", () => {
   const launch = source("../src/pages/DesktopLaunchPage.tsx");
   const api = source("../src/lib/publicApi.ts");
   assert.match(api, /setTimeout\(\(\)=>controller\.abort\(\),8000\)/);
-  assert.match(launch, /const maxAttempts = siteServerUrl \? 3 : 24/);
+  assert.match(launch, /const maxAttempts = siteServerUrl \? 3 : 240/);
   assert.match(launch, /attempts >= maxAttempts/);
   assert.match(launch, /ensureLocalBackend\(\)/);
   assert.match(launch, /Retry local startup/);
