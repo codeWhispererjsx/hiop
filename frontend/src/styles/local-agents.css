@@ -1,7 +1,15 @@
+/* The endpoint table has 14 columns, so it gets the full width and the detail
+   panel sits below it except on very wide screens. */
 .agents-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
+}
+
+@media (min-width: 1800px) {
+  .agents-layout {
+    grid-template-columns: minmax(0, 2.4fr) minmax(320px, 1fr);
+  }
 }
 
 .agent-summary-grid {
@@ -613,3 +621,19 @@
     margin-top: 8px;
   }
 }
+
+/* Keep status and hostname visible while scrolling the wide endpoint table sideways. */
+.agents-list th:nth-child(1),
+.agents-list td:nth-child(1),
+.agents-list th:nth-child(2),
+.agents-list td:nth-child(2) {
+  position: sticky;
+  z-index: 1;
+  background: var(--surface);
+}
+.agents-list th:nth-child(1),
+.agents-list td:nth-child(1) { left: 0; min-width: 90px; width: 90px; }
+.agents-list th:nth-child(2),
+.agents-list td:nth-child(2) { left: 90px; box-shadow: 1px 0 0 var(--border); }
+.agents-list tbody tr:hover td:nth-child(-n + 2),
+.agents-list tbody tr.selected td:nth-child(-n + 2) { background: color-mix(in srgb, var(--color-primary) 6%, var(--surface)); }

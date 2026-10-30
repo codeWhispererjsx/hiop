@@ -50,6 +50,8 @@ export default function LocalAgentsPage() {
   const onlineCount = rows.filter((agent) => agent.status === "online").length;
   const offlineCount = rows.filter((agent) => agent.status === "offline" || agent.status === "stale").length;
   const attentionCount = rows.filter((agent) => (agent.uptime_seconds ?? 0) >= 8 * 24 * 60 * 60).length;
+  const updatesPendingCount = rows.filter((agent) => (agent.pending_windows_updates ?? 0) > 0).length;
+  const weakBatteryCount = rows.filter((agent) => agent.battery_health_percent != null && agent.battery_health_percent < 80).length;
   const healthAlerts = rows.filter((agent) =>
     (agent.uptime_seconds ?? 0) >= 8 * 24 * 60 * 60 ||
     (agent.pending_windows_updates ?? 0) > 0 ||
@@ -193,7 +195,7 @@ export default function LocalAgentsPage() {
         <article><span>Total agents</span><strong>{rows.length}</strong><small>Registered endpoints</small></article>
         <article className="agent-summary-online"><span>Online now</span><strong>{onlineCount}</strong><small>Heartbeat received recently</small></article>
         <article className="agent-summary-offline"><span>Offline</span><strong>{offlineCount}</strong><small>Offline or heartbeat is stale</small></article>
-        <article className="agent-summary-attention"><span>Needs attention</span><strong>{healthAlerts.length}</strong><small>{attentionCount} device{attentionCount === 1 ? "" : "s"} online for at least 8 days</small></article>
+        <article className="agent-summary-attention"><span>Needs attention</span><strong>{healthAlerts.length}</strong><small>{healthAlerts.length ? `${attentionCount} up 8+ days · ${updatesPendingCount} pending updates · ${weakBatteryCount} weak battery` : "No long uptime, pending updates, or weak batteries"}</small></article>
       </section>
 
       <section className="agent-health-alerts" aria-label="Device health alerts">
@@ -218,7 +220,7 @@ export default function LocalAgentsPage() {
       </section>
 
       <section className="operational-guide" aria-label="Connect your network">
-        <div><span>1. Download</span><strong>Install the native Windows agent</strong><p>Download and extract the package, then run Install HIOP Agent.cmd and approve the administrator prompt. The service starts automatically and the tray app shows its status. No Python installation is required.</p><Link className="primary-action" to="/download">Download Windows agent</Link></div>
+        <div><span>1. Download</span><strong>Install the native Windows agent</strong><p>Download HIOP-Agent-Windows.exe on the company computer, double-click it, enter this HIOP server address, and approve the administrator prompt. The service starts automatically and the tray icon shows its status.</p><Link className="primary-action" to="/download">Download Windows agent</Link></div>
         <div><span>2. Connect</span><strong>Use a one-time HIOP code</strong><p>Select Connect a computer above. From the HIOP Agent tray icon choose Connect or enroll..., then paste the one-time code. It is bound to the property selected in HIOP and expires shortly.</p></div>
         <div><span>3. Scan and reconcile</span><strong>Keep inventory up to date</strong><p>Run a discovery scan for the same property and a network range containing the agent computer. HIOP links unambiguous matches to existing inventory and refreshes their technical/network details; unmatched or conflicting devices stay in Discovery for review before being added.</p></div>
       </section>

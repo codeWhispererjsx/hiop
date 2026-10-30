@@ -205,13 +205,13 @@ export default function DevicesPage() {
               />
             </label>
             <div className="filter-row">
-              <Filter label="lifecycle" value={status} set={setStatus} rows={unique(all, (x) => x.status)} />
+              <Filter label="lifecycle" allLabel="All lifecycle stages" value={status} set={setStatus} rows={unique(all, (x) => x.status)} />
               <Filter label="condition" value={condition} set={setCondition} rows={unique(all, (x) => x.condition)} />
-              <Filter label="warranty" value={warranty} set={setWarranty} rows={unique(all, (x) => x.warranty_status)} />
+              <Filter label="warranty" allLabel="All warranty statuses" value={warranty} set={setWarranty} rows={unique(all, (x) => x.warranty_status)} />
               <Filter label="type" value={type} set={setType} rows={unique(all, (x) => x.device_type)} />
               <Filter label="department" value={activeDepartment} set={setDepartment} rows={departmentOptions} />
               <Filter label="location" value={location} set={setLocation} rows={locationOptions} />
-              <Filter label="health" value={health} set={setHealth} rows={unique(all, (x) => x.health)} />
+              <Filter label="health" allLabel="All health states" value={health} set={setHealth} rows={unique(all, (x) => x.health)} />
               <Filter label="vendor" value={vendor} set={setVendor} rows={unique(all, (x) => x.vendor)} />
               {activeFilters > 0 && <button className="filter-reset" type="button" onClick={clearFilters}>Clear filters <span>{activeFilters}</span></button>}
             </div>
@@ -289,13 +289,15 @@ export default function DevicesPage() {
 function Filter({ 
   label, 
   value, 
-  set, 
-  rows 
-}: { 
-  label: string; 
-  value: string; 
-  set: (value: string) => void; 
-  rows: string[] 
+  set,
+  rows,
+  allLabel,
+}: {
+  label: string;
+  value: string;
+  set: (value: string) => void;
+  rows: string[];
+  allLabel?: string;
 }) {
   return (
     <select 
@@ -303,9 +305,9 @@ function Filter({
       onChange={(e) => set(e.target.value)} 
       aria-label={`Filter assets by ${label}`}
     >
-      <option value="All">All {label}s</option>
+      <option value="All">{allLabel ?? `All ${label}s`}</option>
       {rows.map((row) => (
-        <option key={row}>{row}</option>
+        <option key={row} value={row}>{row.replaceAll("_", " ")}</option>
       ))}
     </select>
   );

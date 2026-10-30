@@ -64,7 +64,7 @@ export default function SystemMaintenancePage() {
       <PageTitle
         eyebrow="Manage · Reports"
         title="System Maintenance Report"
-        copy="Review read-only endpoint health and historical maintenance records. Remote endpoint actions and scheduled controls are disabled in Phase 1."
+        copy="Review endpoint health and historical maintenance records. HIOP never restarts, shuts down, updates, or wakes computers remotely."
         action={
           <div className="maintenance-page-actions">
             <button type="button" className="secondary-action" onClick={() => window.print()}>Print</button>
@@ -74,7 +74,7 @@ export default function SystemMaintenancePage() {
         }
       />
       {error && <Feedback error={error} />}
-      <p className="maintenance-notice" role="status">Phase 1 is read-only: scheduled restart, shutdown, update, and wake actions are disabled. Use Local Agents for heartbeat status and audited admin notices.</p>
+      <p className="maintenance-notice" role="status">This report is read-only. End-of-day shutdown and screen lock run on each computer through the HIOP agent; see Local Agents for live status, power events, and admin notices.</p>
 
       <section className="maintenance-section" aria-labelledby="maintenance-summary-title">
         <header className="maintenance-section-heading">
@@ -158,13 +158,13 @@ export default function SystemMaintenancePage() {
 
       <section className="maintenance-section" aria-labelledby="maintenance-rules-title">
         <header className="maintenance-section-heading">
-          <div><p className="page-kicker">Phase 2</p><h2 id="maintenance-rules-title">Scheduled endpoint controls</h2><p>Existing rules are retained for audit visibility but are not executed or editable while Phase 1 is active.</p></div>
+          <div><p className="page-kicker">Legacy rules</p><h2 id="maintenance-rules-title">Scheduled endpoint controls</h2><p>Rules from earlier versions are kept for audit history. They no longer run and cannot be edited.</p></div>
         </header>
         {rules.loading || rules.error ? <Feedback loading={rules.loading} error={rules.error} onRetry={rules.reload} /> : (
           <div className="maintenance-rule-list">
             {rules.data?.items.map((rule) => <article className="maintenance-rule-card" key={rule.id}>
               <div className="maintenance-rule-main">
-                <div className="maintenance-rule-name"><h3>{rule.name}</h3><span className="maintenance-status status-neutral">Disabled in Phase 1</span></div>
+                <div className="maintenance-rule-name"><h3>{rule.name}</h3><span className="maintenance-status status-neutral">Disabled</span></div>
                 <p>{rule.description || "No description provided."}</p>
                 <small>{describeRule(rule)} · {rule.schedule.frequency === "weekly" ? `${weekdays[rule.schedule.weekday ?? 0]} ` : ""}{rule.schedule.time} {rule.schedule.timezone}</small>
                 <small>Action: {rule.action.replaceAll("_", " ")} · Affects {rule.affected_count} device{rule.affected_count === 1 ? "" : "s"} · Legacy enabled setting: {rule.enabled ? "yes (ignored)" : "no"}</small>

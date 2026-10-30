@@ -92,7 +92,7 @@ export default function AlertsPage() {
   return (
     <DashboardLayout>
       <PageTitle
-        eyebrow="V3E operations"
+        eyebrow="Monitor"
         title="Alerts & events"
         copy="Actionable, debounced monitoring conditions with preserved evidence and lifecycle history."
       />

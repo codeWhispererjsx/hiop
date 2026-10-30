@@ -199,14 +199,24 @@
   background: var(--input-bg);
 }
 
-.asset-search input {
+/* Outranks the global input:not(...):not(...):not(...) field rule. */
+.asset-inventory-panel .asset-inventory-head .asset-search input[type="search"] {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 0;
   border: 0;
   outline: none;
+  box-shadow: none;
   color: var(--text);
   background: transparent;
-  font-size: 11px;
+  font-size: 13px;
+}
+
+.asset-search:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 
 .asset-table-wrap {

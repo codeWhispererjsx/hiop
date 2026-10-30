@@ -72,7 +72,7 @@ export default function AgentDownloadPage() {
           <span className="agent-download-icon"><Icon name="devices" size={30} aria-hidden="true" /></span>
           <p className="public-eyebrow">Company computers only</p>
           <h1 id="agent-download-title">HIOP Agent for Windows</h1>
-          <p className="agent-download-lead">IT support, device health, and approved maintenance actions for company-managed Windows computers on the hotel admin network.</p>
+          <p className="agent-download-lead">Device health, IT notices, and safe end-of-day power habits for company-managed Windows computers on the hotel admin network.</p>
           <div className="agent-package-facts">
             <span>Windows service + tray app</span>
             <span>Single-file Windows installer (EXE)</span>

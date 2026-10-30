@@ -436,3 +436,20 @@ a.asset-metric-card:focus-visible { outline:3px solid var(--color-primary); outl
 .discovery-guidance-card{display:flex;align-items:center;justify-content:space-between;gap:1.25rem;margin:1rem;padding:1rem 1.1rem;border:1px solid color-mix(in srgb,var(--color-primary) 30%,var(--border));border-radius:var(--radius-lg);background:color-mix(in srgb,var(--color-primary) 7%,var(--surface))}.discovery-guidance-card>div{min-width:0}.discovery-guidance-card strong{display:block;color:var(--text);font-size:.92rem}.discovery-guidance-card p{margin:.35rem 0 0;color:var(--text-muted);font-size:.82rem;line-height:1.5}.discovery-guidance-card button{flex:0 0 auto;min-height:40px}
 .site-server-insights{margin-top:1rem;padding:1.2rem}.site-server-insights>header{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}.site-server-insights>header h2{margin:.25rem 0;font-size:1.1rem}.site-server-insights>header p{margin:0;color:var(--text-muted);font-size:.82rem}.site-server-health{display:flex;align-items:center;gap:2rem}.site-server-donut{display:grid;place-content:center;width:150px;aspect-ratio:1;flex:0 0 auto;border-radius:50%;text-align:center}.site-server-donut strong,.site-server-donut span{position:relative;z-index:1}.site-server-donut strong{font-size:1.6rem;line-height:1.1}.site-server-donut span{color:var(--text-muted);font-size:.75rem}.site-server-health-legend{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:.65rem 1.5rem}.site-server-health-legend>div{display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-size:.84rem}.site-server-health-legend strong{margin-left:auto;color:var(--text)}.site-server-health-dot{width:.65rem;height:.65rem;border-radius:50%}.site-server-health-dot.healthy{background:var(--color-success)}.site-server-health-dot.degraded{background:var(--color-warning)}.site-server-health-dot.unhealthy{background:var(--color-danger)}.site-server-health-dot.unknown{background:var(--border-strong)}.site-server-health-bar{display:flex;height:10px;overflow:hidden;margin-top:1rem;border-radius:999px;background:var(--surface-soft)}.site-server-health-bar span{min-width:0;transition:width .25s ease}.site-server-health-bar .healthy{background:var(--color-success)}.site-server-health-bar .degraded{background:var(--color-warning)}.site-server-health-bar .unhealthy{background:var(--color-danger)}.site-server-health-bar .unknown{background:var(--border-strong)}
 @media(max-width:700px){.report-export-panel,.discovery-guidance-card,.alert-rule-card{align-items:stretch;flex-direction:column}.report-export-panel label{min-width:0}.organization-record-panel>header{align-items:flex-start}.organization-table{min-width:640px}.alert-rule-state{justify-content:flex-start}.site-server-health{align-items:flex-start;gap:1rem}.site-server-donut{width:110px}.site-server-health-legend{grid-template-columns:1fr}.site-server-insights>header{align-items:flex-start;flex-direction:column}}
+
+/* Login footer links: the login page can load without public.css (desktop opens /login directly). */
+.login-public-links{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.5rem 1rem;margin-top:1rem;font-size:.84rem}
+
+/* Top bar: size the property picker from the space the header has, not the window width,
+   and keep the action buttons on one line so they never slide over the picker. */
+.topbar .property-context { flex: 1 1 auto; min-width: 0; }
+.topbar .property-context select { width: 100%; max-width: 25rem; min-width: 0; }
+.topbar .property-context > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar .topbar-actions { flex: 0 0 auto; flex-wrap: nowrap; }
+.topbar .topbar-actions > .secondary-action,
+.topbar .live-pill { white-space: nowrap; }
+@media (max-width: 1100px) {
+  /* Keep the status dot, drop the words; the sidebar's live-channel card still says it in full. */
+  .topbar .live-pill { width: 30px; padding: 0; justify-content: center; font-size: 0; }
+  .topbar .profile > div { display: none; }
+}

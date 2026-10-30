@@ -26,7 +26,7 @@ export default function PropertiesPage(){
   const create=(e:FormEvent)=>{e.preventDefault();void run(()=>endpoints.createManagedProperty(form),"Property created.");setForm(blank)};
   const assign=(e:FormEvent)=>{e.preventDefault();void run(()=>endpoints.assignPropertyAccess(access.property_id,access),"Property access assigned.")};
   return <DashboardLayout>
-    <PageTitle eyebrow="V4J multi-property management" title="Properties" copy="Create hotels, review explainable operational health, and control user access within this organization."/>
+    <PageTitle eyebrow="Administration · properties" title="Properties" copy="Create hotels, review explainable operational health, and control user access within this organization."/>
     {error&&<Feedback error={error}/> } {notice&&<Toast message={notice}/>}{!notifLoading && notifications.length>0 && <Toast message="You have new property access notifications"/>}
     <section className="organization-grid">
       <form className="settings-panel settings-panel-body settings-form-grid" onSubmit={create}>

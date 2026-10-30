@@ -13,7 +13,7 @@ const sidebar = fs.readFileSync(new URL("../src/components/Sidebar.tsx", import.
 test("local agent instructions use the native installer and tray enrollment", () => {
   assert.match(page, /Install HIOP Agent\.cmd/);
   assert.match(page, /Connect or enroll\.\.\./);
-  assert.match(page, /No Python installation is required/);
+  assert.match(page, /HIOP-Agent-Windows\.exe/);
   assert.match(guide, /HIOP Agent tray icon/);
   assert.match(sidebar, /Agents - Managed Endpoints/);
   assert.doesNotMatch(page, /Python 3\.12|Connect HIOP\.cmd/);
@@ -29,7 +29,8 @@ test("phase one sends audited notices without endpoint control actions", () => {
   assert.doesNotMatch(deviceDetails, /Restart device|Shut down device|Lock user session|Native RDP|createDeviceAgentAction/);
   assert.doesNotMatch(assetDetails, /ManagedAssetActions|createManagedAssetAgentAction/);
   assert.doesNotMatch(api, /createDeviceAgentAction|createManagedAssetAgentAction|wakeDevice/);
-  assert.match(maintenance, /scheduled controls are disabled/i);
+  assert.match(maintenance, /never restarts, shuts down, updates, or wakes computers remotely/i);
+  assert.doesNotMatch(maintenance, /Phase [12]/);
 });
 
 test("agent discoveries reconcile matches and keep unmatched devices in review", () => {
