@@ -3,6 +3,23 @@ from pathlib import Path
 from app.api.v1 import reporting
 
 
+class EmptyQuery:
+    def filter(self, *_args, **_kwargs):
+        return self
+
+    def all(self):
+        return []
+
+
+class RecordingDB:
+    def __init__(self):
+        self.queried = []
+
+    def query(self, model):
+        self.queried.append(model)
+        return EmptyQuery()
+
+
 def test_v4i_has_the_prebuilt_report_catalog():
     assert reporting.REPORTS == {
         "executive", "operations", "network", "assets", "lifecycle",
@@ -15,6 +32,22 @@ def test_v4i_supports_required_periods_and_honest_missing_data():
     assert set(reporting.PERIODS) == {"today", "7d", "30d", "90d", "month", "quarter", "year"}
     assert reporting.metric(None, "Availability")["value"] == "Insufficient data"
     assert reporting.trend([], "created_at", reporting.datetime.min.replace(tzinfo=reporting.timezone.utc), reporting.datetime.now(reporting.timezone.utc))["status"] == "insufficient_data"
+
+
+def test_v4i_loads_only_the_data_needed_for_each_report():
+    db = RecordingDB()
+
+    reporting.context(db, "organization", None, None, report="assets")
+
+    assert db.queried == [reporting.ManagedAsset]
+
+
+def test_v4i_selected_property_does_not_load_devices_for_asset_reports():
+    db = RecordingDB()
+
+    reporting.context(db, "organization", None, None, "property", report="assets")
+
+    assert db.queried == [reporting.ManagedAsset]
 
 
 def test_v4i_api_is_tenant_scoped_exportable_and_non_predictive():

@@ -50,20 +50,29 @@ def metric(value,label,drilldown=None,quality="available"):
     return {"label":label,"value":value if value is not None else "Insufficient data","quality":quality if value is not None else "insufficient_data","drilldown":drilldown}
 
 def context(db,org,start,end,selected_property=None,report="executive"):
-    property_ids=[selected_property] if selected_property else [x[0] for x in db.query(Property.id).filter_by(organization_id=org).all()]
+    needs_assets=report in {"executive","assets","lifecycle","vendors","departments","locations"}
+    needs_devices=report in {"executive","operations","network"}
+    needs_incidents=report in {"executive","operations","incidents","departments","locations"}
+    needs_problems=report in {"executive","problems","departments"}
+    needs_changes=report in {"executive","changes"}
+    needs_procurement=report in {"executive","procurement","vendors"}
+    needs_vendors=report in {"executive","vendors"}
+    needs_knowledge=report in {"executive","knowledge"}
+    needs_services=report in {"executive","services","departments"}
+    property_ids=([selected_property] if selected_property else [x[0] for x in db.query(Property.id).filter_by(organization_id=org).all()]) if needs_devices else []
     devices=db.query(Device).filter(Device.property_id.in_(property_ids)).all() if property_ids else []
     device_ids=[x.id for x in devices]
-    assets=db.query(ManagedAsset).filter(ManagedAsset.organization_id==org, *((ManagedAsset.property_id==selected_property,) if selected_property else ())).all()
-    incidents=db.query(OperationalIncident).filter(OperationalIncident.organization_id==org, *((OperationalIncident.property_id==selected_property,) if selected_property else ())).all()
-    problems=db.query(Problem).filter(Problem.organization_id==org, *((Problem.property_id==selected_property,) if selected_property else ())).all()
-    changes=db.query(ChangeRequest).filter(ChangeRequest.organization_id==org, *((ChangeRequest.property_id==selected_property,) if selected_property else ())).all()
-    procurement=db.query(AssetProcurement).filter(AssetProcurement.organization_id==org, *((AssetProcurement.property_id==selected_property,) if selected_property else ())).all()
-    vendors=db.query(Vendor).filter_by(organization_id=org).all()
-    knowledge=db.query(KnowledgeArticle).filter_by(organization_id=org).all()
-    services=db.query(HospitalityTechnologyService).filter(HospitalityTechnologyService.organization_id==org, *((HospitalityTechnologyService.property_id==selected_property,) if selected_property else ())).all()
-    departments=db.query(Department).filter_by(organization_id=org).all()
-    rooms=db.query(Room).filter_by(organization_id=org).all()
-    alerts=db.query(Alert).filter(Alert.device_id.in_(device_ids)).all() if device_ids else []
+    assets=db.query(ManagedAsset).filter(ManagedAsset.organization_id==org, *((ManagedAsset.property_id==selected_property,) if selected_property else ())).all() if needs_assets else []
+    incidents=db.query(OperationalIncident).filter(OperationalIncident.organization_id==org, *((OperationalIncident.property_id==selected_property,) if selected_property else ())).all() if needs_incidents else []
+    problems=db.query(Problem).filter(Problem.organization_id==org, *((Problem.property_id==selected_property,) if selected_property else ())).all() if needs_problems else []
+    changes=db.query(ChangeRequest).filter(ChangeRequest.organization_id==org, *((ChangeRequest.property_id==selected_property,) if selected_property else ())).all() if needs_changes else []
+    procurement=db.query(AssetProcurement).filter(AssetProcurement.organization_id==org, *((AssetProcurement.property_id==selected_property,) if selected_property else ())).all() if needs_procurement else []
+    vendors=db.query(Vendor).filter_by(organization_id=org).all() if needs_vendors else []
+    knowledge=db.query(KnowledgeArticle).filter_by(organization_id=org).all() if needs_knowledge else []
+    services=db.query(HospitalityTechnologyService).filter(HospitalityTechnologyService.organization_id==org, *((HospitalityTechnologyService.property_id==selected_property,) if selected_property else ())).all() if needs_services else []
+    departments=db.query(Department).filter_by(organization_id=org).all() if report=="departments" else []
+    rooms=db.query(Room).filter_by(organization_id=org).all() if report=="locations" else []
+    alerts=db.query(Alert).filter(Alert.device_id.in_(device_ids)).all() if report=="executive" and device_ids else []
     scan_count=0;online_scan_count=0;daily_scans=[];latest_scan_statuses={}
     if device_ids and report in {"executive","operations","network"}:
         scan_filter=(
