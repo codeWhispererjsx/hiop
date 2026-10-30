@@ -39,13 +39,14 @@ export async function getPublicPlans():Promise<PublicBillingPlan[]>{const respon
 export async function getDesktopStatus():Promise<DesktopStatus>{
  const controller=new AbortController();
  const timeout=window.setTimeout(()=>controller.abort(),8000);
+ const target=window.hiopDesktop?.siteServerUrl?"configured HIOP Site Server":"local HIOP service";
  try{
   const response=await fetch(`${apiUrl()}/public/onboarding/desktop-status`,{cache:"no-store",signal:controller.signal});
-  if(!response.ok)throw new Error(`The HIOP Site Server returned an error (${response.status}).`);
+  if(!response.ok)throw new Error(`The ${target} returned an error (${response.status}).`);
   return await response.json();
  }catch(error){
-  if(error instanceof Error&&error.name==="AbortError")throw new Error("The HIOP Site Server did not respond within 8 seconds.");
-  if(error instanceof TypeError)throw new Error("Could not reach the HIOP Site Server. Check that it is running and accessible.");
+  if(error instanceof Error&&error.name==="AbortError")throw new Error(`The ${target} did not respond within 8 seconds.`);
+  if(error instanceof TypeError)throw new Error(`Could not reach the ${target}. Check that it is running.`);
   throw error;
  }finally{
   window.clearTimeout(timeout);

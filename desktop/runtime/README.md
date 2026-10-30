@@ -46,7 +46,7 @@ The packaging step stages these resources into the app. The backend runtime buil
 
 ## Troubleshooting
 
-If the desktop window opens but HIOP cannot connect, check `%LOCALAPPDATA%\HIOP Desktop\logs\backend.log`. PostgreSQL startup output is written to `%LOCALAPPDATA%\HIOP Desktop\logs\postgres.log` and `%LOCALAPPDATA%\HIOP Desktop\logs\postgres-error.log`.
+If the desktop window opens but HIOP cannot connect, use **Retry local startup** first. This restarts the local service if its launcher exited and waits through PostgreSQL recovery. A local installation does not need a Site Server address. Only connect to another Site Server when your HIOP administrator has provided its HTTPS address. If startup still fails, check `%LOCALAPPDATA%\HIOP Desktop\logs\backend.log`; PostgreSQL startup output is written to `%LOCALAPPDATA%\HIOP Desktop\logs\postgres.log` and `%LOCALAPPDATA%\HIOP Desktop\logs\postgres-error.log`. HIOP does not reset or delete the local database during retry.
 
 ## Production packaging still needed
 

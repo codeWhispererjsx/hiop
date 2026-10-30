@@ -159,8 +159,9 @@ function runtimeWorkingDirectory() {
 
 function startBackend() {
   if (process.env.HIOP_DESKTOP_NO_BACKEND === "1") return;
+  if (backendProcess && backendProcess.exitCode === null) return;
 
-  backendProcess = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", runtimeScriptPath()], {
+  const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", runtimeScriptPath()], {
     cwd: runtimeWorkingDirectory(),
     env: {
       ...process.env,
@@ -172,16 +173,36 @@ function startBackend() {
     stdio: isDev ? "inherit" : "ignore",
   });
 
-  backendProcess.on("exit", (code) => {
-    backendProcess = undefined;
+  backendProcess = child;
+  child.on("error", (error) => {
+    if (backendProcess === child) backendProcess = undefined;
+    dialog.showErrorBox(
+      "HIOP local service could not start",
+      `The local HIOP service launcher failed: ${error.message}`
+    );
+  });
+  child.on("exit", (code) => {
+    if (backendProcess === child) backendProcess = undefined;
     if (code && code !== 0) {
       dialog.showErrorBox(
-        "HIOP backend did not start",
-        "The local HIOP service stopped before the desktop app could connect. Check %LOCALAPPDATA%\\HIOP Desktop\\logs\\backend.log."
+        "HIOP local service could not start",
+        "HIOP could not start the service on this computer. Your local database was not reset. Retry startup, or check %LOCALAPPDATA%\\HIOP Desktop\\logs\\backend.log for details."
       );
     }
   });
 }
+
+ipcMain.handle("hiop:backend:ensure", (event) => {
+  assertTrustedRenderer(event);
+  if (readSiteServerUrl()) {
+    throw new Error("This computer is configured to use a remote Site Server.");
+  }
+  if (process.env.HIOP_DESKTOP_NO_BACKEND === "1") {
+    throw new Error("The local HIOP service is disabled for this desktop session.");
+  }
+  startBackend();
+  return { ok: true };
+});
 
 function createWindow() {
   const win = new BrowserWindow({

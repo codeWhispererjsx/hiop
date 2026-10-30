@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## HIOP 3.0.4
+
+- Made local startup recovery restart the HIOP service, wait longer for PostgreSQL recovery, and clearly distinguish local startup from an administrator-configured Site Server.
+- Prevented retry from starting a second PostgreSQL process when the existing database is still recovering; startup failures now preserve the existing local database instead of deleting it.
+
 ## HIOP 3.0.3
 
 - Disabled SQLAlchemy debug echo in the desktop backend to prevent database queries and parameter values from flooding the local backend log.

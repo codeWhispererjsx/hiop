@@ -116,9 +116,17 @@ function Start-HIOPPostgres {
   if ($LASTEXITCODE -eq 0) { $ready = $true }
 
   if (-not $ready) {
-    Write-HIOPLog "Starting bundled PostgreSQL on 127.0.0.1:$postgresPort"
-    $postgresExe = Join-Path $bin "postgres.exe"
-    $script:postgresProcess = Start-Process -FilePath $postgresExe -ArgumentList @("-D", "`"$postgresData`"", "-h", "127.0.0.1", "-p", "$postgresPort") -WindowStyle Hidden -PassThru -RedirectStandardOutput $serverLog -RedirectStandardError $serverErrorLog
+    & $pgCtl "-D" $postgresData "status" *> $null
+    $postgresAlreadyRunning = $LASTEXITCODE -eq 0
+    if ($postgresAlreadyRunning) {
+      Write-HIOPLog "Bundled PostgreSQL is already running; waiting for local database recovery."
+    }
+    else {
+      Write-HIOPLog "Starting bundled PostgreSQL on 127.0.0.1:$postgresPort"
+      $postgresExe = Join-Path $bin "postgres.exe"
+      $script:postgresProcess = Start-Process -FilePath $postgresExe -ArgumentList @("-D", "`"$postgresData`"", "-h", "127.0.0.1", "-p", "$postgresPort") -WindowStyle Hidden -PassThru -RedirectStandardOutput $serverLog -RedirectStandardError $serverErrorLog
+      $script:postgresStartedByHIOP = $true
+    }
     $readyAfterStart = $false
     # A database that is recovering after an unexpected Windows shutdown can
     # need longer than the normal startup time. Keep the setup screen waiting
@@ -127,25 +135,11 @@ function Start-HIOPPostgres {
       Start-Sleep -Milliseconds 500
       & $pgIsReady "-h" "127.0.0.1" "-p" "$postgresPort" "-U" $postgresUser *> $null
       if ($LASTEXITCODE -eq 0) { $readyAfterStart = $true; break }
-      if ($script:postgresProcess.HasExited) { break }
+      if ($script:postgresProcess -and $script:postgresProcess.HasExited) { break }
     }
     if (-not $readyAfterStart) {
-      $startupErrorText = if (Test-Path $serverErrorLog) { Get-Content -Path $serverErrorLog -Raw -ErrorAction SilentlyContinue } else { "" }
-      if ($startupErrorText -match "invalid checkpoint record|could not locate a valid checkpoint record|PANIC:.*checkpoint|database system was interrupted") {
-        if (-not $script:postgresRecoveryAttempted) {
-          $script:postgresRecoveryAttempted = $true
-          Write-HIOPLog "Detected a corrupted PostgreSQL data directory; resetting local database state and recreating it."
-          if ($script:postgresProcess -and -not $script:postgresProcess.HasExited) {
-            Stop-Process -Id $script:postgresProcess.Id -Force -ErrorAction SilentlyContinue
-            $script:postgresProcess.WaitForExit(5000)
-          }
-          if (Test-Path $postgresData) { Remove-Item -Recurse -Force $postgresData }
-          return Start-HIOPPostgres
-        }
-      }
-      throw "PostgreSQL failed to become ready. Check $serverLog"
+      throw "PostgreSQL failed to become ready. The existing local database was preserved. Check $serverLog and $serverErrorLog before attempting database recovery."
     }
-    $script:postgresStartedByHIOP = $true
   }
   else {
     Write-HIOPLog "PostgreSQL is already accepting connections on 127.0.0.1:$postgresPort"
