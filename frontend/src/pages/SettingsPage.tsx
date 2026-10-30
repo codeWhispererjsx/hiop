@@ -7,6 +7,7 @@ import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
 import { Toast } from "../components/Toast";
 import { endpoints } from "../lib/api";
+import { LANDING_PAGES, resolveLandingPage } from "../lib/landingPage";
 import type { OrganizationDepartment, OrganizationLocation, SettingsBundle, SystemHealth } from "../lib/types";
 import { useTheme, type ThemePreference } from "../theme/ThemeContext";
 import { ActiveDirectorySettings } from "../components/ActiveDirectorySettings";
@@ -324,16 +325,8 @@ export default function SettingsPage() {
                 />
                 <SelectField
                   label="Default landing page"
-                  value={g.default_landing_page}
-                  options={[
-                    "/dashboard",
-                    "/devices",
-                    "/network",
-                    "/discovery",
-                    "/alerts",
-                    "/tickets",
-                    "/reports",
-                  ]}
+                  value={resolveLandingPage(g.default_landing_page)}
+                  options={LANDING_PAGES}
                   onChange={(value) =>
                     setDraft({ ...draft, general: { ...g, default_landing_page: value } })
                   }
@@ -1077,15 +1070,17 @@ function SelectField({
 }: {
   label: string;
   value: string;
-  options: string[];
+  options: readonly (string | { value: string; label: string })[];
   onChange: (value: string) => void;
 }) {
   return (
     <label>
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
+        {options.map((option) => typeof option === "string" ? (
           <option key={option}>{option}</option>
+        ) : (
+          <option key={option.value} value={option.value}>{option.label}</option>
         ))}
       </select>
     </label>

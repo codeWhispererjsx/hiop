@@ -6,6 +6,7 @@ import ThemeToggle from "../components/ThemeToggle";
 import { endpoints } from "../lib/api";
 import { clearAuthToken, setAuthToken } from "../lib/auth";
 import { isDesktopMode } from "../lib/appMode";
+import { resolveLandingPage } from "../lib/landingPage";
 import "../App.css";
 import "../styles/product-polish.css";
 
@@ -38,7 +39,14 @@ export default function LoginPage() {
       await setAuthToken(data.access_token);
       const user = await endpoints.me();
       setPassword("");
-      navigate(user.role === "platformadmin" ? "/platform" : "/dashboard");
+      if (user.role === "platformadmin") {
+        navigate("/platform");
+      } else {
+        const landingPage = await endpoints.publicSettings()
+          .then((settings) => settings.default_landing_page)
+          .catch(() => undefined);
+        navigate(resolveLandingPage(landingPage));
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to sign in");
     } finally {

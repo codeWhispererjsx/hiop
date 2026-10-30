@@ -91,7 +91,7 @@ export type NamingConventionSettings={template:string;variables:string[];separat
 export type SettingsBundle = { general:GeneralSettings; organization:OrganizationSettings; network:NetworkSettings; notifications:NotificationSettings; discovery:DiscoverySettings; incidents:IncidentSettings; naming_convention:NamingConventionSettings; email:Record<string,unknown>; security:Record<string,unknown>; application:Record<string,unknown> };
 export type AutomationFeatureStatus = {state:"disabled"|"not_configured"|"failed"|"enabled"|"running";enabled:boolean;details:string;last_attempt:string|null;last_success:string|null;last_error:string|null;delivery_status:string};
 export type AutomationStatus = {email_notifications:AutomationFeatureStatus;daily_audit_email:AutomationFeatureStatus;automatic_offline_incidents:AutomationFeatureStatus};
-export type PublicSettings = { timezone:string; application_name:string; short_name:string; property_name:string; organization_name:string; support_email:string|null; logo:string|null };
+export type PublicSettings = { timezone:string; application_name:string; short_name:string; property_name:string; organization_name:string; support_email:string|null; logo:string|null; default_landing_page?:string };
 export type SystemHealth = { status:string; api:string; database:string; scheduler:string; websocket:string; email:string; last_scan:string|null; application_version:string; environment:string; server_time:string };
 export type LocalOperationsStatus={
   service:{status:string;details:string};

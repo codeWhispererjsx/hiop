@@ -26,7 +26,9 @@ class GeneralSettings(BaseModel):
     date_format: Literal["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"]
     time_format: Literal["12-hour", "24-hour"]
     default_page_size: Literal[10, 25, 50, 100]
-    default_landing_page: Literal["/dashboard", "/devices", "/network", "/discovery", "/alerts", "/tickets", "/reports"]
+    # "/discovery" and "/tickets" are kept so previously saved values still validate; the UI maps them
+    # to "/discovery-intelligence" and "/incidents".
+    default_landing_page: Literal["/dashboard", "/devices", "/network", "/discovery-intelligence", "/alerts", "/incidents", "/reports", "/discovery", "/tickets"]
     support_email: EmailStr | None = None
 
 
@@ -179,6 +181,7 @@ class PublicSettings(BaseModel):
     organization_name: str
     support_email: str | None
     logo: str | None = None
+    default_landing_page: str = "/dashboard"
 
 
 class SystemHealth(BaseModel):

@@ -187,7 +187,7 @@ def save_naming_convention(db: Session, payload: NamingConventionSettings) -> No
 
 def read_public(db: Session) -> dict[str, Any]:
     values = _all(db)
-    return {"application_name": values["general.application_name"], "short_name": values["general.short_name"], "property_name": values["organization.property_name"], "organization_name": values["organization.organization_name"], "support_email": values["organization.support_email"] or values["general.support_email"] or None, "logo": None}
+    return {"application_name": values["general.application_name"], "short_name": values["general.short_name"], "property_name": values["organization.property_name"], "organization_name": values["organization.organization_name"], "support_email": values["organization.support_email"] or values["general.support_email"] or None, "logo": None, "default_landing_page": values["general.default_landing_page"]}
 
 
 def read_network(db: Session) -> dict[str, Any]:
