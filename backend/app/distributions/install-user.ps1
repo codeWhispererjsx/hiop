@@ -34,7 +34,6 @@ try {
     $serviceExe = Join-Path $servicePath 'Hiop.Agent.Service.exe'
     $trayExe = Join-Path $trayPath 'Hiop.Agent.Tray.exe'
     $serviceName = 'HIOPAgent'
-    $brokerName = 'HIOPAgentCommandBroker'
 
     if (Test-Path -LiteralPath $configPath) {
         $currentConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
@@ -81,30 +80,22 @@ try {
         }
     }
 
-    $broker = Get-Service -Name $brokerName -ErrorAction SilentlyContinue
-    if ($broker -and $broker.Status -ne 'Stopped') {
-        Stop-Service -Name $brokerName -Force
-        $broker.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
-    }
-    $brokerBinaryPath = '"' + $serviceExe + '" --privileged-helper'
-    if ($broker) {
-        & sc.exe config $brokerName binPath= $brokerBinaryPath start= auto obj= LocalSystem | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw 'Could not update the restricted HIOP command broker.'
+    $legacyBroker = Get-Service -Name 'HIOPAgentCommandBroker' -ErrorAction SilentlyContinue
+    if ($legacyBroker) {
+        if ($legacyBroker.Status -ne 'Stopped') {
+            Stop-Service -Name $legacyBroker.Name -Force
+            $legacyBroker.WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
         }
-    } else {
-        & sc.exe create $brokerName binPath= $brokerBinaryPath start= auto obj= LocalSystem DisplayName= 'HIOP Agent Command Broker' | Out-Null
+        & sc.exe delete $legacyBroker.Name | Out-Null
         if ($LASTEXITCODE -ne 0) {
-            throw 'Could not install the restricted HIOP command broker.'
+            throw 'Could not remove the legacy HIOP command broker.'
         }
     }
-    & sc.exe description $brokerName 'Allowlisted HIOP Windows actions over a LocalService-restricted named pipe' | Out-Null
-    Set-Service -Name $brokerName -StartupType Automatic
+
     & sc.exe sidtype $serviceName unrestricted | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw 'Could not assign a service-specific identity to the HIOP agent.'
     }
-    Start-Service -Name $brokerName
 
     & sc.exe description $serviceName 'HIOP property-bound discovery and monitoring agent' | Out-Null
     & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000/restart/60000 | Out-Null
@@ -121,7 +112,7 @@ try {
 
     Write-Host ''
     Write-Host 'HIOP Agent installed.' -ForegroundColor Green
-    Write-Host 'The separate LocalSystem broker accepts only fixed, allowlisted Windows actions.' -ForegroundColor Yellow
+    Write-Host 'The agent provides read-only status, discovery, and admin notices. Endpoint control is disabled.'
     Write-Host 'Use the HIOP Agent tray icon to enter a one-time connection code, then confirm this computer appears Online in HIOP.'
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red

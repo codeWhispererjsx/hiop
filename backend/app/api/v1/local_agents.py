@@ -1,9 +1,9 @@
-import hashlib, hmac, ipaddress, json, secrets, socket, re
+import hashlib, hmac, ipaddress, json, secrets
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ from app.models.discovery_intelligence import DiscoveryApprovalLink
 from app.models.asset_intelligence import ManagedAsset
 from app.models.hierarchy import Floor, Property
 from app.models.discovery_intelligence import DiscoveryPolicy
-from app.models.local_agent import AgentEnrollment, AgentJob, AgentMetricSample, AgentObservation, LocalAgentRegistration
+from app.models.local_agent import AgentEnrollment, AgentJob, AgentMetricSample, AgentObservation, AgentPowerEvent, LocalAgentRegistration
 from app.models.network_scan import NetworkScan
 from app.models.user import User
 from app.services.audit_service import create_audit_log
@@ -24,10 +24,9 @@ from app.services.billing_service import enforce_limit
 admin_router=APIRouter(prefix="/local-agents",tags=["Local Agents"])
 agent_router=APIRouter(prefix="/agent",tags=["Agent Protocol"])
 manager=require_roles(["platformadmin","admin"]);reader=require_roles(["platformadmin","admin","technician","viewer"])
-enrollment_limiter=OperationRateLimiter(limit=10,window_seconds=60);ingestion_limiter=OperationRateLimiter(limit=120,window_seconds=60)
+enrollment_limiter=OperationRateLimiter(limit=10,window_seconds=60);ingestion_limiter=OperationRateLimiter(limit=120,window_seconds=60);notice_limiter=OperationRateLimiter(limit=10,window_seconds=60)
 ALLOWED_JOBS={"DISCOVERY","MONITORING","PING","DNS_LOOKUP","ARP_SNAPSHOT","AD_ENRICHMENT"}
-DEVICE_ACTIONS={"RESTART","SHUTDOWN","LOCK","ENABLE_RDP","DISABLE_RDP","TRIGGER_WINDOWS_UPDATE"}
-ALLOWED_SOURCES={"discovery","monitoring","icmp","dns","arp","dhcp","active_directory","windows","device_action"}
+ALLOWED_SOURCES={"discovery","monitoring","icmp","dns","arp","dhcp","active_directory","windows"}
 
 def _digest(value:str)->str:return hashlib.sha256(value.encode()).hexdigest()
 
@@ -36,14 +35,48 @@ class EnrollmentCreate(BaseModel):
 class EnrollRequest(BaseModel):
     enrollment_token:str=Field(min_length=32,max_length=512);hostname:str=Field(min_length=1,max_length=255);version:str=Field(min_length=1,max_length=50);api_version:int=Field(default=1,ge=1,le=1)
 class HeartbeatRequest(BaseModel):
-    version:str=Field(min_length=1,max_length=50);hostname:str=Field(min_length=1,max_length=255);uptime_seconds:int=Field(ge=0);pending_queue:int=Field(default=0,ge=0,le=1_000_000);queue_capacity:int=Field(default=10000,ge=1,le=1_000_000);last_successful_job:str|None=Field(default=None,max_length=80);cpu_percent:float|None=Field(default=None,ge=0,le=100);memory_total_bytes:int|None=Field(default=None,ge=0);memory_free_bytes:int|None=Field(default=None,ge=0);disk_free_bytes:int|None=Field(default=None,ge=0);ip_address:str|None=Field(default=None,max_length=64);operating_system:str|None=Field(default=None,max_length=255);logged_user:str|None=Field(default=None,max_length=255);last_update:datetime|None=None
+    version:str=Field(min_length=1,max_length=50);hostname:str=Field(min_length=1,max_length=255);uptime_seconds:int=Field(ge=0);pending_queue:int=Field(default=0,ge=0,le=1_000_000);queue_capacity:int=Field(default=10000,ge=1,le=1_000_000);last_successful_job:str|None=Field(default=None,max_length=80);cpu_percent:float|None=Field(default=None,ge=0,le=100);memory_total_bytes:int|None=Field(default=None,ge=0);memory_free_bytes:int|None=Field(default=None,ge=0);disk_free_bytes:int|None=Field(default=None,ge=0);ip_address:str|None=Field(default=None,max_length=64);operating_system:str|None=Field(default=None,max_length=255);logged_user:str|None=Field(default=None,max_length=255);last_update:datetime|None=None;fast_startup_enabled:bool|None=None;lid_close_action:str|None=Field(default=None,max_length=80);battery_health_percent:float|None=Field(default=None,ge=0,le=100);pending_windows_updates:int|None=Field(default=None,ge=0,le=10000);last_shutdown_at:datetime|None=None
 class JobCreate(BaseModel):
     job_type:str;payload:dict=Field(default_factory=dict);timeout_seconds:int=Field(default=120,ge=5,le=3600)
 class JobUpdate(BaseModel):
     status:Literal["started","completed","failed","timed_out","cancelled"];error:str|None=Field(default=None,max_length=1000)
-class DeviceActionCreate(BaseModel):
-    action:Literal["RESTART","SHUTDOWN","LOCK","ENABLE_RDP","DISABLE_RDP","TRIGGER_WINDOWS_UPDATE"]
-    confirm:bool
+class AdminNoticeCreate(BaseModel):
+    agent_ids:list[UUID]=Field(min_length=1,max_length=10)
+    message:str=Field(min_length=1,max_length=240)
+    reason:str=Field(min_length=5,max_length=250)
+
+    @field_validator("agent_ids")
+    @classmethod
+    def unique_agents(cls,value):
+        if len(set(value))!=len(value):raise ValueError("Each target agent may appear only once")
+        return value
+
+    @field_validator("message","reason")
+    @classmethod
+    def trim_notice_text(cls,value):
+        value=value.strip()
+        if not value:raise ValueError("This field must contain non-space characters")
+        if any(ord(character)<32 for character in value):raise ValueError("Control characters are not allowed")
+        return value
+class PowerEventWrite(BaseModel):
+    event_id:UUID
+    event_type:Literal["END_OF_DAY_NUDGE","END_OF_DAY_PROMPT","END_OF_DAY_STAY_ON","END_OF_DAY_SHUTDOWN_BLOCKED","END_OF_DAY_SHUTDOWN_REQUESTED","SMART_LOCK_REQUESTED","SMART_LOCK_APPLIED","SMART_LOCK_FAILED"]
+    occurred_at:datetime
+    reason:str|None=Field(default=None,max_length=250)
+
+    @model_validator(mode="after")
+    def validate_event(self):
+        if self.occurred_at.tzinfo is None or self.occurred_at.utcoffset() is None:
+            raise ValueError("Event time must include a timezone.")
+        if self.occurred_at.astimezone(timezone.utc)>datetime.now(timezone.utc)+timedelta(minutes=5):
+            raise ValueError("Event time cannot be more than five minutes in the future.")
+        if self.event_type=="END_OF_DAY_STAY_ON" and (not self.reason or len(self.reason.strip())<5):
+            raise ValueError("Staying on requires a reason of at least five characters.")
+        if self.reason and any(ord(character)<32 for character in self.reason):
+            raise ValueError("Control characters are not allowed in the reason.")
+        if self.reason is not None:
+            self.reason=self.reason.strip() or None
+        return self
 class ObservationWrite(BaseModel):
     observation_id:str=Field(min_length=8,max_length=80);source:str;observed_at:datetime;schema_version:int=Field(default=1,ge=1,le=1);payload:dict;organization_id:UUID|None=None;property_id:UUID|None=None
 
@@ -94,6 +127,8 @@ def agent_view(row):
         key: getattr(row, key, None) for key in (
             "cpu_percent", "memory_total_bytes", "memory_free_bytes", "disk_free_bytes",
             "ip_address", "operating_system", "logged_user", "last_update",
+            "fast_startup_enabled", "lid_close_action", "battery_health_percent",
+            "pending_windows_updates", "last_shutdown_at",
         )
     })
     return values | {"status": effective}
@@ -128,16 +163,15 @@ def list_agents(db:Session=Depends(get_db),user:User=Depends(reader),org=Depends
 @admin_router.get("/jobs/{job_id}")
 def get_agent_job(job_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
     row=db.query(AgentJob).filter_by(id=job_id,organization_id=org).first()
-    if not row or row.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Agent job not found")
-    payload=json.loads(row.payload)
-    return {"id":str(row.id),"job_type":row.job_type,"action":payload.get("action"),"status":row.status,"created_at":row.created_at,"started_at":row.started_at,"completed_at":row.completed_at,"error":row.error}
+    if not row or row.job_type!="ADMIN_NOTICE" or row.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Agent job not found")
+    return {"id":str(row.id),"job_type":row.job_type,"action":None,"status":row.status,"created_at":row.created_at,"started_at":row.started_at,"completed_at":row.completed_at,"error":row.error}
 
 @admin_router.get("/{agent_id}/history")
 def agent_history(agent_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
     agent=db.query(LocalAgentRegistration).filter_by(id=agent_id,organization_id=org).first()
     if not agent or agent.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Agent not found")
-    rows=db.query(AgentJob).filter_by(agent_id=agent.id,organization_id=org).order_by(AgentJob.created_at.desc()).limit(10).all()
-    return [{"id":str(row.id),"job_type":row.job_type,"action":json.loads(row.payload).get("action"),"status":row.status,"created_at":row.created_at,"started_at":row.started_at,"completed_at":row.completed_at,"error":row.error,"created_by":row.created_by} for row in rows]
+    rows=db.query(AgentJob).filter_by(agent_id=agent.id,organization_id=org,job_type="ADMIN_NOTICE").order_by(AgentJob.created_at.desc()).limit(10).all()
+    return [{"id":str(row.id),"job_type":row.job_type,"action":None,"status":row.status,"created_at":row.created_at,"started_at":row.started_at,"completed_at":row.completed_at,"error":row.error,"created_by":row.created_by} for row in rows]
 
 @admin_router.get("/{agent_id}/metrics")
 def agent_metrics(agent_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
@@ -178,6 +212,38 @@ def create_enrollment(body:EnrollmentCreate,request:Request,db:Session=Depends(g
     db.add(row);db.flush();create_audit_log(db,actor.username,"AGENT_ENROLLMENT_CREATED","AgentEnrollment",str(row.id),f"Created one-time enrollment for property {body.property_id}");db.commit()
     return {"id":row.id,"enrollment_token":token,"expires_at":row.expires_at,"property_id":row.property_id,"name":row.name}
 
+@admin_router.post("/notices",status_code=201)
+def create_admin_notice(body:AdminNoticeCreate,request:Request,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
+    notice_limiter.check(f"notice:{actor.id}")
+    allowed=allowed_property_ids(db,actor,org)
+    agents=db.query(LocalAgentRegistration).filter(
+        LocalAgentRegistration.id.in_(body.agent_ids),
+        LocalAgentRegistration.organization_id==org,
+        LocalAgentRegistration.property_id.in_(allowed),
+        LocalAgentRegistration.revoked_at.is_(None),
+        LocalAgentRegistration.retired_at.is_(None),
+    ).all()
+    if len(agents)!=len(body.agent_ids):raise HTTPException(404,"One or more active agents were not found")
+    now=datetime.now(timezone.utc)
+    queued=[]
+    for agent in agents:
+        row=AgentJob(
+            agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,
+            job_type="ADMIN_NOTICE",
+            payload=json.dumps({"message":body.message,"reason":body.reason},separators=(",",":")),
+            timeout_seconds=900,created_by=actor.id,
+        )
+        db.add(row);db.flush()
+        create_audit_log(
+            db,actor.username,"ADMIN_NOTICE_QUEUED","LocalAgent",str(agent.id),
+            f"Notice queued for {agent.name} ({agent.agent_id}). Reason: {body.reason}. Message: {body.message}",
+            organization_id=org,property_id=agent.property_id,
+            source_ip=request.client.host if request.client else None,
+        )
+        queued.append({"id":str(row.id),"agent_id":str(agent.id),"status":"queued","expires_at":now+timedelta(minutes=15)})
+    db.commit()
+    return {"notices":queued}
+
 @admin_router.post("/{agent_id}/revoke")
 def revoke_agent(agent_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
     row=db.query(LocalAgentRegistration).filter_by(id=agent_id,organization_id=org).first()
@@ -193,80 +259,6 @@ def create_job(agent_id:UUID,body:JobCreate,db:Session=Depends(get_db),actor:Use
     if not agent or agent.property_id not in allowed_property_ids(db,actor,org) or agent.revoked_at:raise HTTPException(404,"Active agent not found")
     _validate_network_job(db,agent,kind,body.payload)
     row=AgentJob(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,job_type=kind,payload=json.dumps(body.payload,separators=(",",":")),timeout_seconds=body.timeout_seconds,created_by=actor.id);db.add(row);db.flush();create_audit_log(db,actor.username,"AGENT_JOB_CREATED","LocalAgent",str(agent.id),f"Queued {kind} agent job {row.id}");db.commit();db.refresh(row);return {"id":row.id,"job_type":row.job_type,"status":row.status}
-
-@admin_router.post("/devices/{device_id}/actions",status_code=202)
-def create_device_action(device_id:UUID,body:DeviceActionCreate,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
-    if not body.confirm:raise HTTPException(422,"Explicit confirmation is required")
-    device=db.query(Device).filter_by(id=device_id).join(Property,Device.property_id==Property.id).filter(Property.organization_id==org).with_for_update().first()
-    if not device:raise HTTPException(404,"Device not found")
-    if device.inventory_status.casefold()=="retired":raise HTTPException(409,"Retired devices cannot receive remote actions")
-    agents=db.query(LocalAgentRegistration).filter_by(device_id=device.id,organization_id=org,property_id=device.property_id).all()
-    active=[row for row in agents if not row.revoked_at and not row.retired_at and agent_view(row)["status"]=="online"]
-    if len(active)!=1:raise HTTPException(409,"A single online HIOP agent must be linked to this device")
-    agent=active[0]
-    if "windows" not in f"{device.ad_operating_system or ''} {getattr(agent, 'operating_system', None) or ''}".casefold():
-        raise HTTPException(409,"This action is available only for Windows devices")
-    row=AgentJob(
-        agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,
-        job_type="DEVICE_ACTION",payload=json.dumps({"action":body.action},separators=(",",":")),
-        timeout_seconds=30,created_by=actor.id,
-    )
-    db.add(row);db.flush()
-    create_audit_log(
-        db,actor.username,"DEVICE_ACTION_QUEUED","Device",str(device.id),
-        f"Queued {body.action.lower()} through HIOP agent {agent.agent_id} as job {row.id}",
-        organization_id=org,property_id=device.property_id,
-    )
-    db.commit()
-    return {"id":str(row.id),"action":body.action,"status":"queued"}
-
-@admin_router.post("/assets/{asset_id}/actions",status_code=202)
-def create_asset_action(asset_id:UUID,body:DeviceActionCreate,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
-    if not body.confirm:raise HTTPException(422,"Explicit confirmation is required")
-    asset=db.query(ManagedAsset).filter_by(id=asset_id,organization_id=org).with_for_update().first()
-    if not asset or asset.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Managed asset not found")
-    if asset.status=="retired":raise HTTPException(409,"Retired assets cannot receive remote actions")
-    agents=db.query(LocalAgentRegistration).filter_by(managed_asset_id=asset.id,organization_id=org,property_id=asset.property_id).all()
-    active=[row for row in agents if not row.revoked_at and not row.retired_at and agent_view(row)["status"]=="online"]
-    if len(active)!=1:raise HTTPException(409,"A single online HIOP agent must be linked to this asset")
-    agent=active[0]
-    if "windows" not in f"{asset.device_type} {agent.operating_system or ''}".casefold():
-        raise HTTPException(409,"This action is available only for Windows assets")
-    row=AgentJob(
-        agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,
-        job_type="DEVICE_ACTION",payload=json.dumps({"action":body.action},separators=(",",":")),
-        timeout_seconds=30,created_by=actor.id,
-    )
-    db.add(row);db.flush()
-    create_audit_log(
-        db,actor.username,"DEVICE_ACTION_QUEUED","ManagedAsset",str(asset.id),
-        f"Queued {body.action.lower()} through HIOP agent {agent.agent_id} as job {row.id}",
-        organization_id=org,property_id=asset.property_id,
-    )
-    db.commit()
-    return {"id":str(row.id),"action":body.action,"status":"queued"}
-
-@admin_router.post("/devices/{device_id}/wol",status_code=202)
-def wake_device(device_id:UUID,db:Session=Depends(get_db),actor:User=Depends(manager),org=Depends(organization_context)):
-    device=db.query(Device).filter_by(id=device_id).join(Property,Device.property_id==Property.id).filter(Property.organization_id==org).first()
-    if not device or device.property_id not in allowed_property_ids(db,actor,org):raise HTTPException(404,"Device not found")
-    mac=re.sub(r"[^0-9a-fA-F]","",device.mac_address or "")
-    if len(mac)!=12:
-        create_audit_log(db,actor.username,"DEVICE_ACTION_WOL_FAILED","Device",str(device.id),"Wake-on-LAN requires a valid device MAC address.",organization_id=org,property_id=device.property_id)
-        db.commit()
-        raise HTTPException(409,"A valid MAC address is required for Wake-on-LAN")
-    packet=b"\xff"*6+bytes.fromhex(mac)*16
-    try:
-        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as sender:
-            sender.setsockopt(socket.SOL_SOCKET,socket.SO_BROADCAST,1)
-            sender.sendto(packet,("255.255.255.255",9))
-    except OSError as exc:
-        create_audit_log(db,actor.username,"DEVICE_ACTION_WOL_FAILED","Device",str(device.id),f"Wake-on-LAN send failed: {exc}",organization_id=org,property_id=device.property_id)
-        db.commit()
-        raise HTTPException(503,"The HIOP server could not send a Wake-on-LAN packet on its local network") from exc
-    create_audit_log(db,actor.username,"DEVICE_ACTION_WOL","Device",str(device.id),f"Sent Wake-on-LAN packet to {device.mac_address}",organization_id=org,property_id=device.property_id)
-    db.commit()
-    return {"status":"sent","mac_address":device.mac_address}
 
 @agent_router.post("/enroll",status_code=201)
 def enroll(body:EnrollRequest,request:Request,db:Session=Depends(get_db)):
@@ -305,26 +297,101 @@ def heartbeat(body:HeartbeatRequest,db:Session=Depends(get_db),agent=Depends(aut
     for field in ("cpu_percent","memory_total_bytes","memory_free_bytes","disk_free_bytes","ip_address","operating_system","logged_user","last_update"):
         value=getattr(body,field)
         if value is not None:setattr(agent,field,value)
+    for field in ("fast_startup_enabled","lid_close_action","battery_health_percent","pending_windows_updates","last_shutdown_at"):
+        if field in body.model_fields_set:setattr(agent,field,getattr(body,field))
     last_sample=db.query(AgentMetricSample.recorded_at).filter_by(agent_id=agent.id).order_by(AgentMetricSample.recorded_at.desc()).first()
     if not last_sample or now-last_sample[0]>=timedelta(minutes=5):
         db.add(AgentMetricSample(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,uptime_seconds=body.uptime_seconds,cpu_percent=body.cpu_percent,memory_total_bytes=body.memory_total_bytes,memory_free_bytes=body.memory_free_bytes,disk_free_bytes=body.disk_free_bytes,recorded_at=now))
-    db.commit();return {"status":"accepted","server_time":now,"agent_api_version":1}
+    db.commit();return {"status":"accepted","server_time":now,"agent_api_version":1,"smart_lock_timeout_seconds":300}
+
+@agent_router.post("/power-events",status_code=202)
+def report_power_event(body:PowerEventWrite,request:Request,db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
+    ingestion_limiter.check(f"power-event:{agent.agent_id}:{request.client.host if request.client else 'unknown'}")
+    existing=db.query(AgentPowerEvent).filter_by(agent_id=agent.id,event_id=str(body.event_id)).first()
+    if existing:return {"status":"duplicate"}
+    row=AgentPowerEvent(
+        agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,
+        event_id=str(body.event_id),event_type=body.event_type,reason=body.reason,occurred_at=body.occurred_at,
+    )
+    db.add(row)
+    occurred=body.occurred_at.astimezone(timezone.utc).isoformat()
+    description=f"{body.event_type.replace('_',' ').title()} at {occurred}."
+    if body.reason:description+=f" Reason: {body.reason}"
+    create_audit_log(
+        db,f"Agent {agent.agent_id}",f"LOCAL_AGENT_{body.event_type}","LocalAgent",str(agent.id),description,
+        organization_id=agent.organization_id,property_id=agent.property_id,
+        source_ip=request.client.host if request.client else None,
+    )
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        duplicate=db.query(AgentPowerEvent).filter_by(agent_id=agent.id,event_id=str(body.event_id)).first()
+        if duplicate:return {"status":"duplicate"}
+        raise
+    return {"status":"recorded"}
 
 @agent_router.get("/jobs")
 def jobs(db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
-    rows=db.query(AgentJob).filter_by(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,status="queued").filter(AgentJob.available_at<=datetime.now(timezone.utc)).order_by(AgentJob.created_at).limit(20).all()
+    rows=db.query(AgentJob).filter_by(agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id,status="queued").filter(AgentJob.job_type.in_(ALLOWED_JOBS),AgentJob.available_at<=datetime.now(timezone.utc)).order_by(AgentJob.created_at).limit(20).all()
     return [{"id":x.id,"type":x.job_type,"payload":json.loads(x.payload),"timeout_seconds":x.timeout_seconds} for x in rows]
+
+@agent_router.get("/notices")
+def agent_notices(db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
+    now=datetime.now(timezone.utc)
+    expiry=now-timedelta(minutes=15)
+    expired=db.query(AgentJob).filter_by(
+        agent_id=agent.id,organization_id=agent.organization_id,
+        property_id=agent.property_id,job_type="ADMIN_NOTICE",status="queued",
+    ).filter(AgentJob.created_at<expiry).limit(100).all()
+    for row in expired:
+        row.status="timed_out"
+        row.completed_at=now
+    if expired:
+        db.commit()
+    rows=db.query(AgentJob).filter_by(
+        agent_id=agent.id,organization_id=agent.organization_id,
+        property_id=agent.property_id,job_type="ADMIN_NOTICE",status="queued",
+    ).filter(AgentJob.created_at>=expiry).order_by(AgentJob.created_at).limit(10).all()
+    return [{"id":str(row.id),"message":json.loads(row.payload)["message"]} for row in rows]
+
+@agent_router.post("/notices/{notice_id}/ack")
+def acknowledge_agent_notice(notice_id:UUID,request:Request,db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
+    row=db.query(AgentJob).filter_by(
+        id=notice_id,agent_id=agent.id,organization_id=agent.organization_id,
+        property_id=agent.property_id,job_type="ADMIN_NOTICE",
+    ).with_for_update().first()
+    if not row:raise HTTPException(404,"Notice not found")
+    if row.status=="completed":return {"status":"display_requested"}
+    if row.status!="queued":raise HTTPException(409,"Notice is no longer available")
+    now=datetime.now(timezone.utc)
+    if row.created_at<now-timedelta(minutes=15):
+        row.status="timed_out"
+        row.completed_at=now
+        db.commit()
+        raise HTTPException(409,"Notice has expired")
+    row.status="completed"
+    row.started_at=now
+    row.completed_at=now
+    create_audit_log(
+        db,f"Agent {agent.agent_id}","ADMIN_NOTICE_DISPLAY_REQUESTED","LocalAgent",str(agent.id),
+        f"Tray requested display of notice {row.id}. {json.loads(row.payload).get('reason','')}",
+        organization_id=agent.organization_id,property_id=agent.property_id,
+        source_ip=request.client.host if request.client else None,
+    )
+    db.commit()
+    return {"status":"display_requested"}
 
 @agent_router.get("/jobs/{job_id}")
 def job_state(job_id:UUID,db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
     row=db.query(AgentJob).filter_by(id=job_id,agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id).first()
-    if not row:raise HTTPException(404,"Job not found")
+    if not row or row.job_type not in ALLOWED_JOBS:raise HTTPException(404,"Job not found")
     return {"status":row.status}
 
 @agent_router.post("/jobs/{job_id}")
 def update_job(job_id:UUID,body:JobUpdate,db:Session=Depends(get_db),agent=Depends(authenticate_agent)):
     row=db.query(AgentJob).filter_by(id=job_id,agent_id=agent.id,organization_id=agent.organization_id,property_id=agent.property_id).with_for_update().first()
-    if not row:raise HTTPException(404,"Job not found")
+    if not row or row.job_type not in ALLOWED_JOBS:raise HTTPException(404,"Job not found")
     from app.models.discovery_intelligence import DiscoveryJob
     linked=json.loads(row.payload).get("discovery_job_id")
     discovery=db.query(DiscoveryJob).filter_by(id=UUID(linked),property_id=agent.property_id).with_for_update().first() if linked else None
@@ -359,39 +426,7 @@ def ingest(body:ObservationWrite,request:Request,db:Session=Depends(get_db),agen
         agent.last_monitoring=agent.last_seen
         if body.source in {"monitoring","icmp"}:
             ingest_monitoring(db,agent,body.payload)
-    if body.source=="device_action":
-        ingest_device_action(db,agent,body.payload)
     db.commit();db.refresh(row);return {"status":"accepted","id":row.id}
-
-def ingest_device_action(db,agent,payload):
-    job_id=payload.get("job_id")
-    try:job_uuid=UUID(str(job_id))
-    except (ValueError,TypeError):raise HTTPException(422,"A device action job reference is required")
-    job=db.query(AgentJob).filter_by(
-        id=job_uuid,agent_id=agent.id,organization_id=agent.organization_id,
-        property_id=agent.property_id,job_type="DEVICE_ACTION",
-    ).first()
-    if not job:raise HTTPException(403,"Action result does not belong to this agent")
-    result=payload.get("result")
-    if not isinstance(result,dict):raise HTTPException(422,"Invalid device action result")
-    action=json.loads(job.payload).get("action")
-    if action not in DEVICE_ACTIONS or result.get("action")!=action:raise HTTPException(422,"Device action result does not match the queued action")
-    succeeded=result.get("succeeded")
-    if not isinstance(succeeded,bool):raise HTTPException(422,"Device action result must include its outcome")
-    device=db.query(Device).filter_by(id=agent.device_id,property_id=agent.property_id).first()
-    if not device:raise HTTPException(409,"The agent is no longer linked to a managed device")
-    actor=f"Agent {agent.agent_id}"
-    outcome="COMPLETED" if succeeded else "FAILED"
-    detail=result.get("message") if isinstance(result.get("message"),str) else "No result details provided."
-    if not succeeded:
-        job.status="failed"
-        job.error=detail[:1000]
-        job.completed_at=datetime.now(timezone.utc)
-    create_audit_log(
-        db,actor,f"DEVICE_ACTION_{outcome}","Device",str(device.id),
-        f"{action.lower()} {outcome.lower()} through HIOP agent. {detail[:500]}",
-        organization_id=agent.organization_id,property_id=agent.property_id,
-    )
 
 
 def ingest_monitoring(db,agent,payload):

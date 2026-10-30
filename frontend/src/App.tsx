@@ -4,6 +4,7 @@ import { Feedback } from "./components/Feedback";
 import { hasUsableToken } from "./lib/auth";
 import { isDesktopMode } from "./lib/appMode";
 import { endpoints } from "./lib/api";
+import { useFeatures, type Features } from "./lib/features";
 import type { User } from "./lib/types";
 
 const LoginPage = lazy(() => import("./pages/LoginPage"));
@@ -50,6 +51,7 @@ const ThisComputerPage = lazy(() => import("./pages/ThisComputerPage"));
 const AccountAccessPage = lazy(() => import("./pages/AccountAccessPage"));
 const DesktopSetupPage = lazy(() => import("./pages/DesktopSetupPage"));
 const DesktopLaunchPage = lazy(() => import("./pages/DesktopLaunchPage"));
+const DesktopConnectPage = lazy(() => import("./pages/DesktopConnectPage"));
 
 function Protected({ children }: { children: ReactNode }) {
   return hasUsableToken() ? children : <Navigate to="/login" replace />;
@@ -65,6 +67,12 @@ function RoleProtected({ children, roles }: { children: ReactNode; roles: User["
   if (user === undefined) return <Feedback loading />;
   if (!user || !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return children;
+}
+
+function FeatureEnabled({ children, feature }: { children: ReactNode; feature: keyof Features }) {
+  const features = useFeatures();
+  if (!features) return <Feedback loading />;
+  return features[feature] ? children : <Navigate to="/dashboard" replace />;
 }
 
 function ScrollToRouteTop() {
@@ -94,6 +102,7 @@ export default function App() {
     <Route path="/" element={isDesktopMode ? <Navigate to={hasUsableToken() ? "/dashboard" : "/desktop-launch"} replace /> : <PublicHomePage />} />
     {isDesktopMode && <Route path="/desktop-launch" element={<DesktopLaunchPage />} />}
     {isDesktopMode && <Route path="/desktop-setup" element={<DesktopSetupPage />} />}
+    {isDesktopMode && <Route path="/desktop-connect" element={<DesktopConnectPage />} />}
     {!isDesktopMode && <Route path="/features" element={<FeaturesPage />} />}
     {!isDesktopMode && <Route path="/pricing" element={<PricingPage />} />}
     {!isDesktopMode && <Route path="/get-started" element={<GetStartedPage />} />}
@@ -127,12 +136,12 @@ export default function App() {
     <Route path="/incidents/services/:serviceId" element={protectedPage(<IncidentsPage />)} />
     <Route path="/incidents/playbooks/*" element={protectedPage(<IncidentsPage />)} />
     <Route path="/incidents/:id/*" element={protectedPage(<IncidentsPage />)} />
-    <Route path="/problems" element={protectedPage(<ProblemsPage />)} />
-    <Route path="/problems/new" element={roleProtectedPage(<ProblemsPage />, ["admin"])} />
-    <Route path="/problems/:id" element={protectedPage(<ProblemsPage />)} />
-    <Route path="/changes" element={protectedPage(<ChangesPage />)} />
-    <Route path="/changes/new" element={roleProtectedPage(<ChangesPage />, ["admin"])} />
-    <Route path="/changes/:id" element={protectedPage(<ChangesPage />)} />
+    <Route path="/problems" element={protectedPage(<FeatureEnabled feature="problem_management"><ProblemsPage /></FeatureEnabled>)} />
+    <Route path="/problems/new" element={roleProtectedPage(<FeatureEnabled feature="problem_management"><ProblemsPage /></FeatureEnabled>, ["admin"])} />
+    <Route path="/problems/:id" element={protectedPage(<FeatureEnabled feature="problem_management"><ProblemsPage /></FeatureEnabled>)} />
+    <Route path="/changes" element={protectedPage(<FeatureEnabled feature="change_management"><ChangesPage /></FeatureEnabled>)} />
+    <Route path="/changes/new" element={roleProtectedPage(<FeatureEnabled feature="change_management"><ChangesPage /></FeatureEnabled>, ["admin"])} />
+    <Route path="/changes/:id" element={protectedPage(<FeatureEnabled feature="change_management"><ChangesPage /></FeatureEnabled>)} />
     <Route path="/knowledge" element={protectedPage(<KnowledgePage />)} />
     <Route path="/knowledge/new" element={roleProtectedPage(<KnowledgePage />, ["admin", "technician"])} />
     <Route path="/knowledge/:id" element={protectedPage(<KnowledgePage />)} />

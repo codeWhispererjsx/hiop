@@ -48,6 +48,53 @@
   color: var(--color-warning);
 }
 
+.agent-health-alerts {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+  margin: 20px 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.agent-health-alerts header h2,
+.agent-health-alerts header p {
+  margin: 0;
+}
+
+.agent-health-alerts header p,
+.agent-health-alerts > p {
+  color: var(--text-muted);
+}
+
+.agent-health-alerts ul {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.agent-health-alerts li button {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-danger) 6%, var(--surface));
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-health-alerts li button span {
+  color: var(--color-danger);
+}
+
 .agents-list {
   background: var(--surface);
   border: 1px solid var(--border);

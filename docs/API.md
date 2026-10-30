@@ -100,7 +100,7 @@ Except for `POST /auth/login`, all application routes require `Authorization: Be
 | Audit | `GET /audit-logs`, `GET /audit-logs/{id}`, `GET /audit-logs/export` |
 | Reports | `GET /reports/summary`, `GET /reports/{name}`, `GET /reports/{name}/export` |
 | Hierarchy | `GET /hierarchy`, admin create/update/deactivate under `/hierarchy/{kind}` |
-| Settings | `GET /settings/public`; admin `GET /settings`, grouped `PUT` routes, and `GET /settings/system-health` |
+| Settings | `GET /settings/public`; admin `GET /settings`, grouped `PUT` routes including `/settings/naming-convention`, and `GET /settings/system-health` |
 | Live updates | `WS /ws/dashboard` |
 | Discovery | `GET /discovery`, `/discovery/{id}`, `/discovery/stats`, `/discovery/export`; admin run, approve, ignore, reject, and bulk routes |
 | Inventory imports | Admin upload/mapping/validate/cancel under `/imports`; admin/technician session, columns, staged rows, errors, and safe error export |

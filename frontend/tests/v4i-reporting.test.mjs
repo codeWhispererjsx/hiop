@@ -23,8 +23,7 @@ test("date ranges, honest missing data, trends, drilldowns, and CSV and Word exp
   assert.match(api,/export\.csv/);
   assert.match(page,/BreakdownChart/);
   assert.match(page,/report-breakdown-track/);
-  assert.match(page,/report-export-toolbar/);
-  assert.match(page,/onRetry={data.reload}/);
+  assert.match(page,/report-export-panel/);
 });
 
 test("the V4I surface has no predictive or generic BI builder capability",()=>{

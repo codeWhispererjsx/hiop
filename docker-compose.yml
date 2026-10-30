@@ -33,7 +33,7 @@ services:
       HIOP_SNMP_SECRET_KEY: ${HIOP_SNMP_SECRET_KEY:?Set a dedicated SNMP credential encryption key}
       HIOP_DISCOVERY_CREDENTIAL_KEY: ${HIOP_DISCOVERY_CREDENTIAL_KEY:?Set a dedicated discovery credential encryption key}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
-      CORS_ORIGINS: '["https://${HIOP_HOST:?Set HIOP_HOST to the production hostname}"]'
+      CORS_ORIGINS: '["https://${HIOP_HOST:?Set HIOP_HOST to the production hostname}","hiop://desktop"]'
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-10}
       DATABASE_MAX_OVERFLOW: ${DATABASE_MAX_OVERFLOW:-20}

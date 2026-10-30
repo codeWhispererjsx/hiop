@@ -1,6 +1,10 @@
 param([int]$Port = 0)
 
 $ErrorActionPreference = "Stop"
+$apiHost = if ($env:HIOP_SITE_SERVER_HOST) { $env:HIOP_SITE_SERVER_HOST } else { "127.0.0.1" }
+if ($apiHost -notin @("127.0.0.1", "0.0.0.0")) {
+  throw "HIOP_SITE_SERVER_HOST must be 127.0.0.1 or 0.0.0.0."
+}
 if ($Port -le 0) {
   if ($env:HIOP_DESKTOP_PORT) { $Port = [int]$env:HIOP_DESKTOP_PORT } else { $Port = 8765 }
 }
@@ -168,7 +172,7 @@ function Stop-HIOPPostgres {
   }
 }
 
-Write-HIOPLog "Starting HIOP Desktop backend on 127.0.0.1:$Port"
+Write-HIOPLog "Starting HIOP Desktop backend on ${apiHost}:$Port"
 Write-HIOPLog "Backend root: $backendRoot"
 Write-HIOPLog "Python runtime: $python"
 Write-HIOPLog "PostgreSQL runtime: $postgresRoot"
@@ -227,7 +231,7 @@ try {
   Invoke-HIOPCommandWithLog $migrationCommand "Database migration failed."
 
   Write-HIOPLog "Launching API process"
-  $apiCommand = '"' + $python + '" -m uvicorn app.main:app --host 127.0.0.1 --port ' + $Port + ' >> "' + $logFile + '" 2>&1'
+  $apiCommand = '"' + $python + '" -m uvicorn app.main:app --host ' + $apiHost + ' --port ' + $Port + ' >> "' + $logFile + '" 2>&1'
   Invoke-HIOPCommandWithLog $apiCommand "API process exited with code $LASTEXITCODE."
 }
 catch {

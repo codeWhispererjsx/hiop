@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added organization-specific asset naming conventions for asset creation and imports.
+- Governed Windows agent 1.3.0: removed remote shutdown, restart, lock, and Wake-on-LAN actions; added admin notices, local end-of-day reminders, a reasoned Stay On prompt, fail-closed local shutdown, a local five-minute Smart Lock policy, device-health reporting, and audited power events.
+- Change management and problem management are now off by default behind `CHANGE_MANAGEMENT_ENABLED` and `PROBLEM_MANAGEMENT_ENABLED`; their code and data are kept.
+- Removed the legacy Python agent; the .NET Windows agent is the only supported agent.
+
 ## HIOP 3.0.0
 
 - Promoted the enterprise and multi-property operations platform from development to a stable release.

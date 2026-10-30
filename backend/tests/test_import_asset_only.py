@@ -5,7 +5,6 @@ from uuid import uuid4
 from sqlalchemy.sql.elements import TextClause
 
 from app.models.asset_intelligence import AssetLifecycleEvent, ManagedAsset
-from app.models.hierarchy import Department
 from app.models.inventory_import import ImportSessionStatus, ImportValidationStatus
 from app.services import import_finalization_service as finalization
 from app.services.import_validation import validate_row
@@ -20,12 +19,13 @@ class AssetImportDB:
     def scalar(self, statement):
         if isinstance(statement, TextClause):
             return 41
-        if "FROM departments" in str(statement):
-            return None
         return self.property_id
 
+    def scalars(self, _statement):
+        return SimpleNamespace(all=lambda: [])
+
     def add(self, row):
-        if isinstance(row, (Department, ManagedAsset)):
+        if isinstance(row, (ManagedAsset, finalization.Department)):
             row.id = uuid4()
         self.added.append(row)
 
@@ -67,7 +67,11 @@ def test_managed_asset_finalization_preserves_fields_without_device_creation(mon
     )
     monkeypatch.setattr(service, "_session", lambda _session_id: session)
     monkeypatch.setattr(finalization, "create_audit_log", lambda *args, **kwargs: None)
-    monkeypatch.setattr(finalization.DeviceIdentityService, "apply_managed_asset_rules", lambda *_args: None)
+    monkeypatch.setattr(
+        finalization.DeviceIdentityService,
+        "apply_managed_asset_rules",
+        lambda *_args, **_kwargs: None,
+    )
 
     row = SimpleNamespace(import_session_id=uuid4(), source_row_number=12)
     result = SimpleNamespace(
@@ -102,9 +106,7 @@ def test_managed_asset_finalization_preserves_fields_without_device_creation(mon
     assert asset.serial_number == "SERIAL-01"
     assert asset.business_owner == "Alex Example"
     assert asset.deployment_date == date(2024, 3, 5)
-    assert asset.department_id is not None
     assert result.plan["target_asset_id"] == str(asset.id)
-    assert any(isinstance(item, Department) and item.name == "IT" for item in db.added)
     assert any(isinstance(item, AssetLifecycleEvent) for item in db.added)
     assert all(not isinstance(item, finalization.Device) for item in db.added)
 

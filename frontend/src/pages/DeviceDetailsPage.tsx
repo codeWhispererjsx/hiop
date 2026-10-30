@@ -10,7 +10,7 @@ import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints } from "../lib/api";
 import { isDesktopMode } from "../lib/appMode";
-import type { Device, DeviceHealth, LiveEvent, LocalAgent, ManagedAsset, User } from "../lib/types";
+import type { Device, DeviceHealth, LiveEvent, ManagedAsset, User } from "../lib/types";
 import { PageTitle } from "./DashboardPage";
 import "../styles/port-intelligence.css";
 
@@ -31,15 +31,6 @@ export default function DeviceDetailsPage() {
   const [discoveryIdentity, setDiscoveryIdentity] = useState<Record<string, unknown>>();
   const [health,setHealth]=useState<DeviceHealth>();
   const [asset,setAsset]=useState<ManagedAsset>();
-  const agents = useRequest(endpoints.listLocalAgents, []);
-  const reloadAgents = agents.reload;
-  useEffect(() => {
-    const timer = window.setInterval(() => void reloadAgents(), 10_000);
-    return () => window.clearInterval(timer);
-  }, [reloadAgents]);
-  const linkedAgent = agents.data?.find(
-    agent => agent.device_id === id || (asset && agent.managed_asset_id === asset.id),
-  );
   useEffect(() => {
     let active = true;
     endpoints.inventoryDiscoveryIdentity(id).then((value) => { if (active) setDiscoveryIdentity(value); }).catch(() => { if (active) setDiscoveryIdentity(undefined); });
@@ -92,7 +83,7 @@ export default function DeviceDetailsPage() {
         copy="Complete device information and operational history from HIOP."
         action={<div className="page-actions">
           <Link className="secondary-action" to="/devices">Back to devices</Link>
-          {device && <DeviceActions device={device} agent={linkedAgent} role={currentUser.data?.role} onNotice={showActionNotice} onError={showActionError} onRescan={async () => {
+          {device && <DeviceActions device={device} role={currentUser.data?.role} onNotice={showActionNotice} onError={showActionError} onRescan={async () => {
             await endpoints.scanDevice(device.id);
             showActionNotice("Connectivity rescan started. HIOP will update this device when the check completes.");
           }} />}
@@ -150,25 +141,18 @@ export default function DeviceDetailsPage() {
   );
 }
 
-type DesktopDeviceAction = "ping" | "trace" | "http" | "https" | "rdp" | "ssh";
-type WindowsDeviceAction = "RESTART" | "SHUTDOWN" | "LOCK";
+type DesktopDeviceAction = "ping" | "trace" | "http" | "https";
 
-function DeviceActions({ device, agent, role, onNotice, onError, onRescan }: { device: Device; agent?: LocalAgent; role?: User["role"]; onNotice: (message: string) => void; onError: (message: string) => void; onRescan: () => Promise<void> }) {
+function DeviceActions({ device, role, onNotice, onError, onRescan }: { device: Device; role?: User["role"]; onNotice: (message: string) => void; onError: (message: string) => void; onRescan: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [confirmingAction, setConfirmingAction] = useState<WindowsDeviceAction>();
   const target = device.ip_address || device.hostname;
   const validTarget = Boolean(target && /^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$/.test(target) && !target.includes(".."));
   const canManageNetwork = role === "admin" || role === "technician";
-  const operatingSystem = (device.ad_operating_system || agent?.operating_system || "").toLowerCase();
-  const canOpenRemoteDesktop = role === "admin" && operatingSystem.includes("windows");
-  const canUseAgentActions = role === "admin" && agent?.status === "online" && operatingSystem.includes("windows") && device.inventory_status.toLowerCase() !== "retired";
-  const canOpenSsh = role === "admin" && /(linux|unix|bsd|macos)/.test(operatingSystem);
   const canOpenWeb = validTarget;
   const hasActions = canOpenWeb || (isDesktopMode && validTarget && canManageNetwork) ||
-    (isDesktopMode && validTarget && (canOpenRemoteDesktop || canOpenSsh)) ||
     (canManageNetwork && Boolean(device.ip_address)) ||
-    Boolean(device.ip_address || device.hostname || device.mac_address || canUseAgentActions);
+    Boolean(device.ip_address || device.hostname || device.mac_address);
   const run = async (action: DesktopDeviceAction, label: string) => {
     if (!validTarget) { onError("This device has no usable hostname or IP address to use."); return; }
     setBusy(true);
@@ -196,29 +180,6 @@ function DeviceActions({ device, agent, role, onNotice, onError, onRescan }: { d
     catch (error) { onError(error instanceof Error ? error.message : "The rescan could not be started."); }
     finally { setBusy(false); }
   };
-  const queueWindowsAction = async () => {
-    if (!confirmingAction || busy) return;
-    const action = confirmingAction;
-    setBusy(true);
-    try {
-      let job: { id: string };
-      if (agent?.device_id === device.id) {
-        job = await endpoints.createDeviceAgentAction(device.id, action);
-      } else if (agent?.managed_asset_id) {
-        job = await endpoints.createManagedAssetAgentAction(agent.managed_asset_id, action);
-      } else {
-        throw new Error("The online agent is not linked to this device or its managed asset.");
-      }
-      const labels: Record<WindowsDeviceAction, string> = { RESTART: "Restart", SHUTDOWN: "Shut down", LOCK: "Lock session" };
-      onNotice(`${labels[action]} was queued for the HIOP agent. Job ${job.id}.`);
-      setConfirmingAction(undefined);
-      setOpen(false);
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "The Windows action could not be queued.");
-    } finally {
-      setBusy(false);
-    }
-  };
   if (!hasActions) return null;
   return <div className="device-actions-menu">
     <button className="secondary-action" type="button" onClick={() => setOpen(value => !value)} aria-expanded={open} aria-haspopup="menu">Device actions</button>
@@ -228,16 +189,6 @@ function DeviceActions({ device, agent, role, onNotice, onError, onRescan }: { d
         <div><button type="button" role="menuitem" disabled={busy} onClick={() => void run("ping", "Ping")}>Ping</button><button type="button" role="menuitem" disabled={busy} onClick={() => void run("trace", "Trace route")}>Trace route</button></div>
       </>}
       {canOpenWeb && <div><button type="button" role="menuitem" disabled={busy} onClick={() => void run("http", "HTTP")}>Open HTTP</button><button type="button" role="menuitem" disabled={busy} onClick={() => void run("https", "HTTPS")}>Open HTTPS</button></div>}
-      {(isDesktopMode && validTarget && (canOpenRemoteDesktop || canOpenSsh)) && <div>
-        {canOpenRemoteDesktop && <button type="button" role="menuitem" disabled={busy} onClick={() => void run("rdp", "Native RDP")}>Native RDP</button>}
-        {canOpenSsh && <button type="button" role="menuitem" disabled={busy} onClick={() => void run("ssh", "SSH")}>SSH</button>}
-      </div>}
-      {canUseAgentActions && <div>
-        <p>Windows agent actions</p>
-        <button type="button" role="menuitem" disabled={busy} onClick={() => setConfirmingAction("RESTART")}>Restart device</button>
-        <button type="button" role="menuitem" disabled={busy} onClick={() => setConfirmingAction("SHUTDOWN")}>Shut down device</button>
-        <button type="button" role="menuitem" disabled={busy} onClick={() => setConfirmingAction("LOCK")}>Lock user session</button>
-      </div>}
       {canManageNetwork && device.ip_address && <button type="button" role="menuitem" onClick={() => void rescan()} disabled={busy}>Rescan connectivity</button>}
       {(device.ip_address || device.hostname || device.mac_address) && <>
         <p>Copy identity</p>
@@ -248,18 +199,6 @@ function DeviceActions({ device, agent, role, onNotice, onError, onRescan }: { d
         </div>
       </>}
     </div>}
-    {confirmingAction && <ConfirmationModal
-      title={`${confirmingAction === "RESTART" ? "Restart" : confirmingAction === "SHUTDOWN" ? "Shut down" : "Lock"} ${device.hostname}?`}
-      confirmLabel="Queue action"
-      busyLabel="Queueing..."
-      busy={busy}
-      onCancel={() => setConfirmingAction(undefined)}
-      onConfirm={() => void queueWindowsAction()}
-    >
-      <p>This action will be sent to the online HIOP agent linked to this Windows device and recorded in the audit trail.</p>
-      {confirmingAction !== "LOCK" && <p className="confirmation-warning">Windows schedules this action 60 seconds after it is accepted. Make sure the device is not running work that must remain available.</p>}
-      {confirmingAction === "LOCK" && <p className="confirmation-warning">Locking requires an interactive Windows session with the HIOP Agent tray app running.</p>}
-    </ConfirmationModal>}
   </div>;
 }
 

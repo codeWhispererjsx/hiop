@@ -163,3 +163,48 @@ def test_import_plan_resolves_a_unique_exact_department_name():
 
     assert plan["hierarchy"]["department_id"] == str(department.id)
     assert plan["values"]["department"] == department.name
+
+
+def test_reviewed_import_creates_missing_department_and_audit_record(monkeypatch):
+    organization_id = uuid4()
+    created = []
+    audit = []
+
+    class Database:
+        info = {"property_id": uuid4()}
+
+        def scalars(self, _query):
+            return SimpleNamespace(all=lambda: [])
+
+        def add(self, row):
+            created.append(row)
+
+        def flush(self):
+            created[-1].id = uuid4()
+
+    monkeypatch.setattr(
+        "app.services.import_finalization_service.create_audit_log",
+        lambda *args: audit.append(args),
+    )
+    service = ImportFinalizationService(Database())
+    actor = SimpleNamespace(username="import-admin")
+
+    department = service._ensure_import_department(
+        "  Front Office  ", organization_id, uuid4(), actor
+    )
+
+    assert isinstance(department, Department)
+    assert department.name == "Front Office"
+    assert department.organization_id == organization_id
+    assert department.is_active is True
+    assert created == [department]
+    assert audit[0][2] == "IMPORT_DEPARTMENT_CREATED"
+
+
+def test_reviewed_import_does_not_create_a_blank_department():
+    class Database:
+        info = {}
+
+    service = ImportFinalizationService(Database())
+
+    assert service._ensure_import_department("  ", uuid4(), None, SimpleNamespace(username="admin")) is None

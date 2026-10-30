@@ -16,14 +16,16 @@ export default function LocalAgentsPage() {
   const [revokeId,setRevokeId]=useState<string>();
   const [notice,setNotice]=useState("");
   const [actionError,setActionError]=useState("");
+  const [showNoticeModal,setShowNoticeModal]=useState(false);
+  const [noticeMessage,setNoticeMessage]=useState("");
+  const [noticeReason,setNoticeReason]=useState("");
+  const [sendingNotice,setSendingNotice]=useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
   const [uptimeFilter, setUptimeFilter] = useState(false);
   const [selected, setSelected] = useState<LocalAgent>();
-  const [commandAgentId, setCommandAgentId] = useState<string>();
-  const [commandNotice, setCommandNotice] = useState("");
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [enrollForm, setEnrollForm] = useState({ name: "", property_id: "", expires_minutes: 15 });
   const [enrolling, setEnrolling] = useState(false);
@@ -33,6 +35,7 @@ export default function LocalAgentsPage() {
   const [enrollError, setEnrollError] = useState("");
 
   const agents = useRequest(endpoints.listLocalAgents, []);
+  const currentUser = useRequest(endpoints.me, []);
   const hierarchy = useRequest(endpoints.hierarchy, []);
   const reloadAgents = agents.reload;
   const history = useRequest(
@@ -46,7 +49,12 @@ export default function LocalAgentsPage() {
   const rows = Array.isArray(agents.data) ? agents.data : [];
   const onlineCount = rows.filter((agent) => agent.status === "online").length;
   const offlineCount = rows.filter((agent) => agent.status === "offline" || agent.status === "stale").length;
-  const attentionCount = rows.filter((agent) => (agent.uptime_seconds ?? 0) > 48 * 60 * 60).length;
+  const attentionCount = rows.filter((agent) => (agent.uptime_seconds ?? 0) >= 8 * 24 * 60 * 60).length;
+  const healthAlerts = rows.filter((agent) =>
+    (agent.uptime_seconds ?? 0) >= 8 * 24 * 60 * 60 ||
+    (agent.pending_windows_updates ?? 0) > 0 ||
+    (agent.battery_health_percent != null && agent.battery_health_percent < 80),
+  );
   const departments = [...new Set([
     ...(hierarchy.data?.departments.filter((item) => item.is_active).map((item) => item.name) ?? []),
     ...rows.map((agent) => agent.department).filter((value): value is string => Boolean(value)),
@@ -62,7 +70,7 @@ export default function LocalAgentsPage() {
     const statusMatch = statusFilter === "all" || agent.status === statusFilter;
     const departmentMatch = departmentFilter === "all" || agent.department === departmentFilter;
     const locationMatch = locationFilter === "all" || agent.location === locationFilter;
-    const uptimeMatch = !uptimeFilter || (agent.uptime_seconds ?? 0) > 48 * 60 * 60;
+    const uptimeMatch = !uptimeFilter || (agent.uptime_seconds ?? 0) >= 8 * 24 * 60 * 60;
     return textMatch && statusMatch && departmentMatch && locationMatch && uptimeMatch;
   });
   useEffect(() => { const timer=window.setInterval(()=>void reloadAgents(),10000); return ()=>window.clearInterval(timer); }, [reloadAgents]);
@@ -98,62 +106,25 @@ export default function LocalAgentsPage() {
     }
   };
 
-  const runAction = async (agent: LocalAgent, action: "RESTART" | "SHUTDOWN" | "ENABLE_RDP" | "DISABLE_RDP" | "TRIGGER_WINDOWS_UPDATE") => {
-    if (!agent.device_id) {
-      setActionError("Link this agent to a managed Windows device before sending actions.");
-      return;
-    }
-    const labels = {RESTART:"restart",SHUTDOWN:"shut down",ENABLE_RDP:"enable Remote Desktop",DISABLE_RDP:"disable Remote Desktop",TRIGGER_WINDOWS_UPDATE:"start a Windows Update scan"};
-    if (!window.confirm(`Send a command to ${agent.hostname || agent.name} to ${labels[action]}?`)) return;
-    setCommandAgentId(agent.id);
-    setCommandNotice(`Command sent to ${agent.hostname || agent.name}. Waiting for the agent...`);
+  const sendAdminNotice = async () => {
+    if (!selected || !noticeMessage.trim() || !noticeReason.trim()) return;
+    setSendingNotice(true);
     setActionError("");
     try {
-      const queued = await endpoints.createDeviceAgentAction(agent.device_id, action);
-      for (let attempt = 0; attempt < 24; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 5000));
-        const job = await endpoints.getAgentJobStatus(queued.id);
-        if (job.status === "completed") {
-          setCommandNotice(`${labels[action]} command completed on ${agent.hostname || agent.name}.`);
-          void history.reload();
-          return;
-        }
-        if (["failed", "timed_out", "cancelled"].includes(job.status)) {
-          throw new Error(job.error || `The command ${job.status.replaceAll("_", " ")}.`);
-        }
-      }
-      setCommandNotice(`Command is still queued for ${agent.hostname || agent.name}. Check history for the final result.`);
-      void history.reload();
+      await endpoints.createAgentNotice({
+        agent_ids: [selected.id],
+        message: noticeMessage.trim(),
+        reason: noticeReason.trim(),
+      });
+      setShowNoticeModal(false);
+      setNoticeMessage("");
+      setNoticeReason("");
+      setNotice(`Admin notice queued for ${selected.hostname || selected.name}. It expires after 15 minutes.`);
+      await history.reload();
     } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : "The command failed.");
-      setCommandNotice("");
-      void history.reload();
+      setActionError(caught instanceof Error ? caught.message : "The admin notice could not be sent.");
     } finally {
-      setCommandAgentId(undefined);
-    }
-  };
-
-  const wakeAgent = async (agent: LocalAgent) => {
-    if (!agent.device_id || !window.confirm(`Send a Wake-on-LAN packet to ${agent.hostname || agent.name}?`)) return;
-    setActionError("");
-    try {
-      await endpoints.wakeDevice(agent.device_id);
-      setCommandNotice(`Wake-on-LAN packet sent to ${agent.hostname || agent.name}. Network equipment must allow it.`);
-    } catch (caught) {
-      setActionError(caught instanceof Error ? caught.message : "Wake-on-LAN failed.");
-    }
-  };
-
-  const copyRdpCommand = async (agent: LocalAgent) => {
-    if (!agent.ip_address) {
-      setActionError("This agent has not reported an IP address.");
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(`mstsc /v:${agent.ip_address}`);
-      setNotice("Native RDP command copied. The operator must be able to reach this PC.");
-    } catch {
-      setActionError("Could not copy the RDP command.");
+      setSendingNotice(false);
     }
   };
 
@@ -163,7 +134,24 @@ export default function LocalAgentsPage() {
 
   return (
     <DashboardLayout>
-      {notice&&<p role="status">{notice}</p>}{commandNotice&&<p className="agent-command-pending" role="status">{commandAgentId&&<span className="agent-command-spinner" aria-hidden="true"/>}{commandNotice}</p>}{actionError&&<p role="alert">{actionError}</p>}
+      {notice&&<p role="status">{notice}</p>}{actionError&&<p role="alert">{actionError}</p>}
+      {showNoticeModal && selected && <Modal title={`Send admin notice to ${selected.hostname || selected.name}`} onClose={()=>{if(!sendingNotice)setShowNoticeModal(false)}}>
+        <div className="quick-navigation">
+          <p>The notice is requested as plain text in the HIOP Agent tray while a user is signed in. It expires after 15 minutes if no tray requests it.</p>
+          <label>Notice message *
+            <textarea maxLength={240} rows={4} value={noticeMessage} onChange={(event)=>setNoticeMessage(event.target.value)} />
+          </label>
+          <label>Reason *
+            <textarea maxLength={250} rows={2} value={noticeReason} onChange={(event)=>setNoticeReason(event.target.value)} />
+          </label>
+          <div className="modal-footer">
+            <button type="button" onClick={()=>setShowNoticeModal(false)} disabled={sendingNotice}>Cancel</button>
+            <button type="button" className="primary-action" onClick={()=>void sendAdminNotice()} disabled={sendingNotice || !noticeMessage.trim() || !noticeReason.trim()}>
+              {sendingNotice ? "Sending…" : "Send notice"}
+            </button>
+          </div>
+        </div>
+      </Modal>}
       {revokeId&&<Modal title="Revoke local agent?" onClose={()=>setRevokeId(undefined)}><p>This computer will stop sending observations to HIOP. You will need a new enrollment to reconnect it.</p><div className="modal-actions"><button className="secondary-action" onClick={()=>setRevokeId(undefined)}>Keep agent</button><button className="danger-action" onClick={()=>void handleRevoke(revokeId)}>Revoke agent</button></div></Modal>}
       {enrollToken&&<Modal title="Connect this computer" onClose={()=>setEnrollToken("")}>
         <div className="connection-code-modal">
@@ -187,7 +175,7 @@ export default function LocalAgentsPage() {
       <PageTitle
         eyebrow="Administration"
         title="Agents - Managed Endpoints"
-        copy="Track enrolled Windows computers, connectivity, inventory links, and recent agent commands. Agent actions are available only for an online agent securely linked to a managed Windows device."
+        copy="Track Windows device health, battery and update status, and inventory links. The agent applies end-of-day nudges and a five-minute idle lock locally; HIOP sends no remote power or lock commands."
         action={
           <div className="page-title-actions">
             <Link className="secondary-action" to="/download">Download Windows agent</Link>
@@ -205,7 +193,28 @@ export default function LocalAgentsPage() {
         <article><span>Total agents</span><strong>{rows.length}</strong><small>Registered endpoints</small></article>
         <article className="agent-summary-online"><span>Online now</span><strong>{onlineCount}</strong><small>Heartbeat received recently</small></article>
         <article className="agent-summary-offline"><span>Offline</span><strong>{offlineCount}</strong><small>Offline or heartbeat is stale</small></article>
-        <article className="agent-summary-attention"><span>Needs attention</span><strong>{attentionCount}</strong><small>Uptime is over 48 hours</small></article>
+        <article className="agent-summary-attention"><span>Needs attention</span><strong>{healthAlerts.length}</strong><small>{attentionCount} device{attentionCount === 1 ? "" : "s"} online for at least 8 days</small></article>
+      </section>
+
+      <section className="agent-health-alerts" aria-label="Device health alerts">
+        <header><h2>Device Health</h2><p>Live status and health details refresh with each agent heartbeat.</p></header>
+        {healthAlerts.length ? (
+          <ul>
+            {healthAlerts.map((agent) => {
+              const flags = [
+                (agent.uptime_seconds ?? 0) >= 8 * 24 * 60 * 60 ? `Online for ${formatUptime(agent.uptime_seconds)} — restart recommended` : null,
+                (agent.pending_windows_updates ?? 0) > 0 ? `${agent.pending_windows_updates} Windows updates pending` : null,
+                agent.battery_health_percent != null && agent.battery_health_percent < 80 ? `Battery health ${Math.round(agent.battery_health_percent)}%` : null,
+              ].filter((value): value is string => value !== null);
+              return <li key={agent.id}>
+                <button type="button" onClick={() => setSelected(agent)}>
+                  <strong>{agent.hostname || agent.name}</strong>
+                  <span>{flags.join(" · ")}</span>
+                </button>
+              </li>;
+            })}
+          </ul>
+        ) : <p>No current health alerts. Missing telemetry is shown as “Not reported,” not treated as healthy.</p>}
       </section>
 
       <section className="operational-guide" aria-label="Connect your network">
@@ -214,9 +223,9 @@ export default function LocalAgentsPage() {
         <div><span>3. Scan and reconcile</span><strong>Keep inventory up to date</strong><p>Run a discovery scan for the same property and a network range containing the agent computer. HIOP links unambiguous matches to existing inventory and refreshes their technical/network details; unmatched or conflicting devices stay in Discovery for review before being added.</p></div>
       </section>
       <section className="operational-guide" aria-label="How local agents work">
-        <div><span>Why it exists</span><strong>Observe the hotel network from inside</strong><p>A hosted HIOP server cannot directly see private hotel networks. A local agent securely sends approved discovery and monitoring observations. Agent-brokered remote desktop is not available; Native RDP is launched from the device page and requires direct network access.</p></div>
+        <div><span>Why it exists</span><strong>Observe the hotel network from inside</strong><p>A hosted HIOP server cannot directly see private hotel networks. A local agent securely sends approved discovery and monitoring observations and read-only device heartbeat data.</p></div>
         <div><span>How to use it</span><strong>Install, enroll, verify</strong><p>After installation, create a short-lived code for the correct property and enroll from the tray app. To update an enrolled agent, run Install HIOP Agent.cmd from a fresh package; its registration and local queue are preserved. To remove it, run Remove HIOP Agent.cmd.</p></div>
-        <div><span>Security</span><strong>Property-bound and restricted</strong><p>Credentials are machine-protected and enrollment is one-time. The service accepts allowlisted discovery, monitoring, and fixed Windows actions only; it does not accept arbitrary commands. Restart and shutdown are scheduled 60 seconds ahead. Lock requires an interactive signed-in session with the tray app running.</p></div>
+        <div><span>Security</span><strong>Local policies; no remote controls</strong><p>Credentials are machine-protected and enrollment is one-time. HIOP sends only a five-minute idle-lock policy; the signed-in tray applies it locally. End-of-day prompts and any normal shutdown decision are local, idle-checked, fail-closed, and audited. There are no remote lock, shutdown, restart, or arbitrary-command actions.</p></div>
       </section>
       <FeatureGuide kind="agent"/>
 
@@ -258,7 +267,7 @@ export default function LocalAgentsPage() {
             </label>
             <label className="agent-uptime-filter">
               <input type="checkbox" checked={uptimeFilter} onChange={(event) => setUptimeFilter(event.target.checked)} />
-              Uptime over 48 hours
+              Uptime at least 8 days
             </label>
           </div>
 
@@ -309,7 +318,7 @@ export default function LocalAgentsPage() {
                     <td>{agent.ip_address || "—"}</td>
                     <td>{agent.last_heartbeat ? formatDateTime(agent.last_heartbeat) : "Never"}</td>
                     <td>{agent.last_update ? formatDateTime(agent.last_update) : "—"}</td>
-                    <td className={(agent.uptime_seconds ?? 0) > 48 * 60 * 60 ? "agent-uptime-warning" : ""}>{formatUptime(agent.uptime_seconds)}</td>
+                    <td className={(agent.uptime_seconds ?? 0) >= 8 * 24 * 60 * 60 ? "agent-uptime-warning" : ""}>{formatUptime(agent.uptime_seconds)}</td>
                     <td>{agent.version || "Unknown"}</td>
                     <td onClick={(event) => event.stopPropagation()}>
                       {agent.managed_asset_id
@@ -320,13 +329,7 @@ export default function LocalAgentsPage() {
                     </td>
                     <td>{properties.data?.find(property=>property.id===agent.property_id)?.name ?? "Assigned property"}</td>
                     <td className="agent-row-actions" onClick={(event) => event.stopPropagation()}>
-                      <button disabled={agent.status !== "online" || !agent.device_id || commandAgentId === agent.id} onClick={() => void runAction(agent, "RESTART")}>Restart</button>
-                      <button disabled={agent.status !== "online" || !agent.device_id || commandAgentId === agent.id} onClick={() => void runAction(agent, "SHUTDOWN")}>Shutdown</button>
-                      <button disabled={agent.status !== "online" || !agent.device_id || commandAgentId === agent.id} onClick={() => void runAction(agent, "ENABLE_RDP")}>Enable RDP</button>
-                      <button disabled={agent.status !== "online" || !agent.device_id || commandAgentId === agent.id} onClick={() => void runAction(agent, "DISABLE_RDP")}>Disable RDP</button>
-                      <button disabled={agent.status !== "online" || !agent.device_id || commandAgentId === agent.id} onClick={() => void runAction(agent, "TRIGGER_WINDOWS_UPDATE")}>Update scan</button>
-                      <button disabled={!agent.device_id || !agent.mac_address} onClick={() => void wakeAgent(agent)}>Wake</button>
-                      <button disabled={!agent.ip_address} onClick={() => void copyRdpCommand(agent)}>Copy RDP</button>
+                      <span>Heartbeat monitoring only</span>
                     </td>
                   </tr>
                 ))}
@@ -368,11 +371,21 @@ export default function LocalAgentsPage() {
                 <Detail label="Memory" value={selected.memory_total_bytes ? `${formatBytes(selected.memory_total_bytes - (selected.memory_free_bytes ?? 0))} used / ${formatBytes(selected.memory_total_bytes)} total` : "Not reported"} />
                 <Detail label="Disk free" value={selected.disk_free_bytes === null ? "Not reported" : formatBytes(selected.disk_free_bytes)} />
                 <Detail label="Last Windows update" value={selected.last_update ? formatDateTime(selected.last_update) : "Not reported"} />
+                <Detail label="Fast Startup" value={selected.fast_startup_enabled == null ? "Not reported" : selected.fast_startup_enabled ? "On" : "Off"} />
+                <Detail label="Lid close action" value={selected.lid_close_action || "Not reported"} />
+                <Detail label="Battery health" value={selected.battery_health_percent == null ? "Not reported" : `${Math.round(selected.battery_health_percent)}%`} />
+                <Detail label="Pending Windows updates" value={selected.pending_windows_updates == null ? "Not reported" : selected.pending_windows_updates === 0 ? "None pending" : `${selected.pending_windows_updates} pending`} />
+                <Detail label="Last shutdown event" value={selected.last_shutdown_at ? formatDateTime(selected.last_shutdown_at) : "Not reported"} />
                 <Detail label="Pending Queue" value={`${selected.pending_queue}/${selected.queue_capacity}`} />
                 <Detail label="Registered" value={formatDateTime(selected.registered_at)} />
               </dl>
                 <section className="agent-history">
-                  <h3>Recent command history</h3>
+                  <h3>Local power policies</h3>
+                  <p>Smart Lock is applied on this computer after five minutes idle. The tray shows a closing-time reminder at 10:45 p.m.; at 11:30 p.m. it may request a normal shutdown only after an inactivity countdown, with no known work apps or visible application windows and successful safety checks. Choose Stay On and provide a reason to cancel.</p>
+                </section>
+                <section className="agent-history">
+                  <h3>Recent admin notices</h3>
+                  <small>Completed means the tray requested a toast; Windows cannot confirm that a user saw it.</small>
                   {history.loading ? <p>Loading history...</p> : history.error ? <Feedback error={history.error} onRetry={history.reload} /> : history.data?.length ? history.data.map((job) => (
                     <article key={job.id}>
                       <strong>{job.action || job.job_type.replaceAll("_", " ")}</strong>
@@ -380,26 +393,16 @@ export default function LocalAgentsPage() {
                       <small>{formatDateTime(job.created_at)}</small>
                       {job.error && <p>{job.error}</p>}
                     </article>
-                  )) : <p>No recent commands.</p>}
+                  )) : <p>No recent notices.</p>}
                 </section>
                 <section className="agent-history">
                   <h3>Endpoint health · last 7 days</h3>
                   {metrics.loading ? <p>Loading uptime history...</p> : metrics.error ? <Feedback error={metrics.error} onRetry={metrics.reload} /> : metrics.data?.length ? <MetricChart values={metrics.data.map((sample) => sample.uptime_seconds ?? 0)} /> : <p>Uptime history starts after the agent has checked in for at least five minutes.</p>}
                 </section>
               <div className="agent-actions">
-                {selected.status === "online" && selected.device_id && (
-                  <div className="agent-command-buttons">
-                    <button className="secondary-action" disabled={commandAgentId === selected.id} onClick={() => void runAction(selected, "RESTART")}>Restart</button>
-                    <button className="secondary-action" disabled={commandAgentId === selected.id} onClick={() => void runAction(selected, "SHUTDOWN")}>Shutdown / Cool Off</button>
-                    <button className="secondary-action" disabled={commandAgentId === selected.id} onClick={() => void runAction(selected, "ENABLE_RDP")}>Enable RDP</button>
-                    <button className="secondary-action" disabled={commandAgentId === selected.id} onClick={() => void runAction(selected, "DISABLE_RDP")}>Disable RDP</button>
-                    <button className="secondary-action" disabled={commandAgentId === selected.id} onClick={() => void runAction(selected, "TRIGGER_WINDOWS_UPDATE")}>Trigger Update Scan</button>
-                  </div>
+                {currentUser.data && ["admin","platformadmin"].includes(currentUser.data.role) && selected.status === "online" && (
+                  <button className="secondary-action" onClick={()=>{setActionError("");setShowNoticeModal(true)}}>Send admin notice</button>
                 )}
-                {selected.device_id && <div className="agent-command-buttons">
-                  <button className="secondary-action" disabled={!selected.mac_address} onClick={() => void wakeAgent(selected)}>Wake-on-LAN</button>
-                  <button className="secondary-action" disabled={!selected.ip_address} onClick={() => void copyRdpCommand(selected)}>Copy RDP Command</button>
-                </div>}
                 {selected.status !== "revoked" && (
                   <button className="danger-action" onClick={() => setRevokeId(selected.id)}>
                     Revoke Agent

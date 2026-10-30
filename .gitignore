@@ -64,3 +64,6 @@ desktop/release/
 buildcheck-*/
 desktop/build-runtime/
 .vercel
+
+# Local development databases
+backend/*.db

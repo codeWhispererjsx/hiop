@@ -1,6 +1,14 @@
 from typing import Literal
+import re
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+from app.services.naming_convention_service import (
+    DEFAULT_NAMING_CONVENTION,
+    NAMING_TOKENS,
+    TOKEN_PATTERN,
+    variables_in_template,
+)
 
 
 class GeneralSettings(BaseModel):
@@ -127,6 +135,29 @@ class IncidentSettings(BaseModel):
     incident_reopen_enabled: bool = True
 
 
+class NamingConventionSettings(BaseModel):
+    template: str = Field(DEFAULT_NAMING_CONVENTION["template"], min_length=1, max_length=120)
+    variables: list[str] = Field(default_factory=list, max_length=30)
+    separator: Literal["-", "_", ".", ""] = "-"
+
+    @model_validator(mode="after")
+    def validate_template(self):
+        variables = variables_in_template(self.template)
+        remainder = TOKEN_PATTERN.sub("", self.template)
+        if "{" in remainder or "}" in remainder:
+            raise ValueError("The template contains an invalid or unclosed variable.")
+        if re.search(r"[^A-Za-z0-9{}:._-]", self.template):
+            raise ValueError("Use only letters, numbers, variables, hyphens, underscores, and periods in the template.")
+        for variable in variables:
+            name, _, width = variable.partition(":")
+            if name not in NAMING_TOKENS or (width and not 2 <= int(width) <= 6):
+                raise ValueError(f"Unsupported naming variable: {{{variable}}}.")
+        if not any(variable.startswith("NUM") for variable in variables):
+            raise ValueError("Include {NUM} or a padded number such as {NUM:03} to keep asset numbers unique.")
+        self.variables = variables
+        return self
+
+
 class SettingsBundle(BaseModel):
     general: GeneralSettings
     organization: OrganizationSettings
@@ -134,6 +165,7 @@ class SettingsBundle(BaseModel):
     notifications: NotificationSettings
     discovery: DiscoverySettings
     incidents: IncidentSettings
+    naming_convention: NamingConventionSettings = Field(default_factory=NamingConventionSettings)
     email: dict
     security: dict
     application: dict

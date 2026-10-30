@@ -59,7 +59,7 @@
       "installerHeaderIcon": "assets/icon.ico",
       "deleteAppDataOnUninstall": false
     },
-    "icon": "assets/icon.ico"
+    "icon": "assets/icon.png"
   },
   "devDependencies": {
     "electron": "^39.2.7",

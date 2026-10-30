@@ -7,7 +7,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { useRequest } from "../hooks/useRequest";
 import DashboardLayout from "../layouts/DashboardLayout";
 import { endpoints, getPaginatedItems } from "../lib/api";
-import { downloadBrandedWordReportSections } from "../lib/brandedWordExport";
+import { downloadBrandedWordReport } from "../lib/brandedWordExport";
 import type { ManagedAsset } from "../lib/types";
 import { PageTitle } from "./DashboardPage";
 
@@ -133,26 +133,21 @@ export default function DevicesPage() {
         const bytes = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
         saveBlob(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${filename}.xlsx`);
       } else {
-        const identityColumns = columns.filter(([, key]) => [
-          "asset_number", "asset_tag", "name", "hostname", "device_type", "vendor",
-          "model", "serial_number", "business_owner",
-        ].includes(key));
-        const operationalColumns = columns.filter(([, key]) => [
-          "asset_number", "hostname", "ip_address", "mac_address", "department",
-          "location", "status", "health", "warranty_status",
-        ].includes(key));
-        type AssetExportColumn = (typeof columns)[number];
-        const sectionRows = (selectedColumns: readonly AssetExportColumn[]) => [
-          selectedColumns.map(([label]) => label),
-          ...selectedRows.map((row) => selectedColumns.map(([, key]) => row[key] ?? "")),
+        const wordRows = [
+          ["Asset", "Device", "Assignment", "Technical details", "Network", "Health & lifecycle"],
+          ...selectedRows.map((row) => [
+            `Asset number: ${value(row.asset_number)}\nAsset tag: ${value(row.asset_tag)}`,
+            `Name: ${value(row.name)}\nHostname: ${value(row.hostname)}\nType: ${value(row.device_type)}`,
+            `Assigned to: ${value(row.business_owner)}\nDepartment: ${value(row.department)}\nLocation: ${value(row.location)}`,
+            `Vendor: ${value(row.vendor)}\nModel: ${value(row.model)}\nSerial: ${value(row.serial_number)}`,
+            `IP address: ${value(row.ip_address)}\nMAC address: ${value(row.mac_address)}`,
+            `Lifecycle: ${value(row.status)}\nHealth: ${value(row.health)}\nWarranty: ${value(row.warranty_status)}`,
+          ]),
         ];
-        await downloadBrandedWordReportSections(
+        await downloadBrandedWordReport(
           "Managed Asset Inventory",
           filename,
-          [
-            { heading: "Asset identity and ownership", rows: sectionRows(identityColumns) },
-            { heading: "Network and lifecycle details", rows: sectionRows(operationalColumns) },
-          ],
+          wordRows,
         );
       }
     } catch (error) {
@@ -266,7 +261,7 @@ export default function DevicesPage() {
                     </span>
                     <span>
                       <strong>{value(row.department)}</strong>
-                      <small>{value(row.location)} · Assigned to: {row.business_owner || "Not assigned"}</small>
+                      <small>{value(row.location)} · Owner: {value(row.business_owner)}</small>
                     </span>
                     <span>
                       <span className="device-statuses">

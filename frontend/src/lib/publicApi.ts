@@ -1,7 +1,8 @@
-const API_URL=import.meta.env.VITE_API_URL??"/api/v1";
-const BACKEND_URL=API_URL.replace(/\/api\/v1\/?$/,"");
-const publicDownloadUrl=(path:string)=>`${BACKEND_URL}${path}`;
-export function getPublicAgentServerUrl():string{return BACKEND_URL||window.location.origin}
+import { getApiBaseUrl } from "./desktopServer";
+const apiUrl=()=>getApiBaseUrl();
+const backendUrl=()=>apiUrl().replace(/\/api\/v1\/?$/,"");
+const publicDownloadUrl=(path:string)=>`${backendUrl()}${path}`;
+export function getPublicAgentServerUrl():string{return backendUrl()||window.location.origin}
 export type PublicBillingPlan={id:string;code:string;name:string;description:string;audience:string|null;monthly_price:string|null;yearly_price:string|null;currency:string;trial_days:number;features:string[];limits:Record<string,number>;checkout_available:boolean};
 export type OnboardingPayload={plan_code:string;organization_name:string;organization_code:string;contact_email:string;country:string;timezone:string;phone?:string;description?:string;property_name:string;property_code:string;property_city:string;admin_username:string;admin_email:string;admin_password:string};
 export type DesktopStatus={platform_owner_required:boolean;organization_required:boolean;platform_owner_count:number;organization_count:number};
@@ -29,16 +30,16 @@ function safeValidationMessage(detail:ValidationIssue[]):string{
  return [...new Set(messages)].join(" ")||"Please review the highlighted information and try again.";
 }
 export async function registerCustomer(payload:OnboardingPayload):Promise<OnboardingResult>{
- const response=await fetch(`${API_URL}/public/onboarding/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+ const response=await fetch(`${apiUrl()}/public/onboarding/register`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
  if(!response.ok){let message="Unable to complete organization setup.";try{const body=await response.json() as {detail?:string|ValidationIssue[]};message=typeof body.detail==="string"?body.detail:Array.isArray(body.detail)?safeValidationMessage(body.detail):message}catch{/* keep safe message */}throw new Error(message)}
  return response.json();
 }
-export async function getPublicPlans():Promise<PublicBillingPlan[]>{const response=await fetch(`${API_URL}/billing/public/plans`);if(!response.ok)throw new Error("Unable to load current plans.");return response.json()}
+export async function getPublicPlans():Promise<PublicBillingPlan[]>{const response=await fetch(`${apiUrl()}/billing/public/plans`);if(!response.ok)throw new Error("Unable to load current plans.");return response.json()}
 
-export async function getDesktopStatus():Promise<DesktopStatus>{const response=await fetch(`${API_URL}/public/onboarding/desktop-status`);if(!response.ok)throw new Error("Unable to read desktop setup status.");return response.json()}
-export async function bootstrapPlatformOwner(payload:PlatformBootstrapPayload):Promise<PlatformBootstrapResult>{const response=await fetch(`${API_URL}/platform/bootstrap`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!response.ok){let message="Unable to create platform owner.";try{const body=await response.json() as {detail?:string|ValidationIssue[]};message=typeof body.detail==="string"?body.detail:Array.isArray(body.detail)?safeValidationMessage(body.detail):message}catch{/* Keep the generic error when the response is not JSON. */}throw new Error(message)}return response.json()}
+export async function getDesktopStatus():Promise<DesktopStatus>{const response=await fetch(`${apiUrl()}/public/onboarding/desktop-status`);if(!response.ok)throw new Error("Unable to read desktop setup status.");return response.json()}
+export async function bootstrapPlatformOwner(payload:PlatformBootstrapPayload):Promise<PlatformBootstrapResult>{const response=await fetch(`${apiUrl()}/platform/bootstrap`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!response.ok){let message="Unable to create platform owner.";try{const body=await response.json() as {detail?:string|ValidationIssue[]};message=typeof body.detail==="string"?body.detail:Array.isArray(body.detail)?safeValidationMessage(body.detail):message}catch{/* Keep the generic error when the response is not JSON. */}throw new Error(message)}return response.json()}
 
-export async function getDesktopActivationStatus():Promise<{status:string;configured:boolean;activation_url:string|null;organization_code:string|null}>{const response=await fetch(`${API_URL}/public/onboarding/desktop-activation-status`);if(!response.ok)throw new Error("Unable to read desktop activation status.");return response.json()}
+export async function getDesktopActivationStatus():Promise<{status:string;configured:boolean;activation_url:string|null;organization_code:string|null}>{const response=await fetch(`${apiUrl()}/public/onboarding/desktop-activation-status`);if(!response.ok)throw new Error("Unable to read desktop activation status.");return response.json()}
 
 export async function getPublicAgentStatus():Promise<PublicAgentStatus>{
  const response=await fetch(publicDownloadUrl("/download/status"),{cache:"no-store"});

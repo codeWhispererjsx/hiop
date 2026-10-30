@@ -126,6 +126,13 @@ def root():
         "status": "running"
     }
 
+@app.get(f"{settings.api_prefix}/features", tags=["Operations"])
+def features():
+    return {
+        "change_management": settings.change_management_enabled,
+        "problem_management": settings.problem_management_enabled,
+    }
+
 @app.get("/health", tags=["Operations"])
 def health():
     db = SessionLocal()
@@ -211,8 +218,10 @@ app.include_router(procurement_router, prefix=settings.api_prefix)
 app.include_router(vendors_router, prefix=settings.api_prefix)
 app.include_router(service_management_router, prefix=settings.api_prefix)
 app.include_router(organization_structure_router, prefix=settings.api_prefix)
-app.include_router(problems_router, prefix=settings.api_prefix)
-app.include_router(changes_router, prefix=settings.api_prefix)
+if settings.problem_management_enabled:
+    app.include_router(problems_router, prefix=settings.api_prefix)
+if settings.change_management_enabled:
+    app.include_router(changes_router, prefix=settings.api_prefix)
 app.include_router(knowledge_base_router, prefix=settings.api_prefix)
 app.include_router(reporting_router, prefix=settings.api_prefix)
 app.include_router(property_management_router, prefix=settings.api_prefix)

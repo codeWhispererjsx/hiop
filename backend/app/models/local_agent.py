@@ -33,6 +33,11 @@ class LocalAgentRegistration(Base):
     operating_system: Mapped[str | None] = mapped_column(String(255))
     logged_user: Mapped[str | None] = mapped_column(String(255))
     last_update: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    fast_startup_enabled: Mapped[bool | None] = mapped_column(Boolean)
+    lid_close_action: Mapped[str | None] = mapped_column(String(80))
+    battery_health_percent: Mapped[float | None] = mapped_column(Float)
+    pending_windows_updates: Mapped[int | None] = mapped_column(Integer)
+    last_shutdown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pending_queue: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     queue_capacity: Mapped[int] = mapped_column(Integer, default=10000, server_default="10000", nullable=False)
     registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False)
@@ -107,6 +112,19 @@ class AgentDownloadEvent(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     client_ip: Mapped[str] = mapped_column(String(64), nullable=False)
     downloaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False, index=True)
+
+class AgentPowerEvent(Base):
+    __tablename__ = "agent_power_events"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("local_agent_registrations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    property_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    reason: Mapped[str | None] = mapped_column(String(250))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()", nullable=False, index=True)
+    __table_args__ = (Index("uq_agent_power_event", "agent_id", "event_id", unique=True),)
 
 class AgentMetricSample(Base):
     __tablename__ = "agent_metric_samples"

@@ -294,6 +294,12 @@ Click **Export CSV** to download the current report data.
 - Organization name and property details
 - Contact information
 
+### Naming Convention
+
+Administrators can configure the generated managed-asset number in **Settings → Naming Convention**. Type a template or add, remove, and reorder variables, choose a separator (including **(none)** to concatenate values without punctuation), check the live preview, and save. Changing the separator updates separators between existing variables. For example, `{COMPANY}-{FLOOR}-{DEPT}-{TYPE}-{NUM:03}` produces identifiers such as `LCH-03-ACC-DT-005`.
+
+Available variables include company code, location, floor, building, department, device type, user, year, asset name, and a sequential number. A number variable is required for uniqueness; padded number widths from 2 to 6 digits are supported. The template affects new managed assets and does not rename existing records or replace manually entered device asset tags.
+
 ### Network Settings
 
 - Approved network CIDR for scanning

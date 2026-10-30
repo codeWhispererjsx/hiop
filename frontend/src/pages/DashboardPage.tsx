@@ -163,8 +163,8 @@ export default function DashboardPage() {
             ) : (
               <div className="system-health-cards">
                 <Link to="/reports/system-maintenance" className="system-health-card tone-warning"><span>Systems needing update</span><strong>{systemHealth.data.summary.updates_needed}</strong><small>Windows update older than 7 days</small></Link>
-                <Link to="/reports/system-maintenance" className={`system-health-card ${systemHealth.data.summary.restarts_needed > 5 ? "tone-danger" : systemHealth.data.summary.restarts_needed ? "tone-warning" : "tone-good"}`}><span>Systems needing restart / cool off</span><strong>{systemHealth.data.summary.restarts_needed}</strong><small>Uptime is over 48 hours</small></Link>
-                <Link to="/reports/system-maintenance" className="system-health-card tone-info"><span>Cooled off last night</span><strong>{systemHealth.data.summary.cooled_off_last_night}</strong><small>Scheduled shutdown recorded 21:00–06:00</small></Link>
+                <Link to="/reports/system-maintenance" className={`system-health-card ${systemHealth.data.summary.restarts_needed > 5 ? "tone-danger" : systemHealth.data.summary.restarts_needed ? "tone-warning" : "tone-good"}`}><span>Endpoints with uptime over 48 hours</span><strong>{systemHealth.data.summary.restarts_needed}</strong><small>Review heartbeat and update health</small></Link>
+                <Link to="/reports/system-maintenance" className="system-health-card tone-info"><span>Legacy cool-off records</span><strong>{systemHealth.data.summary.cooled_off_last_night}</strong><small>Historical data only; controls are disabled</small></Link>
                 <Link to="/reports/system-maintenance" className={`system-health-card ${systemHealth.data.summary.hygiene_score > 80 ? "tone-good" : systemHealth.data.summary.hygiene_score >= 50 ? "tone-warning" : "tone-danger"}`}><span>System hygiene score</span><strong>{systemHealth.data.summary.hygiene_score}%</strong><small>Online, recently restarted, and updated</small><i><b style={{ width: `${systemHealth.data.summary.hygiene_score}%` }} /></i></Link>
               </div>
             )}

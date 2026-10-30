@@ -5,6 +5,7 @@ import BrandLogo from "../components/BrandLogo";
 import ThemeToggle from "../components/ThemeToggle";
 import { endpoints } from "../lib/api";
 import { clearAuthToken, setAuthToken } from "../lib/auth";
+import { isDesktopMode } from "../lib/appMode";
 import "../App.css";
 import "../styles/product-polish.css";
 
@@ -154,6 +155,7 @@ export default function LoginPage() {
             Protected access. Activity is recorded in the hospitality IT audit trail.
           </p>
           <p className="login-public-links">
+            {isDesktopMode && <Link to="/desktop-connect">Change Site Server</Link>}
             <Link to="/">Back to HIOP</Link>
             <Link to="/get-started">Create an organization</Link>
           </p>

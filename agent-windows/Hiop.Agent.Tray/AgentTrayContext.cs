@@ -1,8 +1,4 @@
 using System.Diagnostics;
-using System.IO.Pipes;
-using System.Security.AccessControl;
-using System.Security.Principal;
-using System.Text.Json;
 using Hiop.Agent.Core;
 
 namespace Hiop.Agent.Tray;
@@ -12,10 +8,14 @@ internal sealed class AgentTrayContext : ApplicationContext
     private readonly NotifyIcon _icon;
     private readonly ToolStripMenuItem _statusItem;
     private readonly System.Windows.Forms.Timer _refreshTimer;
-    private readonly CancellationTokenSource _actionListenerCancellation = new();
     private readonly string _configPath = AgentConfiguration.DefaultPath;
+    private readonly AgentPowerEventQueue _powerEvents = new(
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HIOP", "Agent"));
     private AgentConfiguration? _configuration;
+    private EndOfDayPromptForm? _endOfDayPrompt;
     private bool _refreshing;
+    private bool _smartLockArmed = true;
+    private bool _powerStorageErrorShown;
 
     public AgentTrayContext()
     {
@@ -40,76 +40,7 @@ internal sealed class AgentTrayContext : ApplicationContext
         _refreshTimer = new System.Windows.Forms.Timer { Interval = 10000 };
         _refreshTimer.Tick += async (_, _) => await RefreshStatusAsync();
         _refreshTimer.Start();
-        _ = ListenForDeviceActionsAsync(_actionListenerCancellation.Token);
         _ = RefreshStatusAsync();
-    }
-
-    private static NamedPipeServerStream CreateDeviceActionPipe()
-    {
-        var security = new PipeSecurity();
-        var agentService = (SecurityIdentifier)new NTAccount(@"NT SERVICE\HIOPAgent")
-            .Translate(typeof(SecurityIdentifier));
-        security.AddAccessRule(new PipeAccessRule(agentService, PipeAccessRights.ReadWrite, AccessControlType.Allow));
-        return NamedPipeServerStreamAcl.Create(
-            AgentDeviceActionPipe.Name,
-            PipeDirection.InOut,
-            1,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous,
-            1024,
-            1024,
-            security);
-    }
-
-    private async Task ListenForDeviceActionsAsync(CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            try
-            {
-                await using var pipe = CreateDeviceActionPipe();
-                await pipe.WaitForConnectionAsync(cancellationToken);
-                using var reader = new StreamReader(pipe, leaveOpen: true);
-                await using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
-                var line = await reader.ReadLineAsync(cancellationToken);
-                var request = line is null
-                    ? null
-                    : JsonSerializer.Deserialize<AgentDeviceActionRequest>(line, AgentJson.Api);
-                var response = request?.Action == "LOCK"
-                    ? WindowsDeviceActionRunner.Run(request.Action)
-                    : new AgentDeviceActionResponse(false, "Only interactive session locking is allowed on this pipe.");
-                await writer.WriteLineAsync(JsonSerializer.Serialize(response, AgentJson.Api).AsMemory(), cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                break;
-            }
-            catch (IOException exception)
-            {
-                Debug.WriteLine($"HIOP agent action pipe failed: {exception.Message}");
-                await DelayBeforeRetryAsync(cancellationToken);
-            }
-            catch (UnauthorizedAccessException exception)
-            {
-                Debug.WriteLine($"HIOP agent action pipe access failed: {exception.Message}");
-                await DelayBeforeRetryAsync(cancellationToken);
-            }
-            catch (JsonException exception)
-            {
-                Debug.WriteLine($"HIOP agent action request was invalid: {exception.Message}");
-            }
-        }
-    }
-
-    private static async Task DelayBeforeRetryAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
     }
 
     private async Task RefreshStatusAsync()
@@ -125,6 +56,12 @@ internal sealed class AgentTrayContext : ApplicationContext
             var response = await AgentControlClient.SendAsync(new AgentControlRequest("status"));
             _statusItem.Text = $"Status: {response.Status}";
             _icon.Text = $"HIOP Agent: {response.Status}";
+            if (response.Enrolled)
+            {
+                await ApplySmartLockPolicyAsync(response.SmartLockTimeoutSeconds);
+                await FlushPowerEventsAsync();
+                await ShowAdminNoticesAsync();
+            }
         }
         catch (Exception exception) when (exception is IOException or TimeoutException or UnauthorizedAccessException)
         {
@@ -133,7 +70,201 @@ internal sealed class AgentTrayContext : ApplicationContext
         }
         finally
         {
+            CheckEndOfDayPolicy();
             _refreshing = false;
+        }
+    }
+
+    private async Task ApplySmartLockPolicyAsync(int? timeoutSeconds)
+    {
+        if (timeoutSeconds != 300)
+        {
+            return;
+        }
+
+        var idleDuration = WindowsPowerPolicy.GetIdleDuration();
+        if (idleDuration is null)
+        {
+            Debug.WriteLine("HIOP smart lock was skipped because Windows could not report idle time.");
+            return;
+        }
+
+        if (idleDuration < TimeSpan.FromSeconds(timeoutSeconds.Value))
+        {
+            _smartLockArmed = true;
+            return;
+        }
+
+        if (!_smartLockArmed)
+        {
+            return;
+        }
+
+        _powerEvents.QueueEvent("SMART_LOCK_REQUESTED");
+        if (WindowsPowerPolicy.TryLockWorkstation(out var error))
+        {
+            _smartLockArmed = false;
+            _powerEvents.QueueEvent("SMART_LOCK_APPLIED");
+            await FlushPowerEventsAsync();
+            return;
+        }
+
+        _smartLockArmed = false;
+        _powerEvents.QueueEvent("SMART_LOCK_FAILED", $"Smart Lock could not be applied (Windows error {error}).");
+        Debug.WriteLine($"HIOP Smart Lock failed with Windows error {error}.");
+        await FlushPowerEventsAsync();
+    }
+
+    private async Task FlushPowerEventsAsync()
+    {
+        foreach (var powerEvent in _powerEvents.PendingEvents)
+        {
+            try
+            {
+                var response = await AgentControlClient.SendAsync(
+                    new AgentControlRequest("report-power-event", PowerEvent: powerEvent));
+                if (!response.Ok)
+                {
+                    Debug.WriteLine($"HIOP power event {powerEvent.EventId} is waiting for server delivery.");
+                    return;
+                }
+
+                _powerEvents.Acknowledge(powerEvent.EventId);
+            }
+            catch (Exception exception) when (exception is IOException or TimeoutException or UnauthorizedAccessException)
+            {
+                Debug.WriteLine($"HIOP power event {powerEvent.EventId} could not be delivered: {exception.Message}");
+                return;
+            }
+        }
+    }
+
+    private void CheckEndOfDayPolicy()
+    {
+        try
+        {
+            var now = DateTime.Now;
+            var localDate = DateOnly.FromDateTime(now);
+            if (now.TimeOfDay >= new TimeSpan(22, 45, 0) && now.TimeOfDay < new TimeSpan(23, 30, 0) &&
+                _powerEvents.QueueDailyEvent("END_OF_DAY_NUDGE", localDate, isPrompt: false))
+            {
+                _icon.BalloonTipTitle = "HIOP Closing-time reminder";
+                _icon.BalloonTipText = "Closing time is approaching. Please save your work and shut down when ready.";
+                _icon.BalloonTipIcon = ToolTipIcon.Info;
+                _icon.ShowBalloonTip(10000);
+            }
+
+            if (now.TimeOfDay < new TimeSpan(23, 30, 0) || _endOfDayPrompt is not null)
+            {
+                return;
+            }
+
+            var idleDuration = WindowsPowerPolicy.GetIdleDuration();
+            if (idleDuration is null || idleDuration < TimeSpan.FromMinutes(30) ||
+                !_powerEvents.QueueDailyEvent("END_OF_DAY_PROMPT", localDate, isPrompt: true))
+            {
+                return;
+            }
+
+            _endOfDayPrompt = new EndOfDayPromptForm(
+                RequestLocalShutdown,
+                reason => _powerEvents.QueueEvent("END_OF_DAY_STAY_ON", reason),
+                reason => _powerEvents.QueueEvent("END_OF_DAY_SHUTDOWN_BLOCKED", reason));
+            _endOfDayPrompt.FormClosed += (_, _) => _endOfDayPrompt = null;
+            _endOfDayPrompt.Show();
+        }
+        catch (IOException exception)
+        {
+            ShowPowerStorageError(exception.Message);
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ShowPowerStorageError(exception.Message);
+        }
+    }
+
+    private void ShowPowerStorageError(string message)
+    {
+        Debug.WriteLine($"HIOP end-of-day policy is disabled because its audit state could not be saved: {message}");
+        if (_powerStorageErrorShown)
+        {
+            return;
+        }
+
+        _powerStorageErrorShown = true;
+        _icon.BalloonTipTitle = "HIOP power policy paused";
+        _icon.BalloonTipText = "HIOP could not save its local audit state. Automatic power actions are paused.";
+        _icon.BalloonTipIcon = ToolTipIcon.Error;
+        _icon.ShowBalloonTip(10000);
+    }
+
+    private bool RequestLocalShutdown()
+    {
+        _powerEvents.QueueEvent("END_OF_DAY_SHUTDOWN_REQUESTED");
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = Path.Combine(Environment.SystemDirectory, "shutdown.exe"),
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                ArgumentList = { "/s", "/t", "0" },
+            });
+            if (process is null)
+            {
+                _powerEvents.QueueEvent("END_OF_DAY_SHUTDOWN_BLOCKED", "Windows did not start the normal shutdown process.");
+                return false;
+            }
+
+            _ = FlushPowerEventsAsync();
+            return true;
+        }
+        catch (System.ComponentModel.Win32Exception exception)
+        {
+            _powerEvents.QueueEvent("END_OF_DAY_SHUTDOWN_BLOCKED", $"Windows rejected the normal shutdown request: {exception.Message[..Math.Min(exception.Message.Length, 200)]}");
+            return false;
+        }
+        catch (InvalidOperationException exception)
+        {
+            _powerEvents.QueueEvent("END_OF_DAY_SHUTDOWN_BLOCKED", $"Windows rejected the normal shutdown request: {exception.Message[..Math.Min(exception.Message.Length, 200)]}");
+            return false;
+        }
+        catch (IOException exception)
+        {
+            _powerEvents.QueueEvent("END_OF_DAY_SHUTDOWN_BLOCKED", $"Windows rejected the normal shutdown request: {exception.Message[..Math.Min(exception.Message.Length, 200)]}");
+            return false;
+        }
+    }
+
+    private async Task ShowAdminNoticesAsync()
+    {
+        try
+        {
+            var response = await AgentControlClient.SendAsync(new AgentControlRequest("notices"));
+            if (!response.Ok || response.Notices is null)
+            {
+                return;
+            }
+
+
+            foreach (var notice in response.Notices)
+            {
+                _icon.BalloonTipTitle = "HIOP IT Notice";
+                _icon.BalloonTipText = notice.Message;
+                _icon.BalloonTipIcon = ToolTipIcon.Info;
+                _icon.ShowBalloonTip(10000);
+                var acknowledgement = await AgentControlClient.SendAsync(
+                    new AgentControlRequest("acknowledge-notice", NoticeId: notice.Id));
+                if (!acknowledgement.Ok)
+                {
+                    Debug.WriteLine($"HIOP admin notice {notice.Id} could not be acknowledged.");
+                }
+                break;
+            }
+        }
+        catch (Exception exception) when (exception is IOException or TimeoutException or UnauthorizedAccessException)
+        {
+            Debug.WriteLine($"HIOP admin notice delivery failed: {exception.Message}");
         }
     }
 
@@ -181,8 +312,6 @@ internal sealed class AgentTrayContext : ApplicationContext
 
     protected override void ExitThreadCore()
     {
-        _actionListenerCancellation.Cancel();
-        _actionListenerCancellation.Dispose();
         _refreshTimer.Stop();
         _refreshTimer.Dispose();
         _icon.Visible = false;

@@ -12,7 +12,6 @@ test("Word reports use HIOP and organization branding with an actual DOCX packer
   assert.match(brandedExport, /organization\.logo/);
   assert.match(brandedExport, /hospitality-it-ops-wordmark-dark-transparent\.png/);
   assert.match(brandedExport, /\.docx/);
-  assert.match(brandedExport, /downloadBrandedWordReportSections/);
 });
 
 test("visible CSV exports offer a branded Word alternative", () => {
@@ -28,10 +27,9 @@ test("visible CSV exports offer a branded Word alternative", () => {
   }
 });
 
-test("asset Word exports separate identity and operational columns for readability", () => {
+test("the asset inventory Word report uses readable grouped columns and includes assigned owners", () => {
   const devices = source("../src/pages/DevicesPage.tsx");
-  assert.match(devices, /Asset identity and ownership/);
-  assert.match(devices, /Network and lifecycle details/);
-  assert.match(devices, /business_owner/);
-  assert.match(devices, /Assigned to/);
+  assert.match(devices, /"Asset", "Device", "Assignment", "Technical details", "Network", "Health & lifecycle"/);
+  assert.match(devices, /Assigned to: \$\{value\(row\.business_owner\)\}/);
+  assert.match(brandedExport, /split\(\/\\r\?\\n\/\)/);
 });

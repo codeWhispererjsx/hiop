@@ -4,7 +4,7 @@
 
 HIOP separates configuration into three security classes:
 
-1. **Database-backed runtime settings** — application display defaults, organization profile, scanner scheduling and safe scanner behavior, and notification policy. These are explicit schema fields stored in `system_settings`; arbitrary keys are not accepted.
+1. **Database-backed runtime settings** — application display defaults, organization profile, scanner scheduling and safe scanner behavior, notification policy, and the organization-scoped managed-asset naming convention. These are validated schema fields persisted in `system_settings` or `organization_settings`; arbitrary keys are not accepted.
 2. **User/browser preferences** — light, dark, or system appearance is stored in the browser under `hiop_theme`. The startup script applies it before React renders to prevent a theme flash.
 3. **Environment-only deployment configuration** — `SECRET_KEY`, `DATABASE_URL`, email address/password, connection credentials, tokens, private keys, and raw connection strings. These are never returned by Settings APIs and cannot be edited in the UI.
 
@@ -16,9 +16,12 @@ HIOP separates configuration into three security classes:
 - `PUT /api/v1/settings/organization` — organization profile (admin only)
 - `PUT /api/v1/settings/network` — validated private-network and scheduler controls (admin only)
 - `PUT /api/v1/settings/notifications` — notification policy, without SMTP secrets (admin only)
+- `PUT /api/v1/settings/naming-convention` — validated organization-scoped asset-number template (admin only)
 - `GET /api/v1/settings/system-health` — secret-safe live component status (admin only)
 
 Every mutation writes a safe audit event in the same database transaction. SMTP credentials, passwords, tokens, connection strings, and private keys are excluded from responses and audit descriptions.
+
+The Naming Convention setting controls `managed_assets.asset_number` for newly created assets. It supports `{COMPANY}`, `{LOCATION}`, `{FLOOR}`, `{BUILDING}`, `{DEPT}`, `{TYPE}`, `{USER}`, `{NUM}`, `{NUM:02}` through `{NUM:06}`, `{YEAR}`, and `{ASSET}`. A sequential-number variable is mandatory; the generated value is capped at 120 characters. Existing asset numbers and manually entered device asset tags are unchanged.
 
 ## Departments and locations
 

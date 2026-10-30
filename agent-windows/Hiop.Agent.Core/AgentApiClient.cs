@@ -58,6 +58,7 @@ public sealed class AgentApiClient : IDisposable
         var cpu = ReadWmiValue("Win32_PerfFormattedData_PerfOS_Processor", "PercentProcessorTime", "Name='_Total'");
         var loggedUser = ReadWmiValue("Win32_ComputerSystem", "UserName");
         var lastUpdate = ReadLatestWindowsUpdate();
+        var health = WindowsHealthReader.Collect();
         var diskFree = DriveInfo.GetDrives().Where(drive => drive.IsReady && drive.DriveType == DriveType.Fixed)
             .Select(drive => drive.AvailableFreeSpace).DefaultIfEmpty().Sum();
         var ipAddress = NetworkInterface.GetAllNetworkInterfaces()
@@ -80,12 +81,26 @@ public sealed class AgentApiClient : IDisposable
             ipAddress,
             operatingSystem,
             loggedUser,
-            lastUpdate);
+            lastUpdate,
+            health.FastStartupEnabled,
+            health.LidCloseAction,
+            health.BatteryHealthPercent,
+            health.PendingWindowsUpdates,
+            health.LastShutdownAt);
         return SendAsync<AgentHeartbeatResponse>(HttpMethod.Post, "/agent/heartbeat", request, true, cancellationToken);
     }
 
     public Task<List<AgentJob>> GetJobsAsync(CancellationToken cancellationToken) =>
         SendAsync<List<AgentJob>>(HttpMethod.Get, "/agent/jobs", null, true, cancellationToken);
+
+    public Task<List<AgentNotice>> GetNoticesAsync(CancellationToken cancellationToken) =>
+        SendAsync<List<AgentNotice>>(HttpMethod.Get, "/agent/notices", null, true, cancellationToken);
+
+    public Task<AgentNoticeAcknowledgement> AcknowledgeNoticeAsync(Guid id, CancellationToken cancellationToken) =>
+        SendAsync<AgentNoticeAcknowledgement>(HttpMethod.Post, $"/agent/notices/{id}/ack", null, true, cancellationToken);
+
+    public Task<JsonElement> ReportPowerEventAsync(AgentPowerEvent powerEvent, CancellationToken cancellationToken) =>
+        SendAsync<JsonElement>(HttpMethod.Post, "/agent/power-events", powerEvent, true, cancellationToken);
 
     public Task<AgentJobStatusResponse> GetJobStatusAsync(Guid id, CancellationToken cancellationToken) =>
         SendAsync<AgentJobStatusResponse>(HttpMethod.Get, $"/agent/jobs/{id}", null, true, cancellationToken);

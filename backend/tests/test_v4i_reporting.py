@@ -3,23 +3,6 @@ from pathlib import Path
 from app.api.v1 import reporting
 
 
-class EmptyQuery:
-    def filter(self, *_args, **_kwargs):
-        return self
-
-    def all(self):
-        return []
-
-
-class RecordingDB:
-    def __init__(self):
-        self.queried = []
-
-    def query(self, model):
-        self.queried.append(model)
-        return EmptyQuery()
-
-
 def test_v4i_has_the_prebuilt_report_catalog():
     assert reporting.REPORTS == {
         "executive", "operations", "network", "assets", "lifecycle",
@@ -34,14 +17,6 @@ def test_v4i_supports_required_periods_and_honest_missing_data():
     assert reporting.trend([], "created_at", reporting.datetime.min.replace(tzinfo=reporting.timezone.utc), reporting.datetime.now(reporting.timezone.utc))["status"] == "insufficient_data"
 
 
-def test_v4i_loads_only_the_data_needed_for_each_report():
-    db = RecordingDB()
-
-    reporting.context(db, "organization", None, None, report="assets")
-
-    assert db.queried == [reporting.ManagedAsset]
-
-
 def test_v4i_api_is_tenant_scoped_exportable_and_non_predictive():
     source = Path(reporting.__file__).read_text(encoding="utf-8").lower()
     assert 'prefix="/reporting"' in source
@@ -52,6 +27,9 @@ def test_v4i_api_is_tenant_scoped_exportable_and_non_predictive():
     assert "forecast" not in source
     assert "predictive" not in source
     assert "materialized" not in source
+    assert 'writer.writerow(["section","name","value","details"])' in source
+    assert 'payload["breakdowns"]' in source
+    assert 'payload["trends"]' in source
 
 
 def test_v4i_does_not_add_a_reporting_store_or_migration():

@@ -7,6 +7,7 @@ import Sidebar from "../components/Sidebar";
 import { endpoints } from "../lib/api";
 import type { LiveEvent, PropertyContext, PublicSettings, User } from "../lib/types";
 import { clearAuthToken, getAuthToken, getOrganizationContext, setOrganizationContext } from "../lib/auth";
+import { getDashboardWebSocketUrl } from "../lib/desktopServer";
 import "../styles/dashboard.css";
 import "../styles/product-polish.css";
 export default function DashboardLayout({
@@ -30,6 +31,7 @@ export default function DashboardLayout({
   liveEventRef.current = onLiveEvent;
   liveStateRef.current = onLiveStateChange;
   useLayoutEffect(() => {
+    if (location.hash) return;
     const resetScroll = () => {
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
       document.documentElement.scrollTop = 0;
@@ -42,7 +44,6 @@ export default function DashboardLayout({
       cancelAnimationFrame(frame);
       clearTimeout(timer);
     };
-    if (location.hash) return;
   }, [location.pathname, location.hash]);
   useEffect(() => {
     const refreshContext = () => {
@@ -114,15 +115,7 @@ export default function DashboardLayout({
       try {
         const token = getAuthToken();
         if (!token) return;
-        const defaultWebSocketUrl =
-          `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
-        const configuredWebSocketUrl = import.meta.env.VITE_WS_URL;
-        const normalizedConfiguredUrl = configuredWebSocketUrl?.startsWith("http")
-          ? `${configuredWebSocketUrl.replace(/^http:/, "ws:").replace(/^https:/, "wss:").replace(/\/api\/v1\/?$/, "")}/ws/dashboard`
-          : configuredWebSocketUrl;
-        const websocketUrl = normalizedConfiguredUrl?.startsWith("/")
-          ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${normalizedConfiguredUrl}`
-          : normalizedConfiguredUrl ?? defaultWebSocketUrl;
+        const websocketUrl = getDashboardWebSocketUrl();
         socket = new WebSocket(
           websocketUrl,
           ["hiop", token],

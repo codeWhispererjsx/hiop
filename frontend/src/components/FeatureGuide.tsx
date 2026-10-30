@@ -72,6 +72,15 @@ const guides = {
           “powered off.”
         </p>
         <p>
+          The agent reports health telemetry and can display short-lived
+          plain-text notices from authorized HIOP administrators. The server
+          sends only a five-minute idle-lock policy; the tray applies it locally.
+          End-of-day prompts and any normal shutdown request are also local.
+          HIOP has no remote lock, shutdown, restart, or arbitrary-command action.
+          If activity or an open application is detected, or a safety check
+          fails, the shutdown countdown pauses. The tray never force-closes apps.
+        </p>
+        <p>
           Request the agent to stop its scan process. HIOP shows Stopping until
           it receives acknowledgement. If the agent loses its connection,
           acknowledgement cannot be immediate.

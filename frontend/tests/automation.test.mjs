@@ -6,6 +6,7 @@ const app=readFileSync(new URL("../src/App.tsx",import.meta.url),"utf8");
 const sidebar=readFileSync(new URL("../src/components/Sidebar.tsx",import.meta.url),"utf8");
 const page=readFileSync(new URL("../src/pages/AutomationPage.tsx",import.meta.url),"utf8");
 const api=readFileSync(new URL("../src/lib/api.ts",import.meta.url),"utf8");
+const styles=readFileSync(new URL("../src/styles/dashboard.css",import.meta.url),"utf8");
 
 test("automation route and navigation are protected and registered",()=>{
   assert.match(app,/path="\/automation\/\*"/);
@@ -17,4 +18,12 @@ test("version one automation exposes only operational schedules",()=>{
   assert.doesNotMatch(page,/eval\(|new Function|type=["']?script|name=["']?(shell|script)/i);
   for(const label of ["Scheduled network scans","Scheduled monitoring","Email notifications","Automatic offline incidents"]) assert.match(page,new RegExp(label));
   for(const removed of ["workflow builder","dead-letter","correlation","approval queue"]) assert.doesNotMatch(page,new RegExp(removed,"i"));
+});
+
+test("automation forms and status cards have responsive, readable layouts",()=>{
+  assert.match(styles,/\.automation-controls\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(styles,/\.automation-controls \.primary-action\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
+  assert.match(styles,/\.automation-status-grid\s*\{[^}]*display:\s*grid/s);
+  assert.match(styles,/\.automation-status-card dl\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s);
+  assert.match(styles,/@media \(max-width: 640px\)\s*\{[^}]*\.automation-controls\s*\{[^}]*grid-template-columns:\s*1fr/s);
 });

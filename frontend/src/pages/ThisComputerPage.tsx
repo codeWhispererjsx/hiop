@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Feedback } from "../components/Feedback";
 import { useRequest } from "../hooks/useRequest";
@@ -19,6 +19,7 @@ function readableStatus(value: string) {
 
 export default function ThisComputerPage() {
   const operations = useRequest(endpoints.localOperationsStatus, []);
+  const monitoring = useRequest(() => endpoints.monitoringSummary("24h"), []);
   const [downloading, setDownloading] = useState(false);
   const [reportError, setReportError] = useState("");
 
@@ -45,16 +46,19 @@ export default function ThisComputerPage() {
 
   const status = operations.data;
   const addresses = status.network.ipv4_addresses.length ? status.network.ipv4_addresses.join(", ") : "Not detected";
-  const serviceChecks = [
-    { label: "HIOP service", value: status.service.status },
-    { label: "Database", value: status.database.status },
-    { label: "Automation scheduler", value: status.scheduler.status },
-    { label: "Backup and recovery", value: status.backup.status },
-  ];
-  const healthyChecks = serviceChecks.filter(({ value }) => !/unavailable|failed|error|offline/i.test(value)).length;
-  const discoveryCoverage = status.discovery.hosts_total
-    ? Math.min(100, Math.round(status.discovery.hosts_completed * 100 / status.discovery.hosts_total))
-    : 0;
+  const healthCounts = (monitoring.data?.devices ?? []).reduce(
+    (counts, device) => {
+      const health = device.health.toLowerCase();
+      if (health === "healthy") counts.healthy += 1;
+      else if (health === "degraded") counts.degraded += 1;
+      else if (health === "unhealthy") counts.unhealthy += 1;
+      else counts.unknown += 1;
+      return counts;
+    },
+    { healthy: 0, degraded: 0, unhealthy: 0, unknown: 0 },
+  );
+  const healthTotal = Object.values(healthCounts).reduce((sum, value) => sum + value, 0);
+  const healthPercent = (value: number) => healthTotal ? `${(value / healthTotal) * 100}%` : "0%";
 
   return <DashboardLayout>
     <PageTitle eyebrow="Hotel operations" title="Site Server" copy="Check this HIOP installation, local database, monitoring, backups, and recovery information." />
@@ -69,29 +73,24 @@ export default function ThisComputerPage() {
       <article><span>Storage</span><strong>{formatBytes(status.storage.available_bytes)} free</strong><p>HIOP database: {formatBytes(status.storage.database_bytes)}. {status.storage.details}</p></article>
     </section>
 
-    <section className="this-computer-visuals" aria-label="Installation health charts">
-      <article className="this-computer-chart">
-        <header><div><span>Service health</span><h2>Installation checks</h2></div><strong>{healthyChecks} / {serviceChecks.length} ready</strong></header>
-        <div className="service-health-bars">
-          {serviceChecks.map(({ label, value }) => {
-            const failed = /unavailable|failed|error|offline/i.test(value);
-            const warning = /stale|unknown|disabled|pending/i.test(value);
-            const score = failed ? 0 : warning ? 55 : 100;
-            return <div key={label} className={failed ? "danger" : warning ? "warning" : "healthy"}>
-              <div><span>{label}</span><strong>{readableStatus(value)}</strong></div>
-              <span className="service-health-track"><i style={{ width: `${score}%` }} /></span>
-            </div>;
-          })}
+    <section className="site-server-insights panel" aria-label="Monitoring health overview">
+      <header><div><span>Live visibility</span><h2>Monitoring pulse</h2><p>Device health observed over the last 24 hours.</p></div><Link className="secondary-action" to="/network-performance">Open performance</Link></header>
+      {monitoring.loading || monitoring.error ? <Feedback loading={monitoring.loading} error={monitoring.error} onRetry={() => void monitoring.reload()} /> : monitoring.data && <>
+        <div className="site-server-health">
+          <div className="site-server-donut" role="img" aria-label={`${healthCounts.healthy} healthy, ${healthCounts.degraded} degraded, ${healthCounts.unhealthy} unhealthy, ${healthCounts.unknown} unknown devices`} style={{ background: `radial-gradient(circle, var(--surface) 62%, transparent 64%), conic-gradient(var(--color-success) 0 ${healthPercent(healthCounts.healthy)}, var(--color-warning) ${healthPercent(healthCounts.healthy)} ${healthPercent(healthCounts.healthy + healthCounts.degraded)}, var(--color-danger) ${healthPercent(healthCounts.healthy + healthCounts.degraded)} ${healthPercent(healthCounts.healthy + healthCounts.degraded + healthCounts.unhealthy)}, var(--border) ${healthPercent(healthCounts.healthy + healthCounts.degraded + healthCounts.unhealthy)} 100%)` }}>
+            <strong>{healthTotal}</strong><span>devices</span>
+          </div>
+          <div className="site-server-health-legend">
+            {([["Healthy", healthCounts.healthy], ["Degraded", healthCounts.degraded], ["Unhealthy", healthCounts.unhealthy], ["Unknown", healthCounts.unknown]] as const).map(([label, count]) => <div key={label}><span className={`site-server-health-dot ${label.toLowerCase()}`} /><span>{label}</span><strong>{count}</strong></div>)}
+          </div>
         </div>
-      </article>
-      <article className="this-computer-chart discovery-coverage">
-        <header><div><span>Discovery</span><h2>Latest scan coverage</h2></div><strong>{discoveryCoverage}%</strong></header>
-        <div className="coverage-ring" style={{ "--coverage": `${discoveryCoverage}%` } as CSSProperties} role="img" aria-label={`${discoveryCoverage}% of scan targets checked`}>
-          <strong>{discoveryCoverage}%</strong><span>checked</span>
+        <div className="site-server-health-bar" role="img" aria-label="Device health distribution">
+          <span className="healthy" style={{ width: healthPercent(healthCounts.healthy) }} />
+          <span className="degraded" style={{ width: healthPercent(healthCounts.degraded) }} />
+          <span className="unhealthy" style={{ width: healthPercent(healthCounts.unhealthy) }} />
+          <span className="unknown" style={{ width: healthPercent(healthCounts.unknown) }} />
         </div>
-        <p>{status.discovery.hosts_completed} of {status.discovery.hosts_total} hosts checked</p>
-        <small>{status.discovery.last_run ? `Last run ${formatDateTime(status.discovery.last_run)}` : "No scan recorded"}</small>
-      </article>
+      </>}
     </section>
 
     <section className="this-computer-guide" aria-label="Local operations quick actions">
@@ -99,7 +98,7 @@ export default function ThisComputerPage() {
       <nav className="this-computer-actions">
         <Link className="primary-action" to="/discovery-intelligence">Run device discovery</Link>
         <Link className="secondary-action" to="/settings">Open HIOP settings</Link>
-        <button className="secondary-action" type="button" onClick={() => document.getElementById("diagnostics")?.scrollIntoView({ behavior: "smooth", block: "start" })}>View service diagnostics</button>
+        <a className="secondary-action" href="#diagnostics">View service diagnostics</a>
         <button className="secondary-action" type="button" disabled={downloading} onClick={() => void downloadReport()}>{downloading ? "Preparing report…" : "Download support report"}</button>
         <button className="secondary-action" type="button" onClick={() => document.getElementById("backup-recovery")?.scrollIntoView({ behavior: "smooth" })}>View backup and recovery</button>
       </nav>

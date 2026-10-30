@@ -589,15 +589,16 @@ function Rules({
 
       {!loading && !error && !rows.length && <Feedback emptyTitle="No predefined rules are configured." empty="The default rules may not have been installed. Ask an administrator to check the HIOP database migrations; no arbitrary rule scripts are accepted." />}
 
-      {!loading && !error && rows.map((row) => (
-        <article className="admin-entry" key={row.id}>
-          <div>
+      {!loading && !error && <div className="alert-rule-list">{rows.map((row) => (
+        <article className="alert-rule-card" key={row.id}>
+          <div className="alert-rule-description">
             <h3>{row.name}</h3>
-            <p>
-              {row.description} · {row.severity} · {row.consecutive_observations}{" "}
-              observations
-              {row.threshold_value != null ? ` · threshold ${row.threshold_value}` : ""}
-            </p>
+            <p>{row.description}</p>
+            <div className="alert-rule-meta">
+              <StatusBadge status={row.severity} />
+              <span>{row.consecutive_observations} consecutive observations</span>
+              {row.threshold_value != null && <span>Threshold {row.threshold_value}</span>}
+            </div>
           </div>
           <div className="alert-rule-state">
             <StatusBadge status={row.enabled ? "active" : "disabled"} />
@@ -606,23 +607,15 @@ function Rules({
                 className={row.enabled ? "danger-action" : "primary-action"}
                 disabled={busy === row.id}
                 onClick={() => void save(row, !row.enabled)}
-                aria-label={
-                  row.enabled
-                    ? `Disable rule ${row.name}`
-                    : `Enable rule ${row.name}`
-                }
+                aria-label={row.enabled ? `Disable rule ${row.name}` : `Enable rule ${row.name}`}
                 aria-busy={busy === row.id}
               >
-                {busy === row.id
-                  ? "Updating…"
-                  : row.enabled
-                  ? "Disable rule"
-                  : "Enable rule"}
+                {busy === row.id ? "Updating…" : row.enabled ? "Disable rule" : "Enable rule"}
               </button>
             )}
           </div>
         </article>
-      ))}
+      ))}</div>}
     </section>
   );
 }

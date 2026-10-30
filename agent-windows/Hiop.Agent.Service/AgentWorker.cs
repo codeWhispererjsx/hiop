@@ -89,8 +89,12 @@ public sealed class AgentWorker(
 
             try
             {
-                await api.SendHeartbeatAsync(queue.Count, status.LastSuccessfulJob, stoppingToken);
-                status.Set("Online", "Connected to HIOP.", DateTimeOffset.UtcNow);
+                var response = await api.SendHeartbeatAsync(queue.Count, status.LastSuccessfulJob, stoppingToken);
+                status.Set(
+                    "Online",
+                    "Connected to HIOP.",
+                    DateTimeOffset.UtcNow,
+                    smartLockTimeoutSeconds: response.SmartLockTimeoutSeconds);
             }
             catch (AgentApiException exception) when (exception.StatusCode == HttpStatusCode.Unauthorized)
             {

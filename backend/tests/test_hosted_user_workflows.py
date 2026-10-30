@@ -157,7 +157,7 @@ def test_failed_invitation_rolls_back_and_returns_actionable_error(monkeypatch):
 
 def test_cancelled_agent_job_cannot_be_resurrected():
     from app.api.v1.local_agents import update_job, JobUpdate
-    task = SimpleNamespace(payload="{}", status="cancelled")
+    task = SimpleNamespace(job_type="DISCOVERY", payload="{}", status="cancelled")
     db = MagicMock()
     db.query.return_value.filter_by.return_value.with_for_update.return_value.first.return_value = task
     agent = SimpleNamespace(id=uuid4(), organization_id=uuid4(), property_id=uuid4())

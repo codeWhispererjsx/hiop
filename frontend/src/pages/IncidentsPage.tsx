@@ -9,6 +9,7 @@ import { PageTitle } from "./DashboardPage";
 import { Icon } from "../components/Icon";
 import { endpoints, getPaginatedItems } from "../lib/api";
 import { useRequest } from "../hooks/useRequest";
+import { useFeatures } from "../lib/features";
 
 const CATEGORIES = [
   "network",
@@ -55,9 +56,11 @@ export default function IncidentsPage() {
 
 function WorkspaceLinks() {
   const { id } = useParams();
+  const features = useFeatures();
+  const problemsEnabled = Boolean(features?.problem_management);
   const related = useRequest(
-    () => (id ? endpoints.incidentProblems(id) : Promise.resolve([])),
-    [id]
+    () => (id && problemsEnabled ? endpoints.incidentProblems(id) : Promise.resolve([])),
+    [id, problemsEnabled]
   );
   const me = useRequest(endpoints.me, []);
 
@@ -66,15 +69,21 @@ function WorkspaceLinks() {
       <Link className="secondary-action" to="/incidents">
         Tickets
       </Link>
-      <Link className="secondary-action" to="/problems">
-        Problems
-      </Link>
-      <Link className="secondary-action" to="/problems?status=known_error">
-        Known Errors
-      </Link>
-      <Link className="secondary-action" to="/changes">
-        Changes
-      </Link>
+      {problemsEnabled && (
+        <>
+          <Link className="secondary-action" to="/problems">
+            Problems
+          </Link>
+          <Link className="secondary-action" to="/problems?status=known_error">
+            Known Errors
+          </Link>
+        </>
+      )}
+      {features?.change_management && (
+        <Link className="secondary-action" to="/changes">
+          Changes
+        </Link>
+      )}
       <Link className="secondary-action" to="/knowledge">
         Knowledge
       </Link>
@@ -91,7 +100,7 @@ function WorkspaceLinks() {
             Related {problem.problem_number}
           </Link>
         ))}
-      {id && me.data?.role === "admin" && (
+      {id && problemsEnabled && me.data?.role === "admin" && (
         <Link
           className="primary-action"
           to={`/problems/new?incident=${id}`}

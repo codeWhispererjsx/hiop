@@ -64,6 +64,68 @@ public sealed class AgentFoundationTests
     }
 
     [Fact]
+    public void PowerEventQueuePersistsDailyPromptsAndRetriesUntilAcknowledged()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "hiop-agent-tests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var queue = new AgentPowerEventQueue(directory);
+            var today = DateOnly.FromDateTime(DateTime.Now);
+
+            Assert.True(queue.QueueDailyEvent("END_OF_DAY_NUDGE", today, isPrompt: false));
+            Assert.False(queue.QueueDailyEvent("END_OF_DAY_NUDGE", today, isPrompt: false));
+            var pending = Assert.Single(queue.PendingEvents);
+            Assert.Equal("END_OF_DAY_NUDGE", pending.EventType);
+
+            var afterRestart = new AgentPowerEventQueue(directory);
+            Assert.Single(afterRestart.PendingEvents);
+            afterRestart.Acknowledge(pending.EventId);
+            Assert.Empty(new AgentPowerEventQueue(directory).PendingEvents);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(59, 0, false)]
+    [InlineData(60, 0, true)]
+    [InlineData(600, 1, false)]
+    public void AutomaticShutdownRequiresVerifiedIdleAndNoOpenWindows(int idleSeconds, int openWindows, bool expected)
+    {
+        var applications = Enumerable.Range(0, openWindows).Select(index => $"application-{index}").ToArray();
+
+        Assert.Equal(
+            expected,
+            WindowsPowerPolicy.CanAutomaticallyShutDown(TimeSpan.FromSeconds(idleSeconds), applications));
+    }
+
+    [Fact]
+    public void AutomaticShutdownFailsClosedWhenIdleOrWindowStateIsUnknown()
+    {
+        Assert.False(WindowsPowerPolicy.CanAutomaticallyShutDown(null, []));
+        Assert.False(WindowsPowerPolicy.CanAutomaticallyShutDown(TimeSpan.FromMinutes(2), null));
+    }
+
+    [Theory]
+    [InlineData("EXCEL", false, true)]
+    [InlineData("unknown-editor", true, true)]
+    [InlineData("explorer", true, true)]
+    [InlineData("shellexperiencehost", true, false)]
+    [InlineData("svchost", false, false)]
+    public void ShutdownSafetyBlocksKnownWorkAppsAndUnknownVisibleWindows(
+        string processName,
+        bool hasVisibleWindow,
+        bool expected)
+    {
+        Assert.Equal(expected, WindowsPowerPolicy.IsPotentialUnsavedWork(processName, hasVisibleWindow));
+    }
+
+    [Fact]
     public void DiscoveryRangesAreBoundedAndEnumerateUsableAddresses()
     {
         var hosts = AgentJobExecutor.EnumerateHosts("192.168.10.0/30", 4);
@@ -96,9 +158,9 @@ public sealed class AgentFoundationTests
     }
 
     [Fact]
-    public async Task DeviceActionRejectsArbitraryPayloadBeforeRunningAnOperation()
+    public async Task AgentRejectsLegacyEndpointControlJobs()
     {
-        var payload = JsonSerializer.SerializeToElement(new { action = "EXECUTE_COMMAND" });
+        var payload = JsonSerializer.SerializeToElement(new { action = "SHUTDOWN" });
         var job = new AgentJob(Guid.NewGuid(), "DEVICE_ACTION", payload, 10);
 
         await Assert.ThrowsAsync<InvalidOperationException>(

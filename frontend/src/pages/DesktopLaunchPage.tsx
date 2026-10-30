@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import BrandLogo from "../components/BrandLogo";
 import { getDesktopStatus } from "../lib/publicApi";
 import "../styles/public.css";
@@ -45,6 +46,7 @@ export default function DesktopLaunchPage() {
       <p className="public-eyebrow">HIOP Desktop</p>
       <h1>Opening HIOP…</h1>
       <p>{message}</p>
+      <Link className="public-button secondary" to="/desktop-connect">Connect to another Site Server</Link>
     </section>
   </main>;
 }

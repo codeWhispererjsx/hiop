@@ -4,7 +4,6 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Numerics;
-using System.IO.Pipes;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using Hiop.Agent.Core;
@@ -23,57 +22,8 @@ public static partial class AgentJobExecutor
             "PING" or "MONITORING" => ("monitoring", await DiscoverHostAsync(ReadIp(job.Payload, "target"), cancellationToken)),
             "DNS_LOOKUP" => ("dns", await LookupDnsAsync(ReadIp(job.Payload, "target"), cancellationToken)),
             "ARP_SNAPSHOT" => ("arp", await ReadArpSnapshotAsync(cancellationToken)),
-            "DEVICE_ACTION" => ("device_action", await ExecuteDeviceActionAsync(job.Payload, cancellationToken)),
             _ => throw new InvalidOperationException($"Unsupported HIOP agent job type '{job.Type}'."),
         };
-    }
-
-    private static async Task<object> ExecuteDeviceActionAsync(JsonElement payload, CancellationToken cancellationToken)
-    {
-        var action = ReadString(payload, "action").ToUpperInvariant();
-        if (action is not ("RESTART" or "SHUTDOWN" or "LOCK" or "ENABLE_RDP" or "DISABLE_RDP" or "TRIGGER_WINDOWS_UPDATE"))
-        {
-            throw new InvalidOperationException("The requested Windows device action is not supported.");
-        }
-
-        var result = action == "LOCK"
-            ? await RunInteractiveActionAsync(action, cancellationToken)
-            : await WindowsPrivilegedActionClient.RunAsync(action, cancellationToken);
-        return new
-        {
-            action,
-            succeeded = result.Succeeded,
-            message = result.Message,
-        };
-    }
-
-    private static async Task<AgentDeviceActionResponse> RunInteractiveActionAsync(
-        string action,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var pipe = new NamedPipeClientStream(
-                ".",
-                AgentDeviceActionPipe.Name,
-                PipeDirection.InOut,
-                PipeOptions.Asynchronous);
-            await pipe.ConnectAsync(3000, cancellationToken);
-            using var reader = new StreamReader(pipe, leaveOpen: true);
-            await using var writer = new StreamWriter(pipe, leaveOpen: true) { AutoFlush = true };
-            await writer.WriteLineAsync(JsonSerializer.Serialize(new AgentDeviceActionRequest(action), AgentJson.Api).AsMemory(), cancellationToken);
-            var response = await reader.ReadLineAsync(cancellationToken);
-            return response is null
-                ? new AgentDeviceActionResponse(false, "The interactive HIOP Agent tray app returned no action result.")
-                : JsonSerializer.Deserialize<AgentDeviceActionResponse>(response, AgentJson.Api)
-                    ?? new AgentDeviceActionResponse(false, "The interactive HIOP Agent tray app returned an invalid result.");
-        }
-        catch (Exception exception) when (exception is IOException or TimeoutException or UnauthorizedAccessException)
-        {
-            return new AgentDeviceActionResponse(
-                false,
-                $"Locking requires the interactive HIOP Agent tray app: {exception.Message}");
-        }
     }
 
     private static async Task<object> DiscoverAsync(JsonElement payload, CancellationToken cancellationToken)

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     secret_key: str
     access_token_expire_minutes: int = 60
     environment: Literal["development", "testing", "production"] = "development"
-    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "hiop://desktop"]
     public_app_url: str = ""
     discovery_execution_mode: Literal["auto", "agent", "backend"] = "agent"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     snmp_cleanup_hour_utc: int = Field(default=3, ge=0, le=23)
     snmp_alert_flap_window_minutes: int = Field(default=30, ge=5, le=1440)
     snmp_alert_notification_threshold: Literal["info", "warning", "high", "critical"] = "warning"
+
+    # Frozen ITSM modules. Code and data are kept; their APIs and UI stay off unless enabled.
+    change_management_enabled: bool = False
+    problem_management_enabled: bool = False
 
     # Relational topology foundation; live discovery remains out of scope.
     topology_enabled: bool = True
@@ -172,10 +176,10 @@ class Settings(BaseSettings):
             raise ValueError("ACCESS_TOKEN_EXPIRE_MINUTES must be between 5 and 43200")
         if self.environment == "production" and self.debug:
             raise ValueError("DEBUG must be false in production")
-        if any(not origin.startswith(("http://", "https://")) for origin in self.cors_origins):
-            raise ValueError("CORS_ORIGINS must contain absolute HTTP or HTTPS origins")
-        if self.environment == "production" and any(not origin.startswith("https://") or "localhost" in origin or "127.0.0.1" in origin for origin in self.cors_origins):
-            raise ValueError("Production CORS_ORIGINS must contain only production HTTPS origins")
+        if any(origin != "hiop://desktop" and not origin.startswith(("http://", "https://")) for origin in self.cors_origins):
+            raise ValueError("CORS_ORIGINS must contain absolute HTTP or HTTPS origins or the HIOP desktop origin")
+        if self.environment == "production" and any(origin != "hiop://desktop" and (not origin.startswith("https://") or "localhost" in origin or "127.0.0.1" in origin) for origin in self.cors_origins):
+            raise ValueError("Production CORS_ORIGINS must contain only production HTTPS origins and the HIOP desktop origin")
         if self.environment == "production" and any(marker in self.secret_key.lower() for marker in ("replace", "change-me", "validation-only")):
             raise ValueError("Production SECRET_KEY still contains a placeholder value")
         if self.environment == "production" and any(marker in self.database_url.lower() for marker in ("replace", "change-me")):
@@ -228,4 +232,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

@@ -16,6 +16,7 @@ type Section =
   | "organization"
   | "departments"
   | "locations"
+  | "naming_convention"
   | "network"
   | "discovery"
   | "active_directory"
@@ -36,6 +37,7 @@ const sections: Array<{
   { key: "organization", label: "Organization", icon: "hierarchy" },
   { key: "departments", label: "Departments", icon: "hierarchy" },
   { key: "locations", label: "Locations", icon: "hierarchy" },
+  { key: "naming_convention", label: "Naming Convention", icon: "settings" },
   { key: "network", label: "Network & scanner", icon: "network" },
   { key: "discovery", label: "Discovery", icon: "discovery" },
   { key: "active_directory", label: "Active Directory", icon: "lock" },
@@ -48,6 +50,72 @@ const sections: Array<{
   { key: "about", label: "Application information", icon: "settings" },
 ];
 
+const NAMING_VARIABLES = [
+  { token: "COMPANY", label: "Company" },
+  { token: "LOCATION", label: "Location" },
+  { token: "FLOOR", label: "Floor" },
+  { token: "BUILDING", label: "Building" },
+  { token: "DEPT", label: "Department" },
+  { token: "TYPE", label: "Type" },
+  { token: "USER", label: "User" },
+  { token: "NUM", label: "Number" },
+  { token: "NUM:02", label: "Number (2 digits)" },
+  { token: "NUM:03", label: "Number (3 digits)" },
+  { token: "NUM:04", label: "Number (4 digits)" },
+  { token: "NUM:05", label: "Number (5 digits)" },
+  { token: "NUM:06", label: "Number (6 digits)" },
+  { token: "YEAR", label: "Year" },
+  { token: "ASSET", label: "Asset name" },
+];
+
+function previewNamingTemplate(template: string): string {
+  const examples: Record<string, string> = {
+    COMPANY: "LCH",
+    LOCATION: "03",
+    FLOOR: "03",
+    BUILDING: "MAIN",
+    DEPT: "ACC",
+    TYPE: "DT",
+    USER: "JSMITH",
+    YEAR: "2026",
+    ASSET: "DESKTOP",
+  };
+  return template.replace(/\{([A-Z]+(?::\d{2})?)\}/g, (_match, token: string) => {
+    if (token.startsWith("NUM")) {
+      const width = Number(token.split(":")[1] ?? 0);
+      return String(5).padStart(width, "0");
+    }
+    return examples[token] ?? `{${token}}`;
+  });
+}
+
+function namingTokens(template: string): string[] {
+  return Array.from(template.matchAll(/\{([^{}]+)\}/g), (match) => match[1]);
+}
+
+function templateWithOrderedTokens(template: string, tokens: string[], separator: string): string {
+  const matches = Array.from(template.matchAll(/\{[^{}]+\}/g));
+  if (!matches.length) return tokens.map((token) => `{${token}}`).join(separator);
+  const prefix = template.slice(0, matches[0].index);
+  const suffix = template.slice(matches[matches.length - 1].index! + matches[matches.length - 1][0].length);
+  return `${prefix}${tokens.map((token) => `{${token}}`).join(separator)}${suffix}`;
+}
+
+function removeNamingToken(template: string, tokenIndex: number): string {
+  const matches = Array.from(template.matchAll(/\{[^{}]+\}/g));
+  const tokenMatch = matches[tokenIndex];
+  if (!tokenMatch || tokenMatch.index === undefined) return template;
+  const start = tokenMatch.index;
+  const end = start + tokenMatch[0].length;
+  const following = template.slice(end).match(/^[._-]*/)?.[0] ?? "";
+  const preceding = template.slice(0, start).match(/[._-]*$/)?.[0] ?? "";
+  const nextTokenExists = matches.slice(tokenIndex + 1).length > 0;
+  if (nextTokenExists && following) return `${template.slice(0, start)}${template.slice(end + following.length)}`;
+  if (preceding) return `${template.slice(0, start - preceding.length)}${template.slice(end)}`;
+  if (following) return `${template.slice(0, start)}${template.slice(end + following.length)}`;
+  return `${template.slice(0, start)}${template.slice(end)}`;
+}
+
 export default function SettingsPage() {
   const [section, setSection] = useState<Section>("general");
   const [draft, setDraft] = useState<SettingsBundle | null>(null);
@@ -56,6 +124,7 @@ export default function SettingsPage() {
   const [health, setHealth] = useState<SystemHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [draggingNamingToken, setDraggingNamingToken] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const { preference, setPreference } = useTheme();
@@ -127,6 +196,8 @@ export default function SettingsPage() {
         result = await endpoints.updateNotificationSettings(draft.notifications);
       } else if (section === "incidents") {
         result = await endpoints.updateIncidentSettings(draft.incidents);
+      } else if (section === "naming_convention") {
+        result = await endpoints.updateNamingConventionSettings(draft.naming_convention);
       }
       setDraft(result);
       window.dispatchEvent(new Event("hiop:organization-updated"));
@@ -170,6 +241,8 @@ export default function SettingsPage() {
   const d = draft.discovery;
   const notifications = draft.notifications;
   const incidents = draft.incidents;
+  const namingConvention = draft.naming_convention;
+  const currentNamingTokens = namingTokens(namingConvention.template);
 
   return (
     <DashboardLayout>
@@ -298,6 +371,147 @@ export default function SettingsPage() {
               items={locations}
               link="/administration/organization?tab=locations"
             />
+          )}
+
+          {section === "naming_convention" && (
+            <SettingsPanel
+              title="Naming Convention Builder"
+              copy="Define the asset number format used for new assets in your organization."
+            >
+              <div className="settings-form-grid">
+                <label>
+                  <span>Template</span>
+                  <input
+                    required
+                    maxLength={120}
+                    type="text"
+                    value={namingConvention.template}
+                    onChange={(event) => {
+                      const template = event.target.value;
+                      const variables = [...new Set(Array.from(template.matchAll(/\{([^{}]+)\}/g), (match) => match[1]))];
+                      setDraft({ ...draft, naming_convention: { ...namingConvention, template, variables } });
+                    }}
+                    aria-label="Asset number template"
+                  />
+                </label>
+                <SelectField
+                  label="Separator"
+                  value={namingConvention.separator || "(none)"}
+                  options={["-", "_", ".", "(none)"]}
+                  onChange={(value) => {
+                    const separator = value === "(none)" ? "" : value as "-" | "_" | ".";
+                    const template = namingConvention.template.replace(/}(?:[-_.]+)(?=\{)/g, `}${separator}`);
+                    setDraft({
+                      ...draft,
+                      naming_convention: { ...namingConvention, template, separator },
+                    });
+                  }}
+                />
+              </div>
+              <p className="settings-note">Choose “(none)” to concatenate variables directly with no punctuation. Drag variables to reorder them or use the move buttons. Remove variables with Remove; at least one sequential number is required. You can also type or edit the template directly.</p>
+              <div className="settings-record-list" aria-label="Reorder or remove naming variables">
+                {currentNamingTokens.map((token, index) => {
+                  const label = NAMING_VARIABLES.find((item) => item.token === token)?.label ?? token;
+                  return (
+                    <div
+                      key={`${token}-${index}`}
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("text/plain", String(index));
+                        event.dataTransfer.effectAllowed = "move";
+                        setDraggingNamingToken(index);
+                      }}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        if (draggingNamingToken === null || draggingNamingToken === index) return;
+                        const nextTokens = [...currentNamingTokens];
+                        const [moved] = nextTokens.splice(draggingNamingToken, 1);
+                        nextTokens.splice(index, 0, moved);
+                        const template = templateWithOrderedTokens(namingConvention.template, nextTokens, namingConvention.separator);
+                        setDraft({
+                          ...draft,
+                          naming_convention: { ...namingConvention, template, variables: nextTokens },
+                        });
+                        setDraggingNamingToken(null);
+                      }}
+                      onDragEnd={() => setDraggingNamingToken(null)}
+                    >
+                      <span>
+                        <i aria-hidden="true">⠿</i>
+                        <strong>{label}</strong>
+                        <code>{`{${token}}`}</code>
+                      </span>
+                      <span>
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          disabled={index === 0}
+                          aria-label={`Move ${label} up`}
+                          onClick={() => {
+                            const nextTokens = [...currentNamingTokens];
+                            [nextTokens[index - 1], nextTokens[index]] = [nextTokens[index], nextTokens[index - 1]];
+                            const template = templateWithOrderedTokens(namingConvention.template, nextTokens, namingConvention.separator);
+                            setDraft({ ...draft, naming_convention: { ...namingConvention, template, variables: nextTokens } });
+                          }}
+                        >Up</button>
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          disabled={index === currentNamingTokens.length - 1}
+                          aria-label={`Move ${label} down`}
+                          onClick={() => {
+                            const nextTokens = [...currentNamingTokens];
+                            [nextTokens[index], nextTokens[index + 1]] = [nextTokens[index + 1], nextTokens[index]];
+                            const template = templateWithOrderedTokens(namingConvention.template, nextTokens, namingConvention.separator);
+                            setDraft({ ...draft, naming_convention: { ...namingConvention, template, variables: nextTokens } });
+                          }}
+                        >Down</button>
+                        <button
+                          className="secondary-action"
+                          type="button"
+                          aria-label={`Remove ${label}`}
+                          disabled={token.startsWith("NUM") && !currentNamingTokens.some((item, itemIndex) => itemIndex !== index && item.startsWith("NUM"))}
+                          onClick={() => {
+                            const template = removeNamingToken(namingConvention.template, index);
+                            const variables = namingTokens(template);
+                            setDraft({ ...draft, naming_convention: { ...namingConvention, template, variables } });
+                          }}
+                        >Remove</button>
+                      </span>
+                    </div>
+                  );
+                })}
+                {!currentNamingTokens.length && <p>No variables in the template yet. Add one below.</p>}
+              </div>
+              <div className="module-list" aria-label="Add naming variable">
+                <strong>Add variable</strong>
+                {NAMING_VARIABLES.map(({ token, label }) => (
+                  <button
+                    className="secondary-action"
+                    key={token}
+                    type="button"
+                    onClick={() => {
+                      const separator = namingConvention.separator;
+                      const joiner = namingConvention.template && separator && !namingConvention.template.endsWith(separator) ? separator : "";
+                      const template = `${namingConvention.template}${joiner}{${token}}`;
+                      const variables = namingTokens(template);
+                      setDraft({ ...draft, naming_convention: { ...namingConvention, template, variables } });
+                    }}
+                  >
+                    + {label}
+                  </button>
+                ))}
+              </div>
+              <p className="settings-note">
+                Supported variables: {NAMING_VARIABLES.map(({ token }) => `{${token}}`).join(", ")}, plus padded numbers such as {"{NUM:02}"} through {"{NUM:06}"}. Include a number variable so generated asset numbers remain unique.
+              </p>
+              <div className="settings-readonly">
+                <div><dt>Live preview</dt><dd><code>{previewNamingTemplate(namingConvention.template)}</code></dd></div>
+                <div><dt>Variables in template</dt><dd>{namingConvention.variables.length ? namingConvention.variables.map((variable) => `{${variable}}`).join(", ") : "None"}</dd></div>
+              </div>
+              <SaveButton saving={saving} onClick={save} />
+            </SettingsPanel>
           )}
 
           {section === "network" && (

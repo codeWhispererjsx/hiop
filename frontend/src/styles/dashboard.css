@@ -893,3 +893,168 @@
     width: 100%;
   }
 }
+
+.automation-panel {
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+
+.automation-panel .settings-toggles {
+  padding: 1rem 1.25rem 0;
+  margin-bottom: 0;
+}
+
+.automation-panel .settings-toggle {
+  min-height: 4.25rem;
+  padding: 0.875rem 1rem;
+  background: var(--surface);
+}
+
+.automation-panel .settings-toggle span {
+  min-width: 0;
+}
+
+.automation-panel .settings-toggle span strong {
+  font-size: 0.8125rem;
+}
+
+.automation-panel .settings-toggle span small {
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.automation-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 1rem 1.25rem 1.25rem;
+  border-top: 0;
+}
+
+.automation-controls label {
+  min-width: 0;
+}
+
+.automation-controls label > span {
+  font-size: 0.8125rem;
+}
+
+.automation-controls label > small {
+  min-height: 1.1em;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.automation-controls .primary-action {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.automation-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 0.75rem;
+  padding: 1rem 1.25rem 1.25rem;
+  border-top: 1px solid var(--border);
+  background: color-mix(in srgb, var(--text-muted) 3%, transparent);
+}
+
+.automation-status-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--surface);
+}
+
+.automation-status-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.automation-status-card h3 {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.automation-status-card header strong {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 750;
+  text-transform: capitalize;
+}
+
+.automation-status-card .status-enabled {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
+}
+
+.automation-status-card .status-running {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+
+.automation-status-card .status-failed {
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
+}
+
+.automation-status-card > p {
+  margin: 0.75rem 0;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.automation-status-card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.automation-status-card dl > div {
+  min-width: 0;
+}
+
+.automation-status-card dt {
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
+}
+
+.automation-status-card dd {
+  margin: 0.25rem 0 0;
+  color: var(--text);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .automation-panel .settings-toggles {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .automation-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-controls .primary-action {
+    grid-column: auto;
+  }
+
+  .automation-status-card dl {
+    grid-template-columns: 1fr;
+  }
+}

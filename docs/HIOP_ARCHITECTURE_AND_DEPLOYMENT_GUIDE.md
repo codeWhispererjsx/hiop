@@ -54,6 +54,8 @@ Clients are hotel users who access HIOP through the desktop application or a bro
 
 Clients sign in to their hotel's Site Server and receive organization, property, and role permissions there. They do not use the HIOP Owner Console.
 
+The Windows desktop client can connect to an HTTPS Site Server without hosting a local database or backend. For the current LAN pilot instructions and implementation limits, see [HIOP LAN client setup](./HIOP_LAN_CLIENT_SETUP.md).
+
 ## Optional HIOP Collectors
 
 A Collector is needed only when the Site Server cannot reach a separate network area, such as another building, VLAN, or secured network zone. A Collector gathers approved network evidence and sends results securely to the hotel's Site Server. It does not contain the hotel's main operational database; collection remains controlled by the Site Server.
@@ -114,9 +116,9 @@ For current container, environment, upgrade, and backup commands, see [Productio
 
 ### Phase 2: Client Access
 
-- Allow approved hotel users to connect to the Site Server.
+- Pilot desktop clients can connect to an HTTPS Site Server API using the initial LAN client flow described in [HIOP LAN client setup](./HIOP_LAN_CLIENT_SETUP.md).
 - Enforce organization, property, and role permissions.
-- Support secure local-network access.
+- Complete managed service lifecycle, unattended host startup, installer setup, and broader secure-network deployment before production multi-user rollout.
 
 ### Phase 3: Owner Console
 

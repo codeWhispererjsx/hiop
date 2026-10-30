@@ -4,13 +4,14 @@ import DashboardLayout from "../layouts/DashboardLayout";
 import { Feedback } from "../components/Feedback";
 import { Icon } from "../components/Icon";
 import { StatusBadge } from "../components/StatusBadge";
-import { endpoints } from "../lib/api";
+import { endpoints, getPaginatedItems } from "../lib/api";
 import type { MonitoringSummary } from "../lib/types";
 import { PageTitle } from "./DashboardPage";
 import "../styles/network-performance.css";
 
 export default function NetworkPerformancePage() {
   const [summary, setSummary] = useState<MonitoringSummary>();
+  const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -18,7 +19,31 @@ export default function NetworkPerformancePage() {
     setLoading(true);
     setError("");
     try {
-      setSummary(await endpoints.monitoringSummary("24h"));
+      const [monitoring, devices] = await Promise.all([
+        endpoints.monitoringSummary("24h"),
+        endpoints.devices(),
+      ]);
+      const additionalPages = await Promise.all(
+        Array.from(
+          { length: Math.max(0, devices.total_pages - 1) },
+          (_, index) =>
+            endpoints.devices({
+              page: String(index + 2),
+              page_size: String(devices.page_size),
+            }),
+        ),
+      );
+      setSummary(monitoring);
+      setDeviceNames(
+        Object.fromEntries(
+          [devices, ...additionalPages]
+            .flatMap((page) => getPaginatedItems(page))
+            .map((device) => [
+              device.id,
+              device.hostname.trim() || "Unidentified device",
+            ]),
+        ),
+      );
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -88,7 +113,7 @@ export default function NetworkPerformancePage() {
             {summary.devices.length === 0 ? (
               <p>No monitored devices are available yet.</p>
             ) : (
-              <div className="port-table-wrap">
+              <div className="performance-table-wrap">
                 <table>
                   <thead>
                     <tr>
@@ -105,7 +130,7 @@ export default function NetworkPerformancePage() {
                       <tr key={device.device_id}>
                         <td>
                           <Link className="performance-device-link" to={`/devices/${device.device_id}`}>
-                            {device.hostname?.trim() || "Unnamed device"}
+                            {deviceNames[device.device_id] || "Unidentified device"}
                           </Link>
                         </td>
                         <td>

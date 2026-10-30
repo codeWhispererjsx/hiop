@@ -25,7 +25,7 @@ export function UploadStep({admin,onUploaded}:{admin:boolean;onUploaded:(session
       <Icon name="import" size={34}/><strong>Drop CSV, XLSX, or DOCX here</strong><span>or</span><label className="secondary-action">Browse file<input type="file" accept=".csv,.xlsx,.docx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={event=>choose(event.target.files?.[0])} disabled={!admin||busy}/></label><small>Word files must contain an inventory table with a header row. Backend-enforced size and content checks apply.</small>
     </div>
     {file&&<div className="selected-file"><Icon name="server"/><div><strong>{file.name}</strong><span>{(file.size/1024).toFixed(1)} KiB · {file.type||"content type unavailable"}</span></div><button className="icon-button" aria-label="Clear selected file" onClick={()=>setFile(null)} disabled={busy}><Icon name="close"/></button></div>}
-    <div className="import-guidance"><div><strong>Required</strong><span>A clear hostname or computer-name column. Matching uses the exact hostname; existing device information is never overwritten.</span></div><div><strong>New hosts</strong><span>Unmatched hosts become managed inventory records using only uploaded details. Agent enrollment can link to that record by exact hostname later.</span></div><div><strong>Departments</strong><span>Approved asset imports reuse a matching department or create a missing department during finalization. Assigned To is preserved as the asset owner.</span></div><div><strong>Duplicates</strong><span>Repeated hostnames and conflicting identifiers are held back. Macros and formulas are never executed.</span></div></div>
+    <div className="import-guidance"><div><strong>Required</strong><span>A clear hostname or computer-name column. Matching uses the exact hostname; existing device information is never overwritten.</span></div><div><strong>New hosts</strong><span>Unmatched hosts become managed inventory records using only uploaded details. Agent enrollment can link to that record by exact hostname later.</span></div><div><strong>Duplicates</strong><span>Repeated hostnames and conflicting identifiers are held back. Macros and formulas are never executed.</span></div></div>
     {error&&<div className="inline-notice error" role="alert">{error}</div>}{busy&&<div className="processing-state" role="status"><span className="spinner"/><div><strong>Checking uploaded hosts</strong><span>File safety, hostname matching, and duplicate checks are running.</span></div><span className="progress-track indeterminate"><i/></span></div>}
     <footer className="wizard-actions">{busy&&<button className="secondary-action" onClick={()=>controller?.abort()}>Cancel upload</button>}<button className="primary-action" disabled={!file||!admin||busy} onClick={()=>void upload()}>{busy?"Checking…":"Upload and find hosts"}</button></footer>
   </section>;
@@ -122,7 +122,7 @@ export function MatchReviewStep({session,admin,conflictsOnly=false,onChanged}:{s
               <small>{row.resolution_action?`Resolved: ${row.resolution_action}`:row.validation_status==="duplicate"?"Duplicate identifier — review before creating an asset":"Pending review"}</small>
             </div>
             {candidate
-              ? <>
+              ? <div className="match-candidate">
                 <div className="match-score"><strong>{candidate.match_score}</strong><span>{candidate.match_level}</span></div>
                 <div className="match-summary">
                   <strong>{candidate.candidate_type.replaceAll("_"," ")}</strong>
@@ -130,8 +130,8 @@ export function MatchReviewStep({session,admin,conflictsOnly=false,onChanged}:{s
                   <small>Recommendation: {candidate.recommended_action.replaceAll("_"," ")}</small>
                 </div>
                 <StatusBadge status={candidate.match_status}/>
-              </>
-              : <div className="match-summary"><strong>No match found</strong><span>No existing device scored high enough to suggest a match.</span></div>}
+              </div>
+              : <div className="match-candidate no-match"><div className="match-summary"><strong>No match found</strong><span>No existing device scored high enough to suggest a match.</span></div></div>}
             <div className="import-row-actions">
               {candidate&&<button className="secondary-action" onClick={()=>setSelected(candidate)}>Compare match</button>}
               {admin&&!row.resolution_action&&candidate?.match_status==="pending"&&<button className="primary-action" disabled={busy} onClick={()=>void resolve("accept",row,candidate)}>Accept match</button>}

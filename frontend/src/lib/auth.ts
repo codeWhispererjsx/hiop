@@ -9,6 +9,8 @@ declare global {
     hiopDesktop?: {
       mode: "desktop";
       platform: string;
+      siteServerUrl: string | null;
+      saveSiteServerUrl: (url: string | null) => Promise<{ ok: true }>;
       getSessionToken: () => Promise<string | null>;
       setSessionToken: (token: string) => Promise<void>;
       clearSessionToken: () => Promise<void>;

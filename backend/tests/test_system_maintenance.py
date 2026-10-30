@@ -7,7 +7,7 @@ import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app.api.v1.system_maintenance import RuleWrite, maintenance_log, system_health
+from app.api.v1.system_maintenance import RuleWrite, create_rule, maintenance_log, run_maintenance_rules, system_health, update_rule
 
 
 def rule_payload(**overrides):
@@ -43,6 +43,33 @@ def test_maintenance_rule_accepts_allowlisted_conditions_and_schedule():
 def test_maintenance_rule_rejects_invalid_or_unbounded_values(overrides):
     with pytest.raises(ValidationError):
         RuleWrite(**rule_payload(**overrides))
+
+def test_scheduled_endpoint_actions_cannot_be_created_or_updated():
+    body=RuleWrite(**rule_payload())
+    with pytest.raises(HTTPException) as create_error:
+        create_rule(body,MagicMock(),SimpleNamespace(username="admin",id="user-id"),"organization-id")
+    assert create_error.value.status_code==409
+    with pytest.raises(HTTPException) as update_error:
+        update_rule(uuid4(),body,MagicMock(),SimpleNamespace(username="admin",id="user-id"),"organization-id")
+    assert update_error.value.status_code==409
+
+def test_scheduler_disables_legacy_rules_without_queuing_actions(monkeypatch):
+    rule=SimpleNamespace(id=uuid4(),organization_id=uuid4(),property_id=uuid4(),enabled=True,updated_at=None)
+    query=MagicMock()
+    query.filter_by.return_value.all.return_value=[rule]
+    db=MagicMock()
+    db.query.return_value=query
+    audit=MagicMock()
+    monkeypatch.setattr("app.db.database.SessionLocal",lambda:db)
+    monkeypatch.setattr("app.api.v1.system_maintenance.create_audit_log",audit)
+
+    run_maintenance_rules()
+
+    assert rule.enabled is False
+    assert rule.updated_at is not None
+    db.add.assert_not_called()
+    db.commit.assert_called_once()
+    assert audit.call_args.args[2]=="MAINTENANCE_RULE_DISABLED"
 
 
 def test_custom_maintenance_log_requires_ordered_dates():

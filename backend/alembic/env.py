@@ -84,7 +84,7 @@ from app.models.segmentation import VLANMembershipObservation
 from app.models.asset_intelligence import AssetLifecycleEvent, ManagedAsset
 from app.models.procurement import AssetProcurement, ProcurementAssetLink, ProcurementEvent, ProcurementLineItem
 from app.models.billing import BillingDocumentReference, BillingEvent, CommercialPlan, OrganizationSubscription
-from app.models.local_agent import AgentDownloadEvent, AgentEnrollment, AgentJob, AgentMaintenanceRule, AgentMetricSample, AgentObservation, LocalAgentRegistration
+from app.models.local_agent import AgentDownloadEvent, AgentEnrollment, AgentJob, AgentMaintenanceRule, AgentMetricSample, AgentObservation, AgentPowerEvent, LocalAgentRegistration
 import app.models as models_package
 
 for model_module in pkgutil.iter_modules(models_package.__path__):

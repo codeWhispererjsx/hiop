@@ -25,7 +25,7 @@ from app.models.system_health import JobExecution
 from app.models.backup import BackupRecord, RestoreTest
 from app.models.discovery_intelligence import DiscoveryJob
 from app.models.user import User
-from app.schemas.settings import DiscoverySettings, GeneralSettings, IncidentSettings, NetworkSettings, NotificationSettings, OrganizationSettings, PublicSettings, SettingsBundle, SystemHealth
+from app.schemas.settings import DiscoverySettings, GeneralSettings, IncidentSettings, NamingConventionSettings, NetworkSettings, NotificationSettings, OrganizationSettings, PublicSettings, SettingsBundle, SystemHealth
 from app.services.audit_service import create_audit_log
 from app.services import settings_service
 from app.services.scheduler_service import AUTOMATION_OUTBOX_JOB_ID, DAILY_AUDIT_EMAIL_JOB_ID, configure_discovery_scheduler, configure_scheduler, network_scan_job_id, scheduler
@@ -124,6 +124,21 @@ def update_discovery(payload: DiscoverySettings, db: Session = Depends(get_db), 
 @router.put("/settings/incidents", response_model=SettingsBundle)
 def update_incidents(payload: IncidentSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
     return save_settings_group(db, user, "incidents", payload)
+
+
+@router.put("/settings/naming-convention", response_model=SettingsBundle)
+def update_naming_convention(payload: NamingConventionSettings, db: Session = Depends(get_db), user: User = Depends(require_roles(["admin"]))):
+    if not user.organization_id:
+        raise HTTPException(403, "Organization context is required to configure asset naming.")
+    db.info["organization_id"] = user.organization_id
+    try:
+        settings_service.save_naming_convention(db, payload)
+        create_audit_log(db, user.username, "UPDATE_NAMING_CONVENTION", "Settings", "naming_convention", "Updated asset naming convention")
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return user_bundle(db, user)
 
 
 @router.get("/settings/system-health")

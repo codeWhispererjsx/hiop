@@ -1207,15 +1207,15 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
                   <p><code>Case-insensitive hostname match</code></p>
                   {canManage && (
                     <div className="identity-review-actions">
-                      <button type="button" className="secondary-action" disabled={busy} onClick={() => edit(rule)}>Edit</button>
+                      <button type="button" disabled={busy} onClick={() => edit(rule)}>Edit</button>
                       {deleteConfirmation === rule.id ? (
                         <>
                           <span>Delete this rule?</span>
-                          <button type="button" className="danger-action" disabled={busy} onClick={() => void remove(rule)}>Confirm delete</button>
-                          <button type="button" className="secondary-action" disabled={busy} onClick={() => setDeleteConfirmation(null)}>Cancel</button>
+                          <button type="button" disabled={busy} onClick={() => void remove(rule)}>Confirm delete</button>
+                          <button type="button" disabled={busy} onClick={() => setDeleteConfirmation(null)}>Cancel</button>
                         </>
                       ) : (
-                        <button type="button" className="danger-action" disabled={busy} onClick={() => setDeleteConfirmation(rule.id)}>Delete</button>
+                        <button type="button" disabled={busy} onClick={() => setDeleteConfirmation(rule.id)}>Delete</button>
                       )}
                     </div>
                   )}
@@ -1298,7 +1298,7 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
               <button className="primary-action" disabled={busy}>
                 {busy ? "Saving…" : editingRule ? "Save changes" : "Add rule"}
               </button>
-              {editingRule && <button type="button" className="secondary-action" disabled={busy} onClick={() => { setEditingRule(null); setForm({ ...EMPTY_RULE }); }}>Cancel edit</button>}
+              {editingRule && <button type="button" disabled={busy} onClick={() => { setEditingRule(null); setForm({ ...EMPTY_RULE }); }}>Cancel edit</button>}
             </form>
           ) : (
             <p>
@@ -1317,8 +1317,6 @@ function IdentityRulesPanel({ canManage }: { canManage: boolean }) {
               />
             </label>
             <button
-              className="primary-action"
-              type="button"
               disabled={busy || !previewInput}
               onClick={() => void test()}
             >

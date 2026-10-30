@@ -114,6 +114,22 @@ export default function ReportingPage() {
         title="Organization reporting"
         copy="Prebuilt, explainable reports calculated from live HIOP organization data."
       />
+      <section className="report-export-panel" aria-label="Export report">
+        <div>
+          <span>Export current view</span>
+          <strong>{title(report)} report</strong>
+          <p>Downloads include the active reporting period and filters.</p>
+        </div>
+        <label htmlFor="report-export-format">File format
+          <select id="report-export-format" value={exportFormat} onChange={(event) => setExportFormat(event.target.value as "csv" | "word")}>
+            <option value="csv">CSV spreadsheet</option>
+            <option value="word">Branded Word report (.docx)</option>
+          </select>
+        </label>
+        <button className="primary-action" onClick={() => void exportReport()} disabled={exporting}>
+          {exporting ? "Preparing export…" : `Export ${exportFormat === "csv" ? "CSV" : "Word report"}`}
+        </button>
+      </section>
       {exportError && <p className="form-error" role="alert">{exportError}</p>}
       <nav className="page-actions report-tabs" aria-label="Specialized reports">
         <Link className="secondary-action" to="/reports/system-maintenance">System Maintenance Report</Link>
@@ -145,11 +161,6 @@ export default function ReportingPage() {
           </div>
         </details>
       </nav>
-      <section className="report-export-toolbar" aria-label="Export report">
-        <div><strong>{title(report)} report</strong><span>Export the current report using the selected date range and filters.</span></div>
-        <label htmlFor="report-export-format">Export format<select id="report-export-format" value={exportFormat} onChange={(event) => setExportFormat(event.target.value as "csv" | "word")}><option value="csv">CSV spreadsheet</option><option value="word">Branded Word report</option></select></label>
-        <button className="primary-action" onClick={() => void exportReport()} disabled={exporting}>{exporting ? "Preparing export…" : `Export ${exportFormat === "csv" ? "CSV" : "Word report"}`}</button>
-      </section>
       <section className="operations-guide report-guide" aria-label="Reporting guide"><div><span>Choose</span><strong>{title(report)} report</strong><p>Select a common report or open More reports for additional options.</p></div><div><span>Filter</span><strong>Choose a date range</strong><p>Start with a preset period or select a custom date range.</p></div><div><span>Act</span><strong>Drill down or export</strong><p>Open underlying records from linked metrics or export the current view as CSV or a branded Word report.</p></div></section>
       <section className="toolbar-panel" aria-label="Report filters">
         <div className="filter-row">
@@ -253,7 +264,7 @@ export default function ReportingPage() {
         <p className="toolbar-summary">Report scope: <strong>{title(report)}</strong> · {periods.find((item) => item.id === period)?.label}</p>
       </section>
       {data.loading || data.error || !data.data ? (
-        <Feedback loading={data.loading} error={data.error} onRetry={data.reload} loadingTitle={`Loading ${title(report).toLowerCase()} report`} loadingMessage="Calculating the report from the selected organization and date range." />
+        <Feedback loading={data.loading} error={data.error} />
       ) : (
         <>
           <section className="report-metric-grid" aria-label="Report metrics">

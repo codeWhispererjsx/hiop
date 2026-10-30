@@ -2,12 +2,13 @@ from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+from uuid import UUID
 from zipfile import ZipFile
 import pytest
 from fastapi import HTTPException
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from app.api.v1.local_agents import ALLOWED_JOBS, DeviceActionCreate, ObservationWrite, _select_inventory_match, _validate_network_job, agent_router, agent_view, authenticate_agent, create_asset_action, create_device_action, download_windows_installer, ingest, reconcile_agent_discovery
+from app.api.v1.local_agents import ALLOWED_JOBS, AdminNoticeCreate, JobCreate, ObservationWrite, _select_inventory_match, _validate_network_job, acknowledge_agent_notice, agent_notices, agent_router, agent_view, authenticate_agent, create_admin_notice, create_job, download_windows_installer, ingest, reconcile_agent_discovery
 from app.core.security import get_db
 
 def agent(**values):
@@ -15,12 +16,84 @@ def agent(**values):
     base.update(values);return SimpleNamespace(**base)
 def test_job_protocol_has_no_arbitrary_command():
     assert "EXECUTE_COMMAND" not in ALLOWED_JOBS
+
+def test_endpoint_control_jobs_are_not_accepted():
+    with pytest.raises(HTTPException) as exc:
+        create_job(
+            "agent-id",JobCreate(job_type="DEVICE_ACTION",payload={"action":"SHUTDOWN"}),
+            MagicMock(),SimpleNamespace(id="user-id"),"11111111-1111-1111-1111-111111111111",
+        )
+    assert exc.value.status_code==422
+
+def test_admin_notice_is_bounded_and_requires_unique_targets():
+    with pytest.raises(ValueError):
+        AdminNoticeCreate(agent_ids=["22222222-2222-2222-2222-222222222222"]*2,message="Notice",reason="Scheduled maintenance")
+    with pytest.raises(ValueError):
+        AdminNoticeCreate(agent_ids=["22222222-2222-2222-2222-222222222222"],message="x"*241,reason="Scheduled maintenance")
+    with pytest.raises(ValueError):
+        AdminNoticeCreate(agent_ids=["22222222-2222-2222-2222-222222222222"],message="Line one\nLine two",reason="Scheduled maintenance")
+
+def test_admin_notice_is_targeted_scoped_and_audited(monkeypatch):
+    target=agent(id="33333333-3333-3333-3333-333333333333",name="Front desk",agent_id="HIOP-AGENT-01")
+    monkeypatch.setattr("app.api.v1.local_agents.allowed_property_ids",lambda *_args:{"22222222-2222-2222-2222-222222222222"})
+    audit=MagicMock()
+    monkeypatch.setattr("app.api.v1.local_agents.create_audit_log",audit)
+    db=MagicMock()
+    db.query.return_value.filter.return_value.all.return_value=[target]
+    request=SimpleNamespace(client=SimpleNamespace(host="192.0.2.10"))
+    response=create_admin_notice(
+        AdminNoticeCreate(agent_ids=[UUID("33333333-3333-3333-3333-333333333333")],message="Maintenance starts soon.",reason="Scheduled network maintenance"),
+        request,db,SimpleNamespace(id="user-id",username="admin"),UUID("11111111-1111-1111-1111-111111111111"),
+    )
+    queued=next(call.args[0] for call in db.add.call_args_list if getattr(call.args[0],"job_type",None)=="ADMIN_NOTICE")
+    assert queued.agent_id=="33333333-3333-3333-3333-333333333333"
+    assert queued.timeout_seconds==900
+    assert '"message":"Maintenance starts soon."' in queued.payload
+    assert '"reason":"Scheduled network maintenance"' in queued.payload
+    assert response["notices"][0]["status"]=="queued"
+    assert audit.call_args.kwargs["source_ip"]=="192.0.2.10"
+
+def test_agent_notice_delivery_expires_old_notices_and_acknowledges_delivery(monkeypatch):
+    now=datetime.now(timezone.utc)
+    expired=SimpleNamespace(status="queued",created_at=now-timedelta(minutes=20),completed_at=None)
+    pending=SimpleNamespace(
+        id="notice-id",status="queued",created_at=now,payload='{"message":"Save your work","reason":"Maintenance"}',
+        started_at=None,completed_at=None,
+    )
+    expired_query=MagicMock()
+    expired_query.filter_by.return_value.filter.return_value.limit.return_value.all.return_value=[expired]
+    pending_query=MagicMock()
+    pending_query.filter_by.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value=[pending]
+    db=MagicMock()
+    db.query.side_effect=[expired_query,pending_query]
+    notices=agent_notices(db,agent())
+    assert notices==[{"id":"notice-id","message":"Save your work"}]
+    assert expired.status=="timed_out"
+    db.commit.assert_called_once()
+
+    audit=MagicMock()
+    monkeypatch.setattr("app.api.v1.local_agents.create_audit_log",audit)
+    ack_query=MagicMock()
+    ack_query.filter_by.return_value.with_for_update.return_value.first.return_value=pending
+    db.query.side_effect=None
+    db.query.return_value=ack_query
+    result=acknowledge_agent_notice(
+        UUID("44444444-4444-4444-4444-444444444444"),
+        SimpleNamespace(client=SimpleNamespace(host="192.0.2.11")),db,agent(),
+    )
+    assert result=={"status":"display_requested"}
+    assert audit.call_args.args[2]=="ADMIN_NOTICE_DISPLAY_REQUESTED"
+    assert pending.status=="completed"
+    assert pending.started_at is not None
+    assert pending.completed_at is not None
+    db.commit.assert_called()
 def test_agent_status_uses_heartbeat_freshness():
     now=datetime.now(timezone.utc)
     assert agent_view(agent(last_heartbeat=now))["status"]=="online"
     assert agent_view(agent(last_heartbeat=now-timedelta(minutes=5)))["status"]=="stale"
     assert agent_view(agent(last_heartbeat=now-timedelta(minutes=20)))["status"]=="offline"
     assert agent_view(agent(last_heartbeat=now,revoked_at=now))["status"]=="revoked"
+
 def test_missing_machine_credential_fails_closed():
     with pytest.raises(HTTPException) as exc:authenticate_agent(None,MagicMock())
     assert exc.value.status_code==401
@@ -172,72 +245,6 @@ def test_windows_agent_is_bound_to_the_unique_matched_managed_device(monkeypatch
     assert matched is device
     assert registration.device_id=="device-1"
 
-def test_device_action_requires_confirmation_and_queues_only_allowlisted_operation():
-    property_id="22222222-2222-2222-2222-222222222222"
-    device=SimpleNamespace(
-        id="device-1",property_id=property_id,inventory_status="Active",
-        ad_operating_system="Microsoft Windows 11 Enterprise",
-    )
-    registration=agent(
-        id="agent-row",organization_id="11111111-1111-1111-1111-111111111111",
-        property_id=property_id,device_id="device-1",last_heartbeat=datetime.now(timezone.utc),
-        revoked_at=None,retired_at=None,
-    )
-    device_query=MagicMock()
-    device_query.filter_by.return_value.join.return_value.filter.return_value.with_for_update.return_value.first.return_value=device
-    agent_query=MagicMock()
-    agent_query.filter_by.return_value.all.return_value=[registration]
-    user_query=MagicMock()
-    user_query.filter.return_value.first.return_value=None
-    db=MagicMock()
-    db.query.side_effect=[device_query,agent_query,user_query]
-    response=create_device_action(
-        "device-1",DeviceActionCreate(action="LOCK",confirm=True),db,
-        SimpleNamespace(username="admin",id="user-1"),"11111111-1111-1111-1111-111111111111",
-    )
-    queued=next(call.args[0] for call in db.add.call_args_list if getattr(call.args[0],"job_type",None)=="DEVICE_ACTION")
-    assert response["status"]=="queued"
-    assert queued.agent_id=="agent-row"
-    assert queued.payload=='{"action":"LOCK"}'
-    with pytest.raises(HTTPException) as exc:
-        create_device_action(
-            "device-1",DeviceActionCreate(action="RESTART",confirm=False),MagicMock(),
-            SimpleNamespace(username="admin",id="user-1"),"11111111-1111-1111-1111-111111111111",
-        )
-    assert exc.value.status_code==422
-
-def test_asset_action_queues_for_one_online_windows_agent(monkeypatch):
-    property_id="22222222-2222-2222-2222-222222222222"
-    monkeypatch.setattr("app.api.v1.local_agents.allowed_property_ids",lambda *_args:{property_id})
-    monkeypatch.setattr("app.api.v1.local_agents.create_audit_log",lambda *_args,**_kwargs:None)
-    asset=SimpleNamespace(
-        id="asset-1",property_id=property_id,status="active",
-        device_type="Desktop",name="FO-DT-01",
-    )
-    registration=agent(
-        id="agent-row",organization_id="11111111-1111-1111-1111-111111111111",
-        property_id=property_id,managed_asset_id="asset-1",
-        operating_system="Windows 11",last_heartbeat=datetime.now(timezone.utc),
-        revoked_at=None,retired_at=None,
-    )
-    asset_query=MagicMock()
-    asset_query.filter_by.return_value.with_for_update.return_value.first.return_value=asset
-    agent_query=MagicMock()
-    agent_query.filter_by.return_value.all.return_value=[registration]
-    db=MagicMock()
-    db.query.side_effect=[asset_query,agent_query]
-
-    response=create_asset_action(
-        "asset-1",DeviceActionCreate(action="LOCK",confirm=True),db,
-        SimpleNamespace(username="admin",id="user-1"),
-        "11111111-1111-1111-1111-111111111111",
-    )
-
-    queued=next(call.args[0] for call in db.add.call_args_list if getattr(call.args[0],"job_type",None)=="DEVICE_ACTION")
-    assert response["status"]=="queued"
-    assert queued.agent_id=="agent-row"
-    assert queued.payload=='{"action":"LOCK"}'
-
 def test_agent_download_includes_update_and_confirmed_removal_tools():
     response=download_windows_installer(SimpleNamespace(base_url="https://hiop.example/"),SimpleNamespace(),None)
     with ZipFile(BytesIO(response.body)) as archive:
@@ -251,5 +258,8 @@ def test_agent_download_includes_update_and_confirmed_removal_tools():
     assert "Updating the existing HIOP agent without changing its enrollment." in installer
     assert "sc.exe create" in installer
     assert "NT AUTHORITY\\LocalService" in installer
+    assert "HIOPAgentCommandBroker" in installer
+    assert "sc.exe delete" in installer
+    assert "HIOP Agent Command Broker" not in installer
     assert "Python 3.12" not in installer
     assert "Type REMOVE to continue" in uninstaller

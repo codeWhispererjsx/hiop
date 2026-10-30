@@ -1,7 +1,14 @@
-const { app, BrowserWindow, dialog, shell, ipcMain, safeStorage } = require("electron");
+const { app, BrowserWindow, dialog, shell, ipcMain, safeStorage, protocol, net } = require("electron");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const { pathToFileURL } = require("url");
+const { validateSiteServerUrl } = require("./site-server-url.cjs");
+
+protocol.registerSchemesAsPrivileged([{
+  scheme: "hiop",
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+}]);
 
 const isDev = Boolean(process.env.HIOP_DESKTOP_URL);
 if (isDev) {
@@ -11,9 +18,21 @@ const resourcesRoot = process.resourcesPath || path.join(__dirname, "..", "..");
 const repoRoot = path.join(__dirname, "..", "..");
 const packagedFrontend = path.join(resourcesRoot, "frontend", "index.html");
 const devFrontend = path.join(repoRoot, "frontend", "dist", "index.html");
-const frontendUrl = process.env.HIOP_DESKTOP_URL || `file://${fs.existsSync(packagedFrontend) ? packagedFrontend : devFrontend}`;
+const frontendRoot = path.dirname(fs.existsSync(packagedFrontend) ? packagedFrontend : devFrontend);
+const frontendUrl = process.env.HIOP_DESKTOP_URL || "hiop://desktop/index.html";
 let backendProcess;
 let mainWindow;
+
+function siteServerConfigPath() {
+  return path.join(app.getPath("userData"), "site-server.json");
+}
+
+function readSiteServerUrl() {
+  const configPath = siteServerConfigPath();
+  if (!fs.existsSync(configPath)) return null;
+  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  return validateSiteServerUrl(config.siteServerUrl);
+}
 
 function validNetworkTarget(value) {
   const target = String(value || "").trim();
@@ -81,6 +100,30 @@ ipcMain.handle("hiop:session:set", (event, token) => {
 ipcMain.handle("hiop:session:clear", (event) => {
   assertTrustedRenderer(event);
   fs.rmSync(sessionTokenPath(), { force: true });
+});
+
+ipcMain.on("hiop:site-server:get", (event) => {
+  assertTrustedRenderer(event);
+  event.returnValue = readSiteServerUrl();
+});
+
+ipcMain.handle("hiop:site-server:set", (event, value) => {
+  assertTrustedRenderer(event);
+  const siteServerUrl = validateSiteServerUrl(value);
+  const configPath = siteServerConfigPath();
+  if (siteServerUrl) {
+    const temporaryPath = `${configPath}.tmp`;
+    fs.writeFileSync(temporaryPath, JSON.stringify({ siteServerUrl }), { mode: 0o600 });
+    fs.renameSync(temporaryPath, configPath);
+  } else {
+    fs.rmSync(configPath, { force: true });
+  }
+  fs.rmSync(sessionTokenPath(), { force: true });
+  setTimeout(() => {
+    app.relaunch();
+    app.quit();
+  }, 150);
+  return { ok: true };
 });
 
 ipcMain.handle("hiop:device-action", async (_event, action, rawTarget) => {
@@ -160,6 +203,12 @@ function createWindow() {
     if (url.startsWith("http://") || url.startsWith("https://")) shell.openExternal(url);
     return { action: "deny" };
   });
+  win.webContents.on("will-navigate", (event, url) => {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      event.preventDefault();
+      void shell.openExternal(url);
+    }
+  });
 
   void win.loadURL(frontendUrl);
   if (isDev) win.webContents.openDevTools({ mode: "detach" });
@@ -177,9 +226,29 @@ if (hasSingleInstanceLock) {
     mainWindow.focus();
   });
 
-  app.whenReady().then(() => {
-    startBackend();
+  app.whenReady().then(async () => {
+    if (!process.env.HIOP_DESKTOP_URL) {
+      await protocol.handle("hiop", async (request) => {
+        const requestUrl = new URL(request.url);
+        if (requestUrl.hostname !== "desktop") return new Response("Not found", { status: 404 });
+        const requestedPath = decodeURIComponent(requestUrl.pathname);
+        const filePath = path.resolve(frontendRoot, `.${requestedPath}`);
+        const relativePath = path.relative(frontendRoot, filePath);
+        if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+          return new Response("Not found", { status: 404 });
+        }
+        try {
+          return await net.fetch(pathToFileURL(filePath).toString());
+        } catch {
+          return new Response("Not found", { status: 404 });
+        }
+      });
+    }
+    if (!readSiteServerUrl()) startBackend();
     createWindow();
+  }).catch((error) => {
+    dialog.showErrorBox("HIOP Desktop could not start", error instanceof Error ? error.message : "The desktop runtime configuration is invalid.");
+    app.quit();
   });
 }
 

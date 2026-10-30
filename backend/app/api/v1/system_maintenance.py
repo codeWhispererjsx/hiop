@@ -2,7 +2,6 @@ import csv
 import io
 import json
 import re
-import socket
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 from uuid import UUID
@@ -143,14 +142,6 @@ def _matched_devices(db: Session, org_id, property_id, criteria):
             continue
         matches.append((agent, device))
     return len(matches), matches
-
-
-def _authorized_property(db: Session, user: User, org_id, property_id):
-    if property_id is not None:
-        if property_id not in allowed_property_ids(db, user, org_id):
-            raise HTTPException(403, "Property is outside your permitted scope")
-        if not db.query(Property.id).filter_by(id=property_id, organization_id=org_id).first():
-            raise HTTPException(404, "Property not found")
 
 
 @router.get("/system-health")
@@ -362,44 +353,12 @@ def list_rules(db: Session = Depends(get_db), user: User = Depends(reader), org=
 
 @rules_router.post("", status_code=201)
 def create_rule(body: RuleWrite, db: Session = Depends(get_db), actor: User = Depends(admin), org=Depends(organization_context)):
-    _authorized_property(db, actor, org, body.property_id)
-    row = AgentMaintenanceRule(
-        organization_id=org,
-        property_id=body.property_id,
-        name=body.name.strip(),
-        description=body.description,
-        criteria=json.dumps(body.criteria, separators=(",", ":")),
-        schedule=json.dumps(body.schedule, separators=(",", ":")),
-        action=body.action,
-        enabled=body.enabled,
-        created_by=actor.id,
-    )
-    db.add(row)
-    db.flush()
-    create_audit_log(db, actor.username, "MAINTENANCE_RULE_CREATED", "AgentMaintenanceRule", str(row.id), f"Created maintenance rule {row.name}", organization_id=org, property_id=row.property_id)
-    db.commit()
-    db.refresh(row)
-    return _rule_json(row, db)
+    raise HTTPException(409, "Scheduled endpoint actions are disabled. Phase 1 supports admin notices and read-only device status.")
 
 
 @rules_router.put("/{rule_id}")
 def update_rule(rule_id: UUID, body: RuleWrite, db: Session = Depends(get_db), actor: User = Depends(admin), org=Depends(organization_context)):
-    row = db.query(AgentMaintenanceRule).filter_by(id=rule_id, organization_id=org).first()
-    if not row or (row.property_id and row.property_id not in allowed_property_ids(db, actor, org)):
-        raise HTTPException(404, "Maintenance rule not found")
-    _authorized_property(db, actor, org, body.property_id)
-    row.name = body.name.strip()
-    row.description = body.description
-    row.property_id = body.property_id
-    row.criteria = json.dumps(body.criteria, separators=(",", ":"))
-    row.schedule = json.dumps(body.schedule, separators=(",", ":"))
-    row.action = body.action
-    row.enabled = body.enabled
-    row.updated_at = datetime.now(timezone.utc)
-    create_audit_log(db, actor.username, "MAINTENANCE_RULE_UPDATED", "AgentMaintenanceRule", str(row.id), f"Updated maintenance rule {row.name}; enabled={row.enabled}", organization_id=org, property_id=row.property_id)
-    db.commit()
-    db.refresh(row)
-    return _rule_json(row, db)
+    raise HTTPException(409, "Scheduled endpoint actions are disabled. Phase 1 supports admin notices and read-only device status.")
 
 
 @rules_router.delete("/{rule_id}", status_code=204)
@@ -419,60 +378,13 @@ def run_maintenance_rules():
         now = datetime.now(timezone.utc)
         rules = db.query(AgentMaintenanceRule).filter_by(enabled=True).all()
         for rule in rules:
-            schedule = json.loads(rule.schedule)
-            local_now = now.astimezone(ZoneInfo(schedule["timezone"]))
-            if local_now.strftime("%H:%M") != schedule["time"]:
-                continue
-            if schedule["frequency"] == "weekly" and local_now.weekday() != schedule["weekday"]:
-                continue
-            if rule.last_run_at and rule.last_run_at.astimezone(ZoneInfo(schedule["timezone"])).date() == local_now.date():
-                continue
-            _, targets = _matched_devices(db, rule.organization_id, rule.property_id, json.loads(rule.criteria))
-            for agent, device in targets:
-                if rule.action == "WAKE_ON_LAN":
-                    mac = re.sub(r"[^0-9a-fA-F]", "", device.mac_address or "")
-                    if len(mac) != 12:
-                        create_audit_log(
-                            db, f"Automation Rule: {rule.name}", "MAINTENANCE_RULE_WOL_FAILED",
-                            "Device", str(device.id), "Wake-on-LAN requires a valid device MAC address.",
-                            organization_id=rule.organization_id, property_id=rule.property_id or device.property_id,
-                        )
-                        continue
-                    try:
-                        packet = b"\xff" * 6 + bytes.fromhex(mac) * 16
-                        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
-                            sender.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                            sender.sendto(packet, ("255.255.255.255", 9))
-                    except OSError as exc:
-                        create_audit_log(
-                            db, f"Automation Rule: {rule.name}", "MAINTENANCE_RULE_WOL_FAILED",
-                            "Device", str(device.id), f"Wake-on-LAN send failed: {exc}",
-                            organization_id=rule.organization_id, property_id=rule.property_id or device.property_id,
-                        )
-                        continue
-                    create_audit_log(
-                        db, f"Automation Rule: {rule.name}", "MAINTENANCE_RULE_WOL_SENT",
-                        "Device", str(device.id), "Wake-on-LAN packet sent.",
-                        organization_id=rule.organization_id, property_id=rule.property_id or device.property_id,
-                    )
-                    continue
-                online = agent_view_for_rule(agent, now)
-                if not online:
-                    continue
-                db.add(AgentJob(
-                    agent_id=agent.id,
-                    organization_id=agent.organization_id,
-                    property_id=agent.property_id,
-                    job_type="DEVICE_ACTION",
-                    payload=json.dumps({"action": rule.action, "rule_id": str(rule.id), "rule_name": rule.name}),
-                    timeout_seconds=30,
-                ))
-            rule.last_run_at = now
-            create_audit_log(db, "HIOP Scheduler", "MAINTENANCE_RULE_EXECUTED", "AgentMaintenanceRule", str(rule.id), f"Ran {rule.name} against {len(targets)} matching endpoints", organization_id=rule.organization_id, property_id=rule.property_id)
+            rule.enabled = False
+            rule.updated_at = now
+            create_audit_log(
+                db,"HIOP Safety Policy","MAINTENANCE_RULE_DISABLED","AgentMaintenanceRule",str(rule.id),
+                "Scheduled endpoint control was disabled because Phase 1 permits notices and read-only status only.",
+                organization_id=rule.organization_id,property_id=rule.property_id,
+            )
         db.commit()
     finally:
         db.close()
-
-
-def agent_view_for_rule(agent: LocalAgentRegistration, now: datetime) -> bool:
-    return bool(not agent.revoked_at and not agent.retired_at and agent.last_heartbeat and (now - agent.last_heartbeat).total_seconds() <= 120)

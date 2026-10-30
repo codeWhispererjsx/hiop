@@ -81,35 +81,54 @@ function parseCsv(text: string): string[][] {
 function makeTable(rows: ExportRow[], docx: DocxModule) {
   const data = rows.length ? rows : [["No data available"]];
   const columnCount = Math.max(1, ...data.map((row) => row.length));
-  const columnWidth = Math.floor(pageWidth / columnCount);
+  const headings = data[0].map((value) => asText(value).toLowerCase());
+  const weights = Array.from({ length: columnCount }, (_, index) => {
+    const heading = headings[index] ?? "";
+    if (/^(asset number|asset tag|ip address|mac address|device type|status|health|warranty status)$/.test(heading)) return 0.7;
+    if (/^(name|hostname|assigned to|department|location|vendor|model|serial number)$/.test(heading)) return 1.25;
+    return 1;
+  });
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const columnWidths = weights.map((weight) => Math.floor(pageWidth * weight / totalWeight));
+  columnWidths[columnCount - 1] += pageWidth - columnWidths.reduce((sum, width) => sum + width, 0);
   const border = { style: docx.BorderStyle.SINGLE, size: 1, color: "D8E0EA" };
   const tableBorders = { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border };
   const tableRows = data.map((row, rowIndex) => {
     const cells = Array.from({ length: columnCount }, (_, columnIndex) => {
       const isHeading = rowIndex === 0;
+      const lines = asText(row[columnIndex]).split(/\r?\n/);
       return new docx.TableCell({
-        width: { size: columnWidth, type: docx.WidthType.DXA },
+        width: { size: columnWidths[columnIndex], type: docx.WidthType.DXA },
         borders: tableBorders,
         shading: isHeading
           ? { type: docx.ShadingType.CLEAR, color: "FFFFFF", fill: "17365D" }
           : rowIndex % 2 === 0
             ? { type: docx.ShadingType.CLEAR, color: "FFFFFF", fill: "F3F6FA" }
             : undefined,
-        margins: { top: 90, bottom: 90, left: 100, right: 100 },
-        children: [new docx.Paragraph({
-          children: [new docx.TextRun({
-            text: asText(row[columnIndex]),
-            bold: isHeading,
-            color: isHeading ? "FFFFFF" : "263445",
-            size: 17,
-            font: "Aptos",
-          })],
-        })],
+        margins: { top: 70, bottom: 70, left: 55, right: 55 },
+        children: lines.map((line) => {
+          const separator = isHeading ? -1 : line.indexOf(": ");
+          const label = separator >= 0 ? line.slice(0, separator + 1) : "";
+          const value = separator >= 0 ? line.slice(separator + 2) : line;
+          return new docx.Paragraph({
+            children: [
+              ...(label ? [new docx.TextRun({ text: label, bold: true, color: "526173", size: 14, font: "Aptos" })] : []),
+              new docx.TextRun({
+                text: value,
+                bold: isHeading,
+                color: isHeading ? "FFFFFF" : "263445",
+                size: isHeading ? 15 : 14,
+                font: "Aptos",
+              }),
+            ],
+            spacing: { after: 25 },
+          });
+        }),
       });
     });
     return new docx.TableRow({ children: cells, tableHeader: rowIndex === 0, cantSplit: true });
   });
-  return new docx.Table({ width: { size: pageWidth, type: docx.WidthType.DXA }, columnWidths: Array(columnCount).fill(columnWidth), borders: tableBorders, rows: tableRows });
+  return new docx.Table({ width: { size: pageWidth, type: docx.WidthType.DXA }, columnWidths, borders: tableBorders, rows: tableRows });
 }
 
 function saveBlob(blob: Blob, filename: string) {
@@ -121,7 +140,7 @@ function saveBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function writeBrandedWordReport(title: string, filename: string, sections: Array<{ heading?: string; rows: ExportRow[] }>) {
+export async function downloadBrandedWordReport(title: string, filename: string, rows: ExportRow[]) {
   const docx = await import("docx");
   const organization = await endpoints.organizationProfile();
   const baseUrl = import.meta.env.BASE_URL;
@@ -164,32 +183,13 @@ async function writeBrandedWordReport(title: string, filename: string, sections:
       footers: { default: footer },
       children: [
         new docx.Paragraph({ children: [new docx.TextRun({ text: title, bold: true, color: "17365D", size: 34, font: "Aptos Display" })], spacing: { before: 200, after: 100 } }),
-        new docx.Paragraph({ children: [new docx.TextRun({ text: `${Math.max(0, (sections[0]?.rows.length ?? 0) - 1)} record(s) · Generated ${generatedAt.toLocaleString()}`, color: "667085", size: 18 })], spacing: { after: 220 } }),
-        ...sections.flatMap((section) => [
-          ...(section.heading ? [new docx.Paragraph({
-            children: [new docx.TextRun({ text: section.heading, bold: true, color: "17365D", size: 22, font: "Aptos Display" })],
-            spacing: { before: 240, after: 120 },
-          })] : []),
-          makeTable(section.rows, docx),
-        ]),
+        new docx.Paragraph({ children: [new docx.TextRun({ text: `${rows.length ? Math.max(0, rows.length - 1) : 0} record(s) · Generated ${generatedAt.toLocaleString()}`, color: "667085", size: 18 })], spacing: { after: 220 } }),
+        makeTable(rows, docx),
       ],
     }],
   });
   const output = await docx.Packer.toBlob(document);
   saveBlob(output, filename.replace(/\.csv$/i, "").replace(/\.docx$/i, "") + ".docx");
-}
-
-export async function downloadBrandedWordReport(title: string, filename: string, rows: ExportRow[]) {
-  await writeBrandedWordReport(title, filename, [{ rows }]);
-}
-
-export async function downloadBrandedWordReportSections(
-  title: string,
-  filename: string,
-  sections: Array<{ heading: string; rows: ExportRow[] }>,
-) {
-  if (!sections.length) throw new Error("At least one report section is required.");
-  await writeBrandedWordReport(title, filename, sections);
 }
 
 export async function downloadCsvAsBrandedWordReport(title: string, filename: string, csv: Blob) {

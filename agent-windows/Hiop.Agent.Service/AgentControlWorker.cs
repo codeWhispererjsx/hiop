@@ -108,6 +108,85 @@ public sealed class AgentControlWorker(
             return;
         }
 
+        if (request.Action.Equals("report-power-event", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!credentials.Exists || request.PowerEvent is null)
+            {
+                await WriteResponseAsync(writer, new AgentControlResponse(false, "Error", "An enrolled agent and power event are required."), cancellationToken);
+                return;
+            }
+
+            var powerEvent = request.PowerEvent;
+            if (powerEvent.EventType is not (
+                "END_OF_DAY_NUDGE" or
+                "END_OF_DAY_PROMPT" or
+                "END_OF_DAY_STAY_ON" or
+                "END_OF_DAY_SHUTDOWN_BLOCKED" or
+                "END_OF_DAY_SHUTDOWN_REQUESTED" or
+                "SMART_LOCK_APPLIED" or
+                "SMART_LOCK_FAILED") ||
+                powerEvent.EventType == "END_OF_DAY_STAY_ON" &&
+                (string.IsNullOrWhiteSpace(powerEvent.Reason) || powerEvent.Reason.Trim().Length < 5))
+            {
+                await WriteResponseAsync(writer, new AgentControlResponse(false, "Error", "The local power event is invalid."), cancellationToken);
+                return;
+            }
+
+            try
+            {
+                await api.ReportPowerEventAsync(powerEvent, cancellationToken);
+                await WriteResponseAsync(writer, new AgentControlResponse(true, "Online", "Power event recorded."), cancellationToken);
+            }
+            catch (HttpRequestException exception)
+            {
+                logger.LogWarning("HIOP local power event could not be uploaded: {Message}", exception.Message);
+                await WriteResponseAsync(writer, new AgentControlResponse(false, "Offline", "The local power event is queued for retry."), cancellationToken);
+            }
+            return;
+        }
+
+        if (request.Action.Equals("notices", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!credentials.Exists)
+            {
+                await WriteResponseAsync(writer, new AgentControlResponse(false, "Enrollment required", "Enroll this computer before receiving notices."), cancellationToken);
+                return;
+            }
+
+            try
+            {
+                var notices = await api.GetNoticesAsync(cancellationToken);
+                await WriteResponseAsync(writer, new AgentControlResponse(true, "Online", "Admin notices retrieved.", Notices: notices), cancellationToken);
+            }
+            catch (HttpRequestException exception)
+            {
+                logger.LogWarning("HIOP admin notices could not be retrieved: {Message}", exception.Message);
+                await WriteResponseAsync(writer, new AgentControlResponse(false, "Offline", "Admin notices are temporarily unavailable."), cancellationToken);
+            }
+            return;
+        }
+
+        if (request.Action.Equals("acknowledge-notice", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!request.NoticeId.HasValue)
+            {
+                await WriteResponseAsync(writer, new AgentControlResponse(false, "Error", "A notice identifier is required."), cancellationToken);
+                return;
+            }
+
+            try
+            {
+                var acknowledgement = await api.AcknowledgeNoticeAsync(request.NoticeId.Value, cancellationToken);
+                await WriteResponseAsync(writer, new AgentControlResponse(true, "Online", acknowledgement.Status), cancellationToken);
+            }
+            catch (HttpRequestException exception)
+            {
+                logger.LogWarning("HIOP admin notice {NoticeId} could not be acknowledged: {Message}", request.NoticeId, exception.Message);
+                await WriteResponseAsync(writer, new AgentControlResponse(false, "Offline", "The notice delivery could not be acknowledged."), cancellationToken);
+            }
+            return;
+        }
+
         if (request.Action.Equals("enroll", StringComparison.OrdinalIgnoreCase))
         {
             await EnrollAsync(request, writer, cancellationToken);

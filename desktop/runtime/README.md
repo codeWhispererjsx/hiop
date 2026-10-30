@@ -2,7 +2,7 @@
 
 This folder contains the Windows desktop runtime for HIOP.
 
-The Electron shell loads the desktop build of the current React interface and starts a local FastAPI backend on `127.0.0.1:8765`.
+The Electron shell loads the desktop build of the current React interface and starts a local FastAPI backend on `127.0.0.1:8765` when this computer is the Site Server. It can also connect as a client to an HTTPS Site Server without starting a local backend or database.
 
 The packaged desktop build includes a copied, portable Python 3.12 runtime with the backend dependencies installed, and a bundled PostgreSQL runtime. It does not rely on the Python installation or filesystem paths of the computer that built the installer. On first launch, HIOP initializes its private local database under `%LOCALAPPDATA%\HIOP Desktop\postgres-data`, starts it on localhost, applies migrations, and then starts the API.
 
@@ -14,6 +14,18 @@ The packaged desktop build includes a copied, portable Python 3.12 runtime with 
 4. Start the desktop shell from the `desktop` folder with `npm start`.
 
 The runtime script starts the private local database and applies database migrations before starting the backend.
+
+## Connecting desktop clients to a Site Server
+
+1. Prepare one always-on Site Server and configure its API behind HTTPS. Desktop clients accept only HTTPS Site Server URLs; HTTP is allowed for localhost testing only.
+2. Configure the Site Server API to allow the exact HIOP desktop origin `hiop://desktop`. Production `CORS_ORIGINS` may contain this origin alongside approved HTTPS web origins.
+3. Install and open HIOP Desktop on each client PC. On the launch or sign-in screen, choose **Connect to another Site Server**, enter the HTTPS origin (for example `https://hiop.hotel.example`), and save. HIOP signs out and restarts in client mode.
+4. Client mode stores only the Site Server URL and does not start local PostgreSQL or FastAPI. All clients use the Site Server API; its PostgreSQL port must not be exposed to client machines.
+5. To return a computer to local Site Server mode, choose **Change Site Server** and select **Use this computer as the Site Server**.
+
+For the first Windows LAN pilot, start the Site Server with `HIOP_SITE_SERVER_HOST=0.0.0.0` so a same-machine HTTPS reverse proxy can reach the API at `127.0.0.1:8765`. Keep the backend port blocked from client subnets and expose only the reverse proxy's HTTPS port. The packaged desktop Site Server currently runs its backend with the desktop session; keep HIOP open on the host. A managed Windows service, unattended startup, and production installer hardening are still required before treating this as a production multi-user server.
+
+See [HIOP LAN client setup](../../docs/HIOP_LAN_CLIENT_SETUP.md) for certificate, proxy, firewall, pilot, and limitation details.
 
 ## Windows packaging flow
 

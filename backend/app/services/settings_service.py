@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.network_scan import NetworkScan
 from app.models.system_setting import SystemSetting, OrganizationSetting
-from app.schemas.settings import DiscoverySettings, GeneralSettings, IncidentSettings, NetworkSettings, NotificationSettings, OrganizationSettings
+from app.schemas.settings import DiscoverySettings, GeneralSettings, IncidentSettings, NamingConventionSettings, NetworkSettings, NotificationSettings, OrganizationSettings
+from app.services.naming_convention_service import DEFAULT_NAMING_CONVENTION
 
 
 DEFAULTS = {
@@ -139,10 +140,49 @@ def read_bundle(db: Session) -> dict[str, Any]:
         "network": _group(values, "network"), "notifications": _group(values, "notifications"),
         "discovery": read_discovery(db),
         "incidents": read_incident_settings(db),
+        "naming_convention": read_naming_convention(db),
         "email": {"configured": configured},
         "security": {"roles": ["admin", "technician", "viewer"]},
         "application": {"product_name": "HIOP", "short_name": "HIOP"},
     }
+
+
+def read_naming_convention(db: Session) -> dict[str, Any]:
+    values = DEFAULT_NAMING_CONVENTION.copy()
+    organization_id = db.info.get("organization_id")
+    if organization_id:
+        rows = db.query(OrganizationSetting).filter(
+            OrganizationSetting.organization_id == organization_id,
+            OrganizationSetting.key.in_(
+                ("naming_convention.template", "naming_convention.variables", "naming_convention.separator")
+            ),
+        ).all()
+        stored = {row.key: row.value for row in rows}
+        values["template"] = stored.get("naming_convention.template", values["template"])
+        values["separator"] = stored.get("naming_convention.separator", values["separator"])
+        parsed_variables = stored.get("naming_convention.variables")
+        if parsed_variables:
+            values["variables"] = json.loads(parsed_variables)
+    return NamingConventionSettings(**values).model_dump()
+
+
+def save_naming_convention(db: Session, payload: NamingConventionSettings) -> None:
+    organization_id = db.info.get("organization_id")
+    if not organization_id:
+        raise ValueError("Organization context is required to save a naming convention.")
+    for key, value in (
+        ("template", payload.template),
+        ("variables", json.dumps(payload.variables)),
+        ("separator", payload.separator),
+    ):
+        setting_key = f"naming_convention.{key}"
+        row = db.query(OrganizationSetting).filter_by(
+            organization_id=organization_id, key=setting_key
+        ).first()
+        if row:
+            row.value = value
+        else:
+            db.add(OrganizationSetting(organization_id=organization_id, key=setting_key, value=value))
 
 
 def read_public(db: Session) -> dict[str, Any]:

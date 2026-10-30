@@ -1,8 +1,7 @@
 import { clearAuthToken, getAuthToken, getOrganizationContext } from "./auth";
+import { getApiBaseUrl } from "./desktopServer";
 
 // Same-origin by default; Vite and nginx proxy this path to FastAPI.
-const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
-
 export class ApiError extends Error { status: number; constructor(message: string, status: number) { super(message); this.status = status; } }
 
 // Utility function to handle both array and paginated API responses
@@ -59,7 +58,7 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
   let response: Response;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 15000);
-  try { response = await fetch(`${API_URL}${path}`, { ...init, headers, signal: init.signal ?? controller.signal }); }
+  try { response = await fetch(`${getApiBaseUrl()}${path}`, { ...init, headers, signal: init.signal ?? controller.signal }); }
   catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw new ApiError("The request timed out. Check the connection and try again.", 408);
     throw new ApiError("HIOP is temporarily unavailable. Check your connection and try again.", 0);
@@ -73,7 +72,7 @@ async function performRequest<T>(path: string, init: RequestInit, token: string 
     if (["Property is outside your permitted scope", "Property access denied"].includes(detail ?? "")) {
       window.localStorage.removeItem("hiop.active_property_id");
       headers.delete("X-HIOP-Property-ID");
-      try { response = await fetch(`${API_URL}${path}`, { ...init, headers }); }
+      try { response = await fetch(`${getApiBaseUrl()}${path}`, { ...init, headers }); }
       catch { throw new ApiError("HIOP is temporarily unavailable. Check your connection and try again.", 0); }
     }
   }
@@ -108,7 +107,7 @@ async function download(path: string) {
   const property=window.localStorage.getItem("hiop.active_property_id");
   const headers:Record<string,string>={};if(token)headers.Authorization=`Bearer ${token}`;if(organization)headers["X-Organization-ID"]=organization;if(property)headers["X-HIOP-Property-ID"]=property;
   let response: Response;
-  try { response = await fetch(`${API_URL}${path}`, { headers }); }
+  try { response = await fetch(`${getApiBaseUrl()}${path}`, { headers }); }
   catch { throw new ApiError("HIOP is temporarily unavailable. Check your connection and try again.", 0); }
   if (response.status === 401) {
     void clearAuthToken().catch((error: unknown) => console.error("Unable to clear the unauthorized HIOP session.", error));
@@ -189,7 +188,7 @@ export const endpoints = {
   updateProperty: (id:string, body: unknown) => api<import("./types").Property>(`/properties/${id}`, {method:"PATCH", body:JSON.stringify(body)}),
   archiveProperty: (id:string) => api<void>(`/properties/${id}`, {method:"DELETE"}),
   dashboard: () => api<import("./types").DashboardData>("/dashboard/"),
-  devices: () => api<{ items: import("./types").Device[]; total: number; page: number; page_size: number; total_pages: number }>("/devices/"),
+  devices: (filters:Record<string,string|undefined>={}) => api<{ items: import("./types").Device[]; total: number; page: number; page_size: number; total_pages: number }>(`/devices/${queryString(filters)}`),
   assetPage: (filters:Record<string,string|undefined>={}) => api<import("./types").ManagedAsset[]|{items:import("./types").ManagedAsset[];total:number;page:number;page_size:number}>(`/assets${queryString(filters)}`),
   assets: async (filters:Record<string,string|undefined>={}) => getPaginatedItems(await endpoints.assetPage(filters)),
   asset: (id:string) => api<import("./types").ManagedAsset>(`/assets/${id}`),
@@ -236,11 +235,8 @@ export const endpoints = {
   resolveV3EAlert:(id:string,reason:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}/resolve`,{method:"POST",body:JSON.stringify({reason})}),
   listLocalAgents: (filters: Record<string,string|undefined>={}) => api<import("./types").LocalAgent[]>(`/local-agents${queryString(filters)}`),
   createAgentEnrollment: (body: {name:string;property_id:string;expires_minutes:number}) => api<{id:string;enrollment_token:string;expires_at:string;property_id:string;name:string}>("/local-agents/enrollments",{method:"POST",body:JSON.stringify(body)}),
+  createAgentNotice: (body:{agent_ids:string[];message:string;reason:string}) => api<{notices:Array<{id:string;agent_id:string;status:string;expires_at:string}>}>("/local-agents/notices",{method:"POST",body:JSON.stringify(body)}),
   revokeAgent: (id:string) => api<import("./types").LocalAgent>(`/local-agents/${id}/revoke`,{method:"POST"}),
-  createDeviceAgentAction: (deviceId:string,action:"RESTART"|"SHUTDOWN"|"LOCK"|"ENABLE_RDP"|"DISABLE_RDP"|"TRIGGER_WINDOWS_UPDATE") => api<{id:string;action:string;status:string}>(`/local-agents/devices/${deviceId}/actions`,{method:"POST",body:JSON.stringify({action,confirm:true})}),
-  createManagedAssetAgentAction: (assetId:string,action:"RESTART"|"SHUTDOWN"|"LOCK") => api<{id:string;action:string;status:string}>(`/local-agents/assets/${assetId}/actions`,{method:"POST",body:JSON.stringify({action,confirm:true})}),
-  wakeDevice: (deviceId:string) => api<{status:string;mac_address:string}>(`/local-agents/devices/${deviceId}/wol`,{method:"POST"}),
-  getAgentJobStatus: (jobId:string) => api<import("./types").AgentJobStatus>(`/local-agents/jobs/${jobId}`),
   getAgentHistory: (agentId:string) => api<import("./types").AgentJobStatus[]>(`/local-agents/${agentId}/history`),
   getAgentMetrics: (agentId:string) => api<import("./types").AgentMetricSample[]>(`/local-agents/${agentId}/metrics`),
   v3eEvents:()=>api<{items:Array<{id:string;created_at:string;alert_title:string;alert_id:string;action:string;actor:string;reason:string}>}>("/alert-center/events"),
@@ -258,9 +254,6 @@ export const endpoints = {
   maintenanceLog: (range:"7d"|"30d"|"custom",start_date?:string,end_date?:string) => api<{items:import("./types").MaintenanceLogEntry[]}>(`/reports/maintenance-log${queryString({range,start_date,end_date})}`),
   exportMaintenanceLog: (range:"7d"|"30d"|"custom",start_date?:string,end_date?:string) => download(`/reports/maintenance-log/export${queryString({range,start_date,end_date})}`),
   maintenanceRules: () => api<{items:import("./types").MaintenanceRule[]}>("/automation/rules"),
-  createMaintenanceRule: (body:Omit<import("./types").MaintenanceRule,"id"|"last_run_at"|"affected_count"|"created_at"|"updated_at">) => api<import("./types").MaintenanceRule>("/automation/rules",{method:"POST",body:JSON.stringify(body)}),
-  updateMaintenanceRule: (id:string,body:Omit<import("./types").MaintenanceRule,"id"|"last_run_at"|"affected_count"|"created_at"|"updated_at">) => api<import("./types").MaintenanceRule>(`/automation/rules/${id}`,{method:"PUT",body:JSON.stringify(body)}),
-  deleteMaintenanceRule: (id:string) => api<void>(`/automation/rules/${id}`,{method:"DELETE"}),
   report: (name: import("./types").ReportKey, filters: import("./types").ReportFilters = {}) => api<import("./types").ReportPage>(`/reports/${name}${queryString(filters)}`),
   exportReport: (name: import("./types").ReportKey, filters: import("./types").ReportFilters = {}) => download(`/reports/${name}/export${queryString(filters)}`),
   users: () => api<import("./types").User[]>("/users"),
@@ -285,6 +278,7 @@ export const endpoints = {
   updateNotificationSettings: (body: import("./types").NotificationSettings) => api<import("./types").SettingsBundle>("/settings/notifications", { method: "PUT", body: JSON.stringify(body) }),
   updateDiscoverySettings: (body: import("./types").DiscoverySettings) => api<import("./types").SettingsBundle>("/settings/discovery", { method: "PUT", body: JSON.stringify(body) }),
   updateIncidentSettings: (body: import("./types").IncidentSettings) => api<import("./types").SettingsBundle>("/settings/incidents", { method: "PUT", body: JSON.stringify(body) }),
+  updateNamingConventionSettings: (body: import("./types").NamingConventionSettings) => api<import("./types").SettingsBundle>("/settings/naming-convention", { method: "PUT", body: JSON.stringify(body) }),
   systemHealth: () => api<import("./types").SystemHealth>("/settings/system-health"),
   localOperationsStatus:()=>api<import("./types").LocalOperationsStatus>("/local-operations/status"),
   downloadLocalSupportReport:()=>download("/local-operations/support-report"),

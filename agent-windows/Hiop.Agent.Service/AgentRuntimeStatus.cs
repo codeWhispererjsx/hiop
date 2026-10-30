@@ -9,6 +9,7 @@ public sealed class AgentRuntimeStatus
     private string _message = "HIOP agent service is starting.";
     private DateTimeOffset? _lastHeartbeat;
     private string? _lastSuccessfulJob;
+    private int? _smartLockTimeoutSeconds;
 
     public AgentControlResponse Snapshot(AgentCredentialStore credentials, AgentObservationQueue queue)
     {
@@ -20,11 +21,17 @@ public sealed class AgentRuntimeStatus
                 _message,
                 credentials.Exists,
                 queue.Count,
-                _lastHeartbeat);
+                _lastHeartbeat,
+                SmartLockTimeoutSeconds: _smartLockTimeoutSeconds);
         }
     }
 
-    public void Set(string status, string message, DateTimeOffset? heartbeat = null, string? lastSuccessfulJob = null)
+    public void Set(
+        string status,
+        string message,
+        DateTimeOffset? heartbeat = null,
+        string? lastSuccessfulJob = null,
+        int? smartLockTimeoutSeconds = null)
     {
         lock (_gate)
         {
@@ -38,6 +45,11 @@ public sealed class AgentRuntimeStatus
             if (lastSuccessfulJob is not null)
             {
                 _lastSuccessfulJob = lastSuccessfulJob;
+            }
+
+            if (smartLockTimeoutSeconds.HasValue)
+            {
+                _smartLockTimeoutSeconds = smartLockTimeoutSeconds;
             }
         }
     }

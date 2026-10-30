@@ -7,16 +7,6 @@ public static class AgentControlPipe
     public const string Name = "hiop-agent-control";
 }
 
-public static class AgentDeviceActionPipe
-{
-    public const string Name = "hiop-agent-device-actions";
-}
-
-public static class AgentPrivilegedActionPipe
-{
-    public const string Name = "hiop-agent-privileged-actions";
-}
-
 public static class AgentJson
 {
     public static JsonSerializerOptions Api { get; } = new(JsonSerializerDefaults.Web)
@@ -25,7 +15,11 @@ public static class AgentJson
     };
 }
 
-public sealed record AgentControlRequest(string Action, string? EnrollmentToken = null);
+public sealed record AgentControlRequest(
+    string Action,
+    string? EnrollmentToken = null,
+    Guid? NoticeId = null,
+    AgentPowerEvent? PowerEvent = null);
 
 public sealed record AgentControlResponse(
     bool Ok,
@@ -33,11 +27,9 @@ public sealed record AgentControlResponse(
     string Message,
     bool Enrolled = false,
     int PendingQueue = 0,
-    DateTimeOffset? LastHeartbeat = null);
-
-public sealed record AgentDeviceActionRequest(string Action);
-
-public sealed record AgentDeviceActionResponse(bool Succeeded, string Message);
+    DateTimeOffset? LastHeartbeat = null,
+    IReadOnlyList<AgentNotice>? Notices = null,
+    int? SmartLockTimeoutSeconds = null);
 
 public sealed record AgentEnrollmentRequest(string EnrollmentToken, string Hostname, string Version, int ApiVersion = 1);
 
@@ -57,11 +49,26 @@ public sealed record AgentHeartbeatRequest(
     string? IpAddress,
     string? OperatingSystem,
     string? LoggedUser,
-    DateTimeOffset? LastUpdate);
+    DateTimeOffset? LastUpdate,
+    bool? FastStartupEnabled = null,
+    string? LidCloseAction = null,
+    double? BatteryHealthPercent = null,
+    int? PendingWindowsUpdates = null,
+    DateTimeOffset? LastShutdownAt = null);
 
-public sealed record AgentHeartbeatResponse(string Status, DateTimeOffset ServerTime, int AgentApiVersion);
+public sealed record AgentHeartbeatResponse(
+    string Status,
+    DateTimeOffset ServerTime,
+    int AgentApiVersion,
+    int? SmartLockTimeoutSeconds = null);
 
 public sealed record AgentJob(Guid Id, string Type, JsonElement Payload, int TimeoutSeconds);
+
+public sealed record AgentPowerEvent(Guid EventId, string EventType, DateTimeOffset OccurredAt, string? Reason = null);
+
+public sealed record AgentNotice(Guid Id, string Message);
+
+public sealed record AgentNoticeAcknowledgement(string Status);
 
 public sealed record AgentJobStatusResponse(string Status);
 
