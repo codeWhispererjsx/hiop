@@ -45,3 +45,9 @@ test("desktop site-server connection provides context-aware back navigation", ()
   assert.match(login, /state=\{\{ returnTo: "\/login" \}\}/);
   assert.match(launch, /state=\{\{ returnTo: "\/desktop-launch" \}\}/);
 });
+
+test("desktop backend disables SQL debug echo to prevent runaway logs", () => {
+  const runtime = source("../../desktop/runtime/start-local-backend.ps1");
+  assert.match(runtime, /\$env:DEBUG = "false"/);
+  assert.doesNotMatch(runtime, /\$env:DEBUG = "true"/);
+});

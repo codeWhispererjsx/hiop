@@ -198,7 +198,9 @@ if (Test-HIOPPortInUse $Port) {
 
 if (-not $env:APP_NAME) { $env:APP_NAME = "HIOP Desktop" }
 if (-not $env:APP_VERSION) { $env:APP_VERSION = "desktop-dev" }
-if (-not $env:DEBUG) { $env:DEBUG = "true" }
+# SQLAlchemy echo logging writes every query and its parameters to the desktop log.
+# Keep SQL statements and parameter values out of the desktop log.
+$env:DEBUG = "false"
 if (-not $env:ENVIRONMENT) { $env:ENVIRONMENT = "development" }
 if (-not $env:SECRET_KEY) { $env:SECRET_KEY = "desktop-local-development-secret-change-before-release" }
 # A desktop installation is a trusted local workspace. Keep the signed-in

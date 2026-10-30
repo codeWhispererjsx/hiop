@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## HIOP 3.0.3
+
+- Disabled SQLAlchemy debug echo in the desktop backend to prevent database queries and parameter values from flooding the local backend log.
+
 ## HIOP 3.0.2
 
 - Fixed desktop startup hanging on an unresponsive Site Server; startup now times out, retries, and offers clear recovery actions.
