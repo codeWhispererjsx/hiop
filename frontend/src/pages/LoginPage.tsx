@@ -155,7 +155,7 @@ export default function LoginPage() {
             Protected access. Activity is recorded in the hospitality IT audit trail.
           </p>
           <p className="login-public-links">
-            {isDesktopMode && <Link to="/desktop-connect">Change Site Server</Link>}
+            {isDesktopMode && <Link to="/desktop-connect" state={{ returnTo: "/login" }}>Change Site Server</Link>}
             <Link to="/">Back to HIOP</Link>
             <Link to="/get-started">Create an organization</Link>
           </p>

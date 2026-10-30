@@ -36,7 +36,21 @@ export async function registerCustomer(payload:OnboardingPayload):Promise<Onboar
 }
 export async function getPublicPlans():Promise<PublicBillingPlan[]>{const response=await fetch(`${apiUrl()}/billing/public/plans`);if(!response.ok)throw new Error("Unable to load current plans.");return response.json()}
 
-export async function getDesktopStatus():Promise<DesktopStatus>{const response=await fetch(`${apiUrl()}/public/onboarding/desktop-status`);if(!response.ok)throw new Error("Unable to read desktop setup status.");return response.json()}
+export async function getDesktopStatus():Promise<DesktopStatus>{
+ const controller=new AbortController();
+ const timeout=window.setTimeout(()=>controller.abort(),8000);
+ try{
+  const response=await fetch(`${apiUrl()}/public/onboarding/desktop-status`,{cache:"no-store",signal:controller.signal});
+  if(!response.ok)throw new Error(`The HIOP Site Server returned an error (${response.status}).`);
+  return await response.json();
+ }catch(error){
+  if(error instanceof Error&&error.name==="AbortError")throw new Error("The HIOP Site Server did not respond within 8 seconds.");
+  if(error instanceof TypeError)throw new Error("Could not reach the HIOP Site Server. Check that it is running and accessible.");
+  throw error;
+ }finally{
+  window.clearTimeout(timeout);
+ }
+}
 export async function bootstrapPlatformOwner(payload:PlatformBootstrapPayload):Promise<PlatformBootstrapResult>{const response=await fetch(`${apiUrl()}/platform/bootstrap`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});if(!response.ok){let message="Unable to create platform owner.";try{const body=await response.json() as {detail?:string|ValidationIssue[]};message=typeof body.detail==="string"?body.detail:Array.isArray(body.detail)?safeValidationMessage(body.detail):message}catch{/* Keep the generic error when the response is not JSON. */}throw new Error(message)}return response.json()}
 
 export async function getDesktopActivationStatus():Promise<{status:string;configured:boolean;activation_url:string|null;organization_code:string|null}>{const response=await fetch(`${apiUrl()}/public/onboarding/desktop-activation-status`);if(!response.ok)throw new Error("Unable to read desktop activation status.");return response.json()}

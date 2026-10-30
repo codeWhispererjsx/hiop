@@ -25,3 +25,23 @@ test("desktop connection setup clears prior login context and requires server HT
   assert.match(main, /if \(!readSiteServerUrl\(\)\) startBackend\(\)/);
   assert.match(main, /protocol\.registerSchemesAsPrivileged/);
 });
+
+test("desktop launch checks are bounded and provide recovery actions", () => {
+  const launch = source("../src/pages/DesktopLaunchPage.tsx");
+  const api = source("../src/lib/publicApi.ts");
+  assert.match(api, /setTimeout\(\(\)=>controller\.abort\(\),8000\)/);
+  assert.match(launch, /attempts >= 3/);
+  assert.match(launch, /Retry connection/);
+  assert.match(launch, /Continue to/);
+  assert.match(launch, /Connect to an existing Site Server/);
+});
+
+test("desktop site-server connection provides context-aware back navigation", () => {
+  const page = source("../src/pages/DesktopConnectPage.tsx");
+  const login = source("../src/pages/LoginPage.tsx");
+  const launch = source("../src/pages/DesktopLaunchPage.tsx");
+  assert.match(page, /desktop-connect-back/);
+  assert.match(page, /returnTo === "\/login" \? "\/login" : "\/desktop-launch"/);
+  assert.match(login, /state=\{\{ returnTo: "\/login" \}\}/);
+  assert.match(launch, /state=\{\{ returnTo: "\/desktop-launch" \}\}/);
+});

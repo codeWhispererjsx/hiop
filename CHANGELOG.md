@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## HIOP 3.0.2
+
+- Fixed desktop startup hanging on an unresponsive Site Server; startup now times out, retries, and offers clear recovery actions.
+- Added context-aware back navigation to Site Server connection settings.
+
 ## HIOP 3.0.1
 
 - Added organization-specific asset naming conventions for asset creation and imports.

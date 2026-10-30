@@ -1,10 +1,14 @@
 import { type FormEvent, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import BrandLogo from "../components/BrandLogo";
 import ThemeToggle from "../components/ThemeToggle";
 import { clearAuthToken } from "../lib/auth";
 import "../styles/public.css";
 
 export default function DesktopConnectPage() {
+  const location = useLocation();
+  const returnTo = (location.state as { returnTo?: string } | null)?.returnTo;
+  const backTo = returnTo === "/login" ? "/login" : "/desktop-launch";
   const [siteServerUrl, setSiteServerUrl] = useState(() => window.hiopDesktop?.siteServerUrl ?? "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -47,6 +51,7 @@ export default function DesktopConnectPage() {
   return <main className="public-site desktop-setup-page">
     <ThemeToggle className="public-theme-toggle" aria-label="Toggle theme" />
     <section className="first-run desktop-setup-card desktop-connect-card">
+      <Link className="desktop-connect-back" to={backTo}>← Back to {backTo === "/login" ? "sign in" : "HIOP startup"}</Link>
       <BrandLogo className="login-logo" />
       <p className="public-eyebrow">HIOP Desktop connection</p>
       <h1>Connect to your Site Server.</h1>
