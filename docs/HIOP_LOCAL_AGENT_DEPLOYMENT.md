@@ -2,53 +2,45 @@
 
 ## Purpose and supported platform
 
-HIOP Local Agent 1.0 is an outbound-only Windows service for Windows Server 2019+ and supported Windows 10/11 machines inside a hotel network. It performs allowlisted observation jobs and uploads evidence to HIOP over HTTPS. It has no inbound listener, shell, remote desktop, arbitrary PowerShell, remediation, or infrastructure-configuration channel.
+The HIOP Local Agent (version 1.3.0) is a .NET 10 Windows service with a system-tray app for Windows 10/11 and Windows Server computers inside a hotel network. It connects outbound to HIOP over HTTPS, sends heartbeats and device health, runs allowlisted observation jobs, and shows administrator notices. It has no inbound listener, shell, remote desktop, arbitrary PowerShell, remote power control, or general command channel.
+
+Source, build steps, and behavior details are in [agent-windows/README.md](../agent-windows/README.md). The earlier Python agent has been removed.
 
 Hosted deployments use Browser to HIOP Cloud to outbound HTTPS to Property Agent to Hotel LAN. On-premises deployments use the same boundary with an internal HTTPS HIOP server.
 
 ## Prerequisites
 
-- 64-bit Python 3.12 or later available through the Windows py launcher.
-- Local administrator permission for service installation only.
-- Outbound TCP 443 from the agent host to the HIOP backend.
-- DNS resolution for HIOP and a certificate trusted by Windows.
-- Local firewall permission for explicitly configured ICMP, DNS, LDAP/LDAPS, and SNMP targets.
-- A dedicated least-privilege service account when directory or network integrations require it.
+- Local administrator permission for installation only.
+- Outbound TCP 443 from the computer to the HIOP backend.
+- DNS resolution for HIOP and a certificate trusted by Windows. Non-loopback server URLs must use HTTPS.
+- Local firewall permission for the ICMP and DNS targets used by discovery and monitoring.
 
-The service has no inbound firewall rule. Collection permissions depend on the job: DNS needs no elevation; ICMP and neighbor visibility follow Windows policy; SNMP/LDAP require network access and scoped read-only credentials.
+The service has no inbound firewall rule.
 
 ## Enrollment and installation
 
-1. Open Administration, Organization, Local agents.
-2. Select the property, enter a stable name, and generate an enrollment.
-3. Copy the one-time token. It expires after 15 minutes and cannot be reused.
-4. In elevated PowerShell run install-service.ps1 with BackendUrl and EnrollmentToken.
+1. Download `HIOP-Agent-Windows.exe` from HIOP and run it on the company computer.
+2. Enter the hotel's HTTPS HIOP address and approve the Windows administrator prompt. The installer creates the service, applies restrictive ACLs to its credential and queue directory, and starts the tray app.
+3. In HIOP, open Local agents, select the property, and create a one-time enrollment code.
+4. Enter the code in the tray enrollment window.
 
-The installer creates an isolated environment, enrolls the machine, protects its credential with Windows DPAPI, installs HIOPLocalAgent with automatic startup, and configures bounded restart-on-failure behavior. The human administrator password and browser token are never stored.
+The machine credential is protected with Windows DPAPI. The administrator's password and browser token are never stored. The ZIP package remains available for administrators who deploy the component files manually.
 
 ## Configuration and recovery
 
-Non-secret configuration is stored at %ProgramData%\HIOP Agent\agent.json. The backend URL must use HTTPS and certificate verification stays enabled. HTTP is accepted only for explicitly enabled localhost test mode.
+Non-secret configuration is stored at `%ProgramData%\HIOP\Agent\agent.json`; the credential and offline queues are in `%ProgramData%\HIOP\Agent\State`. Observations and power events wait in durable local queues while offline and upload after recovery. Duplicate IDs are accepted idempotently. HIOP derives online, stale, and offline state from heartbeat age.
 
-The durable SQLite queue is bounded by queue_max_items and queue_retention_days. When full, it removes the oldest observation. Retries use bounded exponential backoff. Duplicate observation IDs are accepted idempotently.
+- Service status: `Get-Service "HIOP Local Agent"`
+- Restart: `Restart-Service "HIOP Local Agent"`
 
-- Service status: Get-Service HIOPLocalAgent
-- Safe log: %ProgramData%\HIOP Agent\agent.log
-- Queue: %ProgramData%\HIOP Agent\queue.db
-- Restart: Restart-Service HIOPLocalAgent
-
-Logs contain timestamps, severity, and safe error types. Credentials, tokens, integration passwords, and full observation payloads are not logged. HIOP derives online, stale, and offline state from heartbeat age.
-
-If connectivity is lost, results remain in the bounded queue and upload after recovery. Repeated rejection uses backoff. A revoked agent receives HTTP 401 and cannot heartbeat, fetch jobs, or ingest observations.
+A revoked agent receives HTTP 401 and cannot heartbeat, fetch jobs, or submit observations.
 
 ## Revocation, re-enrollment, upgrade, and uninstall
 
-Use Revoke in HIOP to invalidate the machine credential immediately while retaining history. Re-enrollment requires a new one-time token. Automatic upgrade is intentionally not supported in P4; deploy reviewed updates through the hotel's normal software process.
+Use Revoke in HIOP to invalidate the machine credential immediately while retaining history. Re-enrollment requires a new one-time code.
 
-Run uninstall-service.ps1 as administrator to remove the service. Server-side identity, audit history, and observations remain.
+Running `Install HIOP Agent.cmd` from a newer package updates the binaries without replacing the enrolled credential or offline queue. Automatic upgrade is not supported; deploy reviewed updates through the hotel's normal software process. `Remove HIOP Agent.cmd` removes the service, credential, and queue. Server-side identity, audit history, and observations remain.
 
 ## Security boundary
 
-The authenticated machine identity, never request headers or payload IDs, determines organization and property. Mismatched scope claims are denied. Jobs are restricted to DISCOVERY, MONITORING, PING, DNS_LOOKUP, ARP_SNAPSHOT, SNMP_POLL, and AD_ENRICHMENT. Unknown types and command execution are rejected. Payloads are limited to 1 MB and protocol schema version 1.
-
-SNMP and Active Directory adapters require existing property-scoped HIOP integration configuration. Their credentials must be delivered only to the bound agent over TLS, held in memory for the job, and never placed in UI responses or logs.
+The authenticated machine identity, never request headers or payload IDs, determines organization and property. Mismatched scope claims are denied. The agent executes only DISCOVERY, MONITORING, PING, DNS_LOOKUP, and ARP_SNAPSHOT jobs and rejects any other job type. Administrator notices are bounded plain text and are never interpreted as markup or commands. End-of-day reminders, the Stay On prompt, automatic shutdown, and Smart Lock run locally on the computer, and every power event is audited.
