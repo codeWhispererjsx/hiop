@@ -2,11 +2,14 @@
 
 ## Unreleased
 
+## HIOP 3.0.1
+
 - Added organization-specific asset naming conventions for asset creation and imports.
-- Governed Windows agent 1.3.0: removed remote shutdown, restart, lock, and Wake-on-LAN actions; added admin notices, local end-of-day reminders, a reasoned Stay On prompt, fail-closed local shutdown, a local five-minute Smart Lock policy, device-health reporting, and audited power events.
+- Governed Windows agent 1.3.1: removed remote shutdown, restart, lock, and Wake-on-LAN actions; added admin notices, local end-of-day reminders, a reasoned Stay On prompt, fail-closed local shutdown, a local five-minute Smart Lock policy, device-health reporting, and audited power events.
 - Change management and problem management are now off by default behind `CHANGE_MANAGEMENT_ENABLED` and `PROBLEM_MANAGEMENT_ENABLED`; their code and data are kept.
 - Removed the legacy Python agent; the .NET Windows agent is the only supported agent.
-- Windows agent fixes from the first end-to-end run on a real laptop: heartbeats now survive request timeouts and non-JSON responses (previously one slow response stopped heartbeats until the service restarted), the lid-close action is read on laptops that hide it, and the last Windows update date no longer depends on the computer's regional date format. Agent enrollment is now audited.
+- Improved Windows agent heartbeat recovery, health reporting, enrollment auditing, and parsing of Windows update dates, including safe rejection of invalid FILETIME values.
+- Improved report data loading and corrected the dashboard's tenant-scoped open-alert count.
 
 ## HIOP 3.0.0
 

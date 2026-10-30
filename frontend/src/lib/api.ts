@@ -229,7 +229,7 @@ export const endpoints = {
   deleteTicket: (id: string) => api<{message:string}>(`/tickets/${id}`, { method: "DELETE" }),
   alerts: () => api<import("./types").Alert[]>("/alerts"),
   acknowledgeAlert: (id: string) => api<{id:string;acknowledged:boolean}>(`/alerts/${id}/acknowledge`, { method: "PATCH" }),
-  v3eAlerts:(filters:Record<string,string|undefined>={})=>api<{items:import("./types").V3EAlert[];summary:Record<string,number>}>(`/alert-center/alerts${queryString(filters)}`),
+  v3eAlerts:(filters:Record<string,string|undefined>={})=>api<{items:import("./types").V3EAlert[];total:number;page:number;page_size:number;total_pages:number;summary:Record<string,number>}>(`/alert-center/alerts${queryString(filters)}`),
   v3eAlert:(id:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}`),
   acknowledgeV3EAlert:(id:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}/acknowledge`,{method:"POST"}),
   resolveV3EAlert:(id:string,reason:string)=>api<import("./types").V3EAlert>(`/alert-center/alerts/${id}/resolve`,{method:"POST",body:JSON.stringify({reason})}),

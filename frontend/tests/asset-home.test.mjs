@@ -13,6 +13,9 @@ test("home is a simple real-data asset workspace", () => {
   assert.match(page, /endpoints\.devices/);
   assert.match(page, /endpoints\.assetPage\(\{ page_size: "1" \}\)/);
   assert.match(page, /const totalAssets = Array\.isArray\(managedAssets\.data\)/);
+  assert.match(page, /endpoints\.v3eAlerts\(\{ status: "open", page_size: "1" \}\)/);
+  assert.match(page, /const activeAlerts = openAlerts\.data\?\.total/);
+  assert.doesNotMatch(page, /endpoints\.alerts/);
   assert.doesNotMatch(page, /57,842|1,203|dummy|mock/i);
 });
 

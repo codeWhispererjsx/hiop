@@ -210,11 +210,21 @@ public sealed class AgentApiClient : IDisposable
             return date;
         }
 
-        return value.Length == 16 &&
-            long.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var fileTime) &&
-            fileTime > 0
-            ? DateTime.FromFileTimeUtc(fileTime).ToLocalTime()
-            : null;
+        if (value.Length != 16 ||
+            !long.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var fileTime) ||
+            fileTime <= 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return DateTime.FromFileTimeUtc(fileTime).ToLocalTime();
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
     }
 
     private static long? ParseLong(string? value) => long.TryParse(value, out var parsed) ? parsed : null;

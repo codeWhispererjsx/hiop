@@ -4,9 +4,11 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
-from app.api.v1.alerts_events import Resolution, acknowledge, resolve, rules
+from app.api.v1.alerts_events import Resolution, acknowledge, alerts, resolve, rules
 from app.models.alert import AlertHistory
+from app.models.device import Device
 from app.services.alert_event_service import failed_check_percent,latency_breached,offline_breached
 from app.services.network_service import offline_threshold_crossed
 
@@ -111,3 +113,48 @@ def test_rules_response_matches_frontend_items_contract():
     result = rules(db, SimpleNamespace(), uuid4(), None)
 
     assert result == {"items": [rule]}
+
+def test_alert_list_filters_by_tenant_and_counts_open_alerts():
+    organization_id, property_id, device_id = uuid4(), uuid4(), uuid4()
+    open_alert = SimpleNamespace(id=uuid4(), device_id=device_id)
+    acknowledged_alert = SimpleNamespace(id=uuid4(), device_id=device_id)
+    resolved_alert = SimpleNamespace(id=uuid4(), device_id=device_id)
+    allowed_devices = MagicMock()
+    allowed_devices.join.return_value = allowed_devices
+    allowed_devices.filter.return_value = allowed_devices
+    allowed_devices.subquery.return_value = select(Device.id)
+    alert_query = MagicMock()
+    alert_query.filter.return_value.order_by.return_value.all.return_value = [
+        open_alert, acknowledged_alert, resolved_alert
+    ]
+    device_query = MagicMock()
+    device_query.filter.return_value.all.return_value = []
+    db = MagicMock()
+    db.query.side_effect = [allowed_devices, alert_query, device_query]
+
+    def alert_view(_db, row, _device):
+        status = {
+            open_alert.id: "open",
+            acknowledged_alert.id: "acknowledged",
+            resolved_alert.id: "resolved",
+        }[row.id]
+        return {"id": str(row.id), "status": status, "severity": "warning"}
+
+    with patch("app.api.v1.alerts_events.view", side_effect=alert_view):
+        result = alerts(
+            status="open",
+            page=1,
+            page_size=1,
+            db=db,
+            _=SimpleNamespace(),
+            organization_id=organization_id,
+            property_id=property_id,
+        )
+
+    scope_filters = [call.args[0] for call in allowed_devices.filter.call_args_list]
+    assert str(scope_filters[0].left) == "properties.organization_id"
+    assert scope_filters[0].right.value == organization_id
+    assert str(scope_filters[1].left) == "devices.property_id"
+    assert scope_filters[1].right.value == property_id
+    assert result["total"] == 1
+    assert result["items"] == [{"id": str(open_alert.id), "status": "open", "severity": "warning"}]

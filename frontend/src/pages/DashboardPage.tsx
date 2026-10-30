@@ -17,8 +17,8 @@ export default function DashboardPage() {
   const managedAssets = useRequest(() => endpoints.assetPage({ page_size: "1" }), []);
   const systemHealth = useRequest(endpoints.systemHealthReport, []);
   const serviceSummary = useRequest(endpoints.serviceManagementSummary, []);
-  const alerts = useRequest(endpoints.alerts, []);
-  const activeAlerts = alerts.data?.filter((alert) => !alert.acknowledged).length;
+  const openAlerts = useRequest(() => endpoints.v3eAlerts({ status: "open", page_size: "1" }), []);
+  const activeAlerts = openAlerts.data?.total;
   const [query, setQuery] = useState("");
   
   const devices = useMemo(() => getPaginatedItems(inventory.data), [inventory.data]);
@@ -93,9 +93,11 @@ export default function DashboardPage() {
               <small>Open incident records</small>
             </Link>
             <Link className="asset-metric-card" to="/alerts">
-              <span>Active alerts</span>
+              <span>Open alerts</span>
               <strong>{activeAlerts ?? "–"}</strong>
-              <small>Unacknowledged alerts</small>
+              <small role={openAlerts.error ? "alert" : undefined}>
+                {openAlerts.error ? "Unable to load the open-alert count" : "Open alerts awaiting acknowledgment"}
+              </small>
             </Link>
             <article className="asset-insight-card">
               <header>

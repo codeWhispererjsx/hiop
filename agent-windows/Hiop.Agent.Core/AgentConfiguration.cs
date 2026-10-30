@@ -4,7 +4,7 @@ namespace Hiop.Agent.Core;
 
 public sealed record AgentConfiguration(string BackendUrl, string AgentName, int HeartbeatSeconds = 30, int PollSeconds = 5)
 {
-    public const string Version = "1.3.0";
+    public const string Version = "1.3.1";
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
         "HIOP",

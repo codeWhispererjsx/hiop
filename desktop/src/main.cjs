@@ -166,6 +166,7 @@ function startBackend() {
       ...process.env,
       HIOP_DESKTOP_PORT: process.env.HIOP_DESKTOP_PORT || "8765",
       HIOP_DESKTOP_RESOURCES: resourcesRoot,
+      APP_VERSION: app.getVersion(),
     },
     windowsHide: true,
     stdio: isDev ? "inherit" : "ignore",

@@ -246,4 +246,10 @@ public sealed class AgentFoundationTests
     {
         Assert.Null(AgentApiClient.ParseQuickFixInstalledOn(value));
     }
+
+    [Fact]
+    public void QuickFixInstallDatesRejectOutOfRangeFileTimes()
+    {
+        Assert.Null(AgentApiClient.ParseQuickFixInstalledOn("7FFFFFFFFFFFFFFF"));
+    }
 }
