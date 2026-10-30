@@ -16,6 +16,9 @@ export default function DashboardPage() {
   const inventory = useRequest(endpoints.devices, []);
   const managedAssets = useRequest(() => endpoints.assetPage({ page_size: "1" }), []);
   const systemHealth = useRequest(endpoints.systemHealthReport, []);
+  const serviceSummary = useRequest(endpoints.serviceManagementSummary, []);
+  const alerts = useRequest(endpoints.alerts, []);
+  const activeAlerts = alerts.data?.filter((alert) => !alert.acknowledged).length;
   const [query, setQuery] = useState("");
   
   const devices = useMemo(() => getPaginatedItems(inventory.data), [inventory.data]);
@@ -40,7 +43,7 @@ export default function DashboardPage() {
     <DashboardLayout>
       <PageTitle
         eyebrow="Infrastructure inventory"
-        title="Assets"
+        title="Overview"
         copy="Discover, identify, and manage every device from one workspace."
         action={<div className="asset-dashboard-actions">
           <Link className="secondary-action" to="/devices">View inventory</Link>
@@ -81,18 +84,18 @@ export default function DashboardPage() {
             </Link>
             <Link className="asset-metric-card" to="/discovery-intelligence">
               <span>Awaiting approval</span>
-              <strong>View</strong>
-              <small>Review in Discover</small>
+              <strong className="asset-metric-action">Review</strong>
+              <small>New discoveries waiting in Discover</small>
             </Link>
             <Link className="asset-metric-card" to="/incidents">
               <span>Active incidents</span>
-              <strong>View</strong>
-              <small>Open maintenance records</small>
+              <strong>{serviceSummary.data?.open ?? "–"}</strong>
+              <small>Open incident records</small>
             </Link>
             <Link className="asset-metric-card" to="/alerts">
               <span>Active alerts</span>
-              <strong>View</strong>
-              <small>Open or acknowledged alerts</small>
+              <strong>{activeAlerts ?? "–"}</strong>
+              <small>Unacknowledged alerts</small>
             </Link>
             <article className="asset-insight-card">
               <header>
@@ -117,7 +120,7 @@ export default function DashboardPage() {
                 <p>
                   {devices.length
                     ? `${devices.length} managed devices${devices.length > 10 ? " · showing 10" : ""}`
-                    : "Your inventory is clean and ready."}
+                    : "No devices yet. Run a discovery scan to add them."}
                 </p>
               </div>
               <label className="asset-search" htmlFor="asset-search">

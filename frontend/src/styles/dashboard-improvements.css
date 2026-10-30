@@ -487,3 +487,4 @@
   .system-health-overview > header { align-items: stretch; flex-direction: column; }
   .system-health-cards { grid-template-columns: 1fr; }
 }
+.asset-metric-card strong.asset-metric-action{font-size:1.5rem}
