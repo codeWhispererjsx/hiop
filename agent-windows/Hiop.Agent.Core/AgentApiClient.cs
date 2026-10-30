@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -177,7 +178,7 @@ public sealed class AgentApiClient : IDisposable
             using var searcher = new ManagementObjectSearcher("SELECT InstalledOn FROM Win32_QuickFixEngineering");
             using var results = searcher.Get();
             var dates = results.Cast<ManagementObject>()
-                .Select(item => DateTime.TryParse(item["InstalledOn"]?.ToString(), out var date) ? date : (DateTime?)null)
+                .Select(item => ParseQuickFixInstalledOn(item["InstalledOn"]?.ToString()))
                 .Where(date => date.HasValue)
                 .Select(date => date!.Value)
                 .ToArray();
@@ -187,6 +188,33 @@ public sealed class AgentApiClient : IDisposable
         {
             return null;
         }
+    }
+
+    // Win32_QuickFixEngineering reports InstalledOn in US format regardless of the computer's
+    // regional settings, and some systems report a hexadecimal FILETIME instead.
+    public static DateTime? ParseQuickFixInstalledOn(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        value = value.Trim();
+        if (DateTime.TryParseExact(
+                value,
+                ["M/d/yyyy", "MM/dd/yyyy", "yyyyMMdd"],
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal,
+                out var date))
+        {
+            return date;
+        }
+
+        return value.Length == 16 &&
+            long.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var fileTime) &&
+            fileTime > 0
+            ? DateTime.FromFileTimeUtc(fileTime).ToLocalTime()
+            : null;
     }
 
     private static long? ParseLong(string? value) => long.TryParse(value, out var parsed) ? parsed : null;

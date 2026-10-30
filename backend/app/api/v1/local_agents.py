@@ -287,7 +287,10 @@ def enroll(body:EnrollRequest,request:Request,db:Session=Depends(get_db)):
     managed_asset=assets[0] if len(assets)==1 else None
     secret=secrets.token_urlsafe(48);public_id=f"HIOP-AGENT-{secrets.token_hex(8).upper()}"
     row=LocalAgentRegistration(agent_id=public_id,organization_id=enrollment.organization_id,property_id=enrollment.property_id,device_id=device.id if device else None,managed_asset_id=managed_asset.id if managed_asset else None,name=enrollment.name,status="online",version=body.version,hostname=hostname,credential_hash=_digest(secret),last_seen=now,last_heartbeat=now,registered_by=enrollment.created_by);enrollment.used_at=now;db.add(row)
-    try:db.commit();db.refresh(row)
+    try:
+        db.flush()
+        create_audit_log(db,public_id,"AGENT_ENROLLED","LocalAgentRegistration",str(row.id),f"{hostname} enrolled as {public_id} using a one-time enrollment code",organization_id=enrollment.organization_id,property_id=enrollment.property_id)
+        db.commit();db.refresh(row)
     except IntegrityError as exc:db.rollback();raise HTTPException(409,"An agent with this name is already registered") from exc
     return {"agent_id":row.agent_id,"credential":f"{row.agent_id}.{secret}","organization_id":row.organization_id,"property_id":row.property_id,"agent_api_version":1}
 

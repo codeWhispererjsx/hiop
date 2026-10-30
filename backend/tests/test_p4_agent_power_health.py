@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from app.api.v1.local_agents import PowerEventWrite, agent_view, heartbeat, report_power_event
+from app.api.v1.local_agents import EnrollRequest, PowerEventWrite, agent_view, enroll, heartbeat, report_power_event
 
 
 def agent(**values):
@@ -111,6 +111,34 @@ def test_power_events_are_scoped_and_audited(monkeypatch):
     assert result == {"status": "recorded"}
     assert audit.call_args.args[2] == "LOCAL_AGENT_END_OF_DAY_STAY_ON"
     assert audit.call_args.kwargs["source_ip"] == "192.0.2.20"
+
+
+def test_agent_enrollment_is_audited_in_the_enrollment_scope(monkeypatch):
+    audit = MagicMock()
+    monkeypatch.setattr("app.api.v1.local_agents.create_audit_log", audit)
+    monkeypatch.setattr("app.api.v1.local_agents.enrollment_limiter.check", lambda *_args: None)
+    enrollment = SimpleNamespace(
+        id="enrollment-1",
+        organization_id="11111111-1111-1111-1111-111111111111",
+        property_id="22222222-2222-2222-2222-222222222222",
+        name="Front desk PC",
+        created_by="user-1",
+        used_at=None,
+    )
+    db = MagicMock()
+    db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = enrollment
+    db.query.return_value.filter.return_value.limit.return_value.all.return_value = []
+    request = SimpleNamespace(client=SimpleNamespace(host="192.0.2.30"))
+
+    result = enroll(EnrollRequest(enrollment_token="t" * 40, hostname="FRONTDESK-01", version="1.3.0"), request, db)
+
+    assert enrollment.used_at is not None
+    assert audit.call_args.args[1] == result["agent_id"]
+    assert audit.call_args.args[2] == "AGENT_ENROLLED"
+    assert "FRONTDESK-01" in audit.call_args.args[5]
+    assert audit.call_args.kwargs["organization_id"] == enrollment.organization_id
+    assert audit.call_args.kwargs["property_id"] == enrollment.property_id
+    db.commit.assert_called_once()
 
 
 def test_power_event_retry_with_same_id_is_idempotent():

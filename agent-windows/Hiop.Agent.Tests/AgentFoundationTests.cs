@@ -204,4 +204,46 @@ public sealed class AgentFoundationTests
         Assert.Equal(Environment.MachineName, inventory["hostname"]);
         Assert.IsType<Dictionary<string, object?>[]>(inventory["network_adapters"]);
     }
+
+    [Fact]
+    public void LidCloseActionIsReadFromPowercfgOutput()
+    {
+        const string output = """
+            Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)
+              Subgroup GUID: 4f971e89-eebd-4455-a8de-9e59040e7347  (Power buttons and lid)
+                Power Setting GUID: 5ca83367-6e45-459f-a27b-476b1d01c936  (Lid close action)
+                Current AC Power Setting Index: 0x00000001
+                Current DC Power Setting Index: 0x00000003
+            """;
+
+        Assert.Equal("AC Sleep / DC Shut down", WindowsHealthReader.ParseLidCloseAction(output));
+        Assert.Null(WindowsHealthReader.ParseLidCloseAction("Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)"));
+    }
+
+    [Theory]
+    [InlineData("4/23/2025", 2025, 4, 23)]
+    [InlineData("10/1/2023", 2023, 10, 1)]
+    [InlineData("20240315", 2024, 3, 15)]
+    public void QuickFixInstallDatesIgnoreRegionalDateFormat(string value, int year, int month, int day)
+    {
+        var original = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-GB");
+        try
+        {
+            Assert.Equal(new DateTime(year, month, day), AgentApiClient.ParseQuickFixInstalledOn(value)?.Date);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = original;
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("not a date")]
+    public void QuickFixInstallDatesRejectUnreadableValues(string? value)
+    {
+        Assert.Null(AgentApiClient.ParseQuickFixInstalledOn(value));
+    }
 }

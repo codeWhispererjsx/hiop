@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Hiop.Agent.Core;
 
 namespace Hiop.Agent.Service;
@@ -47,6 +48,16 @@ public sealed class AgentWorker(
                 {
                     status.Set("Offline", $"Cannot contact HIOP: {exception.Message}");
                     logger.LogWarning("HIOP agent request failed: {Message}", exception.Message);
+                }
+                catch (TaskCanceledException) when (!stoppingToken.IsCancellationRequested)
+                {
+                    status.Set("Offline", "HIOP did not respond in time.");
+                    logger.LogWarning("HIOP agent request timed out.");
+                }
+                catch (Exception exception) when (exception is JsonException or InvalidDataException)
+                {
+                    status.Set("Offline", "HIOP returned an unexpected response. A proxy or sign-in page may be in the way.");
+                    logger.LogWarning("HIOP agent response was not valid: {Message}", exception.Message);
                 }
                 catch (IOException exception)
                 {
@@ -106,6 +117,16 @@ public sealed class AgentWorker(
             {
                 status.Set("Offline", $"Cannot contact HIOP: {exception.Message}");
                 logger.LogWarning("HIOP agent heartbeat failed: {Message}", exception.Message);
+            }
+            catch (TaskCanceledException) when (!stoppingToken.IsCancellationRequested)
+            {
+                status.Set("Offline", "HIOP did not respond in time.");
+                logger.LogWarning("HIOP agent heartbeat timed out.");
+            }
+            catch (Exception exception) when (exception is JsonException or InvalidDataException)
+            {
+                status.Set("Offline", "HIOP returned an unexpected response. A proxy or sign-in page may be in the way.");
+                logger.LogWarning("HIOP agent heartbeat response was not valid: {Message}", exception.Message);
             }
             catch (IOException exception)
             {

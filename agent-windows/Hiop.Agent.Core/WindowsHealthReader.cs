@@ -75,7 +75,8 @@ public static class WindowsHealthReader
             using var process = Process.Start(new ProcessStartInfo
             {
                 FileName = Path.Combine(Environment.SystemDirectory, "powercfg.exe"),
-                Arguments = "/query SCHEME_CURRENT SUB_BUTTONS LIDACTION",
+                // /qh includes hidden settings; many laptops hide the lid-close action from /query.
+                Arguments = "/qh SCHEME_CURRENT SUB_BUTTONS LIDACTION",
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -96,28 +97,7 @@ public static class WindowsHealthReader
 
             var output = outputTask.GetAwaiter().GetResult();
             _ = errorTask.GetAwaiter().GetResult();
-            if (process.ExitCode != 0)
-            {
-                return null;
-            }
-
-            var values = Regex.Matches(
-                    output,
-                    @"Current (AC|DC) Power Setting Index:\s*0x([0-9a-f]+)",
-                    RegexOptions.IgnoreCase)
-                .Cast<Match>()
-                .ToDictionary(
-                    match => match.Groups[1].Value.ToUpperInvariant(),
-                    match => match.Groups[2].Value,
-                    StringComparer.Ordinal);
-            if (values.Count == 0)
-            {
-                return null;
-            }
-
-            var ac = values.TryGetValue("AC", out var acValue) ? FormatLidAction(acValue) : null;
-            var dc = values.TryGetValue("DC", out var dcValue) ? FormatLidAction(dcValue) : null;
-            return ac is not null && dc is not null ? $"AC {ac} / DC {dc}" : ac ?? dc;
+            return process.ExitCode == 0 ? ParseLidCloseAction(output) : null;
         }
         catch (InvalidOperationException)
         {
@@ -131,6 +111,27 @@ public static class WindowsHealthReader
         {
             return null;
         }
+    }
+
+    public static string? ParseLidCloseAction(string powercfgOutput)
+    {
+        var values = Regex.Matches(
+                powercfgOutput,
+                @"Current (AC|DC) Power Setting Index:\s*0x([0-9a-f]+)",
+                RegexOptions.IgnoreCase)
+            .Cast<Match>()
+            .ToDictionary(
+                match => match.Groups[1].Value.ToUpperInvariant(),
+                match => match.Groups[2].Value,
+                StringComparer.Ordinal);
+        if (values.Count == 0)
+        {
+            return null;
+        }
+
+        var ac = values.TryGetValue("AC", out var acValue) ? FormatLidAction(acValue) : null;
+        var dc = values.TryGetValue("DC", out var dcValue) ? FormatLidAction(dcValue) : null;
+        return ac is not null && dc is not null ? $"AC {ac} / DC {dc}" : ac ?? dc;
     }
 
     private static string? FormatLidAction(string value)
